@@ -1,0 +1,18 @@
+[package]
+name = "br-jobs-runner-kit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Harness for building runners compatible with svc-jobs: Runner trait, RunContext, runner configuration"
+
+[dependencies]
+br-jobs-runner-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+tokio-util.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
