@@ -10,8 +10,14 @@ repository = "https://github.com/BotResources/br-jobs-runner-kit"
 
 [workspace.dependencies]
 br-jobs-runner-core = { path = "crates/br-jobs-runner-core", version = "0.1.0" }
+async-nats = "0.48"
+chrono = { version = "0.4", features = ["serde"] }
+contract-jobs = { git = "https://github.com/BotResources/svc-jobs", tag = "contract-jobs/v0.1.0", version = "0.1.0" }
+futures = "0.3"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
+tracing = "0.1"
 uuid = { version = "1", features = ["v7"] }

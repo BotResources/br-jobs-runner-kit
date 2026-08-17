@@ -4,15 +4,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Harness for building runners compatible with svc-jobs: Runner trait, RunContext, runner configuration"
+description = "Harness for building runners compatible with svc-jobs: Runner trait, RunContext, the NATS runner-transport loop"
 
 [dependencies]
+async-nats.workspace = true
 br-jobs-runner-core.workspace = true
+chrono.workspace = true
+contract-jobs.workspace = true
+futures.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
 tokio-util.workspace = true
+tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }

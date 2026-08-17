@@ -11,6 +11,7 @@ REQUIRED_CHECKS=(
     "cargo-deny check"
     "cargo-machete (unused deps)"
     "cargo semver-checks"
+    "e2e (runner transport vs NATS JetStream)"
     "changelog + readme pins"
     "shellcheck"
     "trufflehog (secret scan)"

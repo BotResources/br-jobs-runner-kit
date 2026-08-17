@@ -110,6 +110,31 @@ jobs:
           done
           exit $fail
 
+  e2e:
+    name: e2e (runner transport vs NATS JetStream)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: e2e
+      - name: install nats-server
+        run: |
+          NATS_VERSION="v2.14.1"
+          URL="https://github.com/nats-io/nats-server/releases/download/${NATS_VERSION}/nats-server-${NATS_VERSION}-linux-amd64.tar.gz"
+          curl -sSfL "$URL" -o /tmp/nats-server.tar.gz
+          tar -xzf /tmp/nats-server.tar.gz -C /tmp
+          sudo install "/tmp/nats-server-${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/nats-server
+          nats-server --version
+      - name: run the e2e suite against a real JetStream
+        run: |
+          nats-server -js -p 4222 -sd "$RUNNER_TEMP/nats" &
+          sleep 1
+          cargo test -p br-jobs-runner-kit --test e2e --locked -- --ignored --test-threads=1
+
   changelog:
     name: changelog + readme pins
     runs-on: ubuntu-latest
