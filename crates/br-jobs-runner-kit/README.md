@@ -6,6 +6,68 @@ implements one trait; the kit owns the whole NATS runner transport: presence
 heartbeat, trigger claim, status facts, log shipping, cancel watch, graceful
 drain.
 
+## Install
+
+Distributed by git tag (no crates.io); the whole workspace ships as one
+version and the `version` must accompany the tag:
+
+```toml
+[dependencies]
+br-jobs-runner-kit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-jobs-runner-kit", tag = "v0.1.0", version = "0.1.0" }
+```
+
+If your project runs `cargo-deny`, allowlist both git sources — the kit and
+its transitive `contract-jobs` pin:
+
+```toml
+[sources]
+allow-git = [
+    "https://github.com/BotResources/br-jobs-runner-kit",
+    "https://github.com/BotResources/svc-jobs",
+]
+```
+
+## A complete runner
+
+```rust,no_run
+use br_jobs_runner_kit::{
+    InstanceKey, RunContext, RunOutcome, Runner, RunnerConfig, RunnerType, run,
+};
+
+struct Summarizer;
+
+#[derive(serde::Deserialize)]
+struct SummarizeJob {
+    url: String,
+}
+
+impl Runner for Summarizer {
+    type Payload = SummarizeJob;
+
+    async fn execute(&self, ctx: RunContext, job: Self::Payload) -> RunOutcome {
+        ctx.declare_plan(vec!["fetch".into(), "summarize".into()]);
+        ctx.start_step(0, "fetch");
+        ctx.log(format!("fetching {}", job.url));
+        if ctx.is_cancelled() {
+            return RunOutcome::failed("cancelled");
+        }
+        ctx.start_step(1, "summarize");
+        RunOutcome::Completed
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), br_jobs_runner_kit::HarnessError> {
+    let config = RunnerConfig::new(
+        "nats://localhost:4222",
+        RunnerType::new("summarizer").expect("a valid runner type"),
+        InstanceKey::new("pod-0").expect("a valid instance key"),
+        env!("CARGO_PKG_VERSION"),
+    );
+    run(config, Summarizer).await
+}
+```
+
 ## Surface
 
 - `run(config, runner)` — connects, binds the declared streams/buckets
