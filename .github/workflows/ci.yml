@@ -1,0 +1,167 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt-clippy-test:
+    name: cargo fmt + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --all-targets --locked
+      - run: cargo test --workspace --doc --locked
+
+  docs:
+    name: cargo doc
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: docs
+      - run: cargo doc --workspace --no-deps --locked
+
+  deny:
+    name: cargo-deny check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2.0.20
+        with:
+          command: check advisories bans licenses sources
+
+  unused-deps:
+    name: cargo-machete (unused deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: taiki-e/install-action@fd2f5e3d644b484055ebf4268f474c565f148f25 # v2.81.9
+        with:
+          tool: cargo-machete
+      - run: cargo machete
+
+  semver:
+    name: cargo semver-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: semver
+      - uses: taiki-e/install-action@fd2f5e3d644b484055ebf4268f474c565f148f25 # v2.81.9
+        with:
+          tool: cargo-semver-checks
+      - name: cargo semver-checks (per-crate, unified baseline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          baseline=$(git tag --list "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n1)
+          if [ -z "$baseline" ]; then
+            echo "::notice::no prior workspace tag (v*), skipping semver-checks (first unified release)"
+            exit 0
+          fi
+          for toml in crates/*/Cargo.toml; do
+            crate=$(basename "$(dirname "$toml")")
+            if [ ! -f "crates/${crate}/src/lib.rs" ]; then
+              echo "::notice::${crate} has no library target, skipping semver-checks"
+              continue
+            fi
+            if ! git cat-file -e "${baseline}:crates/${crate}/Cargo.toml" 2>/dev/null; then
+              echo "::notice::${crate} did not exist at ${baseline}, skipping semver-checks (new crate)"
+              continue
+            fi
+            echo "::group::${crate} vs ${baseline}"
+            if ! cargo semver-checks -p "${crate}" --baseline-rev "${baseline}"; then
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
+
+  changelog:
+    name: changelog + readme pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - name: code change requires a CHANGELOG.md update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Not a pull request — nothing to diff."
+            exit 0
+          fi
+          git fetch origin "${{ github.base_ref }}" --quiet
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+          echo "$changed"
+          if echo "$changed" | grep -qE '^(crates/|Cargo\.toml|Cargo\.lock)' \
+            && ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::workspace code changed without a CHANGELOG.md entry"
+            exit 1
+          fi
+      - name: released version has a dated changelog entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "([^"]+)".*/\1/')
+          if grep -m1 -qF "## [${version}]" CHANGELOG.md; then
+            bash .github/scripts/check-changelog.sh
+          else
+            echo "::notice::v${version} has no changelog heading yet — it will not be tagged until one lands"
+          fi
+      - name: readme tag pins match the workspace version
+        run: bash .github/scripts/check-readme-pins.sh
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck --severity=warning scripts/*.sh .github/scripts/*.sh
+
+  trufflehog:
+    name: trufflehog (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51 # v3.95.5
+        with:
+          extra_args: --results=verified,unknown
