@@ -1,9 +1,17 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/BotResources/br-jobs-runner-kit"
+
+[workspace.dependencies]
+br-jobs-runner-core = { path = "crates/br-jobs-runner-core", version = "0.1.0" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tokio = { version = "1", default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+uuid = { version = "1", features = ["v7"] }
