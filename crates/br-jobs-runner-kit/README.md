@@ -13,7 +13,7 @@ version and the `version` must accompany the tag:
 
 ```toml
 [dependencies]
-br-jobs-runner-kit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-jobs-runner-kit", tag = "v0.1.1", version = "0.1.1" }
+br-jobs-runner-kit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-jobs-runner-kit", tag = "v0.1.2", version = "0.1.2" }
 ```
 
 If your project runs `cargo-deny`, allowlist both git sources — the kit and
@@ -82,6 +82,10 @@ async fn main() -> Result<(), br_jobs_runner_kit::HarnessError> {
 - `RunContext` — handed to each run: `declare_plan(steps)`,
   `start_step(index, label)`, `log(message)` / `log_with(level, step, message)`,
   `cancelled().await` / `is_cancelled()`, `run_id()` / `job_id()` / `attempt()`.
+  `log` emits `INFO`; `log_with` accepts `INFO`, `WARNING`, or `ERROR`
+  case-insensitively (`WARN` aliases `WARNING`). Unsupported levels are rejected
+  locally and reported through operational tracing rather than publishing a line
+  that Jobs would permanently discard.
   `RunContext::stub(run_id)` builds a test context exposing the emitted
   `RunFact`s and the cancel token, so runner authors unit-test with no infra.
 - `RunOutcome` — `Completed`, or `Failed { report, retry_after }` with the

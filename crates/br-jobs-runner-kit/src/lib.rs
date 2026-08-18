@@ -12,7 +12,7 @@ use std::future::Future;
 
 pub use br_jobs_runner_core as core;
 pub use config::{InstanceKey, RunnerConfig, RunnerType};
-pub use context::{LOG_LEVEL_INFO, RunContext};
+pub use context::{LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_WARNING, RunContext};
 pub use contract_jobs as contract;
 pub use error::HarnessError;
 pub use facts::RunFact;
