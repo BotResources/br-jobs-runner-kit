@@ -10,6 +10,18 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
 
 ## Unreleased
 
+## [0.1.1] — 2026-08-18
+
+First-consumer feedback release (ru-scaffold, the first runner on the kit).
+
+### Fixed
+
+- The initial NATS connect now retries in the background (`retry_on_initial_connect`) instead of failing the boot on the first refused dial — a pod scheduled while CNI/NATS readiness is still settling no longer crash-loops. Fail-loud is preserved: with the broker truly absent, the stream/bucket binds still error at boot.
+
+### Added
+
+- README (`br-jobs-runner-kit`): the deployment and abort semantics the first consumer had to discover by reading the source — `drain_timeout` must sit under the pod's `terminationGracePeriodSeconds` (Kubernetes default 30s vs the kit's 600s default); the drain-timeout abort is cooperative and cannot stop `spawn_blocking` closures or non-`kill_on_drop` child processes; process-global state needs a `Drop` guard; ack-as-claim means a broken-but-alive runner burns triggers rather than idling.
+
 ## [0.1.0] — 2026-08-17
 
 ### Added
