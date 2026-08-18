@@ -23,7 +23,9 @@ pub(crate) struct Transport {
 
 impl Transport {
     pub(crate) async fn bind(config: &RunnerConfig) -> Result<Self, HarnessError> {
-        let client = async_nats::connect(&config.nats_url)
+        let client = async_nats::ConnectOptions::new()
+            .retry_on_initial_connect()
+            .connect(&config.nats_url)
             .await
             .map_err(|source| HarnessError::Connect {
                 url: config.nats_url.clone(),
