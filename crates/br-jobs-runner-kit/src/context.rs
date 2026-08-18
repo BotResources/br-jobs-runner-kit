@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::facts::RunFact;
 
-pub const LOG_LEVEL_INFO: &str = "info";
+pub const LOG_LEVEL_INFO: &str = "INFO";
+pub const LOG_LEVEL_WARNING: &str = "WARNING";
+pub const LOG_LEVEL_ERROR: &str = "ERROR";
 
 #[derive(Debug, Clone)]
 pub struct RunContext {
@@ -85,12 +87,21 @@ impl RunContext {
         step_index: Option<u32>,
         message: impl Into<String>,
     ) {
+        let declared_level = level.into();
+        let Some(level) = canonical_log_level(&declared_level) else {
+            tracing::warn!(
+                run_id = %self.run_id,
+                level = %declared_level,
+                "run log line has an unsupported level; expected INFO, WARNING or ERROR"
+            );
+            return;
+        };
         self.emit(RunFact::Log(LogLine {
             version: WIRE_VERSION,
             id: Some(Uuid::now_v7()),
             run_id: self.run_id,
             step_index,
-            level: level.into(),
+            level: level.to_owned(),
             message: message.into(),
             logged_at: Utc::now(),
         }));
@@ -106,6 +117,15 @@ impl RunContext {
 
     fn emit(&self, fact: RunFact) {
         let _ = self.facts.send(fact);
+    }
+}
+
+fn canonical_log_level(level: &str) -> Option<&'static str> {
+    match level.trim().to_ascii_uppercase().as_str() {
+        LOG_LEVEL_INFO => Some(LOG_LEVEL_INFO),
+        "WARN" | LOG_LEVEL_WARNING => Some(LOG_LEVEL_WARNING),
+        LOG_LEVEL_ERROR => Some(LOG_LEVEL_ERROR),
+        _ => None,
     }
 }
 
@@ -151,7 +171,34 @@ mod tests {
         let RunFact::Log(line) = facts.try_recv().expect("log fact") else {
             panic!("expected a log fact");
         };
-        assert_eq!((line.level.as_str(), line.step_index), ("error", Some(2)));
+        assert_eq!(
+            (line.level.as_str(), line.step_index),
+            (LOG_LEVEL_ERROR, Some(2))
+        );
+    }
+
+    #[test]
+    fn given_warn_alias_when_reporting_then_wire_level_is_warning() {
+        let (ctx, mut facts, _cancel) = RunContext::stub(Uuid::now_v7());
+
+        ctx.log_with("warn", None, "nearly out of retries");
+
+        let RunFact::Log(line) = facts.try_recv().expect("a log fact was emitted") else {
+            panic!("expected a log fact");
+        };
+        assert_eq!(line.level, LOG_LEVEL_WARNING);
+    }
+
+    #[test]
+    fn given_unsupported_level_when_reporting_then_invalid_wire_fact_is_not_emitted() {
+        let (ctx, mut facts, _cancel) = RunContext::stub(Uuid::now_v7());
+
+        ctx.log_with("debug", None, "internal detail");
+
+        assert!(matches!(
+            facts.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
     }
 
     #[tokio::test]

@@ -116,7 +116,7 @@ async fn a_trigger_flows_through_started_plan_step_completed_and_logs() {
         .expect("one log line reaches the log stream");
     assert_eq!(fact, "echo-rt");
     assert_eq!(line["message"], "bonjour");
-    assert_eq!(line["level"], "info");
+    assert_eq!(line["level"], "INFO");
 
     harness.shut_down().await.expect("a clean drain");
 }

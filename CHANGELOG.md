@@ -10,6 +10,16 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
 
 ## Unreleased
 
+## [0.1.2] — 2026-08-18
+
+### Fixed
+
+- `RunContext::log` and `log_with` now publish the `INFO`, `WARNING`, and
+  `ERROR` values required by `svc-jobs`. The convenience API accepts these
+  levels case-insensitively and treats `WARN` as `WARNING`; unsupported levels
+  are rejected locally with an operational warning instead of being published
+  and permanently discarded by Jobs.
+
 ## [0.1.1] — 2026-08-18
 
 First-consumer feedback release (ru-scaffold, the first runner on the kit).
