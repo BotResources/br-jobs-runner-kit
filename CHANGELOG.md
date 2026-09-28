@@ -10,6 +10,16 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
 
 ## Unreleased
 
+### Security
+
+- `Cargo.lock` only: `rustls` 0.23.43 → 0.23.45 (RUSTSEC-2026-0285, TLS 1.3
+  handshake messages accepted across encryption level boundaries),
+  `rustls-webpki` 0.103.14 → 0.103.15, and `chacha20` 0.10.1 (yanked) →
+  0.10.2, all reached through `async-nats`. No manifest range and no source
+  change, so no release: a consumer resolves its own lockfile and takes the
+  fixed versions with `cargo update -p rustls -p chacha20`. This makes the
+  `cargo-deny` advisories gate green again on `main`.
+
 ## [0.1.2] — 2026-08-18
 
 ### Fixed
