@@ -29,4 +29,11 @@ wildcards = "deny"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = ["https://github.com/BotResources/svc-jobs"]
+allow-git = [
+    "https://github.com/BotResources/br-llm-clients-rs",
+    "https://github.com/BotResources/br-llm-graph-rs",
+    "https://github.com/BotResources/br-llm-messages-rs",
+    "https://github.com/BotResources/br-rust-common",
+    "https://github.com/BotResources/svc-jobs",
+    "https://github.com/BotResources/svc-threads",
+]

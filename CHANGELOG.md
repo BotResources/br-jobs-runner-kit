@@ -10,6 +10,10 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
 
 ## Unreleased
 
+### Added
+
+- `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code. Its release needs the pin `contract-threads/v0.6.0`.
+
 ### Security
 
 - `Cargo.lock` only: `rustls` 0.23.43 → 0.23.45 (RUSTSEC-2026-0285, TLS 1.3
