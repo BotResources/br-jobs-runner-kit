@@ -116,12 +116,6 @@ impl Runs {
                     format!("the agent {} belongs to no run", agent.as_uuid()),
                 )
             })?;
-            if state.runs.get(&record.run) != Some(&false) {
-                return Err(PortError::new(
-                    PortErrorCode::RunEnded,
-                    "the run of the agent has ended",
-                ));
-            }
             Ok((record.run, record.key.clone()))
         })
     }

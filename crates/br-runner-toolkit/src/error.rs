@@ -8,7 +8,6 @@ pub enum PortErrorCode {
     UnknownAgent,
     UnknownInstance,
     NoLiveInstance,
-    RunEnded,
     NoAuthorName,
     NoInbox,
     JobsRefused,

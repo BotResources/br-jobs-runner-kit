@@ -25,4 +25,4 @@ br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", p
 br-graph-executor = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-executor", tag = "br-graph-executor/v0.1.0", version = "0.1.0" }
 br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", branch = "feat/runner-threads/0-1" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", branch = "feat/runner-threads/0-1", version = "0.1.0" }
