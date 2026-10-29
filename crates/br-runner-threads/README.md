@@ -38,7 +38,7 @@ client.close_message(&closing, Some(&handle)).await?;
 - `Completed` and `BudgetExhausted` need the handle and go on the completion command with the seal. A handle with no chunk has no seal, so the reason goes on the fail command. `Failed`, `Interrupted` and `Cancelled` go on the fail command, carry no seal, and need no handle.
 - The closing detail is checked by `br-llm-messages`: `Failed` requires one; no detail may be blank.
 - A missing thread in `read_context` is `Ok(None)`. A document `br-llm-messages` refuses is `Unreadable` with its stable reason.
-- GraphQL: one token per request from the token cache, sent as bearer. After a rejection no other token is fetched and nothing is sent again. No token is put in an error text.
+- GraphQL: one token per request from the token cache, sent as bearer. After a rejection no other token is fetched and nothing is sent again. The secrets that the token source declares are removed from error texts; a token it does not declare is not.
 
 ## Errors
 
@@ -65,5 +65,5 @@ client.close_message(&closing, Some(&handle)).await?;
 | `ResponseSink` is this crate's own type | `br-agentic-contract` has an infallible sink; a chunk write can fail. |
 | A closing waits on a gate | The seal covers exactly the chunks that took a number before it. |
 | `AnswerLost` closings close the handle for good | Threads may have applied the closing. |
-| Transport secrets are scrubbed from error texts | The token source can echo a token in its own failure text. |
+| Declared token secrets are removed from GraphQL error texts | The token source can echo a token in its own failure text. Only what the source declares is known to the client. |
 | The member `display_name` is optional and `in_roster` is read | Threads may send a member that is not in the roster. |
