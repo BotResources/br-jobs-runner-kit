@@ -40,7 +40,10 @@ fn refused(mut payload: Value) -> Value {
 
 #[test]
 fn the_four_subjects_are_the_contract_answers_of_threads() {
-    let subjects: Vec<String> = routes().into_iter().map(|(subject, _)| subject).collect();
+    let subjects: Vec<String> = routes()
+        .iter()
+        .map(|(subject, _)| subject.clone())
+        .collect();
     assert_eq!(
         subjects,
         [

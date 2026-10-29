@@ -1,6 +1,6 @@
 mod support;
 
-use br_runner_threads::transport::Reply;
+use br_runner_threads::transport::{ChunkMode, Reply};
 use br_runner_threads::{ClosureKind, Error};
 use support::closings::*;
 use support::*;
@@ -134,4 +134,16 @@ async fn a_confirmed_closing_spends_the_handle() {
         f.close(ClosureKind::Completed).await,
         Err(Error::StreamClosed)
     );
+}
+
+#[tokio::test]
+async fn a_broken_handle_with_a_waiting_fail_closing_reports_broken_not_closed() {
+    let f = fixture().await;
+    f.world.bus.chunk_mode(ChunkMode::Fail);
+    assert_eq!(f.handle.keepalive().await, Err(Error::StreamBroken));
+    f.world.bus.chunk_mode(ChunkMode::Ack);
+    let (_, task) = f.start(ClosureKind::Failed);
+    commands_sent(&f.world.bus, 2).await;
+    assert_eq!(f.handle.keepalive().await, Err(Error::StreamBroken));
+    task.abort();
 }

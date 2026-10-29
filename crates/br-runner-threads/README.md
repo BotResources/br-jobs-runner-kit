@@ -2,7 +2,7 @@
 
 The typed client of the Threads service for code that runs inside a runner. It creates threads, writes whole messages or streams, closes a message with a named reason, reads the projected context, sets or fails the title, and requests an artifact upload. Conversation types are those of `br-llm-messages`; thread references are those of `br-agentic-contract`. No wire type appears in the API.
 
-It is thin. It sends what the importer gives, sends nothing twice, and invents no id, limit or timeout. The sealed intent of the minor is the contract; this file maps it to the code.
+It is thin. It sends what the importer gives, sends nothing twice, and invents no id, limit or timeout.
 
 ## Install
 

@@ -13,7 +13,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Added
 
-- `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code. Its release needs the pin `contract-threads/v0.6.0`.
+- `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
 
 ### Security
 

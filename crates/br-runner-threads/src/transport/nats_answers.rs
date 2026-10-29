@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use async_nats::Message;
 use contract_threads::{
@@ -45,16 +45,19 @@ fn locked(state: &Mutex<State>) -> MutexGuard<'_, State> {
 
 type Reader = fn(Value) -> Result<Answer, Error>;
 
-fn routes() -> Vec<(String, Reader)> {
-    vec![
-        (
-            subject_of::<ThreadCommandConfirmed>(),
-            thread_confirmed as Reader,
-        ),
-        (subject_of::<ThreadCommandRefused>(), thread_refused),
-        (subject_of::<MessageCommandConfirmed>(), message_confirmed),
-        (subject_of::<MessageCommandRefused>(), message_refused),
-    ]
+fn routes() -> &'static [(String, Reader)] {
+    static ROUTES: OnceLock<Vec<(String, Reader)>> = OnceLock::new();
+    ROUTES.get_or_init(|| {
+        vec![
+            (
+                subject_of::<ThreadCommandConfirmed>(),
+                thread_confirmed as Reader,
+            ),
+            (subject_of::<ThreadCommandRefused>(), thread_refused),
+            (subject_of::<MessageCommandConfirmed>(), message_confirmed),
+            (subject_of::<MessageCommandRefused>(), message_refused),
+        ]
+    })
 }
 
 fn subject_of<E: ThreadsEvent>() -> String {
@@ -117,7 +120,7 @@ fn command_id_of(payload: &Value) -> Option<Uuid> {
 
 fn read_answer(subject: &str, bytes: &[u8]) -> Option<(Uuid, Result<Answer, Error>)> {
     let (_, read) = routes()
-        .into_iter()
+        .iter()
         .find(|(candidate, _)| candidate == subject)?;
     let envelope = serde_json::from_slice::<Envelope>(bytes).ok()?;
     let command_id = command_id_of(&envelope.payload)?;
@@ -142,7 +145,7 @@ impl Answers {
         for (subject, _) in routes() {
             let subscriber = self
                 .client
-                .subscribe(subject)
+                .subscribe(subject.clone())
                 .await
                 .map_err(|e| Error::Unavailable(e.to_string()))?;
             subscribers.push(subscriber);

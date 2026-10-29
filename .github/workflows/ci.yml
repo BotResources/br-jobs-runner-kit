@@ -137,6 +137,8 @@ jobs:
           nats-server -js -p 4222 -sd "$RUNNER_TEMP/nats" &
           sleep 1
           cargo test -p br-jobs-runner-kit --test e2e --locked -- --ignored --test-threads=1
+      - name: run the br-runner-threads e2e tests against a real JetStream
+        run: cargo test -p br-runner-threads --locked -- --ignored --test-threads=1
 
   changelog:
     name: changelog + readme pins
