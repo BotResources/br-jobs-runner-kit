@@ -254,3 +254,16 @@ async fn an_upload_request_needs_a_v7_artifact_id_and_sends_nothing_otherwise() 
     ));
     assert!(world.graphql.bodies().is_empty());
 }
+
+#[tokio::test]
+async fn a_5xx_with_a_readable_code_is_a_refusal_with_that_code() {
+    for status in [500, 502, 504] {
+        match failure_of(status, json!({ "errors": [coded("INTERNAL")] })).await {
+            Error::Refused(refusal) => {
+                assert_eq!(refusal.code, "INTERNAL", "status {status}");
+                assert_eq!(refusal.params["limit"], 3);
+            }
+            other => panic!("refused, not {other:?}"),
+        }
+    }
+}

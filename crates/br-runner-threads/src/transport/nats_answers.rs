@@ -192,9 +192,14 @@ impl Answers {
         }
     }
 
-    pub(crate) fn register(self: &Arc<Self>, command_id: Uuid) -> Waiter {
+    pub(crate) fn register(self: &Arc<Self>, command_id: Uuid) -> Result<Waiter, Error> {
         let (sender, receiver) = oneshot::channel();
         let mut state = locked(&self.state);
+        if !state.open {
+            return Err(Error::Unavailable(
+                "the answer subscription is not open".to_owned(),
+            ));
+        }
         let token = state.next_token;
         state.next_token += 1;
         state
@@ -202,12 +207,12 @@ impl Answers {
             .entry(command_id)
             .or_default()
             .push((token, sender));
-        Waiter {
+        Ok(Waiter {
             answers: Arc::clone(self),
             command_id,
             token,
             receiver: Some(receiver),
-        }
+        })
     }
 
     fn forget(&self, command_id: Uuid, token: u64) {

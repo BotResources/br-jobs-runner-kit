@@ -42,6 +42,8 @@ pub struct OutboundChunk {
 }
 
 pub trait BusTransport: Send + Sync {
+    fn ready(&self) -> BoxFuture<'_, Result<(), Error>>;
+
     fn send(&self, command: BusCommand) -> BoxFuture<'_, Result<AnswerWait, Error>>;
 
     fn publish_chunk(&self, chunk: OutboundChunk) -> BoxFuture<'_, Result<(), Error>>;
@@ -63,5 +65,5 @@ mod nats;
 mod nats_answers;
 
 pub use http::HttpGraphql;
-pub use memory::{ChunkMode, MemoryBus, MemoryGraphql, Reply};
+pub use memory::{ChunkMode, MemoryBus, MemoryGraphql, ReadyMode, Reply};
 pub use nats::NatsBus;

@@ -149,14 +149,14 @@ async fn the_next_command_reopens_the_subscription_after_it_closed() {
     let answers = Answers::new(client.clone());
     answers.ensure_open().await.expect("open");
 
-    let first = answers.register(Uuid::now_v7());
+    let first = answers.register(Uuid::now_v7()).expect("registered");
     answers.closed();
     assert!(matches!(first.into_wait().await, Err(Error::AnswerLost(_))));
     assert!(!locked(&answers.state).open);
 
     answers.ensure_open().await.expect("reopened");
     let id = Uuid::now_v7();
-    let waiter = answers.register(id);
+    let waiter = answers.register(id).expect("registered");
     client
         .publish(THREAD_CONFIRMED, bytes(thread_payload(id)).into())
         .await

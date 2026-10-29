@@ -39,6 +39,11 @@ pub(crate) async fn answered(
     }
 }
 
+pub(crate) async fn sent(bus: &dyn BusTransport, command: BusCommand) -> Result<AnswerWait, Error> {
+    bus.ready().await?;
+    bus.send(command).await
+}
+
 impl ThreadsClient {
     pub fn new(
         actor: ServiceAccountId,
@@ -53,7 +58,7 @@ impl ThreadsClient {
     }
 
     async fn run(&self, command: BusCommand, wait: Option<Duration>) -> Result<Confirmed, Error> {
-        let pending = self.bus.send(command).await?;
+        let pending = sent(self.bus.as_ref(), command).await?;
         answered(pending, wait).await
     }
 

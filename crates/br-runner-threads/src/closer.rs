@@ -1,4 +1,4 @@
-use crate::client::{ThreadsClient, answered};
+use crate::client::{ThreadsClient, answered, sent};
 use crate::closing::Closing;
 use crate::commands;
 use crate::error::Error;
@@ -18,7 +18,7 @@ pub(crate) async fn close(
             ));
         }
         let command = commands::closing(client.actor, closing, None)?;
-        let pending = client.bus.send(command).await?;
+        let pending = sent(client.bus.as_ref(), command).await?;
         return answered(pending, closing.wait).await;
     };
     if handle.message_id() != closing.message_id {
@@ -38,6 +38,7 @@ pub(crate) async fn close(
         None
     };
     let command = commands::closing(client.actor, closing, seal)?;
+    core.bus.ready().await?;
     let guard = core.begin_closing();
     let pending = match core.bus.send(command).await {
         Ok(pending) => pending,

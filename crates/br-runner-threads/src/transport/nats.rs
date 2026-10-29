@@ -39,15 +39,20 @@ impl NatsBus {
 }
 
 impl BusTransport for NatsBus {
-    fn send(&self, command: BusCommand) -> BoxFuture<'_, Result<AnswerWait, Error>> {
+    fn ready(&self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             if self.fabric.connection_state() != ConnectionState::Connected {
                 return Err(Error::Unavailable(
                     "the connection is not connected".to_owned(),
                 ));
             }
-            self.answers.ensure_open().await?;
-            let waiter = self.answers.register(command.command_id);
+            self.answers.ensure_open().await
+        })
+    }
+
+    fn send(&self, command: BusCommand) -> BoxFuture<'_, Result<AnswerWait, Error>> {
+        Box::pin(async move {
+            let waiter = self.answers.register(command.command_id)?;
             let coords = versioned_command_coords(command.aggregate, command.verb, command.version);
             let envelope = IntegrationCommand::new(
                 command.command_id,
