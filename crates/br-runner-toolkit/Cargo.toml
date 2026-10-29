@@ -1,0 +1,34 @@
+[package]
+name = "br-runner-toolkit"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The library every runner binary imports to be a runner: the agent port, the thread access and the failure and outcome rules over the graph executor"
+
+[dependencies]
+br-agentic-contract.workspace = true
+br-graph-contract.workspace = true
+br-graph-executor.workspace = true
+br-llm-clients-core.workspace = true
+br-llm-messages.workspace = true
+br-runner-threads.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

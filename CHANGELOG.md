@@ -11,6 +11,10 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
+### Added
+
+- `br-runner-toolkit` 0.1.0 (new library): the agent port, the thread access and the failure, outcome and saved-state rules for runner binaries.
+
 ### Security
 
 - `Cargo.lock` only: `rustls` 0.23.43 → 0.23.45 (RUSTSEC-2026-0285, TLS 1.3
