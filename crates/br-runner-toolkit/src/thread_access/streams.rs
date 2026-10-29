@@ -28,7 +28,7 @@ impl Drop for OpenTurn {
 #[derive(Default)]
 pub(crate) struct Streams {
     turns: Mutex<HashMap<TurnId, Arc<OpenTurn>>>,
-    opening: tokio::sync::Mutex<()>,
+    opening: Mutex<HashMap<TurnId, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl Streams {
@@ -61,7 +61,30 @@ impl Streams {
         owner: Owner,
         open: Opening,
     ) -> Result<Arc<OpenTurn>, PortError> {
-        let _guard = self.opening.lock().await;
+        let gate = Arc::clone(
+            self.opening
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .entry(open.turn)
+                .or_default(),
+        );
+        let _guard = gate.lock().await;
+        let turn = open.turn;
+        let result = self.open_once(client, runs, owner, open).await;
+        let mut gates = self.opening.lock().unwrap_or_else(PoisonError::into_inner);
+        if Arc::strong_count(&gate) <= 2 {
+            gates.remove(&turn);
+        }
+        result
+    }
+
+    async fn open_once(
+        &self,
+        client: &ThreadsClient,
+        runs: &Runs,
+        owner: Owner,
+        open: Opening,
+    ) -> Result<Arc<OpenTurn>, PortError> {
         if let Some(existing) = self.get(open.turn) {
             return Ok(existing);
         }

@@ -62,7 +62,7 @@ impl Runs {
 
     pub(crate) fn end(&self, run: Uuid) {
         self.with(|state| {
-            state.runs.insert(run, true);
+            state.runs.remove(&run);
             state.instances.retain(|_, record| record.at.run != run);
             state.agents.retain(|_, record| record.run != run);
             state.keys.retain(|(owner, _), _| *owner != run);
