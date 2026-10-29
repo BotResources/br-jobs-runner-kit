@@ -19,6 +19,12 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
   change, so no release: a consumer resolves its own lockfile and takes the
   fixed versions with `cargo update -p rustls -p chacha20`. This makes the
   `cargo-deny` advisories gate green again on `main`.
+- `Cargo.lock` only: `rustls` 0.23.45 → 0.23.46 (RUSTSEC-2026-0346,
+  RUSTSEC-2026-0347, RUSTSEC-2026-0348, RUSTSEC-2026-0349), `rustls-webpki`
+  0.103.15 → 0.103.16 (RUSTSEC-2026-0382), `webpki-roots` 1.0.9 → 1.0.11
+  (RUSTSEC-2026-0381) and `tokio` 1.53.1 → 1.54.1 (RUSTSEC-2026-0386), all
+  reached through `async-nats`. No manifest range and no source change, so no
+  release.
 
 ## [0.1.2] — 2026-08-18
 
