@@ -150,7 +150,7 @@ async fn a_body_cut_short_after_the_request_left_is_an_answer_lost() {
 }
 
 #[tokio::test]
-async fn a_token_source_that_fails_is_an_auth_error_that_never_shows_the_token() {
+async fn a_token_source_that_fails_is_an_auth_error_that_hides_the_secrets_it_declares() {
     let (graphql, fetched) = transport(1, true);
     match graphql.post(Vec::new()).await {
         Err(Error::Auth(text)) => assert!(!text.contains(TOKEN), "{text}"),
