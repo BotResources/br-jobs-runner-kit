@@ -3,7 +3,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -72,34 +72,37 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
-          toolchain: stable
+          toolchain: "1.95"
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: semver
       - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
         with:
           tool: cargo-semver-checks
-      - name: cargo semver-checks (per-crate, unified baseline)
+      - name: cargo semver-checks against each tracked crate's previous tag
+        run: |
+          set -euo pipefail
+          source .github/scripts/tracked-libraries.sh
+          for crate in $TRACKED_LIBRARIES; do
+            bash .github/scripts/semver-check.sh "$crate"
+          done
+      - name: cargo semver-checks of the frozen crates against the last unified tag
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          fail=0
+          source .github/scripts/tracked-libraries.sh
           baseline=$(git tag --list "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n1)
           if [ -z "$baseline" ]; then
-            echo "::notice::no prior workspace tag (v*), skipping semver-checks (first unified release)"
+            echo "::notice::no unified workspace tag (v*), skipping the frozen crates"
             exit 0
           fi
-          for toml in crates/*/Cargo.toml; do
-            crate=$(basename "$(dirname "$toml")")
-            if [ ! -f "crates/${crate}/src/lib.rs" ]; then
-              echo "::notice::${crate} has no library target, skipping semver-checks"
-              continue
-            fi
+          fail=0
+          for entry in $FROZEN_CRATES; do
+            crate="${entry%@*}"
             if ! git cat-file -e "${baseline}:crates/${crate}/Cargo.toml" 2>/dev/null; then
-              echo "::notice::${crate} did not exist at ${baseline}, skipping semver-checks (new crate)"
+              echo "::notice::${crate} did not exist at ${baseline}, skipping"
               continue
             fi
             echo "::group::${crate} vs ${baseline}"
@@ -142,7 +145,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
-      - name: code change requires a CHANGELOG.md update
+      - name: a change to a frozen crate or the workspace requires a CHANGELOG.md update
         shell: bash
         run: |
           set -euo pipefail
@@ -150,26 +153,32 @@ jobs:
             echo "Not a pull request — nothing to diff."
             exit 0
           fi
+          source .github/scripts/tracked-libraries.sh
           git fetch origin "${{ github.base_ref }}" --quiet
           changed="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
           echo "$changed"
-          if echo "$changed" | grep -qE '^(crates/|Cargo\.toml|Cargo\.lock)' \
-            && ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
-            echo "::error::workspace code changed without a CHANGELOG.md entry"
+          paths='Cargo\.toml$|Cargo\.lock$'
+          for entry in $FROZEN_CRATES; do
+            paths="${paths}|crates/${entry%@*}/"
+          done
+          if echo "$changed" | grep -qE "^(${paths})" && ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::a frozen crate, Cargo.toml or Cargo.lock changed without a CHANGELOG.md entry"
             exit 1
           fi
-      - name: released version has a dated changelog entry
-        shell: bash
+      - name: check changelog entries
         run: |
           set -euo pipefail
-          version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "([^"]+)".*/\1/')
-          if grep -m1 -qF "## [${version}]" CHANGELOG.md; then
-            bash .github/scripts/check-changelog.sh
-          else
-            echo "::notice::v${version} has no changelog heading yet — it will not be tagged until one lands"
-          fi
-      - name: readme tag pins match the workspace version
-        run: bash .github/scripts/check-readme-pins.sh
+          source .github/scripts/tracked-libraries.sh
+          for crate in $TRACKED_LIBRARIES; do
+            bash .github/scripts/check-changelog.sh "$crate"
+          done
+      - name: check README tag pins are fresh
+        run: |
+          set -euo pipefail
+          source .github/scripts/tracked-libraries.sh
+          for crate in $TRACKED_LIBRARIES; do
+            bash .github/scripts/check-readme-pins.sh "$crate"
+          done
 
   shellcheck:
     name: shellcheck
@@ -178,7 +187,39 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck --severity=warning scripts/*.sh .github/scripts/*.sh
+      - run: shellcheck --severity=warning .github/scripts/*.sh
+
+  release-tooling:
+    name: release-line law and registry wiring tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: release-line decision table
+        run: bash .github/scripts/test-release-line.sh
+      - name: release detection and registry wiring
+        run: bash .github/scripts/test-release-pipeline.sh
+      - name: registry gate, tag and record wiring
+        run: bash .github/scripts/test-registry-wiring.sh
+      - name: a version released before the registry chain
+        run: bash .github/scripts/test-released-before-registry.sh
+      - name: gate, computation, tag and record order
+        run: bash .github/scripts/test-release-order.sh
+      - name: a second library joins, a frozen crate stays out
+        run: bash .github/scripts/test-second-library.sh
+
+  registry-gate:
+    name: registry gate
+    if: github.event_name == 'pull_request' && (github.base_ref == 'main' || startsWith(github.base_ref, 'release/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - name: release-line law and registry gate for every bumped tracked crate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BR_REGISTRY_KEY: ${{ secrets.BR_REGISTRY_KEY }}
+        run: bash .github/scripts/pr-registry-gate.sh
 
   trufflehog:
     name: trufflehog (secret scan)
