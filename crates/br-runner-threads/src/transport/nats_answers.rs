@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_nats::Message;
-use contract_threads::coords::event_coords;
+use contract_threads::{
+    MessageCommandConfirmed, MessageCommandRefused, ReasonCode, ThreadCommandConfirmed,
+    ThreadCommandRefused, ThreadsEvent,
+};
 use futures::StreamExt;
 use futures::stream::select_all;
 use serde::Deserialize;
@@ -34,65 +37,91 @@ struct Envelope {
     payload: Value,
 }
 
-#[derive(Deserialize)]
-struct Probe {
-    command_id: Uuid,
-}
-
-#[derive(Deserialize)]
-struct ConfirmedWire {
-    status: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct RefusedWire {
-    reason_code: String,
-    #[serde(default)]
-    params: Map<String, Value>,
-}
-
 fn locked(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn subjects() -> Vec<String> {
-    [
-        ("thread", "confirmed"),
-        ("thread", "refused"),
-        ("message", "confirmed"),
-        ("message", "refused"),
+type Reader = fn(Value) -> Result<Answer, Error>;
+
+fn routes() -> Vec<(String, Reader)> {
+    vec![
+        (
+            subject_of::<ThreadCommandConfirmed>(),
+            thread_confirmed as Reader,
+        ),
+        (subject_of::<ThreadCommandRefused>(), thread_refused),
+        (subject_of::<MessageCommandConfirmed>(), message_confirmed),
+        (subject_of::<MessageCommandRefused>(), message_refused),
     ]
-    .into_iter()
-    .map(|(aggregate, fact)| br_util_nats_fabric::event_subject(&event_coords(aggregate, fact)))
-    .collect()
 }
 
-fn status_of(literal: &str) -> Result<MessageStatus, Error> {
-    match contract_threads::MessageStatus::parse(literal) {
-        Ok(contract_threads::MessageStatus::Streaming) => Ok(MessageStatus::Streaming),
-        Ok(contract_threads::MessageStatus::Completed) => Ok(MessageStatus::Completed),
-        Ok(contract_threads::MessageStatus::Failed) => Ok(MessageStatus::Failed),
-        Ok(contract_threads::MessageStatus::Cancelled) => Ok(MessageStatus::Cancelled),
-        Err(_) => Err(Error::Unreadable(format!("unknown status {literal}"))),
+fn subject_of<E: ThreadsEvent>() -> String {
+    br_util_nats_fabric::event_subject(&E::coords())
+}
+
+fn unreadable(error: serde_json::Error) -> Error {
+    Error::Unreadable(format!("an answer cannot be read: {error}"))
+}
+
+fn status_of(status: contract_threads::MessageStatus) -> MessageStatus {
+    match status {
+        contract_threads::MessageStatus::Streaming => MessageStatus::Streaming,
+        contract_threads::MessageStatus::Completed => MessageStatus::Completed,
+        contract_threads::MessageStatus::Failed => MessageStatus::Failed,
+        contract_threads::MessageStatus::Cancelled => MessageStatus::Cancelled,
     }
 }
 
-fn decode(subject: &str, command_id: Uuid, payload: Value) -> Result<Answer, Error> {
-    if subject.ends_with(".refused.v1") {
-        let wire: RefusedWire = serde_json::from_value(payload)
-            .map_err(|e| Error::Unreadable(format!("a refusal cannot be read: {e}")))?;
-        return Ok(Answer::Refused(Refusal {
-            code: wire.reason_code,
-            params: wire.params,
-            command_id: Some(command_id),
-        }));
-    }
-    let wire: ConfirmedWire = serde_json::from_value(payload)
-        .map_err(|e| Error::Unreadable(format!("a confirmation cannot be read: {e}")))?;
-    let status = wire.status.as_deref().map(status_of).transpose()?;
-    Ok(Answer::Confirmed(Confirmed { command_id, status }))
+fn refusal(command_id: Uuid, code: ReasonCode, params: Map<String, Value>) -> Answer {
+    Answer::Refused(Refusal {
+        code: code.as_str().to_owned(),
+        params,
+        command_id: Some(command_id),
+    })
+}
+
+fn thread_confirmed(payload: Value) -> Result<Answer, Error> {
+    let event: ThreadCommandConfirmed = serde_json::from_value(payload).map_err(unreadable)?;
+    Ok(Answer::Confirmed(Confirmed {
+        command_id: event.command_id,
+        status: None,
+    }))
+}
+
+fn thread_refused(payload: Value) -> Result<Answer, Error> {
+    let event: ThreadCommandRefused = serde_json::from_value(payload).map_err(unreadable)?;
+    Ok(refusal(event.command_id, event.reason_code, event.params))
+}
+
+fn message_confirmed(payload: Value) -> Result<Answer, Error> {
+    let event: MessageCommandConfirmed = serde_json::from_value(payload).map_err(unreadable)?;
+    Ok(Answer::Confirmed(Confirmed {
+        command_id: event.command_id,
+        status: Some(status_of(event.status)),
+    }))
+}
+
+fn message_refused(payload: Value) -> Result<Answer, Error> {
+    let event: MessageCommandRefused = serde_json::from_value(payload).map_err(unreadable)?;
+    Ok(refusal(event.command_id, event.reason_code, event.params))
+}
+
+fn command_id_of(payload: &Value) -> Option<Uuid> {
+    payload
+        .get("command_id")?
+        .as_str()
+        .and_then(|text| Uuid::try_parse(text).ok())
+}
+
+fn read_answer(subject: &str, bytes: &[u8]) -> Option<(Uuid, Result<Answer, Error>)> {
+    let (_, read) = routes()
+        .into_iter()
+        .find(|(candidate, _)| candidate == subject)?;
+    let envelope = serde_json::from_slice::<Envelope>(bytes).ok()?;
+    let command_id = command_id_of(&envelope.payload)?;
+    Some((command_id, read(envelope.payload)))
 }
 
 impl Answers {
@@ -110,7 +139,7 @@ impl Answers {
             return Ok(());
         }
         let mut subscribers = Vec::new();
-        for subject in subjects() {
+        for (subject, _) in routes() {
             let subscriber = self
                 .client
                 .subscribe(subject)
@@ -135,23 +164,16 @@ impl Answers {
     }
 
     fn dispatch(&self, message: &Message) {
-        let Ok(envelope) = serde_json::from_slice::<Envelope>(&message.payload) else {
-            return;
-        };
-        let Ok(probe) = serde_json::from_value::<Probe>(envelope.payload.clone()) else {
+        let Some((command_id, answer)) = read_answer(message.subject.as_str(), &message.payload)
+        else {
             return;
         };
         let waiters = locked(&self.state)
             .waiters
-            .remove(&probe.command_id)
+            .remove(&command_id)
             .unwrap_or_default();
         for (_, sender) in waiters {
-            let answer = decode(
-                message.subject.as_str(),
-                probe.command_id,
-                envelope.payload.clone(),
-            );
-            let _ = sender.send(answer);
+            let _ = sender.send(answer.clone());
         }
     }
 
@@ -226,3 +248,7 @@ impl Drop for Waiter {
         self.answers.forget(self.command_id, self.token);
     }
 }
+
+#[cfg(test)]
+#[path = "nats_answers_tests.rs"]
+mod tests;

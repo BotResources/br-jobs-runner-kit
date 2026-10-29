@@ -111,3 +111,32 @@ async fn a_context_with_no_document_for_the_request_is_unreadable() {
         Err(Error::Unreadable(_))
     ));
 }
+
+#[tokio::test]
+async fn an_absent_threads_context_key_is_unreadable_and_only_an_explicit_null_is_none() {
+    let world = world();
+    for data in [
+        json!({}),
+        json!({ "threadContext": null }),
+        json!({ "other": 1 }),
+    ] {
+        world
+            .graphql
+            .reply_with(reply(200, json!({ "data": data })));
+        match world.client.read_context(&query(&world, false)).await {
+            Err(Error::Unreadable(reason)) => assert!(reason.contains("threadsContext")),
+            other => panic!("unreadable, not {other:?}"),
+        }
+    }
+    world
+        .graphql
+        .reply_with(reply(200, json!({ "data": { "threadsContext": null } })));
+    assert!(
+        world
+            .client
+            .read_context(&query(&world, false))
+            .await
+            .expect("read")
+            .is_none()
+    );
+}

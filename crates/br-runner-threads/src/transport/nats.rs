@@ -7,8 +7,8 @@ use br_core_kernel::Actor;
 use br_util_nats_fabric::{
     ConnectionState, Fabric, FabricError, INTEGRATION_CMD, INTEGRATION_EVT, PublishErrorKind,
 };
-use contract_threads::STREAMING_STREAM;
 use contract_threads::coords::versioned_command_coords;
+use contract_threads::{ChunkFrame, STREAMING_STREAM};
 
 use super::nats_answers::Answers;
 use super::{AnswerWait, BoxFuture, BusCommand, BusTransport, OutboundChunk};
@@ -57,16 +57,8 @@ impl BusTransport for NatsBus {
                 EventMetadata::new(Actor::Service(command.actor), command.command_id),
                 command.payload,
             );
-            let published = self
-                .fabric
-                .publish_command_with_id_outcome(
-                    &coords,
-                    &envelope,
-                    &command.command_id.to_string(),
-                )
-                .await;
-            match published {
-                Ok(_) => Ok(waiter.into_wait()),
+            match self.fabric.publish_command(&coords, &envelope).await {
+                Ok(()) => Ok(waiter.into_wait()),
                 Err(FabricError::Publish {
                     kind: PublishErrorKind::NoStream,
                     detail,
@@ -78,16 +70,14 @@ impl BusTransport for NatsBus {
 
     fn publish_chunk(&self, chunk: OutboundChunk) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
-            let subject = contract_threads::chunk_subject(chunk.message_id);
-            let bytes = serde_json::to_vec(&chunk.frame).map_err(|_| Error::StreamBroken)?;
+            let frame: ChunkFrame =
+                serde_json::from_value(chunk.frame).map_err(|_| Error::StreamBroken)?;
+            let bytes = serde_json::to_vec(&frame).map_err(|_| Error::StreamBroken)?;
             let mut headers = async_nats::HeaderMap::new();
-            headers.insert(
-                async_nats::header::NATS_MESSAGE_ID,
-                format!("{}:{}", chunk.message_id, chunk.seq),
-            );
+            headers.insert(async_nats::header::NATS_MESSAGE_ID, frame.msg_id());
             let ack = self
                 .jetstream
-                .publish_with_headers(subject, headers, bytes.into())
+                .publish_with_headers(frame.subject(), headers, bytes.into())
                 .await
                 .map_err(|_| Error::StreamBroken)?;
             ack.await.map_err(|_| Error::StreamBroken)?;

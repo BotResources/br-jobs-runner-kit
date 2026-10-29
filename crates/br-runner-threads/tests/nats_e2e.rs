@@ -1,40 +1,16 @@
 mod support;
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::{self};
 use br_agentic_contract::ThreadRef;
 use br_runner_threads::transport::NatsBus;
-use br_runner_threads::{ClosureKind, Error, MessageStatus, NewThread, ThreadsClient};
+use br_runner_threads::{ClosureKind, Error, MessageStatus, NewThread};
 use contract_threads::{ChunkFrame, STREAMING_STREAM, chunk_subject};
 use futures::future::join_all;
 use support::nats::*;
+use support::server::Server;
 use support::*;
-
-fn new_thread(thread: ThreadRef) -> NewThread {
-    NewThread {
-        command_id: v7(),
-        thread,
-        owner_id: None,
-        member_ids: Vec::new(),
-        title: None,
-        resources: BTreeMap::new(),
-        origin: None,
-        acting_user_id: None,
-        wait: Some(Duration::from_secs(10)),
-    }
-}
-
-async fn threads_client(client: &async_nats::Client) -> ThreadsClient {
-    let bus = NatsBus::connect(client.clone()).await.expect("bound");
-    ThreadsClient::new(
-        actor(),
-        Arc::new(bus),
-        Arc::new(br_runner_threads::transport::MemoryGraphql::new()),
-    )
-}
 
 #[tokio::test]
 #[ignore = "needs a nats-server binary"]
@@ -44,7 +20,7 @@ async fn concurrent_commands_each_get_their_own_answer_even_when_answers_come_ba
     streams(&client, true).await;
     let script = Script::default();
     let threads: Vec<ThreadRef> = (0..12).map(|_| ThreadRef::new(v7())).collect();
-    let requests: Vec<NewThread> = threads.iter().map(|t| new_thread(*t)).collect();
+    let requests: Vec<NewThread> = threads.iter().map(|t| new_thread_for(*t)).collect();
     for request in requests.iter().step_by(3) {
         script
             .refuse
@@ -59,7 +35,7 @@ async fn concurrent_commands_each_get_their_own_answer_even_when_answers_come_ba
         if index % 3 == 0 {
             match result {
                 Err(Error::Refused(refusal)) => {
-                    assert_eq!(refusal.code, "THREAD_EXISTS");
+                    assert_eq!(refusal.code, "KEY_REUSED");
                     assert_eq!(refusal.params["n"], 1);
                     assert_eq!(refusal.command_id, Some(request.command_id));
                 }
@@ -161,7 +137,7 @@ async fn no_answer_within_the_importer_wait_is_an_answer_lost() {
     let client = server.client().await;
     streams(&client, true).await;
     let threads_client = threads_client(&client).await;
-    let mut request = new_thread(ThreadRef::new(v7()));
+    let mut request = new_thread_for(ThreadRef::new(v7()));
     request.wait = Some(Duration::from_millis(200));
     let result = threads_client.create_thread(&request).await;
     assert!(

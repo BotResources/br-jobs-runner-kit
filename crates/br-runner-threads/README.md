@@ -31,13 +31,14 @@ client.close_message(&closing, Some(&handle)).await?;
 
 ## Rules the code keeps
 
-- Every id of a new object must be a UUIDv7 and is refused before sending otherwise (`InvalidInput`). Reference ids are sent as given.
+- Every id of a new object must be a UUIDv7 of the RFC 4122 variant and is refused before sending otherwise (`InvalidInput`). Reference ids are sent as given.
 - A command ends with its answer. Without `wait`, the operation waits for the answer or for the closing of the answer subscription. With `wait`, a missing answer is `AnswerLost`.
 - Chunks are numbered from 0 without a gap, one at a time per handle and its writers, each ending at the broker acknowledgement. A chunk the broker does not acknowledge breaks the handle (`StreamBroken`), and so does a chunk operation abandoned after it took its number.
 - A closing is sent after every chunk that took a number and after each acknowledgement. While a closing waits for its answer, the handle takes no chunk (`StreamClosed`). The handle is free again only when every closing sent with it was answered `Refused`. A closing answered `AnswerLost` or `Unreadable`, or abandoned after sending, closes the handle for good. A confirmed closing spends it. A closing refused before sending changes nothing.
 - `Completed` and `BudgetExhausted` need the handle and go on the completion command with the seal. A handle with no chunk has no seal, so the reason goes on the fail command. `Failed`, `Interrupted` and `Cancelled` go on the fail command, carry no seal, and need no handle.
 - The closing detail is checked by `br-llm-messages`: `Failed` requires one; no detail may be blank.
-- A missing thread in `read_context` is `Ok(None)`. A document `br-llm-messages` refuses is `Unreadable` with its stable reason.
+- A command is published with no broker dedup id, so a resend under the same command id always reaches Threads, which gives the same answer. An answer is read as the Threads contract event of its exact subject; any other subject is no answer.
+- A missing thread in `read_context` is `Ok(None)` (the field `threadsContext` is explicitly null). A response with no `threadsContext` field is `Unreadable`. A document `br-llm-messages` refuses is `Unreadable` with its stable reason.
 - GraphQL: one token per request from the token cache, sent as bearer. After a rejection no other token is fetched and nothing is sent again. The secrets that the token source declares are removed from error texts; a token it does not declare is not.
 
 ## Errors
@@ -62,6 +63,7 @@ client.close_message(&closing, Some(&handle)).await?;
 | `NatsBus` binds streams and creates none | Streams are declared by gitops. A missing stream is `Infra`, and an absent subject stream is `Unavailable`. |
 | One shared answer subscription | Answers are matched by command id. Each command registers its waiter before it publishes, and a dropped waiter is forgotten. |
 | Chunks are published on the streaming stream directly, with `Nats-Msg-Id` `{message_id}:{seq}` | The fabric has no writer-side lane publish. The id lets the broker drop a duplicate of one chunk. |
+| Commands carry no `Nats-Msg-Id` | The broker drops a second message with the same id inside its duplicate window and says nothing, so a resend after a lost answer would never reach Threads. Threads deduplicates by command id. |
 | `ResponseSink` is this crate's own type | `br-agentic-contract` has an infallible sink; a chunk write can fail. |
 | A closing waits on a gate | The seal covers exactly the chunks that took a number before it. |
 | `AnswerLost` closings close the handle for good | Threads may have applied the closing. |

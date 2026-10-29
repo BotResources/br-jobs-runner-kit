@@ -88,6 +88,17 @@ async fn a_403_without_a_code_is_a_forbidden_refusal_and_other_failures_lose_the
 }
 
 #[tokio::test]
+async fn a_403_with_a_readable_code_is_a_refusal_with_that_code_not_forbidden() {
+    match failure_of(403, json!({ "errors": [coded("NOT_A_MEMBER")] })).await {
+        Error::Refused(refusal) => {
+            assert_eq!(refusal.code, "NOT_A_MEMBER");
+            assert_eq!(refusal.params["limit"], 3);
+        }
+        other => panic!("refused, not {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn a_2xx_error_without_a_code_or_without_data_is_unreadable() {
     assert!(matches!(
         failure_of(200, json!({ "errors": [{ "message": "boom" }] })).await,

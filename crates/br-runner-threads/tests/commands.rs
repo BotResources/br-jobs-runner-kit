@@ -106,6 +106,12 @@ async fn ids_of_new_objects_are_refused_before_sending_when_they_are_not_uuidv7(
         world.client.create_thread(&request).await,
         Err(Error::InvalidInput(_))
     ));
+    let mut request = new_thread(&world);
+    request.command_id = support::v7_with_a_foreign_variant();
+    assert!(matches!(
+        world.client.create_thread(&request).await,
+        Err(Error::InvalidInput(_))
+    ));
     let notice_turn = ai_turn_with(notice());
     let bad_annotation = PlacedAnnotation {
         after_entry: entry_id(),

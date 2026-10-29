@@ -92,7 +92,10 @@ impl ThreadsClient {
         let data = self
             .graphql(operations::body(operations::CONTEXT, variables)?)
             .await?;
-        let found = data.get("threadsContext").cloned().unwrap_or(Value::Null);
+        let found = data
+            .get("threadsContext")
+            .cloned()
+            .ok_or_else(|| Error::Unreadable("the response holds no threadsContext".to_owned()))?;
         context::parse(found, query.agent.is_some())
     }
 

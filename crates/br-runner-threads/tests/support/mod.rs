@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 pub mod closings;
 pub mod nats;
+pub mod server;
 
 pub fn v7() -> Uuid {
     Uuid::now_v7()
@@ -23,6 +24,10 @@ pub fn v7() -> Uuid {
 
 pub fn not_v7() -> Uuid {
     Uuid::from_u128(0x1111_1111_1111_4111_8111_1111_1111_1111)
+}
+
+pub fn v7_with_a_foreign_variant() -> Uuid {
+    Uuid::from_u128(0x0192_b3c4_d5e6_7abc_c123_4567_89ab_cdef)
 }
 
 pub fn turn_id() -> TurnId {
