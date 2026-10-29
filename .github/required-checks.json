@@ -1,0 +1,15 @@
+{
+  "required": [
+    "cargo fmt + clippy + test",
+    "cargo doc",
+    "cargo-deny check",
+    "cargo-machete (unused deps)",
+    "cargo semver-checks",
+    "e2e (runner transport vs NATS JetStream)",
+    "changelog + readme pins",
+    "shellcheck",
+    "release-line law and registry wiring tests",
+    "registry gate",
+    "trufflehog (secret scan)"
+  ]
+}

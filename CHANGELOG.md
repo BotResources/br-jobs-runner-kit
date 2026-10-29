@@ -4,9 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-The workspace releases as one unified version; this is its single changelog.
-A release is a PR that bumps `[workspace.package] version` and adds the
-matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
+This file is the changelog of the frozen crates `br-jobs-runner-core` and
+`br-jobs-runner-kit`, released up to the unified tag `v0.1.2`. Every registered
+library keeps its own `crates/<crate>/CHANGELOG.md` with plain `## X.Y.Z`
+headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
@@ -19,6 +20,10 @@ matching `## [X.Y.Z] — YYYY-MM-DD` heading; merging it auto-tags `v{X.Y.Z}`.
   change, so no release: a consumer resolves its own lockfile and takes the
   fixed versions with `cargo update -p rustls -p chacha20`. This makes the
   `cargo-deny` advisories gate green again on `main`.
+
+### Changed
+
+- Release pipeline: the unified `v{version}` auto-tag is replaced by the Libraries-registry per-crate release (`{library}/v{version}`), gated by the registry and recorded in it. `br-jobs-runner-core` and `br-jobs-runner-kit` are not registered libraries: they are frozen at 0.1.2 and the pipeline refuses any bump of them. Their `version` is now a literal in each crate manifest (no `[workspace.package] version`). No source change, no release.
 
 ## [0.1.2] — 2026-08-18
 
