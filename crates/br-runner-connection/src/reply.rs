@@ -39,6 +39,15 @@ fn coded(error: &Value) -> Option<Refusal> {
     })
 }
 
+fn unauthenticated(error: &Value) -> bool {
+    error
+        .get("extensions")
+        .and_then(Value::as_object)
+        .and_then(|extensions| extensions.get("code"))
+        .and_then(Value::as_str)
+        == Some(UNAUTHENTICATED)
+}
+
 fn error_list(body: Option<&Value>) -> Result<Vec<&Value>, ()> {
     match body.and_then(|b| b.get("errors")) {
         None | Some(Value::Null) => Ok(Vec::new()),
@@ -61,13 +70,15 @@ pub(crate) fn judge(reply: Reply) -> Result<Value, Error> {
     let success = (200..300).contains(&reply.status);
     let mut body = serde_json::from_slice::<Value>(&reply.body).ok();
     let listed = error_list(body.as_ref());
+    if let Ok(items) = &listed
+        && items.iter().any(|e| unauthenticated(e))
+    {
+        return Err(Error::Unauthenticated);
+    }
     let coded_errors: Vec<Refusal> = listed
         .as_ref()
         .map(|items| items.iter().filter_map(|e| coded(e)).collect())
         .unwrap_or_default();
-    if coded_errors.iter().any(|e| e.code == UNAUTHENTICATED) {
-        return Err(Error::Unauthenticated);
-    }
     if let Some(first) = coded_errors.into_iter().next() {
         return Err(Error::Refused(first));
     }

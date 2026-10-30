@@ -1,28 +1,8 @@
 mod support;
 
-use std::time::Duration;
-
 use br_runner_connection::{Cause, CodeOrigin, Error};
-use serde_json::{Value, json};
+use serde_json::json;
 use support::*;
-
-async fn answered(action: impl Fn() -> Action + Send + Sync + 'static) -> Result<Value, Error> {
-    let server = HttpServer::start(serve(move |_| action())).await;
-    let connection = connection_to(
-        &server.url(),
-        Counting::giving_token(),
-        Duration::from_secs(10),
-    )
-    .await;
-    connection.graphql("{ x }", json!({})).await
-}
-
-fn refused(result: Result<Value, Error>) -> br_runner_connection::Refusal {
-    match result {
-        Err(Error::Refused(refusal)) => refusal,
-        other => panic!("expected Refused, got {other:?}"),
-    }
-}
 
 #[tokio::test]
 async fn a_2xx_with_data_and_no_error_gives_the_data() {
