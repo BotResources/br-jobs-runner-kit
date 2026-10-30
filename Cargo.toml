@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit"]
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads"]
 
 [workspace.package]
 edition = "2024"
@@ -20,3 +20,12 @@ tokio = { version = "1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 tracing = "0.1"
 uuid = { version = "1", features = ["v7"] }
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.1.0", version = "0.1.0" }
+br-core-events = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-events", tag = "br-core-events/v0.1.0", version = "0.1.0" }
+br-core-integration = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-integration", tag = "br-core-integration/v0.1.0", version = "0.1.0" }
+br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
+br-llm-clients-common-auth = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-common-auth", tag = "br-llm-clients-common-auth/v0.1.0", version = "0.1.0" }
+br-llm-clients-common-http = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-common-http", tag = "br-llm-clients-common-http/v0.2.0", version = "0.2.0" }
+br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
+br-util-nats-fabric = { git = "https://github.com/BotResources/br-rust-common", package = "br-util-nats-fabric", tag = "br-util-nats-fabric/v0.1.0", version = "0.1.0" }
+contract-threads = { git = "https://github.com/BotResources/svc-threads", package = "contract-threads", tag = "contract-threads/v0.6.0", version = "0.6.0" }

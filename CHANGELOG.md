@@ -11,6 +11,10 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
+### Added
+
+- `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
+
 ### Security
 
 - `Cargo.lock` only: `rustls` 0.23.43 → 0.23.45 (RUSTSEC-2026-0285, TLS 1.3

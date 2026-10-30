@@ -1,0 +1,63 @@
+# br-runner-threads
+
+The typed client of the Threads service for code that runs inside a runner. It creates threads, writes whole messages or streams, closes a message with a named reason, reads the projected context, sets or fails the title, and requests an artifact upload. Conversation types are those of `br-llm-messages`; thread references are those of `br-agentic-contract`. No wire type appears in the API.
+
+It is thin. It sends what the importer gives, sends nothing twice, and invents no id, limit or timeout.
+
+## Install
+
+```toml
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.1.0", version = "0.1.0" }
+```
+
+## Surface
+
+| Item | Role |
+|---|---|
+| `ThreadsClient::new(actor, bus, graphql)` | Builds the client. Publishes nothing, runs no timer, is `Clone`. |
+| `create_thread`, `write_message` | Bus commands. Return `Confirmed { command_id, status }`. |
+| `open_stream` | Bus command with status `STREAMING`. Returns a `StreamHandle` only after the confirmation. |
+| `close_message(&Closing, Option<&StreamHandle>)` | Closes with `Completed`, `BudgetExhausted`, `Failed`, `Interrupted` or `Cancelled`. |
+| `read_context`, `set_title`, `fail_title_job`, `request_upload` | GraphQL operations. |
+| `StreamHandle` | `delta`, `entry`, `annotation`, `keepalive`, `writer()`, `sink_factory()`. |
+| `StreamWriter` | Cloned write side: `entry`, `annotation`, `keepalive`. Shares the sequence and the seal. |
+| `SinkFactory` / `ResponseSink` | `sink()` gives a sink; `send(ResponseDelta)` publishes one delta chunk and waits for the broker. |
+| `transport::{BusTransport, GraphqlTransport}` | The two seams the importer can replace. `BusTransport::ready` is awaited before each `send`. |
+| `transport::NatsBus`, `transport::HttpGraphql` | Ready transports. |
+| `transport::{MemoryBus, MemoryGraphql}` | In-memory transports for tests. They record and answer as the test says and apply no Threads rule. |
+| `Error` | The single error type. |
+
+```ignore
+let client = ThreadsClient::new(actor, Arc::new(NatsBus::connect(nats).await?), Arc::new(graphql));
+let handle = client.open_stream(&open).await?;
+let sink = handle.sink_factory().sink();
+handle.keepalive().await?;
+client.close_message(&closing, Some(&handle)).await?;
+```
+
+## Rules the code keeps
+
+- Every id of a new object must be a UUIDv7 of the RFC 4122 variant and is refused before sending otherwise (`InvalidInput`). Reference ids are sent as given.
+- A command ends with its answer. Without `wait`, the operation waits for the answer or for the closing of the answer subscription. With `wait`, a missing answer is `AnswerLost`.
+- Chunks are numbered from 0 without a gap, one at a time per handle and its writers, each ending at the broker acknowledgement. A chunk the broker does not acknowledge breaks the handle (`StreamBroken`), and so does a chunk operation abandoned after it took its number.
+- A closing is sent after every chunk that took a number and after each acknowledgement. While a closing waits for its answer, the handle takes no chunk (`StreamClosed`). The handle is free again only when every closing sent with it was answered `Refused`. A closing counts as sent when its publish starts. Before that, the bus is asked to be ready (`BusTransport::ready`: connected, answer subscription open, `Unavailable` otherwise), and a closing abandoned or failed there changes nothing. A closing answered `AnswerLost` or `Unreadable`, or abandoned once its publish has started, closes the handle for good. A confirmed closing spends it. A closing refused before sending changes nothing.
+- `Completed` and `BudgetExhausted` need the handle and go on the completion command with the seal. A handle with no chunk has no seal, so the reason goes on the fail command. `Failed`, `Interrupted` and `Cancelled` go on the fail command, carry no seal, and need no handle.
+- The closing detail is checked by `br-llm-messages`: `Failed` requires one; no detail may be blank.
+- A command is published with no broker dedup id, so a resend under the same command id always reaches Threads, which gives the same answer. An answer is read as the Threads contract event of its exact subject; any other subject is no answer.
+- A missing thread in `read_context` is `Ok(None)` (the field `threadsContext` is explicitly null). A response with no `threadsContext` field is `Unreadable`. A document `br-llm-messages` refuses is `Unreadable` with its stable reason.
+- GraphQL: one token per request from the token cache, sent as bearer. After a rejection no other token is fetched and nothing is sent again. The secrets that the token source declares are removed from error texts; a token it does not declare is not.
+
+## Errors
+
+| Error | Meaning |
+|---|---|
+| `InvalidInput` | Refused before sending by a rule above, or by `br-llm-messages` (stable reason as text). |
+| `Refused(Refusal)` | Threads answered with a code, parameters, and the command id for a command. A 403 with no readable code is `FORBIDDEN`. With several GraphQL errors, the first one that has a code. |
+| `Unavailable` | Nothing was sent and Threads received nothing. |
+| `AnswerLost` | Sent, no answer. It may or may not have been applied. |
+| `StreamBroken` | A chunk was not acknowledged. The handle stays broken. |
+| `StreamClosed` | The handle is closed, for now or for good. |
+| `Auth` | The token cache gave no token. |
+| `Unauthenticated` | HTTP 401, or a GraphQL error coded `UNAUTHENTICATED`. Wins over `Refused`. |
+| `Unreadable` | An answer or document that cannot be read. It may have been applied. |
+| `Infra` | A stream the bus transport binds is missing or cannot be bound. |
