@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use br_core_kernel::ServiceAccountId;
-use br_runner_connection::{BoxFuture, Connection, Credential, CredentialFailure, Token};
+use br_runner_connection::{BoxFuture, Connection, Credential, CredentialFailure, Error, Token};
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -115,4 +115,28 @@ pub async fn eventually(what: &str, mut condition: impl FnMut() -> bool) {
         tokio::task::yield_now().await;
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
+}
+
+pub async fn answered(action: impl Fn() -> Action + Send + Sync + 'static) -> Result<Value, Error> {
+    let server = HttpServer::start(serve(move |_| action())).await;
+    let connection = connection_to(
+        &server.url(),
+        Counting::giving_token(),
+        Duration::from_secs(10),
+    )
+    .await;
+    connection.graphql("{ x }", json!({})).await
+}
+
+pub fn refused(result: Result<Value, Error>) -> br_runner_connection::Refusal {
+    match result {
+        Err(Error::Refused(refusal)) => refusal,
+        other => panic!("expected Refused, got {other:?}"),
+    }
+}
+
+pub async fn bounded<T>(work: impl std::future::Future<Output = T>) -> T {
+    tokio::time::timeout(Duration::from_secs(20), work)
+        .await
+        .expect("the call returned in time: its deadline code is broken")
 }

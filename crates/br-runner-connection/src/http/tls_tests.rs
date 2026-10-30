@@ -150,6 +150,23 @@ async fn an_https_endpoint_whose_certificate_is_trusted_is_served() {
 }
 
 #[tokio::test]
+async fn an_uppercase_https_scheme_selects_tls_like_the_lowercase_one() {
+    let server = serve_tls(self_signed()).await;
+    let endpoint =
+        Endpoint::parse(&format!("HTTPS://localhost:{}/graphql", server.port)).expect("endpoint");
+    assert!(endpoint.secure);
+    let reply = Gateway::new(endpoint, trusting(&server.root))
+        .post(
+            HeaderValue::from_static("Bearer t"),
+            b"{}".to_vec(),
+            Duration::from_secs(10),
+        )
+        .await
+        .expect("served over TLS");
+    assert_eq!(reply.body, br#"{"data":{"secure":true}}"#);
+}
+
+#[tokio::test]
 async fn an_https_endpoint_whose_certificate_is_not_trusted_is_unavailable_by_transport() {
     let server = serve_tls(self_signed()).await;
     refused_in_transport(post(&server, default_config()).await);

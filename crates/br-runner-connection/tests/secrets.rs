@@ -45,7 +45,7 @@ async fn no_text_of_a_failed_call_holds_the_token_whatever_the_failure() {
                     200,
                     json!({ "data": null, "errors": [{
                         "message": e.clone(),
-                        "extensions": { "code": format!("CODE_{TOKEN}"), "params": { "k": e.clone(), "list": [e.clone()] }, "reason": e.clone(), "other": e.clone() }
+                        "extensions": { "code": format!("CODE_{TOKEN}"), "params": { "k": e.clone(), "list": [e.clone()], format!("key_{TOKEN}"): "v" }, "reason": e.clone(), "other": e.clone() }
                     }] }),
                 )
             },
@@ -110,7 +110,7 @@ async fn no_text_of_a_failed_call_holds_the_token_whatever_the_failure() {
     );
     assert_eq!(
         Value::Object(refusal.params.clone()),
-        json!({ "k": "echo of [redacted] in the text", "list": ["echo of [redacted] in the text"] })
+        json!({ "k": "echo of [redacted] in the text", "list": ["echo of [redacted] in the text"], "key_[redacted]": "v" })
     );
 }
 

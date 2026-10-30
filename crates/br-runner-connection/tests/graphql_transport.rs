@@ -2,7 +2,7 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_connection::{Cause, Error};
+use br_runner_connection::{Cause, CodeOrigin, Error};
 use serde_json::{Value, json};
 use support::*;
 
@@ -14,10 +14,8 @@ async fn run(
     credential: std::sync::Arc<Counting>,
     wait: Duration,
 ) -> Result<Value, Error> {
-    connection_to(&server.url(), credential, wait)
-        .await
-        .graphql("{ x }", json!({}))
-        .await
+    let connection = connection_to(&server.url(), credential, wait).await;
+    bounded(connection.graphql("{ x }", json!({}))).await
 }
 
 fn unused_port() -> u16 {
@@ -32,7 +30,7 @@ fn unused_port() -> u16 {
 async fn a_connection_that_cannot_be_made_is_unavailable_by_transport() {
     let url = format!("http://127.0.0.1:{}/g", unused_port());
     let connection = connection_to(&url, Counting::giving_token(), LONG).await;
-    match connection.graphql("{ x }", json!({})).await {
+    match bounded(connection.graphql("{ x }", json!({}))).await {
         Err(Error::Unavailable(failure)) => assert_eq!(failure.cause, Cause::Transport),
         other => panic!("expected Unavailable, got {other:?}"),
     }
@@ -44,14 +42,14 @@ async fn a_failed_tls_handshake_is_unavailable_by_transport_and_a_silent_one_by_
     let url = closing.url().replace("http://", "https://");
     let connection = connection_to(&url, Counting::giving_token(), LONG).await;
     assert!(matches!(
-        connection.graphql("{ x }", json!({})).await,
+        bounded(connection.graphql("{ x }", json!({}))).await,
         Err(Error::Unavailable(f)) if f.cause == Cause::Transport
     ));
     let silent = HttpServer::start(Mode::Mute).await;
     let url = silent.url().replace("http://", "https://");
     let connection = connection_to(&url, Counting::giving_token(), SHORT).await;
     assert!(matches!(
-        connection.graphql("{ x }", json!({})).await,
+        bounded(connection.graphql("{ x }", json!({}))).await,
         Err(Error::Unavailable(f)) if f.cause == Cause::WaitFired
     ));
 }
@@ -154,12 +152,61 @@ async fn every_failure_leaves_the_connection_usable_for_the_next_call() {
     }))
     .await;
     let connection = connection_to(&server.url(), Counting::giving_token(), LONG).await;
-    assert!(connection.graphql("{ bad }", json!({})).await.is_err());
+    assert!(
+        bounded(connection.graphql("{ bad }", json!({})))
+            .await
+            .is_err()
+    );
     assert_eq!(
-        connection
-            .graphql("{ good }", json!({}))
+        bounded(connection.graphql("{ good }", json!({})))
             .await
             .expect("data"),
         json!({ "ok": true })
     );
+}
+
+#[tokio::test]
+async fn a_401_whose_body_is_cut_or_never_finishes_is_still_unauthenticated() {
+    let behaviours: Vec<(&str, Behaviour)> = vec![
+        (
+            "cut",
+            Box::new(|| {
+                Action::RawThenClose(
+                    b"HTTP/1.1 401 X\r\ncontent-length: 100\r\n\r\n{\"err".to_vec(),
+                )
+            }),
+        ),
+        (
+            "never finished",
+            Box::new(|| {
+                Action::Raw(b"HTTP/1.1 401 X\r\ncontent-length: 100\r\n\r\n{\"err".to_vec())
+            }),
+        ),
+    ];
+    for (name, behaviour) in behaviours {
+        let server = HttpServer::start(serve(move |_| behaviour())).await;
+        let got = run(&server, Counting::giving_token(), LONG).await;
+        assert!(
+            matches!(got, Err(Error::Unauthenticated)),
+            "{name}: {got:?}"
+        );
+        assert_eq!(server.requests().len(), 1, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn a_403_whose_body_is_cut_is_still_refused_forbidden() {
+    let server = HttpServer::start(serve(|_| {
+        Action::RawThenClose(b"HTTP/1.1 403 X\r\ncontent-length: 100\r\n\r\n{\"err".to_vec())
+    }))
+    .await;
+    let got = run(&server, Counting::giving_token(), LONG).await;
+    match got {
+        Err(Error::Refused(refusal)) => {
+            assert_eq!(refusal.code, "FORBIDDEN");
+            assert_eq!(refusal.origin, CodeOrigin::Connection);
+        }
+        other => panic!("expected Refused, got {other:?}"),
+    }
+    assert_eq!(server.requests().len(), 1);
 }

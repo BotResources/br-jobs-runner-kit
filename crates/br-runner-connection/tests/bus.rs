@@ -16,6 +16,14 @@ async fn connected(connection: &Connection) {
     }
 }
 
+async fn cut(connection: &Connection) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while connection.bus().connection_state() == async_nats::connection::State::Connected {
+        assert!(Instant::now() < deadline, "the cut was not seen");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 #[tokio::test]
 #[ignore = "needs a nats-server binary"]
 async fn the_connection_gives_back_the_bus_it_was_built_with() {
@@ -186,5 +194,45 @@ async fn a_request_with_no_connected_bus_is_unavailable_and_is_not_delivered_aft
         first.payload,
         Bytes::from_static(b"sentinel"),
         "nothing was repeated"
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs a nats-server binary"]
+async fn a_session_cut_and_restored_before_the_wait_ends_still_makes_the_request_lost_by_transport()
+{
+    let mut server = Server::start();
+    let service = server.client().await;
+    let mut subscription = service.subscribe("svc.recut").await.expect("subscribed");
+    service.flush().await.expect("flushed");
+    let (connection, _) = connect_to(server.client().await).await;
+    let call = tokio::spawn({
+        let connection = connection.clone();
+        async move {
+            request(
+                &connection,
+                "svc.recut",
+                Bytes::from_static(b"x"),
+                Duration::from_secs(5),
+            )
+            .await
+        }
+    });
+    tokio::time::timeout(WAIT, subscription.next())
+        .await
+        .expect("in time")
+        .expect("m");
+    server.kill();
+    cut(&connection).await;
+    server.restart();
+    connected(&connection).await;
+    assert!(
+        !call.is_finished(),
+        "the wait ended before the reconnection"
+    );
+    let got = call.await.expect("joined");
+    assert!(
+        matches!(got, Err(Error::Lost(ref f)) if f.cause == Cause::Transport),
+        "{got:?}"
     );
 }
