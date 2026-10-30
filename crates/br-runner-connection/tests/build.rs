@@ -16,6 +16,10 @@ async fn build(endpoint: &str) -> Result<Connection, Error> {
     )
 }
 
+fn with_user_information(user: &str, password: &str) -> String {
+    format!("http://{user}:{password}@host/graphql")
+}
+
 #[tokio::test]
 async fn an_endpoint_that_is_not_an_absolute_http_or_https_url_is_invalid_input() {
     for bad in [
@@ -29,7 +33,7 @@ async fn an_endpoint_that_is_not_an_absolute_http_or_https_url_is_invalid_input(
         "http://exa mple.test/",
         "http://host/p#fragment",
         "http://host/p#",
-        "http://user:secret@host/graphql",
+        &with_user_information("user", "secret"),
         "https://user@host/graphql",
         "https://@host/graphql",
     ] {
@@ -42,8 +46,11 @@ async fn an_endpoint_that_is_not_an_absolute_http_or_https_url_is_invalid_input(
 
 #[tokio::test]
 async fn the_refusal_of_an_endpoint_does_not_repeat_it() {
-    for bad in ["http://user:hunter2@host/graphql", "http://host/#hunter2"] {
-        let error = build(bad).await.expect_err("refused");
+    for bad in [
+        with_user_information("user", "hunter2"),
+        "http://host/#hunter2".to_owned(),
+    ] {
+        let error = build(&bad).await.expect_err("refused");
         let text = format!("{error} | {error:?}");
         assert!(!text.contains("hunter2"), "{text}");
     }
