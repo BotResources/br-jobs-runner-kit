@@ -2,6 +2,7 @@
 
 pub mod nats;
 pub mod server;
+pub mod tls;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,6 +15,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub use server::{Action, HttpServer, Mode, serve};
+pub use tls::UntrustedTlsServer;
 
 pub const TOKEN: &str = "tok-0123456789-SECRET-abcdef";
 

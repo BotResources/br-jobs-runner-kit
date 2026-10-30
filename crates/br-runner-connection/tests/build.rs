@@ -28,12 +28,37 @@ async fn an_endpoint_that_is_not_an_absolute_http_or_https_url_is_invalid_input(
         "https:///graphql",
         "http://exa mple.test/",
         "http://host/p#fragment",
+        "http://host/p#",
+        "http://user:secret@host/graphql",
+        "https://user@host/graphql",
+        "https://@host/graphql",
     ] {
         assert!(
             matches!(build(bad).await, Err(Error::InvalidInput(_))),
             "{bad:?} must be refused"
         );
     }
+}
+
+#[tokio::test]
+async fn the_refusal_of_an_endpoint_does_not_repeat_it() {
+    for bad in ["http://user:hunter2@host/graphql", "http://host/#hunter2"] {
+        let error = build(bad).await.expect_err("refused");
+        let text = format!("{error} | {error:?}");
+        assert!(!text.contains("hunter2"), "{text}");
+    }
+}
+
+#[tokio::test]
+async fn a_zero_reply_wait_is_invalid_input() {
+    let got = Connection::new(
+        "http://127.0.0.1:1/g",
+        Arc::new(FixedToken::new(TOKEN)),
+        idle_bus().await,
+        account(),
+        Duration::ZERO,
+    );
+    assert!(matches!(got, Err(Error::InvalidInput(_))), "{got:?}");
 }
 
 #[tokio::test]

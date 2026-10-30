@@ -53,6 +53,7 @@ pub enum CodeOrigin {
 #[non_exhaustive]
 pub struct Refusal {
     pub code: String,
+    pub reason: Option<String>,
     pub params: Map<String, Value>,
     pub message: String,
     pub origin: CodeOrigin,

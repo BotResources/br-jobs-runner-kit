@@ -168,7 +168,10 @@ async fn a_trusted_certificate_is_refused_when_the_endpoint_names_a_host_it_is_n
 async fn a_certificate_signed_by_an_authority_outside_the_webpki_roots_is_refused() {
     let server = serve_tls(signed_by_an_authority()).await;
     let text = refused_in_transport(post(&server, default_config()).await);
-    assert!(text.contains("UnknownIssuer") || text.contains("unknown"), "{text}");
+    assert!(
+        text.contains("UnknownIssuer") || text.contains("unknown"),
+        "{text}"
+    );
     post(&server, trusting(&server.root))
         .await
         .expect("served once its authority is trusted");

@@ -3,6 +3,7 @@ mod tls;
 #[cfg(test)]
 mod tls_tests;
 
+use std::future::Future;
 use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use http::header::{AUTHORIZATION, CONTENT_TYPE, HOST};
 use http::{HeaderValue, Method, Request};
 use http_body_util::{BodyExt, Full};
 use rustls::ClientConfig;
+use tokio::time::error::Elapsed;
 use tokio::time::{Instant, timeout_at};
 
 use crate::endpoint::Endpoint;
@@ -32,11 +34,11 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
     text
 }
 
-const FAR_FUTURE: Duration = Duration::from_secs(86_400 * 365 * 30);
-
-fn deadline_after(wait: Duration) -> Instant {
-    let now = Instant::now();
-    now.checked_add(wait).unwrap_or_else(|| now + FAR_FUTURE)
+async fn before<T>(deadline: Option<Instant>, work: impl Future<Output = T>) -> Result<T, Elapsed> {
+    match deadline {
+        Some(at) => timeout_at(at, work).await,
+        None => Ok(work.await),
+    }
 }
 
 fn lost(error: &dyn std::error::Error) -> Error {
@@ -61,31 +63,28 @@ impl Gateway {
         wait: Duration,
     ) -> Result<Reply, Error> {
         let request = self.request(authorization, body)?;
-        let deadline = deadline_after(wait);
-        let (sender, driver) = timeout_at(deadline, open(&self.endpoint, &self.tls))
+        let deadline = Instant::now().checked_add(wait);
+        let (sender, driver) = before(deadline, open(&self.endpoint, &self.tls))
             .await
             .map_err(|_| {
                 Error::Unavailable(Failure::wait(
                     "the wait fired before the connection was ready",
                 ))
             })??;
-        timeout_at(deadline, exchange(sender, driver, request))
+        before(deadline, exchange(sender, driver, request))
             .await
             .map_err(|_| Error::Lost(Failure::wait("the wait fired before the answer")))?
     }
 
-    fn request(
+    pub(crate) fn request(
         &self,
         authorization: HeaderValue,
         body: Vec<u8>,
     ) -> Result<Request<Full<Bytes>>, Error> {
-        let host = HeaderValue::from_str(&self.endpoint.host_header).map_err(|_| {
-            Error::InvalidInput("the endpoint host is not a header value".to_owned())
-        })?;
         Request::builder()
             .method(Method::POST)
             .uri(self.endpoint.target.as_str())
-            .header(HOST, host)
+            .header(HOST, self.endpoint.host_header.clone())
             .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
             .header(AUTHORIZATION, authorization)
             .body(Full::new(Bytes::from(body)))

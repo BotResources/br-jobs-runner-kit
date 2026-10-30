@@ -1,5 +1,5 @@
-use http::Uri;
 use http::uri::PathAndQuery;
+use http::{HeaderValue, Uri};
 use rustls_pki_types::ServerName;
 
 use crate::error::Error;
@@ -9,7 +9,7 @@ pub(crate) struct Endpoint {
     pub(crate) secure: bool,
     pub(crate) host: String,
     pub(crate) port: u16,
-    pub(crate) host_header: String,
+    pub(crate) host_header: HeaderValue,
     pub(crate) target: PathAndQuery,
     pub(crate) server_name: ServerName<'static>,
 }
@@ -35,6 +35,9 @@ impl Endpoint {
             .authority()
             .ok_or_else(|| invalid("has no host"))?
             .clone();
+        if authority.as_str().contains('@') {
+            return Err(invalid("holds user information"));
+        }
         let host = authority.host();
         if host.is_empty() {
             return Err(invalid("has no host"));
@@ -49,10 +52,8 @@ impl Endpoint {
         let port = authority
             .port_u16()
             .unwrap_or(if secure { 443 } else { 80 });
-        let host_header = match authority.port() {
-            Some(explicit) => format!("{host}:{explicit}"),
-            None => host.to_owned(),
-        };
+        let host_header = HeaderValue::from_str(authority.as_str())
+            .map_err(|_| invalid("has a host that is not a header value"))?;
         let target = uri
             .path_and_query()
             .cloned()

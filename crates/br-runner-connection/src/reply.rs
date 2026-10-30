@@ -10,14 +10,21 @@ pub(crate) struct Reply {
     pub(crate) body: Vec<u8>,
 }
 
+fn optional<'a>(extensions: &'a Map<String, Value>, key: &str) -> Option<&'a Value> {
+    extensions.get(key).filter(|value| !value.is_null())
+}
+
 fn coded(error: &Value) -> Option<Refusal> {
     let extensions = error.get("extensions")?.as_object()?;
     let code = extensions.get("code")?.as_str()?.to_owned();
-    let params = extensions
-        .iter()
-        .filter(|(key, _)| key.as_str() != "code")
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect();
+    let reason = match optional(extensions, "reason") {
+        None => None,
+        Some(value) => Some(value.as_str()?.to_owned()),
+    };
+    let params = match optional(extensions, "params") {
+        None => Map::new(),
+        Some(value) => value.as_object()?.clone(),
+    };
     let message = error
         .get("message")
         .and_then(Value::as_str)
@@ -25,6 +32,7 @@ fn coded(error: &Value) -> Option<Refusal> {
         .to_owned();
     Some(Refusal {
         code,
+        reason,
         params,
         message,
         origin: CodeOrigin::Service,
@@ -67,6 +75,7 @@ pub(crate) fn judge(reply: Reply) -> Result<Value, Error> {
         return Err(if reply.status == 403 {
             Error::Refused(Refusal {
                 code: FORBIDDEN.to_owned(),
+                reason: None,
                 params: Map::new(),
                 message: String::new(),
                 origin: CodeOrigin::Connection,

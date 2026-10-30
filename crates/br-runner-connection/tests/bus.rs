@@ -1,56 +1,12 @@
 mod support;
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use br_runner_connection::{Cause, Connection, Error};
 use bytes::Bytes;
-use futures::{StreamExt, TryStreamExt};
-use support::nats::Server;
+use futures::StreamExt;
+use support::nats::{Server, WAIT, connect_to, echo, request};
 use support::*;
-
-const WAIT: Duration = Duration::from_secs(10);
-
-async fn connect_to(client: async_nats::Client) -> (Connection, Arc<Counting>) {
-    let credential = Counting::giving_token();
-    let connection = Connection::new(
-        "http://127.0.0.1:1/graphql",
-        credential.clone(),
-        client,
-        account(),
-        WAIT,
-    )
-    .expect("builds");
-    (connection, credential)
-}
-
-async fn echo(client: async_nats::Client, subject: &'static str) {
-    let mut subscription = client.subscribe(subject).await.expect("subscribed");
-    client.flush().await.expect("flushed");
-    tokio::spawn(async move {
-        while let Some(message) = subscription.next().await {
-            if let Some(reply) = message.reply {
-                let mut body = b"echo:".to_vec();
-                body.extend_from_slice(&message.payload);
-                let _ = client.publish(reply, body.into()).await;
-            }
-        }
-    });
-}
-
-async fn request(
-    connection: &Connection,
-    subject: &str,
-    body: Bytes,
-    wait: Duration,
-) -> Result<Bytes, Error> {
-    tokio::time::timeout(
-        Duration::from_secs(15),
-        connection.bus_request(subject, body, wait),
-    )
-    .await
-    .expect("the request returned")
-}
 
 async fn connected(connection: &Connection) {
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -82,60 +38,6 @@ async fn the_connection_gives_back_the_bus_it_was_built_with() {
         message.payload,
         Bytes::from_static(b"through the given bus")
     );
-}
-
-#[tokio::test]
-#[ignore = "needs a nats-server binary with JetStream"]
-async fn a_connection_and_its_requests_create_no_stream_and_no_bucket() {
-    let server = Server::start_with_jetstream();
-    let service = server.client().await;
-    echo(service, "svc.echo").await;
-    let client = server.client().await;
-    let jetstream = async_nats::jetstream::new(client.clone());
-    let before = jetstream
-        .query_account()
-        .await
-        .expect("JetStream is enabled");
-    assert_eq!((before.streams, before.consumers), (0, 0));
-    let (connection, _) = connect_to(client).await;
-    request(&connection, "svc.echo", Bytes::from_static(b"ping"), WAIT)
-        .await
-        .expect("a reply");
-    connection.bus().flush().await.expect("flushed");
-    let after = jetstream.query_account().await.expect("account");
-    assert_eq!((after.streams, after.consumers), (0, 0));
-    let names: Vec<String> = jetstream
-        .stream_names()
-        .try_collect()
-        .await
-        .expect("stream names");
-    assert!(names.is_empty(), "{names:?}");
-    jetstream
-        .create_key_value(async_nats::jetstream::kv::Config {
-            bucket: "CONTROL".to_owned(),
-            ..Default::default()
-        })
-        .await
-        .expect("a bucket");
-    assert_eq!(jetstream.query_account().await.expect("account").streams, 1);
-}
-
-#[tokio::test]
-#[ignore = "needs a nats-server binary"]
-async fn a_wait_too_long_to_count_is_no_limit_and_the_request_completes() {
-    let server = Server::start();
-    let service = server.client().await;
-    echo(service, "svc.echo").await;
-    let (connection, _) = connect_to(server.client().await).await;
-    let reply = request(
-        &connection,
-        "svc.echo",
-        Bytes::from_static(b"ping"),
-        Duration::MAX,
-    )
-    .await
-    .expect("a reply");
-    assert_eq!(reply, Bytes::from_static(b"echo:ping"));
 }
 
 #[tokio::test]
@@ -208,20 +110,6 @@ async fn a_request_with_no_reply_within_the_wait_is_lost_by_the_wait_and_is_sent
         Bytes::from_static(b"sentinel"),
         "the request was not sent again"
     );
-}
-
-#[tokio::test]
-#[ignore = "needs a nats-server binary"]
-async fn a_subject_the_bus_refuses_is_invalid_input() {
-    let server = Server::start();
-    let (connection, _) = connect_to(server.client().await).await;
-    for subject in ["", "a b"] {
-        let got = request(&connection, subject, Bytes::new(), WAIT).await;
-        assert!(
-            matches!(got, Err(Error::InvalidInput(_))),
-            "{subject:?}: {got:?}"
-        );
-    }
 }
 
 #[tokio::test]

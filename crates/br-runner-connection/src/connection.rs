@@ -48,6 +48,9 @@ impl Connection {
         service_account: ServiceAccountId,
         reply_wait: Duration,
     ) -> Result<Self, Error> {
+        if reply_wait.is_zero() {
+            return Err(Error::InvalidInput("the reply wait is zero".to_owned()));
+        }
         let endpoint = Endpoint::parse(endpoint)?;
         let secure = endpoint.secure;
         let fabric = Fabric::new(async_nats::jetstream::new(bus.clone()));
@@ -117,3 +120,6 @@ fn bearer(secret: &str) -> Result<HeaderValue, CredentialFailure> {
     value.set_sensitive(true);
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests;

@@ -48,6 +48,7 @@ impl Error {
             Self::Unauthenticated => Self::Unauthenticated,
             Self::Refused(refusal) => Self::Refused(Refusal {
                 code: text(refusal.code, secret),
+                reason: refusal.reason.map(|reason| text(reason, secret)),
                 params: object(refusal.params, secret),
                 message: text(refusal.message, secret),
                 origin: refusal.origin,

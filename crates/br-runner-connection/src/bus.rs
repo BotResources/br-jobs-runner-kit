@@ -14,6 +14,9 @@ pub(crate) async fn request(
     body: Bytes,
     wait: Duration,
 ) -> Result<Bytes, Error> {
+    if wait.is_zero() {
+        return Err(Error::InvalidInput("the bus wait is zero".to_owned()));
+    }
     if fabric.connection_state() != ConnectionState::Connected {
         return Err(Error::Unavailable(Failure::transport(
             "the bus connection is not connected",

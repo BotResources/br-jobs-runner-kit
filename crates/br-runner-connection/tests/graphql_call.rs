@@ -89,6 +89,16 @@ async fn a_wait_too_long_to_count_is_no_limit_and_the_call_completes() {
 }
 
 #[tokio::test]
+async fn a_wait_too_long_to_count_never_fires() {
+    let server = HttpServer::start(serve(|_| Action::Hang)).await;
+    let connection = connection_to(&server.url(), Counting::giving_token(), Duration::MAX).await;
+    let call = connection.graphql("{ x }", json!({}));
+    let outcome = tokio::time::timeout(Duration::from_millis(300), call).await;
+    assert!(outcome.is_err(), "the call ended: {outcome:?}");
+    assert_eq!(server.requests().len(), 1);
+}
+
+#[tokio::test]
 async fn several_tasks_share_one_connection() {
     let server = HttpServer::start(serve(|_| data(json!({ "ok": true })))).await;
     let credential = Counting::giving_token();
