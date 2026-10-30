@@ -22,12 +22,14 @@ impl std::fmt::Debug for Token {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CredentialKind {
     NoUsable,
     FetchFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 #[error("{}: {text}", match .kind {
     CredentialKind::NoUsable => "no usable credential",
     CredentialKind::FetchFailed => "credential fetch failed",

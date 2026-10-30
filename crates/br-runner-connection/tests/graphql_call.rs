@@ -81,6 +81,14 @@ async fn the_time_the_credential_takes_does_not_count_in_the_reply_wait() {
 }
 
 #[tokio::test]
+async fn a_wait_too_long_to_count_is_no_limit_and_the_call_completes() {
+    let server = HttpServer::start(serve(|_| data(json!({ "ok": true })))).await;
+    let connection = connection_to(&server.url(), Counting::giving_token(), Duration::MAX).await;
+    let data = connection.graphql("{ x }", json!({})).await.expect("data");
+    assert_eq!(data, json!({ "ok": true }));
+}
+
+#[tokio::test]
 async fn several_tasks_share_one_connection() {
     let server = HttpServer::start(serve(|_| data(json!({ "ok": true })))).await;
     let credential = Counting::giving_token();

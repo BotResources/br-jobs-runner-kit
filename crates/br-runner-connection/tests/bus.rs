@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use br_runner_connection::{Cause, Connection, Error};
 use bytes::Bytes;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use support::nats::Server;
 use support::*;
 
@@ -62,7 +62,7 @@ async fn connected(connection: &Connection) {
 
 #[tokio::test]
 #[ignore = "needs a nats-server binary"]
-async fn the_connection_gives_back_the_bus_it_was_built_with_and_binds_nothing_on_it() {
+async fn the_connection_gives_back_the_bus_it_was_built_with() {
     let server = Server::start();
     let client = server.client().await;
     let (connection, _) = connect_to(client.clone()).await;
@@ -82,6 +82,60 @@ async fn the_connection_gives_back_the_bus_it_was_built_with_and_binds_nothing_o
         message.payload,
         Bytes::from_static(b"through the given bus")
     );
+}
+
+#[tokio::test]
+#[ignore = "needs a nats-server binary with JetStream"]
+async fn a_connection_and_its_requests_create_no_stream_and_no_bucket() {
+    let server = Server::start_with_jetstream();
+    let service = server.client().await;
+    echo(service, "svc.echo").await;
+    let client = server.client().await;
+    let jetstream = async_nats::jetstream::new(client.clone());
+    let before = jetstream
+        .query_account()
+        .await
+        .expect("JetStream is enabled");
+    assert_eq!((before.streams, before.consumers), (0, 0));
+    let (connection, _) = connect_to(client).await;
+    request(&connection, "svc.echo", Bytes::from_static(b"ping"), WAIT)
+        .await
+        .expect("a reply");
+    connection.bus().flush().await.expect("flushed");
+    let after = jetstream.query_account().await.expect("account");
+    assert_eq!((after.streams, after.consumers), (0, 0));
+    let names: Vec<String> = jetstream
+        .stream_names()
+        .try_collect()
+        .await
+        .expect("stream names");
+    assert!(names.is_empty(), "{names:?}");
+    jetstream
+        .create_key_value(async_nats::jetstream::kv::Config {
+            bucket: "CONTROL".to_owned(),
+            ..Default::default()
+        })
+        .await
+        .expect("a bucket");
+    assert_eq!(jetstream.query_account().await.expect("account").streams, 1);
+}
+
+#[tokio::test]
+#[ignore = "needs a nats-server binary"]
+async fn a_wait_too_long_to_count_is_no_limit_and_the_request_completes() {
+    let server = Server::start();
+    let service = server.client().await;
+    echo(service, "svc.echo").await;
+    let (connection, _) = connect_to(server.client().await).await;
+    let reply = request(
+        &connection,
+        "svc.echo",
+        Bytes::from_static(b"ping"),
+        Duration::MAX,
+    )
+    .await
+    .expect("a reply");
+    assert_eq!(reply, Bytes::from_static(b"echo:ping"));
 }
 
 #[tokio::test]

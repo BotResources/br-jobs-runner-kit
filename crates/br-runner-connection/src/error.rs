@@ -3,12 +3,14 @@ use serde_json::{Map, Value};
 use crate::credential::CredentialFailure;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Cause {
     WaitFired,
     Transport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Failure {
     pub cause: Cause,
     pub text: String,
@@ -41,12 +43,14 @@ impl std::fmt::Display for Failure {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CodeOrigin {
     Service,
     Connection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Refusal {
     pub code: String,
     pub params: Map<String, Value>,

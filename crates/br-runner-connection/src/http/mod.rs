@@ -32,6 +32,13 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
     text
 }
 
+const FAR_FUTURE: Duration = Duration::from_secs(86_400 * 365 * 30);
+
+fn deadline_after(wait: Duration) -> Instant {
+    let now = Instant::now();
+    now.checked_add(wait).unwrap_or_else(|| now + FAR_FUTURE)
+}
+
 fn lost(error: &dyn std::error::Error) -> Error {
     Error::Lost(Failure::transport(chain(error)))
 }
@@ -54,7 +61,7 @@ impl Gateway {
         wait: Duration,
     ) -> Result<Reply, Error> {
         let request = self.request(authorization, body)?;
-        let deadline = Instant::now() + wait;
+        let deadline = deadline_after(wait);
         let (sender, driver) = timeout_at(deadline, open(&self.endpoint, &self.tls))
             .await
             .map_err(|_| {
