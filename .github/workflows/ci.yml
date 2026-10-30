@@ -139,6 +139,8 @@ jobs:
           cargo test -p br-jobs-runner-kit --test e2e --locked -- --ignored --test-threads=1
       - name: run the br-runner-threads e2e tests against a real JetStream
         run: cargo test -p br-runner-threads --locked -- --ignored --test-threads=1
+      - name: run the br-runner-connection e2e tests against a real NATS
+        run: cargo test -p br-runner-connection --locked -- --ignored --test-threads=1
 
   changelog:
     name: changelog + readme pins
