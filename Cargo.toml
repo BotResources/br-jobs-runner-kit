@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads"]
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection"]
 
 [workspace.package]
 edition = "2024"
@@ -10,6 +10,16 @@ repository = "https://github.com/BotResources/br-jobs-runner-kit"
 [workspace.dependencies]
 br-jobs-runner-core = { path = "crates/br-jobs-runner-core", version = "0.1.0" }
 async-nats = "0.48"
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1.12", default-features = false, features = ["client", "http1"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1"
 chrono = { version = "0.4", features = ["serde"] }
 contract-jobs = { git = "https://github.com/BotResources/svc-jobs", tag = "contract-jobs/v0.1.0", version = "0.1.0" }
 futures = "0.3"

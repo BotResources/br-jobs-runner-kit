@@ -1,0 +1,31 @@
+[package]
+name = "br-runner-connection"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The one connection of a runner to the platform: a bearer-authenticated GraphQL call to the gateway and one request with one reply on the bus, with a small error vocabulary and no token in any text"
+
+[dependencies]
+async-nats.workspace = true
+br-core-kernel.workspace = true
+br-util-nats-fabric.workspace = true
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+rustls.workspace = true
+rustls-pki-types.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "rt", "time", "macros"] }
+tokio-rustls.workspace = true
+webpki-roots.workspace = true
+
+[dev-dependencies]
+bytes.workspace = true
+futures.workspace = true
+rcgen.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+uuid.workspace = true
