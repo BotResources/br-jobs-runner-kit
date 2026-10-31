@@ -45,10 +45,20 @@ async fn build_connection_builds_a_connection_that_makes_a_call_against_a_real_e
     assert_eq!(connection.service_account(), account());
 }
 
+async fn connection_with_bus(
+    nats: &Server,
+    url: &str,
+    credential: std::sync::Arc<dyn br_runner_connection::Credential>,
+) -> Connection {
+    Connection::new(url, credential, nats.client().await, account(), WAIT).expect("builds")
+}
+
 #[tokio::test]
+#[ignore = "needs a nats-server binary"]
 async fn graphql_call_reads_data_and_each_error_kind() {
+    let nats = Server::start();
     let server = HttpServer::start(graphql_server()).await;
-    let connection = connection_to(&server.url(), Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &server.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert_eq!(described, r#"data {"me":{"id":"u1"}}"#);
 
@@ -59,7 +69,7 @@ async fn graphql_call_reads_data_and_each_error_kind() {
         )
     }))
     .await;
-    let connection = connection_to(&refusing.url(), Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &refusing.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert_eq!(described, "the service says it found nothing");
 
@@ -70,17 +80,18 @@ async fn graphql_call_reads_data_and_each_error_kind() {
         )
     }))
     .await;
-    let connection = connection_to(&other.url(), Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &other.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert_eq!(described, "refused with the code QUOTA: no");
 
     let unauthenticated = HttpServer::start(serve(|_| Action::json(401, json!({})))).await;
-    let connection = connection_to(&unauthenticated.url(), Counting::giving_token(), WAIT).await;
+    let connection =
+        connection_with_bus(&nats, &unauthenticated.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert_eq!(described, "the gateway rejected the token");
 
     let garbled = HttpServer::start(serve(|_| Action::Reply(200, b"not json".to_vec()))).await;
-    let connection = connection_to(&garbled.url(), Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &garbled.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert!(
         described.starts_with("an answer came that cannot be read"),
@@ -88,7 +99,7 @@ async fn graphql_call_reads_data_and_each_error_kind() {
     );
 
     let failing = HttpServer::start(serve(|_| Action::Reply(500, Vec::new()))).await;
-    let connection = connection_to(&failing.url(), Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &failing.url(), Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert!(
         described.starts_with("sent, no usable answer"),
@@ -98,13 +109,13 @@ async fn graphql_call_reads_data_and_each_error_kind() {
     let closed = HttpServer::start(Mode::Drop).await;
     let url = closed.url();
     drop(closed);
-    let connection = connection_to(&url, Counting::giving_token(), WAIT).await;
+    let connection = connection_with_bus(&nats, &url, Counting::giving_token()).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert!(described.starts_with("nothing received"), "{described}");
 
     let failing_credential =
         Counting::failing(br_runner_connection::CredentialFailure::no_usable("none"));
-    let connection = connection_to(&refusing.url(), failing_credential, WAIT).await;
+    let connection = connection_with_bus(&nats, &refusing.url(), failing_credential).await;
     let described = graphql_call::describe(graphql_call::me(&connection).await);
     assert!(
         described.starts_with("nothing sent, no token"),
@@ -119,9 +130,11 @@ async fn graphql_call_reads_data_and_each_error_kind() {
 }
 
 #[tokio::test]
+#[ignore = "needs a nats-server binary"]
 async fn custom_credential_fetches_a_token_for_a_call_and_fails_with_each_of_its_two_kinds() {
     let server = HttpServer::start(graphql_server()).await;
-    let outcomes = custom_credential::run(&server.url(), TOKEN, idle_bus().await, account())
+    let nats = Server::start();
+    let outcomes = custom_credential::run(&server.url(), TOKEN, nats.client().await, account())
         .await
         .expect("the three outcomes");
     assert_eq!(
