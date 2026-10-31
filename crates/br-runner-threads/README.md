@@ -156,23 +156,23 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 
 ## Bus access
 
-The commands and their outcomes go through `br-util-nats-fabric` on the bus connection of the `Connection`: the client gives the Fabric typed coordinates only and writes no subject, stream or bucket name. Chunks go on the streaming stream of `contract-threads` as `ChunkFrame` messages with a message id; `async-nats` is named in one module only, `src/chunk_lane/`. At building the client checks that the command stream, the event stream and the streaming stream exist: a missing one is `InfraMissing`, and a check that does not end within the check wait is `Unavailable`. This crate never creates a stream, a bucket or a consumer.
+The commands and their outcomes go through `br-util-nats-fabric` on the bus connection of the `Connection`: the client gives the Fabric typed coordinates only and writes no subject, stream or bucket name. Chunks go on the streaming stream of `contract-threads` as `ChunkFrame` messages with a message id; `async-nats` is named in one module only, `src/chunk_lane/`. At building the client checks that the command stream, the event stream and the streaming stream exist: a missing one is `InfraMissing`, and a check that does not end within the check wait is `Unavailable`. This crate creates no stream, no bucket and no consumer: the outcome wait is a plain subscription on the event subjects of the event stream.
 
 ## Rules the code keeps
 
-- A wait that is zero is `InvalidInput`. A thread id, message id, turn id or entry id that is not a UUIDv7 is `InvalidInput`.
-- A command is published once with its command id and the client waits for its outcome: a confirmation is the result, a refusal is `Refused` with the code, the reason, the parameters and the command id. A command that no stream takes is `Unavailable`; a command whose outcome did not come within the wait, or whose outcome cannot be read as a known one, is `Lost` or `Unreadable`.
+- A wait that is zero is `InvalidInput`. A command id, the id of a new thread, an annotation id or an artifact id that is not a UUIDv7 is `InvalidInput`.
+- A command is published once with its command id and the client waits for its outcome: a confirmation is the result, a refusal is `Refused` with the code, the reason, the parameters and the command id. A command published while its stream is missing is `Unavailable`; a command whose outcome did not come within the wait, or whose outcome cannot be read as a known one, is `Lost` or `Unreadable`.
 - A chunk is numbered from 0 by the handle, in the order the calls take it, with no gap even when many tasks write; it returns when the bus has taken it. A chunk the bus did not take within the wait breaks the handle: that chunk and every later one is `StreamBroken`.
 - Closing table: `Completed` sends a complete, with the seal of the chunks, and needs a handle that holds at least one chunk; `BudgetExhausted`, `Failed` and `Interrupted` send a fail; `Cancelled` sends a cancel. The seal is sent for the other kinds only when the handle is healthy and holds a chunk. The commands carry no closure and no detail: the detail of a `Failed` is checked and not sent.
 - A closing goes after every chunk sent before it. After it the handle, its writers and its sinks take no chunk (`StreamClosed`). A closing that Threads refuses, or that ends `Unavailable`, frees the handle again; a closing that is waiting, lost or unreadable keeps the handle closed to chunks, and a new closing can still be sent; a confirmed closing spends the handle and a second closing is `StreamClosed`.
 - The thread queue of the adapter is first in, first out for each thread, with one delivery task for each thread: a stuck thread blocks its own later items and no other thread. Every write operation of the port returns when the item is in the store; none waits for Threads. The only waiting call is `read`: it waits until the items accepted on that thread before it have ended, leftovers of the store included, with no limit, then reads the whole active branch.
 - Sending again: a command is sent again, with the same command id, on `Unavailable`, `Lost` and `Unreadable`; a chunk is sent again, with the same number, on `StreamBroken`. Any other error is final: the item is removed from the store, reported as `ItemRefused`, and the entries it held are `Dropped`. A refused opening drops the later items of its message unsent (`ItemDroppedUnsent`). A closing that Threads confirms as `FAILED`, or that ends for good with an error, is reported as `ClosingFailed`.
-- `entry_stored` gives `Stored` when the item that holds the entry has been taken by Threads, and `Dropped` when an item of that entry was removed after a report. `instance_ended(agent)` waits for the items accepted before the call on the threads that the agent used, then drops the states and open objects of that agent; it queues nothing.
+- `entry_stored` gives `Stored` when the item that holds the entry has been taken by Threads (and for a thread or an entry that the adapter holds nothing about), and `Dropped` when an item of that entry was removed after a report. `instance_ended(agent)` waits for the items accepted before the call on the threads that the agent used, then drops the states and open objects of that agent; it queues nothing.
 - A response sink that is re-opened with the same entry, or discarded, queues the delta that ends the earlier response as interrupted. A response that is completed queues the deltas that the draft still lacks, then the completion, and the result is checked by folding the deltas on a copy of the draft.
 - Dropping the adapter stops its tasks and reports every waiting item as `Unsent`; the items stay in the store.
 - Building the adapter fails with `Store` when the store cannot list, when a kept item cannot be read, or when a kept item does not match the id it is kept under; nothing is sent or removed in that case.
 - The adapter never reads the conversation back except in `read`. The adapter gives faults only: every error of the port is `PortError::Fault` with the error of this crate as its cause.
-- Dependency gate: the crate reaches `br-llm-clients-core` through `br-agentic-contract` and no other library of the `br-llm-clients` family.
+- The dependency graph of the crate holds `br-llm-clients-core`, through `br-agentic-contract`, and no other library of the `br-llm-clients` family. No CI step checks this for this crate.
 
 ## Limits of this version
 
@@ -182,6 +182,7 @@ The commands and their outcomes go through `br-util-nats-fabric` on the bus conn
 | Closure on the wire | The complete, fail and cancel commands are the first version of those commands: no named closure, no detail. |
 | Keepalive | `keepalive` publishes a keepalive chunk; when to send one is the caller's. |
 | Upload | `request_upload` returns the access as Threads gives it and uploads nothing. |
+| Missing command stream with a core listener | When the command stream is missing and a core NATS subscriber listens on the command subjects, the publish is not acknowledged and the command ends `Lost`, not `Unavailable`. |
 | Wait while Threads is down | `read`, `entry_stored` and `instance_ended` wait with no limit for the items of the thread queue to end. |
 | Store | `MemoryQueueStore` keeps nothing across a restart; a durable backend is a `QueueStore` the importer gives. |
 
@@ -193,5 +194,5 @@ The commands and their outcomes go through `br-util-nats-fabric` on the bus conn
 | closing table in the client | The adapter and a direct importer close in the same way; the caller gives a reason and the client picks the command |
 | one delivery task for each thread | The order of items of a thread is the order of the chunks and of the closing; threads do not wait for each other |
 | `Drop` reports `Unsent` | The items stay in the store, so a restarted adapter sends them; the observer learns that this instance did not |
-| `instance_ended` is not in the port | The port of the contract has no end-of-life call; the runner holds the concrete adapter and calls it from its lifecycle hook |
+| `instance_ended` is not in the port | The port of the contract has no end-of-life call; a runner can keep the concrete adapter and call it from its lifecycle hook |
 | self dev-dependency with `test-double` | The tests and the examples use `test_double` and CI builds without `--all-features` |
