@@ -8,7 +8,7 @@ use crate::error::Error;
 use crate::graphql;
 use crate::model::{Content, NewMailInput, ResultRef};
 
-fn assert_unreadable(error: &Error) {
+pub(super) fn assert_unreadable(error: &Error) {
     let Error::Unreadable(text) = error else {
         panic!("{error:?}");
     };
@@ -278,26 +278,4 @@ async fn given_ids_of_the_work_inside_a_bad_value_then_the_text_of_the_error_doe
     let error = unread_with(item).await;
     assert_unreadable(&error);
     assert!(!error.to_string().contains(&id(2).to_string()));
-}
-
-#[tokio::test]
-async fn given_a_mail_view_without_author_or_with_bad_lists_then_the_read_is_unreadable() {
-    for (key, value) in [
-        ("author", Value::Null),
-        ("to", json!("x")),
-        ("cc", Value::Null),
-        ("from", json!("not an id")),
-        ("attachments", json!([{ "name": "n" }])),
-    ] {
-        let mut view = json!({
-            "mailId": id(3), "from": id(4), "author": "Ann", "sourceConversationId": id(5),
-            "subject": "s", "body": "b", "to": [], "cc": [], "attachments": [],
-        });
-        view[key] = value;
-        let scripted = jobs(success(MAIL_ROOT, json!({ "mail": view })));
-        let error = graphql::read_mail(&*scripted, &ids(), id(3), id(4))
-            .await
-            .unwrap_err();
-        assert_unreadable(&error);
-    }
 }

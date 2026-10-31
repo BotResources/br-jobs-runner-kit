@@ -5,6 +5,7 @@ mod mail;
 mod state;
 mod unread;
 mod unreadable;
+mod unreadable_mail;
 
 use std::sync::Arc;
 

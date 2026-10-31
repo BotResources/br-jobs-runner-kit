@@ -14,36 +14,14 @@ use crate::model::{
     AgentDeclaration, CancelEvent, ItemArrived, ListedAgent, ModeEvent, PresenceStatus,
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Call {
-    Graphql {
-        document: String,
-        variables: Value,
-    },
-    Claim {
-        claim_id: Uuid,
-    },
-    Fact(Fact),
-    Log(LogRecord),
-    PresencePut,
-    PresenceDelete,
-    Register {
-        run_id: Uuid,
-        agents: Vec<AgentDeclaration>,
-    },
-    ListAgents {
-        run_id: Uuid,
-    },
-    MarkRead {
-        run_id: Uuid,
-        item_ids: Vec<Uuid>,
-    },
-    Command(ChildCommand),
-}
+mod call;
+mod setters;
+
+pub use call::Call;
 
 type Answer<T> = Box<dyn FnMut() -> Result<T, Error> + Send>;
 
-struct Script {
+pub(super) struct Script {
     calls: Vec<Call>,
     graphql: VecDeque<Result<Value, Error>>,
     graphql_default: Option<Value>,
@@ -95,49 +73,8 @@ impl ScriptedJobs {
         JobsClient::from_backend(Arc::clone(self) as Arc<dyn Backend>)
     }
 
-    fn script(&self) -> MutexGuard<'_, Script> {
+    pub(super) fn script(&self) -> MutexGuard<'_, Script> {
         self.script.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    pub fn calls(&self) -> Vec<Call> {
-        self.script().calls.clone()
-    }
-
-    pub fn push_graphql(&self, answer: Result<Value, Error>) {
-        self.script().graphql.push_back(answer);
-    }
-
-    pub fn graphql_default(&self, answer: Value) {
-        self.script().graphql_default = Some(answer);
-    }
-
-    pub fn answer_facts(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
-        self.script().facts = Some(Box::new(answer));
-    }
-
-    pub fn answer_register(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
-        self.script().register = Some(Box::new(answer));
-    }
-
-    pub fn answer_mark_read(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
-        self.script().mark_read = Some(Box::new(answer));
-    }
-
-    pub fn answer_commands(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
-        self.script().command = Some(Box::new(answer));
-    }
-
-    pub fn set_agents(&self, agents: Vec<ListedAgent>) {
-        self.script().agents = agents;
-    }
-
-    pub fn pause(&self) {
-        *self.hold.lock().unwrap_or_else(|p| p.into_inner()) = true;
-    }
-
-    pub fn resume(&self) {
-        *self.hold.lock().unwrap_or_else(|p| p.into_inner()) = false;
-        self.released.notify_waiters();
     }
 
     pub fn push_arrival(&self, arrival: Result<ItemArrived, Error>) {

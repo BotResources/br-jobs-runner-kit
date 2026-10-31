@@ -13,8 +13,6 @@ test-double = []
 async-nats.workspace = true
 br-agentic-contract.workspace = true
 br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
-br-core-events.workspace = true
-br-core-integration.workspace = true
 br-core-kernel.workspace = true
 br-llm-messages.workspace = true
 br-runner-connection.workspace = true

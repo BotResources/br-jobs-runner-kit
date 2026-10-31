@@ -327,8 +327,6 @@ dependencies = [
  "async-nats",
  "br-agentic-contract",
  "br-core-auth",
- "br-core-events",
- "br-core-integration",
  "br-core-kernel",
  "br-llm-messages",
  "br-runner-connection",
