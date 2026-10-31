@@ -101,16 +101,14 @@ pub(crate) fn trigger(value: Value) -> Result<Parsed, Unreadable> {
         job_id,
         run_id,
     };
-    let unknown: Map<String, Value> = value
-        .as_object()
-        .map(|object| {
-            object
-                .iter()
-                .filter(|(key, _)| !KNOWN.contains(&key.as_str()))
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let Some(object) = value.as_object() else {
+        return Err(unreadable("the trigger is not an object".to_owned()));
+    };
+    let unknown: Map<String, Value> = object
+        .iter()
+        .filter(|(key, _)| !KNOWN.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
     let wire: TriggerV2 =
         serde_json::from_value(value).map_err(|e| unreadable(format!("the trigger: {e}")))?;
     let passport: Passport = serde_json::from_value(wire.passport.clone())

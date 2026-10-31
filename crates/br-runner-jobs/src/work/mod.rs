@@ -2,6 +2,8 @@ mod core;
 mod handles;
 mod parse;
 mod sender;
+#[cfg(test)]
+mod tests;
 
 use std::fmt;
 use std::sync::Arc;

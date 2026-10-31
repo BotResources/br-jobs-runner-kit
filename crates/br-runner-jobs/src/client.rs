@@ -28,6 +28,7 @@ impl std::fmt::Debug for JobsClient {
 pub struct TriggerFeed {
     backend: Arc<dyn Backend>,
     source: Box<dyn TriggerSource>,
+    ended: Option<Error>,
 }
 
 impl std::fmt::Debug for TriggerFeed {
@@ -38,11 +39,24 @@ impl std::fmt::Debug for TriggerFeed {
 
 impl TriggerFeed {
     pub async fn next(&mut self) -> Result<Work, Unreadable> {
-        let incoming = self.source.next().await.map_err(|error| Unreadable {
-            error,
-            job_id: None,
-            run_id: None,
-        })?;
+        if let Some(error) = &self.ended {
+            return Err(Unreadable {
+                error: error.clone(),
+                job_id: None,
+                run_id: None,
+            });
+        }
+        let incoming = match self.source.next().await {
+            Ok(incoming) => incoming,
+            Err(error) => {
+                self.ended = Some(error.clone());
+                return Err(Unreadable {
+                    error,
+                    job_id: None,
+                    run_id: None,
+                });
+            }
+        };
         let value = match serde_json::from_slice(&incoming.raw) {
             Ok(value) => value,
             Err(e) => {
@@ -109,6 +123,7 @@ impl JobsClient {
         Ok(TriggerFeed {
             backend: Arc::clone(&self.backend),
             source: self.backend.open_triggers(ack_wait).await?,
+            ended: None,
         })
     }
 
@@ -122,6 +137,11 @@ impl JobsClient {
         let raw = self.backend.claim(claim_id, wait).await?;
         let value: serde_json::Value = serde_json::from_slice(&raw)
             .map_err(|e| Error::Unreadable(format!("the claim reply: {e}")))?;
+        if !value.is_object() {
+            return Err(Error::Unreadable(
+                "the claim reply is not an object".to_owned(),
+            ));
+        }
         let run = value.get("run").filter(|run| !run.is_null()).cloned();
         let reply: ClaimReplyV2 = match &run {
             Some(_) => {
@@ -176,3 +196,7 @@ impl JobsClient {
         self.backend.presence_ttl().await
     }
 }
+
+#[cfg(test)]
+#[path = "client_tests/mod.rs"]
+mod tests;

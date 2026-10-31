@@ -167,6 +167,13 @@ impl Shared {
 
     pub(crate) fn complete(&self, entry: Entry, result: WriteResult) {
         let name = entry.write.name();
+        self.report(match &result {
+            Ok(()) => QueueReport::Delivered { write: name },
+            Err(removal) => QueueReport::Removed {
+                write: name,
+                removal: removal.clone(),
+            },
+        });
         {
             let mut state = self.lock();
             state.pending.remove(&entry.seq);
@@ -181,13 +188,6 @@ impl Shared {
                 state.last_failure = None;
             }
         }
-        self.report(match &result {
-            Ok(()) => QueueReport::Delivered { write: name },
-            Err(removal) => QueueReport::Removed {
-                write: name,
-                removal: removal.clone(),
-            },
-        });
         let _ = entry.end.send(result);
         self.progressed();
     }

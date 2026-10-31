@@ -6,11 +6,10 @@ use serde_json::Value;
 use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
-use crate::backend::{
-    Backend, BoxFuture, ChildCommand, Fact, IncomingTrigger, LogRecord, RawFeed, TriggerSource,
-};
+use super::scripted_inputs::{Inputs, PresenceRecord};
+use crate::backend::{Backend, BoxFuture, ChildCommand, Fact, LogRecord, RawFeed, TriggerSource};
 use crate::client::JobsClient;
-use crate::error::Error;
+use crate::error::{Error, Operation};
 use crate::model::{
     AgentDeclaration, CancelEvent, ItemArrived, ListedAgent, ModeEvent, PresenceStatus,
 };
@@ -64,6 +63,7 @@ pub struct ScriptedJobs {
     released: Notify,
     arrivals: Mutex<Option<mpsc::UnboundedReceiver<Result<ItemArrived, Error>>>>,
     arrival_sender: mpsc::UnboundedSender<Result<ItemArrived, Error>>,
+    pub(super) inputs: Inputs,
 }
 
 impl ScriptedJobs {
@@ -87,6 +87,7 @@ impl ScriptedJobs {
             released: Notify::new(),
             arrivals: Mutex::new(Some(receiver)),
             arrival_sender,
+            inputs: Inputs::new(),
         })
     }
 
@@ -160,7 +161,7 @@ impl ScriptedJobs {
     }
 }
 
-struct Channel<T>(mpsc::UnboundedReceiver<Result<T, Error>>);
+pub(super) struct Channel<T>(pub(super) mpsc::UnboundedReceiver<Result<T, Error>>);
 
 impl<T: Send + 'static> RawFeed<T> for Channel<T> {
     fn next(&mut self) -> BoxFuture<'_, Result<T, Error>> {
@@ -170,14 +171,6 @@ impl<T: Send + 'static> RawFeed<T> for Channel<T> {
                 .await
                 .unwrap_or_else(|| Err(Error::lost("the scripted feed was dropped")))
         })
-    }
-}
-
-struct NoTriggers;
-
-impl TriggerSource for NoTriggers {
-    fn next(&mut self) -> BoxFuture<'_, Result<IncomingTrigger, Error>> {
-        Box::pin(std::future::pending())
     }
 }
 
@@ -208,6 +201,16 @@ impl Backend for ScriptedJobs {
     ) -> BoxFuture<'a, Result<Value, Error>> {
         Box::pin(async move {
             self.gate().await;
+            if let Some(connection) = self.inputs.routed() {
+                self.record(Call::Graphql {
+                    document: document.to_owned(),
+                    variables: variables.clone(),
+                });
+                return connection
+                    .graphql(document, variables)
+                    .await
+                    .map_err(|error| crate::from_connection::error(error, Operation::Read));
+            }
             let mut script = self.script();
             script.calls.push(Call::Graphql {
                 document: document.to_owned(),
@@ -226,7 +229,7 @@ impl Backend for ScriptedJobs {
     fn claim(&self, claim_id: Uuid, _wait: Duration) -> BoxFuture<'_, Result<Vec<u8>, Error>> {
         Box::pin(async move {
             self.record(Call::Claim { claim_id });
-            Ok(br"{}".to_vec())
+            self.inputs.next_claim()
         })
     }
 
@@ -234,7 +237,7 @@ impl Backend for ScriptedJobs {
         &self,
         _ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
-        Box::pin(async { Ok(Box::new(NoTriggers) as Box<dyn TriggerSource>) })
+        Box::pin(async { Ok(self.inputs.trigger_source()) })
     }
 
     fn publish_fact(&self, fact: Fact, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
@@ -249,45 +252,43 @@ impl Backend for ScriptedJobs {
     fn publish_log(&self, line: LogRecord) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.record(Call::Log(line));
-            Ok(())
+            self.inputs.log_result()
         })
     }
 
     fn presence_put(
         &self,
-        _v: String,
-        _s: PresenceStatus,
-        _c: u32,
+        runner_version: String,
+        status: PresenceStatus,
+        capacity: u32,
     ) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.record(Call::PresencePut);
-            Ok(())
+            self.inputs.put_presence(PresenceRecord {
+                runner_version,
+                status,
+                capacity,
+            })
         })
     }
 
     fn presence_delete(&self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.record(Call::PresenceDelete);
-            Ok(())
+            self.inputs.delete_presence()
         })
     }
 
     fn presence_ttl(&self) -> BoxFuture<'_, Result<Duration, Error>> {
-        Box::pin(async { Ok(Duration::from_secs(90)) })
+        Box::pin(async { self.inputs.ttl() })
     }
 
     fn cancel_feed(&self) -> BoxFuture<'_, Result<Box<dyn RawFeed<CancelEvent>>, Error>> {
-        Box::pin(async {
-            let (_sender, receiver) = mpsc::unbounded_channel();
-            Ok(Box::new(Channel(receiver)) as Box<dyn RawFeed<CancelEvent>>)
-        })
+        Box::pin(async { self.inputs.cancel_feed() })
     }
 
     fn mode_feed(&self) -> BoxFuture<'_, Result<Box<dyn RawFeed<ModeEvent>>, Error>> {
-        Box::pin(async {
-            let (_sender, receiver) = mpsc::unbounded_channel();
-            Ok(Box::new(Channel(receiver)) as Box<dyn RawFeed<ModeEvent>>)
-        })
+        Box::pin(async { self.inputs.mode_feed() })
     }
 
     fn arrival_feed(

@@ -50,6 +50,9 @@ async fn attempts(shared: Arc<Shared>, seq: u64, write: Write) -> WriteResult {
 fn next_head(shared: &Arc<Shared>) -> Option<(Entry, Attempt)> {
     loop {
         let mut state = shared.lock();
+        if state.stopped {
+            return None;
+        }
         let head = state.fifo.pop_front()?;
         if let Some(removal) = blocked(&head.write, &state.ended) {
             drop(state);
@@ -96,70 +99,96 @@ fn gate_ended(shared: &Arc<Shared>, entry: Entry, follow: Option<Write>, gate: G
     }
 }
 
-fn unsent(
-    shared: &Arc<Shared>,
-    current: Option<Entry>,
+struct Task {
+    shared: Arc<Shared>,
+    gates: FuturesUnordered<GateEnd>,
     held: HashMap<u64, (Entry, Option<Write>)>,
-) {
-    let mut entries: Vec<Entry> = current.into_iter().collect();
-    entries.extend(held.into_values().map(|(entry, _)| entry));
-    {
-        let mut state = shared.lock();
-        state.stopped = true;
-        entries.extend(state.fifo.drain(..));
-        entries.extend(state.new_held.drain(..).map(|held| held.entry));
+    entry: Option<Entry>,
+    attempt: Option<Attempt>,
+}
+
+impl Task {
+    fn new(shared: Arc<Shared>) -> Self {
+        Self {
+            shared,
+            gates: FuturesUnordered::new(),
+            held: HashMap::new(),
+            entry: None,
+            attempt: None,
+        }
     }
-    for entry in entries {
-        shared.complete(entry, Err(Removal::LeftUnsent));
+
+    fn take_new_held(&mut self) {
+        let mut state = self.shared.lock();
+        for item in state.new_held.drain(..) {
+            let seq = item.entry.seq;
+            let mut gate = item.gate;
+            self.gates
+                .push(Box::pin(async move { (seq, (&mut gate).await) }));
+            self.held.insert(seq, (item.entry, item.follow));
+        }
+    }
+
+    fn take_head(&mut self) {
+        if self.entry.is_none()
+            && let Some((next, next_attempt)) = next_head(&self.shared)
+        {
+            self.entry = Some(next);
+            self.attempt = Some(next_attempt);
+        }
+    }
+
+    async fn run(&mut self) {
+        loop {
+            self.take_new_held();
+            self.take_head();
+            let shared = Arc::clone(&self.shared);
+            let attempt = &mut self.attempt;
+            let attempt_done = async {
+                match attempt.as_mut() {
+                    Some(running) => running.as_mut().await,
+                    None => std::future::pending().await,
+                }
+            };
+            tokio::select! {
+                biased;
+                () = shared.stop.cancelled() => return,
+                Some((seq, gate)) = self.gates.next(), if !self.gates.is_empty() => {
+                    if let Some((waiting, follow)) = self.held.remove(&seq) {
+                        gate_ended(&shared, waiting, follow, gate);
+                    }
+                }
+                result = attempt_done => {
+                    self.attempt = None;
+                    if let Some(finished) = self.entry.take() {
+                        shared.complete(finished, result);
+                    }
+                }
+                () = shared.wake.notified() => {}
+            }
+        }
+    }
+}
+
+impl Drop for Task {
+    fn drop(&mut self) {
+        self.gates.clear();
+        self.attempt = None;
+        let mut entries: Vec<Entry> = self.entry.take().into_iter().collect();
+        entries.extend(self.held.drain().map(|(_, (entry, _))| entry));
+        {
+            let mut state = self.shared.lock();
+            state.stopped = true;
+            entries.extend(state.fifo.drain(..));
+            entries.extend(state.new_held.drain(..).map(|held| held.entry));
+        }
+        entries.sort_by_key(|entry| entry.seq);
+        for entry in entries {
+            self.shared.complete(entry, Err(Removal::LeftUnsent));
+        }
     }
 }
 
 pub(crate) async fn run(shared: Arc<Shared>) {
-    let mut gates: FuturesUnordered<GateEnd> = FuturesUnordered::new();
-    let mut held: HashMap<u64, (Entry, Option<Write>)> = HashMap::new();
-    let mut entry: Option<Entry> = None;
-    let mut attempt: Option<Attempt> = None;
-    loop {
-        {
-            let mut state = shared.lock();
-            for item in state.new_held.drain(..) {
-                let seq = item.entry.seq;
-                let mut gate = item.gate;
-                gates.push(Box::pin(async move { (seq, (&mut gate).await) }));
-                held.insert(seq, (item.entry, item.follow));
-            }
-        }
-        if entry.is_none()
-            && let Some((next, next_attempt)) = next_head(&shared)
-        {
-            entry = Some(next);
-            attempt = Some(next_attempt);
-        }
-        let attempt_done = async {
-            match attempt.as_mut() {
-                Some(running) => running.as_mut().await,
-                None => std::future::pending().await,
-            }
-        };
-        tokio::select! {
-            biased;
-            () = shared.stop.cancelled() => {
-                drop(gates);
-                unsent(&shared, entry.take(), held);
-                return;
-            }
-            Some((seq, gate)) = gates.next(), if !gates.is_empty() => {
-                if let Some((waiting, follow)) = held.remove(&seq) {
-                    gate_ended(&shared, waiting, follow, gate);
-                }
-            }
-            result = attempt_done => {
-                attempt = None;
-                if let Some(finished) = entry.take() {
-                    shared.complete(finished, result);
-                }
-            }
-            () = shared.wake.notified() => {}
-        }
-    }
+    Task::new(shared).run().await;
 }

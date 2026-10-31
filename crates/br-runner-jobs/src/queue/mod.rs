@@ -3,6 +3,8 @@ mod report;
 mod sender;
 mod shared;
 mod task;
+#[cfg(test)]
+mod tests;
 mod write;
 
 use std::sync::Arc;
@@ -61,9 +63,12 @@ impl DeliveryQueue {
         if settings.retry_wait.is_zero() {
             return Err(Error::invalid("the wait between attempts is zero"));
         }
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return Err(Error::invalid("the delivery queue needs an async runtime"));
+        };
         let start_id = settings.start_id;
         let shared = Shared::new(sender, settings);
-        tokio::spawn(task::run(Arc::clone(&shared)));
+        runtime.spawn(task::run(Arc::clone(&shared)));
         let queue = Self {
             writer: QueueWriter { shared },
             run_id,

@@ -31,4 +31,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 br-runner-jobs = { path = ".", version = ">=0.1.0", features = ["test-double"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }

@@ -28,7 +28,7 @@ pub enum WriteKind {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct WriteName {
     pub kind: WriteKind,
@@ -94,7 +94,9 @@ impl Write {
             Self::Answer(_) => (WriteKind::Answer, Vec::new()),
             Self::SavedState(_) => (WriteKind::SavedState, Vec::new()),
             Self::Fact(fact) => match fact {
-                Fact::Started { run_id, .. } => (WriteKind::Started, vec![*run_id]),
+                Fact::Started { run_id, start_id } => {
+                    (WriteKind::Started, vec![*run_id, *start_id])
+                }
                 Fact::Plan { run_id, .. } => (WriteKind::PlanDeclared, vec![*run_id]),
                 Fact::Step { run_id, .. } => (WriteKind::StepStarted, vec![*run_id]),
                 Fact::Completed { run_id } => (WriteKind::Completed, vec![*run_id]),
