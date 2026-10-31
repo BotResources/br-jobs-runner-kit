@@ -1,3 +1,4 @@
+mod bad_items;
 mod live;
 
 use std::sync::Arc;

@@ -12,6 +12,7 @@ pub(crate) enum EntryKind {
     CcNotice,
     CallNotice(CallNoticeKind),
     MailNotice,
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -136,5 +136,21 @@ pub(in crate::adapter) async fn convert(
                 kind: EntryKind::MailNotice,
             },
         }),
+        UnreadItem::Unknown {
+            item_id,
+            item_kind,
+            message,
+            ..
+        } => Ok(Converted {
+            item: notice_entry(
+                item_id,
+                notice_text::unknown_item(&item_kind, message.as_deref()),
+            )?,
+            entry: MailEntry {
+                item_id,
+                child_job_id: None,
+                kind: EntryKind::Unknown,
+            },
+        }),
     }
 }

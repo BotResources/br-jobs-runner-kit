@@ -5,8 +5,8 @@ use super::unread::{mail_item, notice_item, reply};
 use super::{id, ids, jobs, success};
 use crate::backend::Backend;
 use crate::error::Error;
-use crate::graphql;
-use crate::model::{Content, NewMailInput, ResultRef};
+use crate::graphql::{self, Read};
+use crate::model::{CallNoticeKind, Content, NewMailInput, ResultRef, UnreadItem};
 
 pub(super) fn assert_unreadable(error: &Error) {
     let Error::Unreadable(text) = error else {
@@ -187,15 +187,56 @@ unreadable_reply!(
 );
 
 #[tokio::test]
-async fn given_an_item_of_an_unknown_kind_then_unread_is_unreadable() {
+async fn given_an_item_of_an_unknown_kind_then_unread_keeps_it_as_unknown_with_the_kind_of_jobs() {
     let mut item = mail_item(1);
     item["itemKind"] = json!("ELSE");
-    assert_unreadable(&unread_with(item).await);
+    item["message"] = json!("Something new.");
+    let scripted = jobs(reply(vec![item]));
+    let items = graphql::unread(&*scripted, &ids(), None).await.unwrap();
+    assert_eq!(
+        items,
+        vec![UnreadItem::Unknown {
+            item_id: id(101),
+            address: Some(id(4)),
+            item_kind: "ELSE".to_owned(),
+            message: Some("Something new.".to_owned()),
+        }]
+    );
 }
 
 #[tokio::test]
-async fn given_a_notice_of_an_unknown_type_then_unread_is_unreadable() {
-    assert_unreadable(&unread_with(notice_item(1, "CANCELLED")).await);
+async fn given_a_notice_of_an_unknown_type_then_unread_keeps_it_as_an_unknown_notice_with_its_type()
+{
+    let scripted = jobs(reply(vec![notice_item(1, "CANCELLED")]));
+    let items = graphql::unread(&*scripted, &ids(), None).await.unwrap();
+    let [UnreadItem::CallNotice(notice)] = items.as_slice() else {
+        panic!("{items:?}");
+    };
+    assert_eq!(notice.kind, CallNoticeKind::Unknown);
+    assert_eq!(notice.notice_type.as_deref(), Some("CANCELLED"));
+    assert_eq!(notice.child_job_id, Some(id(301)));
+}
+
+#[tokio::test]
+async fn given_a_notice_of_an_unknown_type_without_a_child_job_then_it_is_kept_without_one() {
+    let mut item = notice_item(1, "CANCELLED");
+    item.as_object_mut().unwrap().remove("jobId");
+    let scripted = jobs(reply(vec![item]));
+    let items = graphql::unread(&*scripted, &ids(), None).await.unwrap();
+    let [UnreadItem::CallNotice(notice)] = items.as_slice() else {
+        panic!("{items:?}");
+    };
+    assert_eq!(notice.child_job_id, None);
+}
+
+#[tokio::test]
+async fn given_a_notice_of_a_known_type_with_a_known_type_name_then_no_type_name_is_kept() {
+    let scripted = jobs(reply(vec![notice_item(1, "ACCEPTED")]));
+    let items = graphql::unread(&*scripted, &ids(), None).await.unwrap();
+    let [UnreadItem::CallNotice(notice)] = items.as_slice() else {
+        panic!("{items:?}");
+    };
+    assert_eq!(notice.notice_type, None);
 }
 
 #[tokio::test]
@@ -263,12 +304,60 @@ async fn given_a_bad_failure_report_or_answer_then_unread_is_unreadable() {
 }
 
 #[tokio::test]
-async fn given_one_bad_item_among_good_ones_then_the_whole_read_is_unreadable() {
+async fn given_one_bad_item_among_good_ones_then_the_whole_listing_of_an_address_is_unreadable() {
     let mut bad = mail_item(2);
     bad["author"] = Value::Null;
     let scripted = jobs(reply(vec![mail_item(1), bad, mail_item(3)]));
     let error = graphql::unread(&*scripted, &ids(), None).await.unwrap_err();
     assert_unreadable(&error);
+}
+
+#[tokio::test]
+async fn given_one_bad_item_among_good_ones_then_the_item_level_read_gives_each_alone_in_order() {
+    let mut bad = mail_item(2);
+    bad["author"] = Value::Null;
+    let scripted = jobs(reply(vec![mail_item(1), bad, mail_item(3)]));
+    let reads = graphql::unread_each(&*scripted, &ids(), None)
+        .await
+        .unwrap();
+    let [Read::Item(first), Read::Bad(bad), Read::Item(last)] = reads.as_slice() else {
+        panic!("{reads:?}");
+    };
+    assert_eq!((first.item_id(), last.item_id()), (id(101), id(103)));
+    assert_eq!(bad.item_id, Some(id(102)));
+    assert_eq!(bad.child_job_id, None);
+    assert_unreadable(&bad.error);
+}
+
+#[tokio::test]
+async fn given_a_bad_notice_when_read_item_by_item_then_it_names_its_child_job_and_its_item() {
+    let mut bad = notice_item(1, "RUN_COMPLETED");
+    bad["resultId"] = json!("nope");
+    let scripted = jobs(reply(vec![bad]));
+    let reads = graphql::unread_each(&*scripted, &ids(), None)
+        .await
+        .unwrap();
+    let [Read::Bad(bad)] = reads.as_slice() else {
+        panic!("{reads:?}");
+    };
+    assert_eq!(
+        (bad.item_id, bad.child_job_id),
+        (Some(id(101)), Some(id(301)))
+    );
+}
+
+#[tokio::test]
+async fn given_an_item_without_its_id_when_read_item_by_item_then_it_is_bad_with_no_item_id() {
+    let mut bad = mail_item(1);
+    bad["itemId"] = Value::Null;
+    let scripted = jobs(reply(vec![bad]));
+    let reads = graphql::unread_each(&*scripted, &ids(), None)
+        .await
+        .unwrap();
+    let [Read::Bad(bad)] = reads.as_slice() else {
+        panic!("{reads:?}");
+    };
+    assert_eq!(bad.item_id, None);
 }
 
 #[tokio::test]

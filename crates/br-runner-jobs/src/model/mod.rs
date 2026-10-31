@@ -124,6 +124,7 @@ pub enum ItemKind {
     CcNotice,
     CallNotice,
     MailNotice,
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +145,7 @@ pub enum CallNoticeKind {
     JobFailed,
     JobCancelled,
     Refused,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -209,6 +211,7 @@ pub struct CallNotice {
     pub item_id: Uuid,
     pub address: Option<Uuid>,
     pub kind: CallNoticeKind,
+    pub notice_type: Option<String>,
     pub child_job_id: Option<Uuid>,
     pub position: Option<i64>,
     pub message: Option<String>,
@@ -238,6 +241,12 @@ pub enum UnreadItem {
         mail_id: Option<Uuid>,
         text: String,
     },
+    Unknown {
+        item_id: Uuid,
+        address: Option<Uuid>,
+        item_kind: String,
+        message: Option<String>,
+    },
 }
 
 impl UnreadItem {
@@ -245,7 +254,8 @@ impl UnreadItem {
         match self {
             Self::DirectMail { item_id, .. }
             | Self::CcNotice { item_id, .. }
-            | Self::MailNotice { item_id, .. } => *item_id,
+            | Self::MailNotice { item_id, .. }
+            | Self::Unknown { item_id, .. } => *item_id,
             Self::CallNotice(notice) => notice.item_id,
         }
     }
@@ -254,7 +264,8 @@ impl UnreadItem {
         match self {
             Self::DirectMail { address, .. }
             | Self::CcNotice { address, .. }
-            | Self::MailNotice { address, .. } => *address,
+            | Self::MailNotice { address, .. }
+            | Self::Unknown { address, .. } => *address,
             Self::CallNotice(notice) => notice.address,
         }
     }

@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::backend::RawFeed;
 use crate::error::Error;
-use crate::graphql;
-use crate::model::{ItemArrived, SyncEnd, UnreadItem};
+use crate::graphql::{self, Read};
+use crate::model::{ItemArrived, SyncEnd};
 use crate::work::WorkCore;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,8 +47,8 @@ impl ArrivalFeed {
         raw: Box<dyn RawFeed<ItemArrived>>,
     ) -> Result<Self, Error> {
         let mut buffer = VecDeque::new();
-        match graphql::unread(core.backend.as_ref(), &core.ids(), None).await {
-            Ok(items) => replay(&items, &mut buffer),
+        match graphql::unread_each(core.backend.as_ref(), &core.ids(), None).await {
+            Ok(reads) => replay(&reads, &mut buffer),
             Err(error @ Error::Unreadable(_)) => buffer.push_back(Arrival::Unreadable {
                 child_job_id: None,
                 error,
@@ -98,14 +98,15 @@ impl ArrivalFeed {
     }
 
     async fn resolve(&mut self, event: ItemArrived) {
-        let read = graphql::unread(self.core.backend.as_ref(), &self.core.ids(), None).await;
+        let read = graphql::unread_each(self.core.backend.as_ref(), &self.core.ids(), None).await;
         self.resolving = None;
         match read {
-            Ok(items) => {
-                let found = items.iter().find(|item| item.item_id() == event.item_id);
-                if let Some(arrival) = found.and_then(resolve::sync_end) {
-                    self.buffer.push_back(arrival);
-                }
+            Ok(reads) => {
+                self.buffer.extend(
+                    reads
+                        .iter()
+                        .filter_map(|read| resolve::resolved(read, &event)),
+                );
             }
             Err(error @ Error::Unreadable(_)) => self.buffer.push_back(Arrival::Unreadable {
                 child_job_id: None,
@@ -116,11 +117,16 @@ impl ArrivalFeed {
     }
 }
 
-fn replay(items: &[UnreadItem], buffer: &mut VecDeque<Arrival>) {
-    for item in items {
-        buffer.push_back(Arrival::Item(resolve::item_arrived(item)));
-        if let Some(arrival) = resolve::sync_end(item) {
-            buffer.push_back(arrival);
+fn replay(reads: &[Read], buffer: &mut VecDeque<Arrival>) {
+    for read in reads {
+        match read {
+            Read::Item(item) => {
+                buffer.push_back(Arrival::Item(resolve::item_arrived(item)));
+                if let Some(arrival) = resolve::sync_end(item) {
+                    buffer.push_back(arrival);
+                }
+            }
+            Read::Bad(bad) => buffer.push_back(resolve::bad(bad)),
         }
     }
 }

@@ -13,9 +13,10 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 pub(crate) use content::{attachment, payload, read_result, upload_payload, upload_result};
+pub(crate) use items::{BadItem, Read};
 pub(crate) use send::send_mail;
 pub(crate) use state::{save_state, saved_state};
-pub(crate) use unread::{read_mail, unread};
+pub(crate) use unread::{read_mail, unread, unread_each};
 
 #[derive(Debug, Clone)]
 pub(crate) struct WorkIds {

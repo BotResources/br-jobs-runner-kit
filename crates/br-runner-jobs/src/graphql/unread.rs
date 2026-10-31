@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use super::items::Read;
 use super::lift::call;
 use super::{WorkIds, decode, documents, items};
 use crate::backend::Backend;
@@ -13,6 +14,21 @@ pub(crate) async fn unread(
     work: &WorkIds,
     address: Option<Uuid>,
 ) -> Result<Vec<UnreadItem>, Error> {
+    unread_each(backend, work, address)
+        .await?
+        .into_iter()
+        .map(|read| match read {
+            Read::Item(item) => Ok(item),
+            Read::Bad(bad) => Err(bad.error),
+        })
+        .collect()
+}
+
+pub(crate) async fn unread_each(
+    backend: &dyn Backend,
+    work: &WorkIds,
+    address: Option<Uuid>,
+) -> Result<Vec<Read>, Error> {
     let variables = json!({ "work": work.json(), "address": address });
     let root = call(
         backend,
@@ -22,10 +38,10 @@ pub(crate) async fn unread(
         variables,
     )
     .await?;
-    decode::list(&root, "items")?
+    Ok(decode::list(&root, "items")?
         .iter()
-        .map(items::item)
-        .collect()
+        .map(items::read)
+        .collect())
 }
 
 pub(crate) async fn read_mail(

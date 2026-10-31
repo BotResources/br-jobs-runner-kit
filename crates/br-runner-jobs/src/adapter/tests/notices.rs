@@ -23,6 +23,7 @@ fn text_of(item: &InboxItem) -> String {
 
 fn notice(kind: CallNoticeKind) -> CallNotice {
     CallNotice {
+        notice_type: None,
         item_id: id(150),
         address: Some(id(70)),
         kind,
@@ -117,7 +118,7 @@ async fn given_every_kind_of_notice_when_it_is_converted_then_a_non_blank_runtim
         CallNoticeKind::JobCancelled,
         CallNoticeKind::Refused,
     ];
-    for kind in kinds {
+    for kind in kinds.into_iter().chain([CallNoticeKind::Unknown]) {
         let mut call = notice(kind);
         call.message = Some("a plain word from jobs".to_owned());
         let done = convert(&world.book, agent.as_uuid(), UnreadItem::CallNotice(call))
@@ -168,4 +169,61 @@ async fn given_a_blank_mail_notice_or_an_item_id_that_is_not_a_uuid_v7_then_the_
     call.item_id = uuid::Uuid::nil();
     let error = convert(&world.book, agent.as_uuid(), UnreadItem::CallNotice(call)).await;
     assert!(error.is_err_and(|error| !error.is_refusal()));
+}
+
+#[tokio::test]
+async fn given_a_notice_of_an_unknown_type_and_an_item_of_an_unknown_kind_when_listed_then_each_is_a_runtime_notice_with_its_word_from_jobs()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let mut unknown_item = notice_item(agent.as_uuid(), 2, "ACCEPTED");
+    unknown_item["itemKind"] = json!("ELSE");
+    unknown_item["message"] = json!("Something new.");
+    world.jobs.graphql_default(only_unread(vec![
+        notice_item(agent.as_uuid(), 1, "PAUSED"),
+        unknown_item,
+    ]));
+    let context = world.context(agent);
+    let batch = world
+        .inbox()
+        .items(&context, None, NonZeroUsize::new(10).expect("limit"))
+        .await
+        .expect("a batch");
+    assert_eq!(batch.items.len(), 2);
+    assert!(text_of(&batch.items[0]).contains("PAUSED"));
+    let second = text_of(&batch.items[1]);
+    assert!(second.contains("ELSE") && second.contains("Something new."));
+    let kinds: Vec<_> = (1..=2)
+        .map(|n| {
+            world
+                .book
+                .listed(agent.as_uuid(), id(100 + n))
+                .expect("recorded")
+                .kind
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            EntryKind::CallNotice(CallNoticeKind::Unknown),
+            EntryKind::Unknown
+        ]
+    );
+}
+
+#[tokio::test]
+async fn given_a_malformed_item_for_an_address_when_it_is_listed_then_the_listing_of_that_address_is_an_error_of_the_port()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let mut bad = notice_item(agent.as_uuid(), 1, "RUN_COMPLETED");
+    bad["resultId"] = json!("nope");
+    world.jobs.graphql_default(only_unread(vec![bad]));
+    let context = world.context(agent);
+    let error = world
+        .inbox()
+        .items(&context, None, NonZeroUsize::new(10).expect("limit"))
+        .await
+        .expect_err("a fault");
+    assert!(!error.is_refusal());
 }

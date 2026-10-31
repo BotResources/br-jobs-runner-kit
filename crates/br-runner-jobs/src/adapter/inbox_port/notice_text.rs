@@ -45,6 +45,10 @@ pub(super) fn call_notice(notice: &CallNotice) -> String {
         CallNoticeKind::JobFailed => format!("{name} failed."),
         CallNoticeKind::JobCancelled => format!("{name} was cancelled."),
         CallNoticeKind::Refused => format!("{name} was refused."),
+        CallNoticeKind::Unknown => match &notice.notice_type {
+            Some(notice_type) => format!("{name} has a notice of the type {notice_type}."),
+            None => format!("{name} has a notice of an unknown type."),
+        },
     }];
     if let Some(message) = &notice.message {
         lines.push(message.clone());
@@ -54,5 +58,11 @@ pub(super) fn call_notice(notice: &CallNotice) -> String {
         CallNoticeKind::JobFailed => lines.extend(failure_lines(notice)),
         _ => {}
     }
+    lines.join("\n")
+}
+
+pub(super) fn unknown_item(item_kind: &str, message: Option<&str>) -> String {
+    let mut lines = vec![format!("An item of the kind {item_kind} arrived.")];
+    lines.extend(message.map(str::to_owned));
     lines.join("\n")
 }
