@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs", "crates/br-runner-as-tool"]
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs", "crates/br-runner-as-node", "crates/br-runner-as-tool"]
 
 [workspace.package]
 edition = "2024"

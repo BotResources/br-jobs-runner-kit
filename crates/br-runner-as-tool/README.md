@@ -99,7 +99,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 8. Give the tool result.
 
 - The crate sends nothing to the result stream.
-- The default content of a completed call is the message of the Result in one text block, as it is. A Result that has attachments gives one more text block for each attachment, headed by its name and type. A Result with no message and no attachment (and a completed end with no Result) gives one text block that says the runner returned nothing.
+- The default content of a completed call is the message of the Result in one text block, as it is. A Result that has attachments gives one more text block for each attachment, headed by its name and type. A blank message (empty or only white space) gives no block of its own. A Result with a blank message and no attachment gives one text block that says the runner returned nothing.
 - The result processor is given the `Content` of the Result and gives content blocks or an `AuthorFailure`. Its blocks replace the default content.
 - On "failed" or "cancelled" the child Job is over: nothing is read and nothing is finished.
 
@@ -155,7 +155,8 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 - The crate does not know whether jobs accepted an upload or a create in background mode.
 - The Result of the called runner is the `Content` that `br-runner-jobs` gives (a message and attachments). A message that holds JSON is given as that text.
 - The runner type is checked with the segment rule of the jobs wire at build time; `br-runner-jobs` has no runner type value of its own.
-- A sync call whose child Job is cancelled by someone else gets no end from the jobs service today. The call then ends at the cancel view, or as a fault when the book of the run is dropped.
+- A sync call whose child Job is cancelled by someone else gets no end from the jobs service. The call then ends at the cancel view, or as a fault when the book of the run is dropped.
+- A completed end that holds neither an inline Result nor a reference is given by the live `br-runner-jobs` as `Unreadable`, not as an end of the sync call. The call then gives a fault and one cancel.
 - An end of the sync call of a kind this crate does not know is a fault (`UnknownEnd`).
 - A create removed from the queue without a refusal (`DependsOnRemoved`, `LeftUnsent`) is a fault whose cause is `CreateRemoved`.
 - A `Tool` used after its run ended gives what the caller handle gives; the crate does not check it.
