@@ -25,15 +25,15 @@ expect() {
 }
 
 write_metadata() {
-    local target="$1" edges="$2"
-    python3 -I - "$target" "$edges" <<'PY'
+    local target="$1" edges="$2" kind="${3:-normal}"
+    python3 -I - "$target" "$edges" "$kind" <<'PY'
 import json
 import sys
 
-target, edges = sys.argv[1], json.loads(sys.argv[2])
+target, edges, kind = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3]
 ids = sorted({name for name in edges} | {dep for deps in edges.values() for dep in deps})
 packages = [{"id": f"id-{name}", "name": name} for name in ids]
-nodes = [{"id": f"id-{name}", "deps": [{"pkg": f"id-{dep}"} for dep in edges.get(name, [])]} for name in ids]
+nodes = [{"id": f"id-{name}", "deps": [{"pkg": f"id-{dep}", "dep_kinds": [{"kind": None if kind == "normal" else kind, "target": None}]} for dep in edges.get(name, [])]} for name in ids]
 with open(target, "w") as handle:
     json.dump({"packages": packages, "workspace_members": ["id-br-runner-connection"], "resolve": {"nodes": nodes}}, handle)
 PY
@@ -54,6 +54,24 @@ write_metadata "$transitive" '{"br-runner-connection": ["helper"], "helper": ["b
 expect 1 "br-llm-clients-common-http (br-llm-clients-common-http <- helper <- br-runner-connection)" "a transitive dependency on the family fails" \
     env CARGO_METADATA_FILE="$transitive" bash "$GATE" br-runner-connection
 
+dev="$WORK/dev.json"
+write_metadata "$dev" '{"br-runner-connection": ["tokio", "br-llm-clients-core"]}' dev
+expect 1 "br-llm-clients-core (br-llm-clients-core <- br-runner-connection)" "a family library reachable only through a dev-dependency edge fails" \
+    env CARGO_METADATA_FILE="$dev" bash "$GATE" br-runner-connection
+
+empty_nodes="$WORK/empty-nodes.json"
+printf '%s' '{"packages": [{"id": "id-br-runner-connection", "name": "br-runner-connection"}], "workspace_members": ["id-br-runner-connection"], "resolve": {"nodes": []}}' >"$empty_nodes"
+expect 1 "has no node in the resolved graph" "a root package with no resolved node fails" \
+    env CARGO_METADATA_FILE="$empty_nodes" bash "$GATE" br-runner-connection
+
+malformed="$WORK/malformed.json"
+printf '%s' '{"packages": [' >"$malformed"
+expect 1 "cannot read the cargo metadata" "malformed JSON fails" \
+    env CARGO_METADATA_FILE="$malformed" bash "$GATE" br-runner-connection
+
+expect 1 "cannot read the cargo metadata" "a missing metadata file fails" \
+    env CARGO_METADATA_FILE="$WORK/absent.json" bash "$GATE" br-runner-connection
+
 other="$WORK/other.json"
 write_metadata "$other" '{"br-runner-connection": ["tokio"], "br-runner-threads": ["br-llm-clients-core"]}'
 expect 0 "reaches no br-llm-clients* library" "a sibling crate may depend on the family" \
@@ -65,9 +83,6 @@ expect 1 "is not exactly one workspace member" "an unknown crate fails" \
 ROOT="$(cd "$HERE/../.." && pwd)"
 expect 0 "reaches no br-llm-clients* library" "the real br-runner-connection reaches no family library" \
     bash -c 'cd "$1" && bash "$2" br-runner-connection' _ "$ROOT" "$GATE"
-
-expect 1 "br-llm-clients" "the real br-runner-threads, which depends on the family, fails" \
-    bash -c 'cd "$1" && bash "$2" br-runner-threads' _ "$ROOT" "$GATE"
 
 echo
 if [[ "$failures" -gt 0 ]]; then

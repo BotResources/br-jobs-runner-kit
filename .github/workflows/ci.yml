@@ -212,7 +212,7 @@ jobs:
         run: bash .github/scripts/test-release-order.sh
       - name: a second library joins, a frozen crate stays out
         run: bash .github/scripts/test-second-library.sh
-      - name: br-runner-connection reaches no br-llm-clients library
+      - name: test the br-llm-clients dependency gate
         run: bash .github/scripts/test-no-llm-clients.sh
 
   registry-gate:

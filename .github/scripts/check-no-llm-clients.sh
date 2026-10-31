@@ -17,24 +17,37 @@ import json
 import sys
 
 path, crate, prefix = sys.argv[1:4]
-with open(path) as handle:
-    metadata = json.load(handle)
 
-names = {package["id"]: package["name"] for package in metadata["packages"]}
-edges = {node["id"]: [dep["pkg"] for dep in node["deps"]] for node in metadata["resolve"]["nodes"]}
+def fail(message):
+    print(f"::error::{message}", file=sys.stderr)
+    sys.exit(1)
+
+
+try:
+    with open(path) as handle:
+        metadata = json.load(handle)
+    names = {package["id"]: package["name"] for package in metadata["packages"]}
+    edges = {node["id"]: [dep["pkg"] for dep in node["deps"]] for node in metadata["resolve"]["nodes"]}
+except (OSError, ValueError, KeyError, TypeError) as error:
+    fail(f"cannot read the cargo metadata ({type(error).__name__}: {error})")
 roots = [package_id for package_id, name in names.items() if name == crate and package_id in metadata["workspace_members"]]
 if len(roots) != 1:
-    print(f"::error::{crate} is not exactly one workspace member of this graph", file=sys.stderr)
-    sys.exit(1)
+    fail(f"{crate} is not exactly one workspace member of this graph")
+if roots[0] not in edges:
+    fail(f"{crate} has no node in the resolved graph")
 
 parent = {roots[0]: None}
 queue = [roots[0]]
 found = []
 while queue:
     current = queue.pop(0)
-    for dep in edges.get(current, []):
+    if current not in edges:
+        fail(f"{names.get(current, current)} has no node in the resolved graph")
+    for dep in edges[current]:
         if dep in parent:
             continue
+        if dep not in names:
+            fail(f"{dep} is not a package of the metadata")
         parent[dep] = current
         if names[dep].startswith(prefix):
             found.append(dep)

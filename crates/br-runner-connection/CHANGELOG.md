@@ -2,7 +2,7 @@
 
 ## 0.1.1
 
-Brings the code in line with the corrected intent of 0.1. The public API of 0.1.0 is kept; the only addition is `Cause::NoListener` (additive, the enum is `#[non_exhaustive]`).
+Fixes the behavior of 0.1.0 on input checks, error reading and the examples. The public API of 0.1.0 is kept; the only addition is `Cause::NoListener` (additive, the enum is `#[non_exhaustive]`).
 
 ### Changed
 
@@ -16,21 +16,20 @@ Brings the code in line with the corrected intent of 0.1. The public API of 0.1.
 ### Added
 
 - `Cause::NoListener`.
-- A dependency gate: `.github/scripts/check-no-llm-clients.sh` fails the build when a library of the `br-llm-clients` family is reachable from `br-runner-connection`, directly or transitively, dev-dependencies included. Its test (`test-no-llm-clients.sh`) covers a direct and a transitive dependency and the real crate.
-- The four examples of the intent in `examples/`: `build_connection` (the quickstart of the README, checked word for word by a test), `graphql_call`, `custom_credential`, `one_connection_for_all`. The tests run them against a real local HTTP endpoint and a real NATS server.
+- A dependency gate: `.github/scripts/check-no-llm-clients.sh` fails the build when a library of the `br-llm-clients` family is reachable from `br-runner-connection`, directly or transitively, dev-dependencies included. Its test (`test-no-llm-clients.sh`) covers a direct, a transitive and a dev-dependency edge, unreadable metadata, a root package with no resolved node, and the real crate.
+- The four examples in `examples/`: `build_connection` (the quickstart of the README, checked word for word by a test), `graphql_call`, `custom_credential`, `one_connection_for_all`. The tests run them against a real local HTTP endpoint and a real NATS server.
 - Tests: no redirect is followed, input checks, subject and size checks, the three causes, the text of the service carried as given.
 
 ### Bus access
 
-- The bus connection stays the `async_nats::Client`. `async_nats` is named in one module only, `src/bus/`, and the crate has no subject, stream or bucket name of its own. Subject names must come from the contract crate of the service that owns the wire, and the published language and `integration.*` must go through `br-util-nats-fabric`, never through this request. The request and the accessor stay generic. They are meant to be called only by the `runner_transport` module of `br-runner-jobs` and the `chunk_lane` module of `br-runner-threads`, when they take a `Connection`; neither library calls this crate yet.
-- Basis: the 2026-08-14 runner-transport exception covers the `svc-jobs` runner channels; its extension to this crate is pending ratification. The README has a "Bus access" paragraph and a Why row.
+- The bus connection is the `async_nats::Client`. `async-nats` is named in one module only, `src/bus/`. The request and the accessor are generic and take any subject the importer gives; this crate writes no subject, stream or bucket name, and never creates infra (no stream, no bucket, no consumer). The README has a "Bus access" paragraph and a Why row.
 - The dependency `br-util-nats-fabric` is removed: the connection no longer builds a Fabric.
 
 ### Not done in this version
 
-- `FixedToken::new` takes any text; the refusal of an empty or unsendable token happens at the first call, as `Credential`. The sealed intent says a fixed token refused at building; a correction is proposed (pending) to remove that sentence, because every credential already fails closed at the call.
-- The sealed intent says the service account is "a text" while the crate carries the typed `ServiceAccountId` of `br-core-kernel`; a correction is proposed (pending) to make the service account that typed value.
-- Bus `Unauthenticated`: not built: the intent keeps it To Be Implemented; a request refused by the bus ends as `Lost` by its wait, or `Unavailable` when the bus is not connected.
+- `FixedToken::new` does not validate; an empty or unsendable token fails at the first call as `Credential`, nothing sent.
+- The service account is the typed `ServiceAccountId` of `br-core-kernel`, carried as given.
+- Bus `Unauthenticated` is not built: a request refused by the bus (credentials or right to send) is not reported as such; it ends as `Lost` by its wait, or `Unavailable` when the bus is not connected.
 
 ## 0.1.0
 

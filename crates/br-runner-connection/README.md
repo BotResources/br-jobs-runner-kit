@@ -1,6 +1,6 @@
 # br-runner-connection
 
-The one connection of a runner to the platform. Runner code builds one `Connection` and gives it to `br-runner-threads` and `br-runner-jobs`. It does the bearer-authenticated GraphQL request, maps every failure to a small error vocabulary, keeps every token out of every text that it writes, gives the bus connection to the runner libraries and offers one request with one reply on the bus. It knows no thread, job, run, mail, agent or Passport, and it sends each request once.
+The one connection of a runner to the platform. A runner builds one `Connection` and gives it to whatever builds its calls on it. The connection does the bearer-authenticated GraphQL request, maps every failure to a small error vocabulary, keeps every token out of every text that it writes, gives the bus connection back to its holder and offers one request with one reply on the bus. It knows no thread, job, run, mail, agent or Passport, and it sends each request once.
 
 ## Install
 
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The other examples are in `examples/` and run in the tests against a real local HTTP endpoint and a real bus: `graphql_call` (each error kind matched, `Refused` read by its code), `custom_credential` (your own `Credential`, and its two failure kinds), `one_connection_for_all` (one `Connection` used by two runner libraries at the same time).
+The other examples are in `examples/` and run in the tests against a real local HTTP endpoint and a real bus: `graphql_call` (each error kind matched, `Refused` read by its code), `custom_credential` (your own `Credential`, and its two failure kinds), `one_connection_for_all` (one `Connection` given to two small stand-in functions, two callers that use it at the same time).
 
 ## Surface
 
@@ -69,7 +69,7 @@ The other examples are in `examples/` and run in the tests against a real local 
 
 ## Bus access
 
-The bus connection is an `async_nats::Client`. The importer builds and authenticates it with the bus credentials of the runner; `Connection::bus()` gives it back and `Connection::bus_request` runs on it. `async_nats` is named in one module only, `src/bus/`. The request is generic: the caller gives the subject and the body, and the library has no subject, stream or bucket name of its own. Subject names must come from the contract crate of the service that owns the wire, in the runner library that calls. The published language and `integration.*` must go through `br-util-nats-fabric`, never through this request. This request is meant to be called only by the `runner_transport` module of `br-runner-jobs` and the `chunk_lane` module of `br-runner-threads`, when they take a `Connection`; neither library calls this crate yet. The direct use of `async-nats` here rests on the 2026-08-14 runner-transport exception, which covers the `svc-jobs` runner channels; its extension to this crate is pending ratification. The library creates and binds no stream, no bucket and no consumer.
+The bus connection is an `async_nats::Client`. The importer builds and authenticates it with the bus credentials of the runner; `Connection::bus()` gives it back and `Connection::bus_request` runs on it. `async-nats` is named in one module only, `src/bus/`. The request and the accessor are generic: they take any subject the importer gives, and this crate writes no subject, stream or bucket name. This crate never creates infra: no stream, no bucket and no consumer.
 
 ## Rules the code keeps
 
@@ -90,16 +90,17 @@ The bus connection is an `async_nats::Client`. The importer builds and authentic
 
 | What | State |
 |---|---|
-| `FixedToken::new` | Takes any text. An empty token, or one that is not a header value, is refused at the first call as `Credential` (no usable credential), not at building. The sealed intent says a fixed token refused at building; a correction is proposed (pending) to remove that sentence, because every credential already fails closed at the call. |
-| Service account | Typed `ServiceAccountId` of `br-core-kernel`, carried as given. The sealed intent says "a text" while the crate carries the typed `ServiceAccountId`; a correction is proposed (pending) to make the service account that typed value. |
-| Bus `Unauthenticated` | Not built: the intent keeps it To Be Implemented; a request refused by the bus ends as `Lost` by its wait, or `Unavailable` when the bus is not connected. `async-nats` tells a refusal of the credentials of the bus, or of the right to send on a subject, only to the event callback that the importer sets when it builds the client, and a `Client` has no accessor for it. |
+| `FixedToken::new` | `FixedToken::new` does not validate. An empty or unsendable token (one that is not a header value) fails at the first call as `Credential` (no usable credential), and nothing is sent. |
+| Service account | The service account is the typed `ServiceAccountId` of `br-core-kernel`, carried as given. |
+| Bus `Unauthenticated` | Not built: a request refused by the bus (credentials or right to send) is not reported as such; it ends as `Lost` by its wait, or `Unavailable` when the bus is not connected. `async-nats` tells a refusal of the credentials of the bus, or of the right to send on a subject, only to the event callback that the importer sets when it builds the client, and a `Client` has no accessor for it. |
 
 ## Why
 
 | Thing | Why it is the way it is |
 |---|---|
-| direct `async-nats` in `bus` | the 2026-08-14 runner-transport exception covers the `svc-jobs` runner channels; its extension to this crate is pending ratification: wire outside `integration.*`, faces the runners, shape from the contract crate |
+| direct `async-nats` in `bus` | the bus connection handed to importers is the `async_nats::Client`; one generic request on it needs no subject knowledge in this crate |
+| dependency gate is a script, not a `cargo-deny` ban | A `bans` rule applies to the whole workspace graph, and other crates in this workspace legitimately depend on the `br-llm-clients` family; the script checks the graph reachable from `br-runner-connection` only |
 | one TCP connection per call, no pool | The connection runs no task and keeps nothing after a call, so an abandoned call leaves nothing behind |
-| no retry | A resend is the importer's decision; only the importer knows if the call was applied (`Lost`) |
+| no retry | Only the importer can resend, and only the importer knows if the call was applied (`Lost`) |
 | bus `_ =>` arm of `bus_request` | An `async-nats` request error of kind `Other` (for example a closed client) ends as `Lost` with cause `Transport`, even when nothing was sent. The library cannot tell whether the request left, so it takes the conservative direction: the importer must treat it as possibly applied |
 | text of the service not scrubbed | The library cannot find a token in a text it did not write; carrying the text as given keeps `Refusal` faithful to what the service said |
