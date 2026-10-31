@@ -85,6 +85,7 @@ pub struct CreateChild {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)] // a command is built once and moved to the transport, boxing buys nothing
 pub enum ChildCommand {
     Create(CreateChild),
     Finish {

@@ -7,8 +7,7 @@ use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
 use crate::backend::{
-    Backend, BoxFuture, ChildCommand, Fact, IncomingTrigger, LogRecord, RawFeed, TriggerDelivery,
-    TriggerSource,
+    Backend, BoxFuture, ChildCommand, Fact, IncomingTrigger, LogRecord, RawFeed, TriggerSource,
 };
 use crate::client::JobsClient;
 use crate::error::Error;

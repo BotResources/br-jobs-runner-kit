@@ -129,11 +129,11 @@ pub(crate) async fn run(shared: Arc<Shared>) {
                 held.insert(seq, (item.entry, item.follow));
             }
         }
-        if entry.is_none() {
-            if let Some((next, next_attempt)) = next_head(&shared) {
-                entry = Some(next);
-                attempt = Some(next_attempt);
-            }
+        if entry.is_none()
+            && let Some((next, next_attempt)) = next_head(&shared)
+        {
+            entry = Some(next);
+            attempt = Some(next_attempt);
         }
         let attempt_done = async {
             match attempt.as_mut() {

@@ -11,7 +11,7 @@ use br_llm_messages::EntryId;
 use br_runner_jobs::test_double::{Call, ScriptedJobs, trigger_json, work_from_trigger};
 use br_runner_jobs::{
     AgentBook, BookLookup, Gate, IgnoreReports, MarkGate, NodeEntry, QueueSettings, book_lookup,
-    mark_gate, mark_gate_stored,
+    mark_gate,
 };
 use contract_jobs::graphql_roots::UNREAD_ROOT;
 use serde::{Deserialize, Serialize};

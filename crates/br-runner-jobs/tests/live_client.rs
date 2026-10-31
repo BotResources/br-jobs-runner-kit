@@ -78,8 +78,7 @@ async fn given_a_trigger_that_is_not_json_when_read_then_it_is_unreadable_and_re
     let unreadable = tokio::time::timeout(Duration::from_secs(10), triggers.next())
         .await
         .expect("a trigger came")
-        .err()
-        .expect("unreadable");
+        .expect_err("unreadable");
     assert!(
         matches!(unreadable.error, Error::Unreadable(_)),
         "{:?}",

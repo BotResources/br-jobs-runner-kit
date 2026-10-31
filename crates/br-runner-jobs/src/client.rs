@@ -38,31 +38,29 @@ impl std::fmt::Debug for TriggerFeed {
 
 impl TriggerFeed {
     pub async fn next(&mut self) -> Result<Work, Unreadable> {
-        {
-            let incoming = self.source.next().await.map_err(|error| Unreadable {
-                error,
-                job_id: None,
-                run_id: None,
-            })?;
-            let value = match serde_json::from_slice(&incoming.raw) {
-                Ok(value) => value,
-                Err(e) => {
-                    let _ = incoming.delivery.terminate().await;
-                    return Err(Unreadable {
-                        error: Error::Unreadable(format!("the trigger is not JSON: {e}")),
-                        job_id: None,
-                        run_id: None,
-                    });
-                }
-            };
-            let delivery = incoming.delivery;
-            return match Work::from_value(Arc::clone(&self.backend), value, None) {
-                Ok(work) => Ok(work.with_delivery(delivery)),
-                Err(unreadable) => {
-                    let _ = delivery.terminate().await;
-                    Err(unreadable)
-                }
-            };
+        let incoming = self.source.next().await.map_err(|error| Unreadable {
+            error,
+            job_id: None,
+            run_id: None,
+        })?;
+        let value = match serde_json::from_slice(&incoming.raw) {
+            Ok(value) => value,
+            Err(e) => {
+                let _ = incoming.delivery.terminate().await;
+                return Err(Unreadable {
+                    error: Error::Unreadable(format!("the trigger is not JSON: {e}")),
+                    job_id: None,
+                    run_id: None,
+                });
+            }
+        };
+        let delivery = incoming.delivery;
+        match Work::from_value(Arc::clone(&self.backend), value, None) {
+            Ok(work) => Ok(work.with_delivery(delivery)),
+            Err(unreadable) => {
+                let _ = delivery.terminate().await;
+                Err(unreadable)
+            }
         }
     }
 }
