@@ -19,18 +19,27 @@ async fn unusable(rx: &mut watch::Receiver<LoopState>, mode: Mode) {
 async fn next_trigger(shared: &Arc<Shared>) -> Work {
     loop {
         let mut guard = shared.triggers.lock().await;
-        if guard.is_none() {
+        if guard.feed.is_none() {
+            if guard.closed_at_beat == Some(shared.current_beat()) {
+                drop(guard);
+                shared.next_beat().await;
+                continue;
+            }
             match shared.calls.triggers(shared.settings.ack_wait()).await {
-                Ok(feed) => *guard = Some(feed),
+                Ok(feed) => {
+                    guard.feed = Some(feed);
+                    guard.closed_at_beat = None;
+                }
                 Err(error) => {
                     tracing::error!(%error, "the feed of the triggers cannot be opened");
+                    guard.closed_at_beat = Some(shared.current_beat());
                     drop(guard);
                     shared.next_beat().await;
                     continue;
                 }
             }
         }
-        let Some(feed) = guard.as_mut() else {
+        let Some(feed) = guard.feed.as_mut() else {
             continue;
         };
         match feed.next().await {
@@ -40,7 +49,8 @@ async fn next_trigger(shared: &Arc<Shared>) -> Work {
             }
             Err(unreadable) => {
                 tracing::error!(error = %unreadable.error, "the feed of the triggers ended");
-                *guard = None;
+                guard.feed = None;
+                guard.closed_at_beat = Some(shared.current_beat());
                 drop(guard);
                 shared.next_beat().await;
             }
@@ -48,17 +58,9 @@ async fn next_trigger(shared: &Arc<Shared>) -> Work {
     }
 }
 
-fn settle_known(shared: &Arc<Shared>, work: Work) {
-    let acknowledge = shared
-        .run(work.run_id())
-        .is_some_and(|known| !known.started_pending());
-    if acknowledge {
-        let shared = Arc::clone(shared);
-        tokio::spawn(async move {
-            if let Err(error) = shared.calls.acknowledge(&work).await {
-                tracing::error!(%error, "the trigger could not be acknowledged");
-            }
-        });
+pub(crate) fn settle_known(shared: &Arc<Shared>, known: &crate::record::RunRecord, work: Work) {
+    if !known.started_pending() {
+        shared.calls.acknowledge(Arc::new(work));
     }
 }
 
@@ -73,13 +75,7 @@ async fn push_step<F: Fields>(
         () = shared.drain.cancelled() => return,
     };
     if shared.draining() {
-        if let Err(error) = shared.calls.give_back(work).await {
-            tracing::error!(%error, "the trigger could not be given back");
-        }
-        return;
-    }
-    if shared.run(work.run_id()).is_some() {
-        settle_known(shared, work);
+        shared.calls.give_back(work);
         return;
     }
     execute(shared, plan, work, Source::Trigger).await;
@@ -99,6 +95,7 @@ async fn pause(shared: &Arc<Shared>, delay: Option<Duration>) {
 
 async fn claim_step<F: Fields>(shared: &Arc<Shared>, plan: &Arc<Plan<F>>, held: &mut Option<Uuid>) {
     let claim_id = held.take().unwrap_or_else(Uuid::now_v7);
+    let epoch = shared.mode_epoch();
     let reply = shared
         .calls
         .claim(claim_id, shared.settings.claim_wait())
@@ -128,9 +125,13 @@ async fn claim_step<F: Fields>(shared: &Arc<Shared>, plan: &Arc<Plan<F>>, held: 
                     if reason == Reason::MalformedClaim.as_str() {
                         tracing::error!(%claim_id, "jobs refused the claim as malformed");
                     }
-                    shared.set_claims_stopped(true);
+                    shared.stop_claims(epoch);
                 }
             }
+        }
+        Err(error @ Error::InvalidInput(_)) => {
+            tracing::error!(%claim_id, %error, "the claim could not be made, there are no more claims");
+            shared.stop_claims(epoch);
         }
         Err(error) => {
             tracing::warn!(%claim_id, %error, "the claim is repeated after a missing answer");
@@ -149,23 +150,20 @@ pub(crate) async fn run<F: Fields>(shared: Arc<Shared>, plan: Arc<Plan<F>>) {
         }
         let state = *rx.borrow_and_update();
         let claiming = held.is_some() || state.mode == Mode::Claim;
-        if claiming && shared.claims_stopped() && state.mode == Mode::Push {
-            held = None;
-            continue;
-        }
-        if !state.can_ask() || (claiming && shared.claims_stopped()) {
+        let claims_blocked = claiming && shared.claims_stopped();
+        if !state.can_ask() || (claims_blocked && state.mode != Mode::Push) {
             tokio::select! {
                 _ = rx.changed() => {}
                 () = shared.drain.cancelled() => return,
             }
             continue;
         }
-        if claiming {
+        if claiming && !claims_blocked {
             claim_step(&shared, &plan, &mut held).await;
         } else {
             push_step(&shared, &plan, &mut rx).await;
         }
-        if shared.single_run() && shared.runs_taken() > 0 {
+        if shared.host_has_taken_its_run() {
             shared.drain.cancel();
         }
     }

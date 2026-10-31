@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use br_runner_jobs::test_double::ScriptedJobs;
 use br_runner_jobs::{CancelEvent, PresenceStatus};
-use br_runner_toolkit::{HostEvent, Settings, TestHost, advance_clock};
+use br_runner_toolkit::{HostEvent, Settings, TestHost};
 use support::*;
 
 fn host_settings() -> br_runner_toolkit::SettingsBuilder {
@@ -89,8 +89,7 @@ async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_t
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_and_the_clock_can_be_advanced()
- {
+async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_without_a_terminal_fact() {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -103,7 +102,6 @@ async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_and_the
     let handle = tokio::spawn(host.run());
     until(|| kinds(&jobs) == vec!["started"]).await;
     jobs.push_cancel(Ok(CancelEvent::OrderMade { run_id: id(101) }));
-    advance_clock(Duration::from_secs(5)).await;
     handle.await.expect("joined").expect("a run");
     assert!(!has_terminal(&jobs));
 }

@@ -1,3 +1,4 @@
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use br_graph_contract::InstanceId;
@@ -30,12 +31,8 @@ fn drained_run(record: &Arc<RunRecord>, aborted: bool) -> DrainedRun {
         .queue()
         .map(|queue| queue.state().waiting)
         .unwrap_or_default();
-    let instances_without_return: Vec<InstanceId> = if aborted {
-        record
-            .unhooked_instances()
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect()
+    let instances_without_return = if aborted {
+        record.running_hooks()
     } else {
         Vec::new()
     };
@@ -49,51 +46,60 @@ fn drained_run(record: &Arc<RunRecord>, aborted: bool) -> DrainedRun {
 }
 
 fn abort_run(shared: &Arc<Shared>, record: &Arc<RunRecord>) -> DrainedRun {
+    record.set_phase(Phase::Aborted);
+    hooks::call_all(shared, record);
     let run = drained_run(record, true);
     tracing::error!(
         run_id = %record.run_id,
         job_id = %record.job_id,
         executor_running = record.executor_running(),
-        instances = run.instances_without_return.len(),
-        writes_left = run.unsent.len(),
+        instances_without_return = ?run.instances_without_return,
+        writes_left = ?run.unsent,
         "the drain aborts a run that is still in flight"
     );
-    record.set_phase(Phase::Aborted);
-    hooks::call_all(shared, record);
     record.stop_arrival();
     drop(record.take_book());
-    shared.instances.remove_run(record.run_id);
+    shared.instances.remove_run(record, Phase::Aborted);
     record.take_queue();
     shared.forget_run(record.run_id);
     run
 }
 
+async fn wait_for_runs(shared: &Arc<Shared>, slots: &mut VecDeque<JoinHandle<()>>) {
+    while let Some(slot) = slots.front_mut() {
+        let _ = slot.await;
+        slots.pop_front();
+    }
+    shared.closings.all_ended().await;
+}
+
 pub(crate) async fn drain(shared: &Arc<Shared>, slots: Vec<JoinHandle<()>>) -> DrainReport {
     shared.drain.cancel();
     shared.status.send_replace(PresenceStatus::Draining);
-    let mut slots = slots;
-    let waited = tokio::time::timeout(shared.settings.drain_timeout(), async {
-        for slot in &mut slots {
-            let _ = slot.await;
-        }
-        shared.closings.all_ended().await;
-    })
+    let mut slots: VecDeque<JoinHandle<()>> = slots.into();
+    let waited = tokio::time::timeout(
+        shared.settings.drain_timeout(),
+        wait_for_runs(shared, &mut slots),
+    )
     .await;
     let mut report = DrainReport::default();
     if waited.is_err() {
-        let closing_runs: Vec<Arc<RunRecord>> = shared
-            .closings
-            .drain_all()
-            .into_iter()
-            .map(|(handle, record)| {
-                handle.abort();
-                record
-            })
-            .collect();
-        let closing_ids: Vec<Uuid> = closing_runs.iter().map(|record| record.run_id).collect();
+        let closings = shared.closings.take_all();
+        for (handle, _) in &closings {
+            handle.abort();
+        }
         for slot in &slots {
             slot.abort();
         }
+        for slot in slots {
+            let _ = slot.await;
+        }
+        let mut closing_runs = Vec::new();
+        for (handle, record) in closings {
+            let _ = handle.await;
+            closing_runs.push(record);
+        }
+        let closing_ids: HashSet<Uuid> = closing_runs.iter().map(|record| record.run_id).collect();
         for record in shared.runs() {
             if !closing_ids.contains(&record.run_id) {
                 report.runs.push(abort_run(shared, &record));
@@ -107,13 +113,7 @@ pub(crate) async fn drain(shared: &Arc<Shared>, slots: Vec<JoinHandle<()>>) -> D
                 report.runs.push(run);
             }
         }
-        for _ in 0..16 {
-            tokio::task::yield_now().await;
-        }
     }
-    *shared.triggers.lock().await = None;
-    if let Err(error) = shared.calls.delete_presence().await {
-        tracing::error!(%error, "the presence could not be deleted, the time to live of the bucket ends it");
-    }
+    shared.triggers.lock().await.feed = None;
     report
 }

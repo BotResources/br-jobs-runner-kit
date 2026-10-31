@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_graph_contract::{CancelHandle, InstanceId};
-use br_runner_jobs::{AgentBook, DeliveryQueue};
+use br_runner_jobs::{AgentBook, BookedAgent, DeliveryQueue};
 use tokio::sync::Notify;
 use uuid::Uuid;
 
@@ -15,6 +15,7 @@ pub(crate) enum Phase {
     Live,
     ExecutorReturned,
     Aborted,
+    Dropped,
 }
 
 struct InstanceInfo {
@@ -25,6 +26,8 @@ struct InstanceInfo {
 struct Inner {
     phase: Phase,
     book: Option<Arc<AgentBook>>,
+    last_agents: Vec<BookedAgent>,
+    running_hooks: Vec<InstanceId>,
     queue: Option<Arc<DeliveryQueue>>,
     context: Option<RunContext>,
     instances: HashMap<InstanceId, InstanceInfo>,
@@ -38,7 +41,6 @@ pub(crate) struct RunRecord {
     started_pending: AtomicBool,
     executor_running: AtomicBool,
     inner: Mutex<Inner>,
-    outstanding_hooks: AtomicUsize,
     hooks_changed: Notify,
 }
 
@@ -53,12 +55,13 @@ impl RunRecord {
             inner: Mutex::new(Inner {
                 phase: Phase::Live,
                 book: None,
+                last_agents: Vec::new(),
+                running_hooks: Vec::new(),
                 queue: None,
                 context: None,
                 instances: HashMap::new(),
                 arrival: None,
             }),
-            outstanding_hooks: AtomicUsize::new(0),
             hooks_changed: Notify::new(),
         })
     }
@@ -112,7 +115,12 @@ impl RunRecord {
     }
 
     pub(crate) fn take_book(&self) -> Option<Arc<AgentBook>> {
-        self.inner().book.take()
+        let mut inner = self.inner();
+        let book = inner.book.take();
+        if let Some(book) = &book {
+            inner.last_agents = book.agents();
+        }
+        book
     }
 
     pub(crate) fn set_arrival(&self, handle: tokio::task::JoinHandle<()>) {
@@ -154,21 +162,21 @@ impl RunRecord {
 
     pub(crate) fn claim_hook(&self, id: InstanceId) -> Option<InstanceEnded> {
         let mut inner = self.inner();
-        let book = inner.book.clone();
+        let agents = match &inner.book {
+            Some(book) => book.agents(),
+            None => inner.last_agents.clone(),
+        };
         let info = inner.instances.get_mut(&id)?;
         if info.hooked {
             return None;
         }
         info.hooked = true;
         let node = info.node.clone();
-        let agents = book
-            .map(|book| {
-                book.agents()
-                    .into_iter()
-                    .filter(|agent| agent.key.node == node)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let agents = agents
+            .into_iter()
+            .filter(|agent| agent.key.node == node)
+            .collect();
+        inner.running_hooks.push(id);
         Some(InstanceEnded {
             instance_id: id,
             node,
@@ -176,17 +184,13 @@ impl RunRecord {
         })
     }
 
-    pub(crate) fn hook_started(&self) {
-        self.outstanding_hooks.fetch_add(1, Ordering::SeqCst);
-    }
-
-    pub(crate) fn hook_returned(&self) {
-        self.outstanding_hooks.fetch_sub(1, Ordering::SeqCst);
+    pub(crate) fn hook_returned(&self, id: InstanceId) {
+        self.inner().running_hooks.retain(|running| *running != id);
         self.hooks_changed.notify_waiters();
     }
 
-    pub(crate) fn outstanding_hooks(&self) -> usize {
-        self.outstanding_hooks.load(Ordering::SeqCst)
+    pub(crate) fn running_hooks(&self) -> Vec<InstanceId> {
+        self.inner().running_hooks.clone()
     }
 
     pub(crate) async fn hooks_returned(&self) {
@@ -194,7 +198,7 @@ impl RunRecord {
             let changed = self.hooks_changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
-            if self.outstanding_hooks() == 0 {
+            if self.running_hooks().is_empty() {
                 return;
             }
             changed.await;

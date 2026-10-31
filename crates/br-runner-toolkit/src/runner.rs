@@ -10,13 +10,15 @@ use crate::drain::{DrainReport, drain};
 use crate::error::{Error, ErrorCode};
 use crate::failure::FailureMapping;
 use crate::hook::LifecycleHook;
+#[cfg(feature = "test-host")]
+use crate::host_state::HostState;
 use crate::instances::{InstanceLookup, Instances};
 use crate::plan::{AnswerFn, Plan};
 use crate::run_start::RunStart;
 use crate::settings::Settings;
 use crate::shared::Shared;
-#[cfg(feature = "test-host")]
-use crate::tap::Tap;
+use crate::signals::Signals;
+use crate::supervise::{Restart, supervised};
 use crate::{feeds, presence, slot};
 
 pub struct StartArgs<F: Fields> {
@@ -79,58 +81,72 @@ impl<F: Fields> StartArgs<F> {
 }
 
 pub struct RunnerBuilder {
-    shared: Arc<Shared>,
+    client: JobsClient,
+    settings: Settings,
+    hook: Option<LifecycleHook>,
+    author_observer: Option<Arc<dyn QueueObserver>>,
     instances: Arc<Instances>,
+    #[cfg(feature = "test-host")]
+    host: Option<Arc<HostState>>,
 }
 
 impl RunnerBuilder {
     pub fn new(client: JobsClient, settings: Settings) -> Self {
-        let instances = Arc::new(Instances::default());
         Self {
-            shared: Shared::new(
-                Calls::new(client, None),
-                settings,
-                None,
-                None,
-                Arc::clone(&instances),
-            ),
-            instances,
+            client,
+            settings,
+            hook: None,
+            author_observer: None,
+            instances: Arc::new(Instances::default()),
+            #[cfg(feature = "test-host")]
+            host: None,
         }
     }
 
-    fn edit(mut self, change: impl FnOnce(&mut Shared)) -> Self {
-        if let Some(shared) = Arc::get_mut(&mut self.shared) {
-            change(shared);
-        }
+    pub fn with_lifecycle_hook(mut self, hook: LifecycleHook) -> Self {
+        self.hook = Some(hook);
         self
     }
 
-    pub fn with_lifecycle_hook(self, hook: LifecycleHook) -> Self {
-        self.edit(|shared| shared.hook = Some(hook))
-    }
-
-    pub fn with_queue_observer(self, observer: Arc<dyn QueueObserver>) -> Self {
-        self.edit(|shared| shared.author_observer = Some(observer))
+    pub fn with_queue_observer(mut self, observer: Arc<dyn QueueObserver>) -> Self {
+        self.author_observer = Some(observer);
+        self
     }
 
     #[cfg(feature = "test-host")]
-    pub(crate) fn with_tap(self, tap: Arc<Tap>) -> Self {
-        self.edit(|shared| {
-            shared.calls = Calls::new(shared.calls.client().clone(), Some(tap));
-        })
-    }
-
-    #[cfg(feature = "test-host")]
-    pub(crate) fn shared(&self) -> Arc<Shared> {
-        Arc::clone(&self.shared)
+    pub(crate) fn with_host(mut self, host: Arc<HostState>) -> Self {
+        self.host = Some(host);
+        self
     }
 
     pub fn instance_lookup(&self) -> InstanceLookup {
         InstanceLookup::new(Arc::clone(&self.instances))
     }
 
+    fn shared(self) -> (Arc<Shared>, Arc<Instances>) {
+        #[cfg(feature = "test-host")]
+        let tap = self.host.as_ref().map(|host| Arc::clone(&host.tap));
+        #[cfg(not(feature = "test-host"))]
+        let tap = None;
+        let shared = Shared::new(
+            Calls::new(self.client, tap),
+            self.settings,
+            self.hook,
+            self.author_observer,
+            Arc::clone(&self.instances),
+        );
+        #[cfg(feature = "test-host")]
+        let shared = shared.with_host(self.host);
+        (Arc::new(shared), self.instances)
+    }
+
     pub async fn start<F: Fields>(self, args: StartArgs<F>) -> Result<DrainReport, Error> {
-        let shared = self.shared;
+        let mut signals = if args.process_signals {
+            Some(Signals::install()?)
+        } else {
+            None
+        };
+        let (shared, instances) = self.shared();
         let ttl = shared
             .calls
             .client()
@@ -139,65 +155,72 @@ impl RunnerBuilder {
             .map_err(|error| Error::jobs(&error))?;
         let capacity = Capacity::new(shared.settings.max_concurrent_runs())
             .map_err(|error| Error::new(ErrorCode::SettingInvalid, error.to_string()))?;
-        self.instances.mark_started();
+        instances.mark_started();
         let plan = Arc::new(args.plan);
-        let background = [
-            tokio::spawn(presence::keep(Arc::clone(&shared), ttl, capacity)),
-            tokio::spawn(feeds::dispatch_mode(Arc::clone(&shared))),
-            tokio::spawn(feeds::cancel_orders(Arc::clone(&shared))),
+        let presence = supervised(Arc::clone(&shared), "presence", Restart::AtOnce, {
+            let shared = Arc::clone(&shared);
+            move || presence::keep(Arc::clone(&shared), ttl, capacity)
+        });
+        let feeds = [
+            supervised(Arc::clone(&shared), "dispatch mode", Restart::AfterBeat, {
+                let shared = Arc::clone(&shared);
+                move || feeds::dispatch_mode(Arc::clone(&shared))
+            }),
+            supervised(Arc::clone(&shared), "cancel orders", Restart::AfterBeat, {
+                let shared = Arc::clone(&shared);
+                move || feeds::cancel_orders(Arc::clone(&shared))
+            }),
         ];
         let slots = (0..shared.settings.max_concurrent_runs())
-            .map(|_| tokio::spawn(slot::run(Arc::clone(&shared), Arc::clone(&plan))))
+            .map(|_| {
+                supervised(Arc::clone(&shared), "slot", Restart::AfterBeat, {
+                    let (shared, plan) = (Arc::clone(&shared), Arc::clone(&plan));
+                    move || slot::run(Arc::clone(&shared), Arc::clone(&plan))
+                })
+            })
             .collect();
-        wait_for_shutdown(args.shutdown, args.process_signals).await;
+        #[cfg(feature = "test-host")]
+        let host_cancel = shared.host.as_ref().map(|host| {
+            let (shared, mut cancel) = (Arc::clone(&shared), host.cancel.subscribe());
+            tokio::spawn(async move {
+                if cancel.wait_for(|cancelled| *cancelled).await.is_ok() {
+                    shared.cancel_all_runs();
+                }
+            })
+        });
+        wait_for_shutdown(args.shutdown, signals.as_mut()).await;
         let report = drain(&shared, slots).await;
-        for task in &background {
+        presence.abort();
+        let _ = presence.await;
+        for task in &feeds {
             task.abort();
+        }
+        #[cfg(feature = "test-host")]
+        if let Some(task) = host_cancel {
+            task.abort();
+        }
+        if let Err(error) = shared.calls.delete_presence().await {
+            tracing::error!(%error, "the presence could not be deleted, the time to live of the bucket ends it");
         }
         Ok(report)
     }
 }
 
-async fn wait_for_shutdown(shutdown: Option<CancellationToken>, process_signals: bool) {
+async fn wait_for_shutdown(shutdown: Option<CancellationToken>, signals: Option<&mut Signals>) {
     let author = async {
         match &shutdown {
             Some(token) => token.cancelled().await,
             None => std::future::pending().await,
         }
     };
-    let signals = async {
-        if process_signals {
-            process_signal().await;
-        } else {
-            std::future::pending::<()>().await;
+    let process = async {
+        match signals {
+            Some(signals) => signals.received().await,
+            None => std::future::pending().await,
         }
     };
     tokio::select! {
         () = author => {}
-        () = signals => {}
-    }
-}
-
-#[cfg(unix)]
-async fn process_signal() {
-    use tokio::signal::unix::{SignalKind, signal};
-    let (Ok(mut terminate), Ok(mut interrupt)) = (
-        signal(SignalKind::terminate()),
-        signal(SignalKind::interrupt()),
-    ) else {
-        tracing::error!("the process signals cannot be listened to");
-        return std::future::pending().await;
-    };
-    tokio::select! {
-        _ = terminate.recv() => {}
-        _ = interrupt.recv() => {}
-    }
-}
-
-#[cfg(not(unix))]
-async fn process_signal() {
-    if tokio::signal::ctrl_c().await.is_err() {
-        tracing::error!("the process signals cannot be listened to");
-        std::future::pending::<()>().await;
+        () = process => {}
     }
 }

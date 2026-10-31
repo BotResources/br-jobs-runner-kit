@@ -1,4 +1,5 @@
 mod calls;
+mod closings;
 mod context;
 mod drain;
 mod error;
@@ -9,6 +10,8 @@ mod hook;
 mod hooks;
 #[cfg(feature = "test-host")]
 mod host;
+#[cfg(feature = "test-host")]
+mod host_state;
 mod instances;
 mod observer;
 mod panic;
@@ -21,7 +24,9 @@ mod runner;
 mod saved_state;
 mod settings;
 mod shared;
+mod signals;
 mod slot;
+mod supervise;
 mod tap;
 
 pub use context::RunContext;
@@ -30,7 +35,7 @@ pub use error::{Error, ErrorCode};
 pub use failure::{FailureMapping, FailureOverride, ReportedFailure, RunRefusal, failure_mapping};
 pub use hook::{InstanceEnded, LifecycleHook, lifecycle_hook};
 #[cfg(feature = "test-host")]
-pub use host::{HostCancel, HostRun, TestHost, advance_clock};
+pub use host::{HostCancel, HostRun, TestHost};
 pub use instances::InstanceLookup;
 pub use plan::AnswerFn;
 pub use run_start::{RunStart, RunStartInput, StartedRun, run_start};

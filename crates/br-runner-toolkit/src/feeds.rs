@@ -21,9 +21,7 @@ pub(crate) async fn dispatch_mode(shared: Arc<Shared>) {
             Ok(mut feed) => loop {
                 match feed.next().await {
                     Ok(event) => {
-                        let mode = mode_of(event);
-                        shared.set_claims_stopped(false);
-                        shared.loop_state.send_modify(|state| state.mode = mode);
+                        shared.mode_changed(mode_of(event));
                     }
                     Err(Error::Unreadable(text)) => {
                         tracing::error!(%text, "an event of the dispatch mode cannot be decoded");

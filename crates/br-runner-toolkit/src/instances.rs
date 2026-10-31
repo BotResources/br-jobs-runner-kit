@@ -1,61 +1,72 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_agentic_contract::{PortError, PortFuture};
 use br_graph_contract::InstanceId;
 use br_runner_jobs::{AgentBook, BookLookup};
-use tokio::sync::Notify;
-use uuid::Uuid;
+use tokio::sync::watch;
 
 use crate::context::RunContext;
 use crate::error::{Error, ErrorCode};
 use crate::record::{Phase, RunRecord};
 
-#[derive(Default)]
 pub(crate) struct Instances {
     by_id: Mutex<HashMap<InstanceId, Arc<RunRecord>>>,
-    changed: Notify,
+    changed: watch::Sender<u64>,
     started: AtomicBool,
 }
 
+impl Default for Instances {
+    fn default() -> Self {
+        Self {
+            by_id: Mutex::default(),
+            changed: watch::channel(0).0,
+            started: AtomicBool::new(false),
+        }
+    }
+}
+
 impl Instances {
+    fn held(&self) -> MutexGuard<'_, HashMap<InstanceId, Arc<RunRecord>>> {
+        self.by_id.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     pub(crate) fn mark_started(&self) {
         self.started.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) fn insert(&self, id: InstanceId, record: Arc<RunRecord>) {
-        self.by_id
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, record);
-        self.changed.notify_waiters();
+    pub(crate) fn insert(&self, id: InstanceId, record: &Arc<RunRecord>) -> bool {
+        let mut held = self.held();
+        if matches!(record.phase(), Phase::Dropped | Phase::Aborted) {
+            return false;
+        }
+        held.insert(id, Arc::clone(record));
+        drop(held);
+        self.changed.send_modify(|generation| *generation += 1);
+        true
     }
 
-    pub(crate) fn remove_run(&self, run_id: Uuid) {
-        self.by_id
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|_, record| record.run_id != run_id);
+    pub(crate) fn remove_run(&self, record: &Arc<RunRecord>, phase: Phase) {
+        record.set_phase(phase);
+        self.held().retain(|_, held| held.run_id != record.run_id);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn waiters(&self) -> usize {
+        self.changed.receiver_count()
     }
 
     async fn find(&self, id: InstanceId) -> Result<Arc<RunRecord>, Error> {
+        let mut changes = self.changed.subscribe();
         loop {
-            let changed = self.changed.notified();
-            tokio::pin!(changed);
-            changed.as_mut().enable();
             if !self.started.load(Ordering::SeqCst) {
                 return Err(Error::new(
                     ErrorCode::NotStarted,
                     "the instance lookup is called before the runner started",
                 ));
             }
-            let found = self
-                .by_id
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .get(&id)
-                .cloned();
+            let found = self.held().get(&id).cloned();
             match found {
                 Some(record) if record.phase() == Phase::Live => return Ok(record),
                 Some(_) => {
@@ -64,7 +75,11 @@ impl Instances {
                         "the run of this instance has ended its executor",
                     ));
                 }
-                None => changed.await,
+                None => {
+                    if changes.changed().await.is_err() {
+                        return Err(Error::new(ErrorCode::InstanceEnded, "the runner is gone"));
+                    }
+                }
             }
         }
     }

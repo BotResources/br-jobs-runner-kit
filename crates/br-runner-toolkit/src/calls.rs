@@ -38,14 +38,22 @@ impl Calls {
         self.client.triggers(ack_wait).await
     }
 
-    pub(crate) async fn acknowledge(&self, work: &Work) -> Result<(), Error> {
+    pub(crate) fn acknowledge(&self, work: Arc<Work>) {
         tell(&self.tap, || HostEvent::TriggerAcknowledged);
-        work.ack().await
+        tokio::spawn(async move {
+            if let Err(error) = work.ack().await {
+                tracing::error!(%error, "the trigger could not be acknowledged");
+            }
+        });
     }
 
-    pub(crate) async fn give_back(&self, work: Work) -> Result<(), Error> {
+    pub(crate) fn give_back(&self, work: Work) {
         tell(&self.tap, || HostEvent::TriggerGivenBack);
-        work.give_back().await
+        tokio::spawn(async move {
+            if let Err(error) = work.give_back().await {
+                tracing::error!(%error, "the trigger could not be given back");
+            }
+        });
     }
 
     pub(crate) async fn publish_presence(

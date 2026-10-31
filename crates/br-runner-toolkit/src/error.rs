@@ -6,6 +6,8 @@ pub enum ErrorCode {
     JobsFailed,
     NotStarted,
     InstanceEnded,
+    SignalsNotListened,
+    TaskEnded,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

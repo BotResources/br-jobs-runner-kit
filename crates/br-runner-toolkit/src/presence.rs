@@ -1,8 +1,10 @@
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::{Capacity, PresenceStatus};
-use tokio::time::{MissedTickBehavior, interval};
+use br_runner_jobs::{Capacity, Error, PresenceStatus};
+use tokio::sync::watch;
+use tokio::time::{Interval, MissedTickBehavior, interval};
 
 use crate::shared::Shared;
 
@@ -11,18 +13,41 @@ fn beat_period(ttl: Duration) -> Duration {
 }
 
 pub(crate) async fn keep(shared: Arc<Shared>, ttl: Duration, capacity: Capacity) {
-    let mut ticks = interval(beat_period(ttl));
+    let status = shared.status.subscribe();
+    let publishing = Arc::clone(&shared);
+    beats(
+        beat_period(ttl),
+        status,
+        move |current| {
+            let shared = Arc::clone(&publishing);
+            async move {
+                shared
+                    .calls
+                    .publish_presence(shared.settings.runner_version(), current, capacity)
+                    .await
+            }
+        },
+        move || shared.beat_now(),
+    )
+    .await;
+}
+
+pub(crate) async fn beats<P, Fut>(
+    period: Duration,
+    mut status: watch::Receiver<PresenceStatus>,
+    publish: P,
+    on_beat: impl Fn(),
+) where
+    P: Fn(PresenceStatus) -> Fut,
+    Fut: Future<Output = Result<(), Error>>,
+{
+    let mut ticks = interval(period);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    let mut status = shared.status.subscribe();
     ticks.tick().await;
     loop {
         let current = *status.borrow_and_update();
-        let publication =
-            shared
-                .calls
-                .publish_presence(shared.settings.runner_version(), current, capacity);
         tokio::select! {
-            result = publication => {
+            result = publish(current) => {
                 if let Err(error) = result {
                     tracing::error!(%error, "the presence could not be published");
                 }
@@ -32,14 +57,11 @@ pub(crate) async fn keep(shared: Arc<Shared>, ttl: Duration, capacity: Capacity)
                 tracing::warn!("a presence publication was still running at the next beat, it is dropped");
             }
         }
-        shared.beat_now();
+        on_beat();
     }
 }
 
-async fn wait_for_beat(
-    ticks: &mut tokio::time::Interval,
-    status: &mut tokio::sync::watch::Receiver<PresenceStatus>,
-) {
+async fn wait_for_beat(ticks: &mut Interval, status: &mut watch::Receiver<PresenceStatus>) {
     tokio::select! {
         _ = ticks.tick() => {}
         _ = status.changed() => {}

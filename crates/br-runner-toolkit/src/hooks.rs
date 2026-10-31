@@ -14,7 +14,6 @@ pub(crate) fn call_once(shared: &Arc<Shared>, record: &Arc<RunRecord>, instance:
     let Some(ended) = record.claim_hook(instance) else {
         return;
     };
-    record.hook_started();
     let record = Arc::clone(record);
     tokio::spawn(async move {
         let run_id = record.run_id;
@@ -24,7 +23,7 @@ pub(crate) fn call_once(shared: &Arc<Shared>, record: &Arc<RunRecord>, instance:
         if called.is_err() {
             tracing::error!(run_id = %run_id, "the lifecycle hook panicked");
         }
-        record.hook_returned();
+        record.hook_returned(instance);
     });
 }
 

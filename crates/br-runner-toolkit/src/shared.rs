@@ -1,16 +1,18 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_graph_contract::CancelToken;
 use br_runner_jobs::{PresenceStatus, QueueObserver, TriggerFeed};
-use tokio::sync::{Notify, watch};
-use tokio::task::AbortHandle;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::calls::Calls;
+use crate::closings::Closings;
 use crate::hook::LifecycleHook;
+#[cfg(feature = "test-host")]
+use crate::host_state::HostState;
 use crate::instances::Instances;
 use crate::record::RunRecord;
 use crate::settings::Settings;
@@ -35,46 +37,14 @@ impl LoopState {
 }
 
 #[derive(Default)]
-pub(crate) struct Registry {
+struct Registry {
     runs: HashMap<Uuid, Arc<RunRecord>>,
     known_cancels: HashSet<Uuid>,
 }
 
-#[derive(Default)]
-pub(crate) struct Closings {
-    entries: Mutex<HashMap<Uuid, (AbortHandle, Arc<RunRecord>)>>,
-    changed: Notify,
-}
-
-impl Closings {
-    fn entries(&self) -> MutexGuard<'_, HashMap<Uuid, (AbortHandle, Arc<RunRecord>)>> {
-        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    pub(crate) fn add(&self, run_id: Uuid, handle: AbortHandle, record: Arc<RunRecord>) {
-        self.entries().insert(run_id, (handle, record));
-    }
-
-    pub(crate) fn remove(&self, run_id: Uuid) {
-        self.entries().remove(&run_id);
-        self.changed.notify_waiters();
-    }
-
-    pub(crate) fn drain_all(&self) -> Vec<(AbortHandle, Arc<RunRecord>)> {
-        self.entries().drain().map(|(_, entry)| entry).collect()
-    }
-
-    pub(crate) async fn all_ended(&self) {
-        loop {
-            let changed = self.changed.notified();
-            tokio::pin!(changed);
-            changed.as_mut().enable();
-            if self.entries().is_empty() {
-                return;
-            }
-            changed.await;
-        }
-    }
+pub(crate) struct TriggerFeedState {
+    pub feed: Option<TriggerFeed>,
+    pub closed_at_beat: Option<u64>,
 }
 
 pub(crate) struct Shared {
@@ -88,14 +58,15 @@ pub(crate) struct Shared {
     pub loop_state: watch::Sender<LoopState>,
     pub instances: Arc<Instances>,
     pub closings: Closings,
-    pub triggers: tokio::sync::Mutex<Option<TriggerFeed>>,
-    pub finished: watch::Sender<usize>,
-    pub host_cancel: watch::Sender<bool>,
-    claims_stopped: AtomicBool,
-    single_run: AtomicBool,
-    taken: AtomicUsize,
+    pub triggers: tokio::sync::Mutex<TriggerFeedState>,
+    mode_epoch: AtomicU64,
+    stopped_epoch: AtomicU64,
     registry: Mutex<Registry>,
+    #[cfg(feature = "test-host")]
+    pub host: Option<Arc<HostState>>,
 }
+
+const NOT_STOPPED: u64 = u64::MAX;
 
 impl Shared {
     pub(crate) fn new(
@@ -104,8 +75,8 @@ impl Shared {
         hook: Option<LifecycleHook>,
         author_observer: Option<Arc<dyn QueueObserver>>,
         instances: Arc<Instances>,
-    ) -> Arc<Self> {
-        Arc::new(Self {
+    ) -> Self {
+        Self {
             calls,
             settings,
             hook,
@@ -120,14 +91,16 @@ impl Shared {
             .0,
             instances,
             closings: Closings::default(),
-            triggers: tokio::sync::Mutex::new(None),
-            finished: watch::channel(0).0,
-            host_cancel: watch::channel(false).0,
-            claims_stopped: AtomicBool::new(false),
-            single_run: AtomicBool::new(false),
-            taken: AtomicUsize::new(0),
+            triggers: tokio::sync::Mutex::new(TriggerFeedState {
+                feed: None,
+                closed_at_beat: None,
+            }),
+            mode_epoch: AtomicU64::new(0),
+            stopped_epoch: AtomicU64::new(NOT_STOPPED),
             registry: Mutex::new(Registry::default()),
-        })
+            #[cfg(feature = "test-host")]
+            host: None,
+        }
     }
 
     fn registry(&self) -> MutexGuard<'_, Registry> {
@@ -138,20 +111,24 @@ impl Shared {
         self.drain.is_cancelled()
     }
 
-    pub(crate) fn register_run(&self, run_id: Uuid, job_id: Uuid) -> (Arc<RunRecord>, CancelToken) {
+    pub(crate) fn register_run(
+        &self,
+        run_id: Uuid,
+        job_id: Uuid,
+    ) -> Result<(Arc<RunRecord>, CancelToken), Arc<RunRecord>> {
         let token = CancelToken::new();
-        self.taken.fetch_add(1, Ordering::SeqCst);
         let record = RunRecord::new(run_id, job_id, token.handle().clone());
         let mut registry = self.registry();
-        if registry.known_cancels.contains(&run_id) || *self.host_cancel.borrow() {
+        if let Some(existing) = registry.runs.get(&run_id) {
+            return Err(Arc::clone(existing));
+        }
+        if registry.known_cancels.contains(&run_id) || self.host_cancelled() {
             token.handle().trigger();
         }
         registry.runs.insert(run_id, Arc::clone(&record));
-        (record, token)
-    }
-
-    pub(crate) fn run(&self, run_id: Uuid) -> Option<Arc<RunRecord>> {
-        self.registry().runs.get(&run_id).cloned()
+        drop(registry);
+        self.host_run_taken();
+        Ok((record, token))
     }
 
     pub(crate) fn runs(&self) -> Vec<Arc<RunRecord>> {
@@ -160,7 +137,7 @@ impl Shared {
 
     pub(crate) fn forget_run(&self, run_id: Uuid) {
         self.registry().runs.remove(&run_id);
-        self.finished.send_modify(|count| *count += 1);
+        self.host_run_forgotten();
     }
 
     pub(crate) fn order_made(&self, run_id: Uuid) {
@@ -185,33 +162,27 @@ impl Shared {
         registry.known_cancels = orders;
     }
 
-    #[cfg(feature = "test-host")]
-    pub(crate) fn cancel_all_for_host(&self) {
-        self.host_cancel.send_replace(true);
-        for record in self.runs() {
-            record.cancel.trigger();
+    pub(crate) fn mode_epoch(&self) -> u64 {
+        self.mode_epoch.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn mode_changed(&self, mode: Mode) {
+        self.mode_epoch.fetch_add(1, Ordering::SeqCst);
+        self.loop_state.send_modify(|state| state.mode = mode);
+    }
+
+    pub(crate) fn stop_claims(&self, claim_epoch: u64) {
+        if claim_epoch == self.mode_epoch() {
+            self.stopped_epoch.store(claim_epoch, Ordering::SeqCst);
         }
     }
 
-    #[cfg(feature = "test-host")]
-    pub(crate) fn take_one_run_only(&self) {
-        self.single_run.store(true, Ordering::SeqCst);
-    }
-
-    pub(crate) fn runs_taken(&self) -> usize {
-        self.taken.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn single_run(&self) -> bool {
-        self.single_run.load(Ordering::SeqCst)
-    }
-
     pub(crate) fn claims_stopped(&self) -> bool {
-        self.claims_stopped.load(Ordering::SeqCst)
+        self.stopped_epoch.load(Ordering::SeqCst) == self.mode_epoch()
     }
 
-    pub(crate) fn set_claims_stopped(&self, stopped: bool) {
-        self.claims_stopped.store(stopped, Ordering::SeqCst);
+    pub(crate) fn current_beat(&self) -> u64 {
+        *self.beat.borrow()
     }
 
     pub(crate) fn beat_now(&self) {
@@ -221,5 +192,56 @@ impl Shared {
     pub(crate) async fn next_beat(&self) {
         let mut beats = self.beat.subscribe();
         let _ = beats.changed().await;
+    }
+}
+
+#[cfg(feature = "test-host")]
+impl Shared {
+    pub(crate) fn with_host(mut self, host: Option<Arc<HostState>>) -> Self {
+        self.host = host;
+        self
+    }
+
+    fn host_cancelled(&self) -> bool {
+        self.host.as_ref().is_some_and(|host| host.cancelled())
+    }
+
+    fn host_run_taken(&self) {
+        if let Some(host) = &self.host {
+            host.run_taken();
+        }
+    }
+
+    fn host_run_forgotten(&self) {
+        if let Some(host) = &self.host {
+            host.run_forgotten();
+        }
+    }
+
+    pub(crate) fn host_has_taken_its_run(&self) -> bool {
+        self.host
+            .as_ref()
+            .is_some_and(|host| host.has_taken_a_run())
+    }
+
+    pub(crate) fn cancel_all_runs(&self) {
+        for record in self.runs() {
+            record.cancel.trigger();
+        }
+    }
+}
+
+#[cfg(not(feature = "test-host"))]
+impl Shared {
+    fn host_cancelled(&self) -> bool {
+        false
+    }
+
+    fn host_run_taken(&self) {}
+
+    fn host_run_forgotten(&self) {}
+
+    pub(crate) fn host_has_taken_its_run(&self) -> bool {
+        false
     }
 }

@@ -8,20 +8,20 @@ use tokio_util::sync::CancellationToken;
 use crate::drain::DrainReport;
 use crate::error::{Error, ErrorCode};
 use crate::hook::LifecycleHook;
+use crate::host_state::HostState;
 use crate::instances::InstanceLookup;
 use crate::runner::{RunnerBuilder, StartArgs};
 use crate::settings::SettingsBuilder;
-use crate::shared::Shared;
-use crate::tap::{HostEvent, Tap};
+use crate::tap::HostEvent;
 
 #[derive(Clone)]
 pub struct HostCancel {
-    shared: Arc<Shared>,
+    state: Arc<HostState>,
 }
 
 impl HostCancel {
     pub fn cancel(&self) {
-        self.shared.cancel_all_for_host();
+        self.state.cancel.send_replace(true);
     }
 }
 
@@ -35,7 +35,17 @@ pub struct HostRun {
 pub struct TestHost<F: Fields> {
     builder: RunnerBuilder,
     args: StartArgs<F>,
-    tap: Arc<Tap>,
+    state: Arc<HostState>,
+}
+
+fn run_ended(
+    ended: Result<Result<DrainReport, Error>, tokio::task::JoinError>,
+) -> Result<DrainReport, Error> {
+    match ended {
+        Ok(result) => result,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(error) => Err(Error::new(ErrorCode::TaskEnded, error.to_string())),
+    }
 }
 
 impl<F: Fields> TestHost<F> {
@@ -48,13 +58,11 @@ impl<F: Fields> TestHost<F> {
             .max_concurrent_runs(1)
             .drain_timeout(Duration::MAX)
             .build()?;
-        let tap = Arc::new(Tap::default());
-        let builder = RunnerBuilder::new(client, settings).with_tap(Arc::clone(&tap));
-        builder.shared().take_one_run_only();
+        let state = HostState::new();
         Ok(Self {
-            builder,
+            builder: RunnerBuilder::new(client, settings).with_host(Arc::clone(&state)),
             args: args.without_shutdown_and_signals(),
-            tap,
+            state,
         })
     }
 
@@ -74,30 +82,31 @@ impl<F: Fields> TestHost<F> {
 
     pub fn cancel_handle(&self) -> HostCancel {
         HostCancel {
-            shared: self.builder.shared(),
+            state: Arc::clone(&self.state),
         }
     }
 
     pub async fn run(self) -> Result<HostRun, Error> {
-        let shared = self.builder.shared();
+        let state = self.state;
         let shutdown = CancellationToken::new();
-        let start = tokio::spawn(
+        let mut start = tokio::spawn(
             self.builder
                 .start(self.args.with_shutdown(shutdown.clone())),
         );
-        let mut finished = shared.finished.subscribe();
-        let _ = finished.wait_for(|count| *count >= 1).await;
-        shutdown.cancel();
-        let drain = start
-            .await
-            .map_err(|error| Error::new(ErrorCode::JobsFailed, error.to_string()))??;
+        let mut finished = state.finished.subscribe();
+        let first_run_forgotten = async {
+            let _ = finished.wait_for(|count| *count >= 1).await;
+        };
+        let drain = tokio::select! {
+            () = first_run_forgotten => {
+                shutdown.cancel();
+                run_ended(start.await)?
+            }
+            ended = &mut start => run_ended(ended)?,
+        };
         Ok(HostRun {
-            events: self.tap.events(),
+            events: state.tap.events(),
             drain,
         })
     }
-}
-
-pub async fn advance_clock(by: Duration) {
-    tokio::time::advance(by).await;
 }

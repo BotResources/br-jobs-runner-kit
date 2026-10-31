@@ -7,7 +7,7 @@ repository.workspace = true
 description = "The main loop of a runner with the jobs service: registration through the presence, parallel run slots, the delivery of the facts of each run and the drain"
 
 [features]
-test-host = ["tokio/test-util"]
+test-host = []
 
 [dependencies]
 br-agentic-contract.workspace = true
