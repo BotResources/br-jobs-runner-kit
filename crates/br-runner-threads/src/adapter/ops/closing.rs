@@ -35,7 +35,8 @@ impl Inner {
                     "a Completed closing for a turn that holds no state or no chunk",
                 ));
             }
-            let seal = if content {
+            let healthy = !inner.message_broken(message);
+            let seal = if content && (kind == ClosureKind::Completed || healthy) {
                 Some(wire::seal_of(chunks)?)
             } else {
                 None

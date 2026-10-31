@@ -6,6 +6,7 @@ use tokio::sync::OwnedMutexGuard;
 
 use super::{OrderGuard, Shared, State};
 use crate::backend::BoxFuture;
+use crate::detach::detach;
 use crate::error::Error;
 
 pub struct ResponseSink {
@@ -39,15 +40,11 @@ async fn deliver(shared: Arc<Shared>, mut state: OwnedMutexGuard<State>, delta: 
 }
 
 async fn held(order: OrderGuard, work: impl std::future::Future<Output = ()> + Send + 'static) {
-    let task = tokio::spawn(async move {
+    let _ = detach(async move {
         let _order = order;
         work.await;
-    });
-    if let Err(failure) = task.await
-        && failure.is_panic()
-    {
-        std::panic::resume_unwind(failure.into_panic());
-    }
+    })
+    .await;
 }
 
 impl StreamSink for ResponseSink {

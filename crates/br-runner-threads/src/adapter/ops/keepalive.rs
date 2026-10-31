@@ -1,7 +1,6 @@
-use std::sync::Arc;
-use std::time::Instant;
-
 use contract_threads::Chunk;
+use std::sync::Arc;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::adapter::inner::{Inner, KeepaliveTask, Slot, locked};
@@ -35,6 +34,11 @@ impl Inner {
         let mut aborts = locked(&self.aborts);
         aborts.retain(|held| !held.is_finished());
         aborts.push(handle.clone());
+        drop(aborts);
+        if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            task.abort();
+            return None;
+        }
         Some(KeepaliveTask(handle))
     }
 
@@ -44,14 +48,10 @@ impl Inner {
         Some(state.last_item_at + self.keepalive_interval)
     }
 
-    fn message_refused_for_good(&self, message: Uuid) -> bool {
-        locked(&self.refused).contains(&message)
-    }
-
     async fn keepalives(self: Arc<Self>, slot: Arc<Slot>, message: Uuid) {
         loop {
             if self.stopped.load(std::sync::atomic::Ordering::SeqCst)
-                || self.message_refused_for_good(message)
+                || self.message_refused(message)
             {
                 return;
             }
@@ -76,7 +76,7 @@ impl Inner {
                     !state.closed && state.last_item_at + inner.keepalive_interval <= Instant::now()
                 });
                 let idle = locked(&slot.queue).items.is_empty();
-                if !due || !idle || inner.message_refused_for_good(message) {
+                if !due || !idle || inner.message_refused(message) {
                     return Ok(());
                 }
                 let id = Uuid::now_v7();

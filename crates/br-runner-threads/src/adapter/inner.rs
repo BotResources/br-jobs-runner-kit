@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use br_agentic_contract::ThreadRef;
 use br_llm_messages::{AgentId, EntryId};
 use contract_threads::Chunk;
 use tokio::sync::{mpsc, watch};
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::settings::WriteContextFn;
@@ -25,7 +26,7 @@ pub(crate) fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 pub(crate) struct Queued {
     pub(crate) item: Item,
     pub(crate) no: u64,
-    pub(crate) accepted_at: Instant,
+    pub(crate) accepted_at: std::time::Instant,
 }
 
 #[derive(Default)]
@@ -110,6 +111,7 @@ pub(crate) struct Inner {
     pub(crate) slots: Mutex<HashMap<ThreadRef, Arc<Slot>>>,
     pub(crate) numbers: AtomicU64,
     pub(crate) refused: Mutex<HashSet<Uuid>>,
+    pub(crate) broken: Mutex<HashSet<Uuid>>,
     pub(crate) stopped: AtomicBool,
     pub(crate) reports: mpsc::UnboundedSender<QueueReport>,
     pub(crate) aborts: Mutex<Vec<tokio::task::AbortHandle>>,

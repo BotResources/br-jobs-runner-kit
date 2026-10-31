@@ -73,6 +73,7 @@ impl ThreadAccessAdapter {
             slots: Mutex::new(HashMap::new()),
             numbers: AtomicU64::new(0),
             refused: Mutex::new(HashSet::new()),
+            broken: Mutex::new(HashSet::new()),
             stopped: AtomicBool::new(false),
             reports: spawn_reporter(settings.observer),
             aborts: Mutex::new(Vec::new()),

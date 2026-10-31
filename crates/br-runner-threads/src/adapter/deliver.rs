@@ -65,6 +65,9 @@ impl Inner {
     }
 
     async fn end_item(&self, slot: &Slot, head: &Queued, how: Ended) {
+        if head.item.kind == ItemKind::Chunk && how != Ended::Delivered {
+            locked(&self.broken).insert(head.item.message);
+        }
         {
             let mut queue = locked(&slot.queue);
             queue.items.pop_front();
@@ -84,8 +87,12 @@ impl Inner {
         }
     }
 
-    fn message_refused(&self, message: uuid::Uuid) -> bool {
+    pub(crate) fn message_refused(&self, message: uuid::Uuid) -> bool {
         locked(&self.refused).contains(&message)
+    }
+
+    pub(crate) fn message_broken(&self, message: uuid::Uuid) -> bool {
+        locked(&self.broken).contains(&message)
     }
 }
 

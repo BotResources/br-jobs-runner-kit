@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use std::time::Instant;
 
 use br_agentic_contract::{AiTurnRef, PortError, ThreadRef};
 use contract_threads::{AiDelivery, AiTurn, Chunk};
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::adapter::inner::{Inner, Mem, Slot, TurnState};

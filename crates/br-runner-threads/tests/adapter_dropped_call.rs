@@ -5,17 +5,9 @@ use br_runner_threads::test_double::CommandBody;
 use br_runner_threads::{EntryOutcome, Error};
 use support::adapter_wire::*;
 use support::adapter_x::*;
-use support::gate_store::GateStore;
+use support::gate_store::{GateStore, dropped};
 use support::queue_kit::pends;
 use support::*;
-
-async fn dropped<T>(store: &GateStore, future: impl std::future::Future<Output = T>) {
-    tokio::pin!(future);
-    tokio::select! {
-        _ = &mut future => panic!("the call ended before its append was parked"),
-        () = store.a_gated_append_started() => {}
-    }
-}
 
 #[tokio::test]
 async fn a_port_call_dropped_while_its_append_is_in_flight_ends_as_if_it_had_been_awaited() {
@@ -91,18 +83,23 @@ async fn a_later_operation_on_the_thread_waits_behind_the_detached_one() {
     let later = notice("later");
     let later_entry = later.id();
 
-    let (result, sent_while_waiting) = tokio::join!(
+    let (result, (sent_while_waiting, appends_while_waiting)) = tokio::join!(
         rig.access().add_entry(&thread, turn.clone(), later),
         async {
             settle().await;
             let sent = rig.threads.chunks().len() + store.kept().await.len();
+            let entered = store.appends_entered();
             store.release_appends();
-            sent
+            (sent, entered)
         }
     );
 
     result.expect("accepted");
     assert_eq!(sent_while_waiting, 0, "the later call went past the first");
+    assert_eq!(
+        appends_while_waiting, 2,
+        "the later call began to keep its item before the first one ended"
+    );
     rig.idle().await;
     let chunks = chunks_of(&rig.threads, turn.id.as_uuid());
     assert_eq!(chunks.len(), 2);

@@ -2,22 +2,13 @@ use std::future::Future;
 use std::sync::Arc;
 
 use crate::adapter::inner::{Inner, Slot};
+use crate::detach::detach;
 use crate::error::Error;
 use crate::response::OrderGuard;
 
 impl Slot {
     pub(crate) async fn order_guard(&self) -> OrderGuard {
         Arc::clone(&self.order).lock_owned().await
-    }
-}
-
-pub(crate) async fn detach<T: Send + 'static>(
-    work: impl Future<Output = Result<T, Error>> + Send + 'static,
-) -> Result<T, Error> {
-    match tokio::spawn(work).await {
-        Ok(result) => result,
-        Err(failure) if failure.is_panic() => std::panic::resume_unwind(failure.into_panic()),
-        Err(_) => Err(Error::Store("the adapter is stopped".to_owned())),
     }
 }
 
@@ -39,6 +30,7 @@ impl Inner {
             work(inner, slot).await
         })
         .await
+        .unwrap_or_else(|| Err(Error::Store("the runtime stopped the call".to_owned())))
     }
 
     pub(crate) async fn ordered<T, F, Fut>(

@@ -73,6 +73,13 @@ impl Inner {
             let _order = slot.order_guard().await;
             let ended = {
                 let mut mem = slot.mem.lock().await;
+                let ended_turns: Vec<_> = mem
+                    .turns
+                    .iter()
+                    .filter(|(_, state)| state.agent == agent)
+                    .map(|(message, _)| *message)
+                    .collect();
+                locked(&self.broken).retain(|message| !ended_turns.contains(message));
                 mem.turns.retain(|_, state| state.agent != agent);
                 let gone: Vec<EntryId> = mem
                     .responses

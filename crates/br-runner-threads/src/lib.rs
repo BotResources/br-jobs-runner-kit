@@ -7,6 +7,7 @@ mod chunk_lane;
 mod client;
 mod closing;
 mod context;
+mod detach;
 mod error;
 mod from_connection;
 mod ids;
