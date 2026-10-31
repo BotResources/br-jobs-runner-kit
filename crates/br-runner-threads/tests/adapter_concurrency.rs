@@ -61,5 +61,5 @@ async fn a_closing_on_the_same_turn_waits_for_a_completing_response_to_queue_all
     let Some(Operation::Command(last)) = operations.last() else {
         panic!("the closing is the last operation: {operations:?}");
     };
-    assert!(matches!(last.body, CommandBody::Cancel(_)));
+    assert!(matches!(last.body, CommandBody::Fail(_)));
 }

@@ -1,8 +1,9 @@
-use contract_threads::{AiDelivery, Chunk, MessageTurn};
+use contract_threads::{AiDelivery, Chunk, LibraryJson, MessageTurn};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::backend::{Command, CommandBody, Outcome};
+use crate::closing::ClosureKind;
 use crate::error::Error;
 use crate::message::MessageStatus;
 
@@ -17,6 +18,17 @@ pub(crate) struct Script {
     pub(crate) graphql: Option<GraphqlAnswer>,
 }
 
+fn failed_status(closure: Option<&LibraryJson>) -> MessageStatus {
+    let kind = closure
+        .and_then(|closure| closure.to_closure_reason().ok())
+        .and_then(|reason| ClosureKind::of(&reason).ok());
+    match kind {
+        Some(ClosureKind::Cancelled) => MessageStatus::Cancelled,
+        Some(ClosureKind::BudgetExhausted | ClosureKind::Completed) => MessageStatus::Completed,
+        _ => MessageStatus::Failed,
+    }
+}
+
 pub(crate) fn default_outcome(command: &Command) -> Outcome {
     let status = match &command.body {
         CommandBody::CreateThread(_) => None,
@@ -28,8 +40,7 @@ pub(crate) fn default_outcome(command: &Command) -> Outcome {
             _ => MessageStatus::Completed,
         }),
         CommandBody::Complete(_) => Some(MessageStatus::Completed),
-        CommandBody::Fail(_) => Some(MessageStatus::Failed),
-        CommandBody::Cancel(_) => Some(MessageStatus::Cancelled),
+        CommandBody::Fail(fail) => Some(failed_status(fail.closure.as_ref())),
     };
     Outcome {
         command_id: command.id,

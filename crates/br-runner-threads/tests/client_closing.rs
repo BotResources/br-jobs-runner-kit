@@ -32,16 +32,17 @@ async fn a_completed_closing_is_sent_as_a_completion_sealed_over_every_chunk() {
 }
 
 #[tokio::test]
-async fn budget_exhausted_failed_and_interrupted_closings_are_sent_as_failures_sealed_when_healthy()
-{
-    for kind in [
-        ClosureKind::BudgetExhausted,
-        ClosureKind::Failed,
-        ClosureKind::Interrupted,
+async fn every_closing_that_is_not_a_completion_is_sent_as_a_failure_that_names_its_closure() {
+    for (kind, status) in [
+        (ClosureKind::BudgetExhausted, MessageStatus::Completed),
+        (ClosureKind::Failed, MessageStatus::Failed),
+        (ClosureKind::Interrupted, MessageStatus::Failed),
+        (ClosureKind::Cancelled, MessageStatus::Cancelled),
     ] {
         let threads = MemoryThreads::new();
         let (handle, open) = with_chunks(&threads, 2).await;
-        let closing = closing_of(&open, kind);
+        let mut closing = closing_of(&open, kind);
+        closing.detail = Some("the reason in words".to_owned());
 
         let confirmed = threads
             .client()
@@ -56,28 +57,70 @@ async fn budget_exhausted_failed_and_interrupted_closings_are_sent_as_failures_s
         assert_eq!(fail.message_id, open.message_id.as_uuid());
         assert_eq!(fail.thread_id, open.thread_id);
         assert_eq!(fail.seal, Some(seal_of(&threads)), "{kind:?}");
-        assert_eq!(confirmed.status, Some(MessageStatus::Failed));
+        let reason = closure_in(&command.body);
+        assert_eq!(kind_of(&reason), kind);
+        assert_eq!(reason.detail(), Some("the reason in words"), "{kind:?}");
+        assert_eq!(confirmed.status, Some(status), "{kind:?}");
     }
 }
 
 #[tokio::test]
-async fn a_cancelled_closing_is_sent_as_a_cancel_sealed_when_healthy() {
+async fn a_completed_closing_names_its_closure() {
     let threads = MemoryThreads::new();
-    let (handle, open) = with_chunks(&threads, 2).await;
-    let closing = closing_of(&open, ClosureKind::Cancelled);
+    let (handle, open) = with_chunks(&threads, 1).await;
+    let mut closing = closing_of(&open, ClosureKind::Completed);
+    closing.detail = Some("all done".to_owned());
 
-    let confirmed = threads
+    threads
         .client()
         .close_message(&closing, Some(&handle))
         .await
         .expect("confirmed");
 
-    let command = last_command(&threads);
-    let CommandBody::Cancel(cancel) = &command.body else {
-        panic!("not a cancel: {:?}", command.body);
-    };
-    assert_eq!(cancel.seal, Some(seal_of(&threads)));
-    assert_eq!(confirmed.status, Some(MessageStatus::Cancelled));
+    let reason = closure_in(&last_command(&threads).body);
+    assert_eq!(kind_of(&reason), ClosureKind::Completed);
+    assert_eq!(reason.detail(), Some("all done"));
+}
+
+#[tokio::test]
+async fn a_keepalive_is_in_the_seal_and_is_no_chunk_for_the_rules_that_need_one() {
+    let threads = MemoryThreads::new();
+    let (handle, open) = opened(&threads.client()).await;
+    handle.keepalive().await.expect("taken");
+
+    let completed = threads
+        .client()
+        .close_message(&closing_of(&open, ClosureKind::Completed), Some(&handle))
+        .await;
+    handle.entry(&notice("filler")).await.expect("still open");
+    threads
+        .client()
+        .close_message(&closing_of(&open, ClosureKind::Failed), Some(&handle))
+        .await
+        .expect("confirmed");
+
+    assert!(
+        matches!(completed, Err(Error::InvalidInput(_))),
+        "{completed:?}"
+    );
+    let sealed = seal_in(&last_command(&threads).body).expect("a seal");
+    assert_eq!(sealed, seal_of(&threads));
+    assert_eq!(sealed.last_seq, 1);
+}
+
+#[tokio::test]
+async fn a_closing_after_nothing_but_keepalives_is_sent_with_no_seal() {
+    let threads = MemoryThreads::new();
+    let (handle, open) = opened(&threads.client()).await;
+    handle.keepalive().await.expect("taken");
+
+    threads
+        .client()
+        .close_message(&closing_of(&open, ClosureKind::Cancelled), Some(&handle))
+        .await
+        .expect("confirmed");
+
+    assert_eq!(seal_in(&last_command(&threads).body), None);
 }
 
 #[tokio::test]
@@ -96,11 +139,10 @@ async fn a_message_this_process_did_not_open_is_closed_by_its_id_with_no_seal() 
         let command = last_command(&threads);
         assert_eq!(command.id, closing.command_id);
         assert_eq!(seal_in(&command.body), None, "{kind:?}");
-        let (message, thread) = match &command.body {
-            CommandBody::Fail(f) => (f.message_id, f.thread_id),
-            CommandBody::Cancel(c) => (c.message_id, c.thread_id),
-            other => panic!("not a closing: {other:?}"),
+        let CommandBody::Fail(fail) = &command.body else {
+            panic!("not a failure: {:?}", command.body);
         };
+        let (message, thread) = (fail.message_id, fail.thread_id);
         assert_eq!(message, open.message_id.as_uuid());
         assert_eq!(thread, open.thread_id);
     }

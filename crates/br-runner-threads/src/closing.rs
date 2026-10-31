@@ -30,7 +30,7 @@ impl ClosureKind {
         })
     }
 
-    pub(crate) fn check(self, detail: Option<&str>) -> Result<(), Error> {
+    pub(crate) fn reason(self, detail: Option<&str>) -> Result<ClosureReason, Error> {
         let bare = match self {
             Self::Completed => ClosureReason::completed(),
             Self::Cancelled => ClosureReason::cancelled(),
@@ -39,17 +39,12 @@ impl ClosureKind {
             Self::Failed => {
                 let detail =
                     detail.ok_or_else(|| Error::invalid("a Failed closing needs a detail"))?;
-                return ClosureReason::failed(detail)
-                    .map(drop)
-                    .map_err(|e| Error::library(&e));
+                return ClosureReason::failed(detail).map_err(|e| Error::library(&e));
             }
         };
         match detail {
-            Some(detail) => bare
-                .with_detail(detail)
-                .map(drop)
-                .map_err(|e| Error::library(&e)),
-            None => Ok(()),
+            Some(detail) => bare.with_detail(detail).map_err(|e| Error::library(&e)),
+            None => Ok(bare),
         }
     }
 }

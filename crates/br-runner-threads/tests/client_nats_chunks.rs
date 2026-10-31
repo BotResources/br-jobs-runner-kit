@@ -6,9 +6,10 @@ use br_core_integration::IntegrationCommand;
 use br_runner_threads::{ClosureKind, Error, MessageStatus, StreamHandle};
 use br_util_nats_fabric::command_subject;
 use contract_threads::{
-    CancelMessage, Chunk, ChunkFrame, CompleteMessage, StoreMessageV2, TURN_CONTENT_ACCUMULATOR,
+    Chunk, ChunkFrame, CompleteMessageV2, FailMessageV2, StoreMessageV2, TURN_CONTENT_ACCUMULATOR,
     ThreadsCommand, chunk_subject, seal_hash,
 };
+use support::client_closing_x::kind_of;
 use support::nats_fixtures::*;
 use support::nats_responder::Responder;
 use support::nats_server::Server;
@@ -105,11 +106,24 @@ async fn a_completed_closing_carries_the_seal_of_the_chunks_the_stream_holds() {
 
     assert_eq!(confirmed.status, Some(MessageStatus::Completed));
     let arrival = responder.received_of(closing.command_id).remove(0);
-    assert_eq!(arrival.subject, command_subject(&CompleteMessage::coords()));
+    assert_eq!(
+        arrival.subject,
+        command_subject(&CompleteMessageV2::coords())
+    );
     assert_eq!(arrival.chunks_on_arrival, 2);
     let landed = frames(&bus).await;
     let held: Vec<&Chunk> = landed.iter().map(|(_, frame)| &frame.chunk).collect();
-    let seal = arrival.payload::<CompleteMessage>().seal;
+    let complete = arrival.payload::<CompleteMessageV2>();
+    let seal = complete.seal;
+    let closure = complete.closure.expect("the completion names its closure");
+    assert_eq!(
+        closure.to_closure_reason().expect("a closure").detail(),
+        None
+    );
+    assert!(matches!(
+        closure.to_closure_reason().expect("a closure"),
+        br_llm_messages::ClosureReason::Completed { .. }
+    ));
     assert_eq!(seal.last_seq, 1);
     assert_eq!(seal.hash, seal_hash(held).expect("a hash"));
     assert_eq!(handle.keepalive().await, Err(Error::StreamClosed));
@@ -117,41 +131,37 @@ async fn a_completed_closing_carries_the_seal_of_the_chunks_the_stream_holds() {
 
 #[tokio::test]
 #[ignore = "needs a nats-server binary"]
-async fn every_closing_kind_without_a_handle_reaches_threads_as_its_command_with_no_seal() {
+async fn every_closing_kind_that_is_not_a_completion_reaches_threads_as_a_failure_that_names_its_closure()
+ {
     let (_server, bus) = infra().await;
     let responder = Responder::start(&bus).await;
     let client = built(&bus).await;
     let kinds = [
-        (
-            ClosureKind::Cancelled,
-            "message.cancel",
-            MessageStatus::Cancelled,
-        ),
-        (ClosureKind::Failed, "message.fail", MessageStatus::Failed),
-        (
-            ClosureKind::Interrupted,
-            "message.fail",
-            MessageStatus::Failed,
-        ),
-        (
-            ClosureKind::BudgetExhausted,
-            "message.fail",
-            MessageStatus::Failed,
-        ),
+        (ClosureKind::Cancelled, MessageStatus::Cancelled),
+        (ClosureKind::Failed, MessageStatus::Failed),
+        (ClosureKind::Interrupted, MessageStatus::Failed),
+        (ClosureKind::BudgetExhausted, MessageStatus::Completed),
     ];
 
-    for (kind, command_type, status) in kinds {
+    for (kind, status) in kinds {
         let mut closing = closing(&open_stream(v7()), kind);
-        closing.detail = (kind == ClosureKind::Failed).then(|| "the model failed".to_owned());
+        closing.detail = Some("the model failed".to_owned());
         let confirmed = client.close_message(&closing, None).await.expect("closed");
 
         assert_eq!(confirmed.status, Some(status), "{kind:?}");
         let arrival = responder.received_of(closing.command_id).remove(0);
-        assert_eq!(arrival.command_type(), command_type);
-        assert!(arrival.envelope.payload.get("seal").is_none(), "{kind:?}");
+        assert_eq!(arrival.subject, command_subject(&FailMessageV2::coords()));
+        assert_eq!(arrival.command_type(), "message.fail");
+        let fail = arrival.payload::<FailMessageV2>();
+        assert!(fail.seal.is_none(), "{kind:?}");
+        let reason = fail
+            .closure
+            .expect("the failure names its closure")
+            .to_closure_reason()
+            .expect("the closure reads back");
+        assert_eq!(kind_of(&reason), kind);
+        assert_eq!(reason.detail(), Some("the model failed"), "{kind:?}");
     }
-    let cancel = command_subject(&CancelMessage::coords());
-    assert_eq!(responder.received()[0].subject, cancel);
 }
 
 #[tokio::test]

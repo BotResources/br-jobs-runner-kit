@@ -28,21 +28,22 @@ impl Inner {
             Some(state) => state.chunks.as_slice(),
             None => &[],
         };
-        if kind == ClosureKind::Completed && chunks.is_empty() {
+        let content = wire::carries_content(chunks);
+        if kind == ClosureKind::Completed && !content {
             return Err(fault(Error::invalid(
                 "a Completed closing for a turn that holds no state or no chunk",
             )));
         }
-        let seal = if chunks.is_empty() {
-            None
-        } else {
+        let seal = if content {
             Some(wire::seal_of(chunks).map_err(fault)?)
+        } else {
+            None
         };
         let command = wire::closing(CloseParts {
             command_id: Uuid::now_v7(),
             thread_id: thread.as_uuid(),
             message_id: message,
-            kind,
+            reason: closure.reason().clone(),
             seal,
             acting_user_id: ctx.acting_user_id,
         })

@@ -5,8 +5,9 @@ use br_core_events::EventMetadata;
 use br_core_integration::{IntegrationCommand, IntegrationEvent};
 use br_util_nats_fabric::event_subject;
 use contract_threads::{
-    AiDelivery, MessageCommandConfirmed, MessageCommandRefused, MessageStatus, MessageTurn,
-    ReasonCode, StoreMessageV2, ThreadCommandConfirmed, ThreadCommandRefused, ThreadsEvent,
+    AiDelivery, FailMessageV2, MessageCommandConfirmed, MessageCommandRefused, MessageStatus,
+    MessageTurn, ReasonCode, StoreMessageV2, ThreadCommandConfirmed, ThreadCommandRefused,
+    ThreadsEvent,
 };
 use futures::StreamExt;
 use serde::Serialize;
@@ -14,7 +15,9 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
+use super::client_closing_x::kind_of;
 use super::nats_streams::{CHUNKS, stored_count};
+use br_runner_threads::ClosureKind;
 
 #[derive(Clone)]
 pub enum Reply {
@@ -150,11 +153,23 @@ fn uuid_of(payload: &Value, key: &str) -> Uuid {
         .expect("an id in the command")
 }
 
+fn failed_status(arrived: &Received) -> MessageStatus {
+    let fail = arrived.payload::<FailMessageV2>();
+    let kind = fail
+        .closure
+        .and_then(|closure| closure.to_closure_reason().ok())
+        .map(|reason| kind_of(&reason));
+    match kind {
+        Some(ClosureKind::Cancelled) => MessageStatus::Cancelled,
+        Some(ClosureKind::BudgetExhausted) => MessageStatus::Completed,
+        _ => MessageStatus::Failed,
+    }
+}
+
 fn status_of(arrived: &Received) -> MessageStatus {
     match arrived.command_type() {
         "message.complete" => MessageStatus::Completed,
-        "message.fail" => MessageStatus::Failed,
-        "message.cancel" => MessageStatus::Cancelled,
+        "message.fail" => failed_status(arrived),
         _ => match arrived.payload::<StoreMessageV2>().message {
             MessageTurn::Ai(turn) if matches!(turn.delivery, AiDelivery::Streaming) => {
                 MessageStatus::Streaming

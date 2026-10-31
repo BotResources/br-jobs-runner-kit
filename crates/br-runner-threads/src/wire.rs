@@ -1,5 +1,6 @@
+use br_llm_messages::ClosureReason;
 use contract_threads::{
-    AiDelivery, AiTurn, CancelMessage, CompleteMessage, CreateThread, FailMessage, LibraryJson,
+    AiDelivery, AiTurn, Chunk, CompleteMessageV2, CreateThread, FailMessageV2, LibraryJson,
     MessageTurn, PlacedAnnotation as WirePlaced, StoreMessageV2, StreamSeal,
 };
 use uuid::Uuid;
@@ -108,7 +109,7 @@ pub(crate) struct CloseParts {
     pub(crate) command_id: Uuid,
     pub(crate) thread_id: Uuid,
     pub(crate) message_id: Uuid,
-    pub(crate) kind: ClosureKind,
+    pub(crate) reason: ClosureReason,
     pub(crate) seal: Option<StreamSeal>,
     pub(crate) acting_user_id: Option<Uuid>,
 }
@@ -119,29 +120,28 @@ pub(crate) fn closing(parts: CloseParts) -> Result<Command, Error> {
         command_id,
         thread_id,
         message_id,
-        kind,
+        reason,
         seal,
         acting_user_id,
     } = parts;
+    let kind = ClosureKind::of(&reason)?;
+    let closure = Some(LibraryJson::of(&reason).map_err(|e| Error::invalid(e.to_string()))?);
     let body = match kind {
-        ClosureKind::Completed => CommandBody::Complete(CompleteMessage {
+        ClosureKind::Completed => CommandBody::Complete(CompleteMessageV2 {
             message_id,
             thread_id,
             seal: seal.ok_or_else(|| Error::invalid("a Completed closing needs a seal"))?,
+            closure,
             acting_user_id,
         }),
-        ClosureKind::BudgetExhausted | ClosureKind::Failed | ClosureKind::Interrupted => {
-            CommandBody::Fail(FailMessage {
-                message_id,
-                thread_id,
-                seal,
-                acting_user_id,
-            })
-        }
-        ClosureKind::Cancelled => CommandBody::Cancel(CancelMessage {
+        ClosureKind::BudgetExhausted
+        | ClosureKind::Failed
+        | ClosureKind::Interrupted
+        | ClosureKind::Cancelled => CommandBody::Fail(FailMessageV2 {
             message_id,
             thread_id,
             seal,
+            closure,
             acting_user_id,
         }),
     };
@@ -151,7 +151,13 @@ pub(crate) fn closing(parts: CloseParts) -> Result<Command, Error> {
     })
 }
 
-pub(crate) fn seal_of(chunks: &[contract_threads::Chunk]) -> Result<StreamSeal, Error> {
+pub(crate) fn carries_content(chunks: &[Chunk]) -> bool {
+    chunks
+        .iter()
+        .any(|chunk| !matches!(chunk, Chunk::Keepalive))
+}
+
+pub(crate) fn seal_of(chunks: &[Chunk]) -> Result<StreamSeal, Error> {
     let hash =
         contract_threads::seal_hash(chunks.iter()).map_err(|e| Error::invalid(e.to_string()))?;
     let last_seq = u64::try_from(chunks.len())

@@ -17,7 +17,6 @@ pub fn message_of(command: &Command) -> Uuid {
         CommandBody::Store(body) => body.message_id,
         CommandBody::Complete(body) => body.message_id,
         CommandBody::Fail(body) => body.message_id,
-        CommandBody::Cancel(body) => body.message_id,
         CommandBody::CreateThread(_) => panic!("a thread creation names no message"),
     }
 }
@@ -27,7 +26,6 @@ pub fn thread_of(command: &Command) -> Uuid {
         CommandBody::Store(body) => body.thread_id,
         CommandBody::Complete(body) => body.thread_id,
         CommandBody::Fail(body) => body.thread_id,
-        CommandBody::Cancel(body) => body.thread_id,
         CommandBody::CreateThread(body) => body.thread_id,
     }
 }

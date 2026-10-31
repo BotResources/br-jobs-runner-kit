@@ -5,10 +5,11 @@ use std::sync::Arc;
 use br_agentic_contract::AiTurnRef;
 use br_llm_messages::{ClosureReason, TurnClosure};
 use br_runner_threads::test_double::{CommandBody, Operation};
-use br_runner_threads::{Error, MemoryQueueStore, WriteContext};
+use br_runner_threads::{ClosureKind, Error, MemoryQueueStore, ReportKind, WriteContext};
 use contract_threads::{Chunk, StreamSeal, seal_hash};
 use support::adapter_wire::*;
 use support::adapter_x::*;
+use support::client_closing_x::{closure_in, kind_of};
 use support::*;
 
 fn closing(reason: ClosureReason) -> TurnClosure {
@@ -87,43 +88,56 @@ async fn completed_goes_as_a_completion_sealed_over_every_chunk_of_the_turn() {
 }
 
 #[tokio::test]
-async fn failed_goes_as_a_failure_sealed_over_every_chunk_of_the_turn() {
-    let (body, seal) = close_healthy(ClosureReason::failed("it broke").expect("reason")).await;
+async fn every_reason_but_completed_goes_as_a_failure_that_names_its_closure_and_its_detail() {
+    for reason in [
+        ClosureReason::failed("it broke").expect("reason"),
+        ClosureReason::interrupted()
+            .with_detail("the host stopped")
+            .expect("reason"),
+        ClosureReason::budget_exhausted()
+            .with_detail("no step left")
+            .expect("reason"),
+        ClosureReason::cancelled(),
+    ] {
+        let (body, seal) = close_healthy(reason.clone()).await;
 
-    let CommandBody::Fail(fail) = body else {
-        panic!("a failure");
-    };
-    assert_eq!(fail.seal, Some(seal));
+        let CommandBody::Fail(fail) = &body else {
+            panic!("{reason:?} is not a failure");
+        };
+        assert_eq!(fail.seal, Some(seal));
+        let sent = closure_in(&body);
+        assert_eq!(kind_of(&sent), kind_of(&reason));
+        assert_eq!(sent.detail(), reason.detail());
+    }
 }
 
 #[tokio::test]
-async fn interrupted_goes_as_a_failure_sealed_over_every_chunk_of_the_turn() {
-    let (body, seal) = close_healthy(ClosureReason::interrupted()).await;
+async fn completed_names_its_closure() {
+    let (body, _) = close_healthy(ClosureReason::completed()).await;
 
-    let CommandBody::Fail(fail) = body else {
-        panic!("a failure");
-    };
-    assert_eq!(fail.seal, Some(seal));
+    assert_eq!(kind_of(&closure_in(&body)), ClosureKind::Completed);
 }
 
 #[tokio::test]
-async fn budget_exhausted_goes_as_a_failure_and_not_as_a_completion() {
-    let (body, seal) = close_healthy(ClosureReason::budget_exhausted()).await;
-
-    let CommandBody::Fail(fail) = body else {
-        panic!("a failure");
-    };
-    assert_eq!(fail.seal, Some(seal));
-}
-
-#[tokio::test]
-async fn cancelled_goes_as_a_cancel_sealed_over_every_chunk_of_the_turn() {
-    let (body, seal) = close_healthy(ClosureReason::cancelled()).await;
-
-    let CommandBody::Cancel(cancel) = body else {
-        panic!("a cancel");
-    };
-    assert_eq!(cancel.seal, Some(seal));
+async fn budget_exhausted_and_cancelled_are_not_reported_as_failed_closings() {
+    for reason in [
+        ClosureReason::budget_exhausted(),
+        ClosureReason::cancelled(),
+    ] {
+        let rig = plain_rig().await;
+        let (thread, turn) = turn_with_entries(&rig, 1).await;
+        rig.access()
+            .close_turn(&thread, turn, closing(reason))
+            .await
+            .expect("accepted");
+        rig.idle().await;
+        assert!(
+            rig.recorder
+                .reports()
+                .iter()
+                .all(|report| report.kind != ReportKind::ClosingFailed)
+        );
+    }
 }
 
 #[tokio::test]
@@ -178,16 +192,13 @@ async fn a_turn_the_adapter_never_saw_is_closed_by_its_id_with_no_seal() {
         ClosureReason::failed("it broke").expect("reason"),
         ClosureReason::interrupted(),
         ClosureReason::budget_exhausted(),
+        ClosureReason::cancelled(),
     ] {
         let CommandBody::Fail(fail) = close_unknown(reason).await else {
             panic!("a failure");
         };
         assert_eq!(fail.seal, None);
     }
-    let CommandBody::Cancel(cancel) = close_unknown(ClosureReason::cancelled()).await else {
-        panic!("a cancel");
-    };
-    assert_eq!(cancel.seal, None);
 }
 
 #[tokio::test]

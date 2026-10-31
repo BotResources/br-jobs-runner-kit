@@ -6,7 +6,7 @@ use std::time::Duration;
 use br_agentic_contract::ThreadAccess;
 use br_llm_messages::{ClosureReason, TurnClosure};
 use br_runner_threads::{Error, MemoryQueueStore, ReportKind, ThreadAccessAdapter, ThreadClient};
-use contract_threads::{Chunk, ChunkFrame, CompleteMessage, seal_hash};
+use contract_threads::{Chunk, ChunkFrame, CompleteMessageV2, seal_hash};
 use support::nats_fixtures::*;
 use support::nats_responder::{Reply, Responder};
 use support::nats_server::Server;
@@ -111,7 +111,7 @@ async fn an_ai_turn_reaches_the_bus_as_an_opening_then_its_chunks_then_a_sealed_
     let numbers: Vec<u64> = frames.iter().map(|frame| frame.seq).collect();
     assert_eq!(numbers, (0..frames.len() as u64).collect::<Vec<_>>());
     let chunks: Vec<&Chunk> = frames.iter().map(|frame| &frame.chunk).collect();
-    let seal = arrivals[1].payload::<CompleteMessage>().seal;
+    let seal = arrivals[1].payload::<CompleteMessageV2>().seal;
     assert_eq!(seal.last_seq, frames.len() as u64 - 1);
     assert_eq!(seal.hash, seal_hash(chunks).expect("a hash"));
 }

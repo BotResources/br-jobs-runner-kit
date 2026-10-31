@@ -95,7 +95,7 @@ async fn a_closing_goes_after_every_chunk_sent_before_it() {
     let (handle, open) = opened(&threads.client()).await;
     threads.pause();
     let writer = handle.writer();
-    let chunk_task = tokio::spawn(async move { writer.keepalive().await });
+    let chunk_task = tokio::spawn(async move { writer.entry(&notice("filler")).await });
     eventually("the chunk reached the bus", || threads.chunks().len() == 1).await;
     let client = threads.client();
     let closing = closing_of(&open, ClosureKind::Completed);

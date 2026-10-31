@@ -21,12 +21,12 @@ impl ThreadClient {
         handle: Option<&StreamHandle>,
     ) -> Result<Confirmed, Error> {
         require_wait(closing.wait, "the outcome wait")?;
-        closing.kind.check(closing.detail.as_deref())?;
+        let reason = closing.kind.reason(closing.detail.as_deref())?;
         let parts = |seal| CloseParts {
             command_id: closing.command_id,
             thread_id: closing.thread_id,
             message_id: closing.message_id,
-            kind: closing.kind,
+            reason: reason.clone(),
             seal,
             acting_user_id: closing.acting_user_id,
         };
@@ -49,12 +49,13 @@ impl ThreadClient {
         let chunks = core.gate.lock().await;
         let completed = closing.kind == ClosureKind::Completed;
         core.judge_closing(completed)?;
-        if completed && chunks.is_empty() {
+        let content = wire::carries_content(&chunks);
+        if completed && !content {
             return Err(Error::invalid(
                 "a Completed closing needs at least one chunk to seal",
             ));
         }
-        let seal = if !chunks.is_empty() && (completed || core.healthy()) {
+        let seal = if content && (completed || core.healthy()) {
             Some(wire::seal_of(&chunks)?)
         } else {
             None
