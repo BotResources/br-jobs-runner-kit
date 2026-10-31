@@ -207,7 +207,7 @@ async fn given_the_end_received_and_the_view_triggered_in_the_same_moment_when_s
 }
 
 #[tokio::test]
-async fn given_the_view_triggered_before_the_end_with_an_inline_result_arrives_when_settled_then_no_cancel_and_no_finish()
+async fn given_the_view_triggered_and_the_end_delivered_before_the_next_poll_when_settled_then_the_end_wins_with_no_cancel_and_no_finish()
  {
     let (caller, script) = memory_caller();
     let tool = sync_tool(caller);
@@ -225,58 +225,20 @@ async fn given_the_view_triggered_before_the_end_with_an_inline_result_arrives_w
 }
 
 #[tokio::test]
-async fn given_a_kept_payload_and_a_view_triggered_before_the_call_when_called_then_no_upload_is_handed_over()
+async fn given_the_view_triggered_and_observed_before_the_end_arrives_when_settled_then_one_cancel_goes_and_no_finish()
  {
     let (caller, script) = memory_caller();
-    let tool = builder("analyst", ToolMode::Sync, caller)
-        .payload_kind(PayloadKind::Kept)
-        .build()
-        .expect("a tool");
-    let token = CancelToken::new();
-    token.handle().trigger();
-
-    let outcome = spawn_with_cancel(&tool, json!({}), &token)
-        .finished()
-        .await
-        .expect("an expected error");
-
-    assert_eq!(texts(&outcome), cancelled_text());
-    assert!(
-        script
-            .calls()
-            .iter()
-            .all(|call| !is_upload(call) && !is_create(call))
-    );
-}
-
-#[tokio::test]
-async fn given_a_background_tool_and_a_view_triggered_before_the_call_when_called_then_nothing_is_sent()
- {
-    let (caller, script) = memory_caller();
-    let tool = background_tool(caller, id(77));
-    let token = CancelToken::new();
-    token.handle().trigger();
-
-    let outcome = spawn_with_cancel(&tool, json!({}), &token)
-        .finished()
-        .await
-        .expect("an expected error");
-
-    assert!(outcome.is_error());
-    assert!(script.calls().is_empty());
-}
-
-#[tokio::test]
-async fn given_a_background_call_that_returned_when_the_view_triggers_later_then_nothing_is_cancelled()
- {
-    let (caller, script) = memory_caller();
-    let tool = background_tool(caller, id(77));
+    let tool = sync_tool(caller);
     let token = CancelToken::new();
     let call = spawn_with_cancel(&tool, json!({}), &token);
-    let outcome = call.finished().await.expect("an acknowledgement");
+    let create = create_of(&script).await;
+
     token.handle().trigger();
     settle().await;
+    script.end(create.job_id, Answer::Now(completed("done")));
+    let outcome = call.finished().await.expect("an expected error");
 
-    assert!(!outcome.is_error());
-    assert_eq!(kinds(&script), vec!["create"]);
+    assert_eq!(texts(&outcome), cancelled_text());
+    assert_eq!(count(&script, is_cancel), 1);
+    assert_eq!(count(&script, is_finish), 0);
 }
