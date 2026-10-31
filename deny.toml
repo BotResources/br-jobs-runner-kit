@@ -30,6 +30,7 @@ wildcards = "deny"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = [
+    "https://github.com/BotResources/br-jobs-runner-kit",
     "https://github.com/BotResources/br-llm-clients-rs",
     "https://github.com/BotResources/br-llm-graph-rs",
     "https://github.com/BotResources/br-llm-messages-rs",

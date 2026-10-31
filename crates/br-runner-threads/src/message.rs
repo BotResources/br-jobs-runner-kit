@@ -19,10 +19,16 @@ pub struct PlacedAnnotation {
     pub annotation: Annotation,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Confirmed {
+    pub command_id: Uuid,
+    pub status: Option<MessageStatus>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WholeMessage {
     pub command_id: Uuid,
-    pub thread: br_agentic_contract::ThreadRef,
+    pub thread_id: Uuid,
     pub parent_message_id: Option<Uuid>,
     pub agent_id: AgentId,
     pub author_name: String,
@@ -31,18 +37,18 @@ pub struct WholeMessage {
     pub impersonator_id: Option<Uuid>,
     pub turn: Turn,
     pub annotations: Vec<PlacedAnnotation>,
-    pub wait: Option<Duration>,
+    pub wait: Duration,
 }
 
 #[derive(Debug, Clone)]
 pub struct OpenStream {
     pub command_id: Uuid,
-    pub thread: br_agentic_contract::ThreadRef,
+    pub thread_id: Uuid,
     pub message_id: TurnId,
     pub parent_message_id: Option<Uuid>,
     pub agent_id: AgentId,
     pub author_name: String,
     pub job_id: Option<Uuid>,
     pub acting_user_id: Option<Uuid>,
-    pub wait: Option<Duration>,
+    pub wait: Duration,
 }

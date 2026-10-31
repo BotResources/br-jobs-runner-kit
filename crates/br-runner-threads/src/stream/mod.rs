@@ -1,6 +1,6 @@
+mod lane;
 pub(crate) mod shared;
-mod sink;
-mod writes;
+pub(crate) mod writes;
 
 use std::sync::Arc;
 
@@ -9,14 +9,14 @@ use uuid::Uuid;
 
 use crate::annotation::Annotation;
 use crate::error::Error;
+use crate::response::{ResponseControl, ResponseSink, pair};
 
-pub use sink::{ResponseSink, SinkFactory};
-
+use lane::HandleLane;
 use shared::Core;
 
 #[derive(Clone)]
 pub struct StreamWriter {
-    pub(crate) core: Arc<Core>,
+    core: Arc<Core>,
 }
 
 impl StreamWriter {
@@ -30,6 +30,10 @@ impl StreamWriter {
 
     pub async fn keepalive(&self) -> Result<(), Error> {
         writes::keepalive(&self.core).await
+    }
+
+    pub fn response(&self, entry: EntryId) -> Result<(ResponseSink, ResponseControl), Error> {
+        response_of(&self.core, entry)
     }
 }
 
@@ -68,7 +72,17 @@ impl StreamHandle {
         }
     }
 
-    pub fn sink_factory(&self) -> SinkFactory {
-        SinkFactory::new(Arc::clone(&self.core))
+    pub fn response(&self, entry: EntryId) -> Result<(ResponseSink, ResponseControl), Error> {
+        response_of(&self.core, entry)
     }
+}
+
+fn response_of(core: &Arc<Core>, entry: EntryId) -> Result<(ResponseSink, ResponseControl), Error> {
+    let turn =
+        br_llm_messages::TurnId::from_uuid(core.message_id).map_err(|e| Error::library(&e))?;
+    Ok(pair(
+        turn,
+        entry,
+        Arc::new(HandleLane::new(Arc::clone(core))),
+    ))
 }

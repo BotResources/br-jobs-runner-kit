@@ -1,4 +1,3 @@
-use br_agentic_contract::ThreadRef;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
@@ -8,14 +7,14 @@ use crate::ids::require_v7;
 
 #[derive(Debug, Clone)]
 pub struct SetTitle {
-    pub thread: ThreadRef,
+    pub thread_id: Uuid,
     pub title_job_id: Uuid,
     pub text: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct FailTitleJob {
-    pub thread: ThreadRef,
+    pub thread_id: Uuid,
     pub title_job_id: Uuid,
     pub code: String,
     pub message: Option<String>,
@@ -24,7 +23,7 @@ pub struct FailTitleJob {
 #[derive(Debug, Clone)]
 pub struct UploadRequest {
     pub artifact_id: Uuid,
-    pub thread: ThreadRef,
+    pub thread_id: Uuid,
     pub name: String,
     pub media_type: String,
     pub size: u64,
@@ -42,27 +41,22 @@ const SET_TITLE: &str = "mutation($threadId: UUID!, $jobId: UUID!, $title: Strin
 const FAIL_TITLE: &str = "mutation($threadId: UUID!, $jobId: UUID!, $reasonCode: String!, $message: String) { threadsFailTitleJob(threadId: $threadId, jobId: $jobId, reasonCode: $reasonCode, message: $message) { success } }";
 const UPLOAD: &str = "mutation($threadId: UUID!, $artifactId: UUID!, $name: String!, $mediaType: String!, $size: Int!, $sha256: String!) { threadsRequestArtifactUpload(threadId: $threadId, artifactId: $artifactId, name: $name, mediaType: $mediaType, size: $size, sha256: $sha256) { url fields } }";
 
-pub(crate) fn body(query: &str, variables: Value) -> Result<Vec<u8>, Error> {
-    serde_json::to_vec(&json!({ "query": query, "variables": variables }))
-        .map_err(|e| Error::invalid(e.to_string()))
-}
-
-pub(crate) fn set_title(title: &SetTitle) -> Result<Vec<u8>, Error> {
-    body(
+pub(crate) fn set_title(title: &SetTitle) -> (&'static str, Value) {
+    (
         SET_TITLE,
         json!({
-            "threadId": title.thread.as_uuid(),
+            "threadId": title.thread_id,
             "jobId": title.title_job_id,
             "title": title.text,
         }),
     )
 }
 
-pub(crate) fn fail_title(fail: &FailTitleJob) -> Result<Vec<u8>, Error> {
-    body(
+pub(crate) fn fail_title(fail: &FailTitleJob) -> (&'static str, Value) {
+    (
         FAIL_TITLE,
         json!({
-            "threadId": fail.thread.as_uuid(),
+            "threadId": fail.thread_id,
             "jobId": fail.title_job_id,
             "reasonCode": fail.code,
             "message": fail.message,
@@ -70,19 +64,19 @@ pub(crate) fn fail_title(fail: &FailTitleJob) -> Result<Vec<u8>, Error> {
     )
 }
 
-pub(crate) fn upload(request: &UploadRequest) -> Result<Vec<u8>, Error> {
+pub(crate) fn upload(request: &UploadRequest) -> Result<(&'static str, Value), Error> {
     require_v7(request.artifact_id, "an artifact id")?;
-    body(
+    Ok((
         UPLOAD,
         json!({
-            "threadId": request.thread.as_uuid(),
+            "threadId": request.thread_id,
             "artifactId": request.artifact_id,
             "name": request.name,
             "mediaType": request.media_type,
             "size": request.size,
             "sha256": request.sha256,
         }),
-    )
+    ))
 }
 
 pub(crate) fn acknowledged(data: &Value, field: &str) -> Result<(), Error> {

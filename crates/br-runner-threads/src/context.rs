@@ -1,4 +1,3 @@
-use br_agentic_contract::ThreadRef;
 use br_llm_messages::{AgentId, Conversation, ProjectedThread};
 use serde::Deserialize;
 use serde_json::Value;
@@ -8,7 +7,7 @@ use crate::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct ContextQuery {
-    pub thread: ThreadRef,
+    pub thread_id: Uuid,
     pub agent: Option<AgentId>,
 }
 
@@ -34,7 +33,7 @@ pub enum ContextContent {
 
 #[derive(Debug, Clone)]
 pub struct ThreadContext {
-    pub thread: ThreadRef,
+    pub thread_id: Uuid,
     pub content: ContextContent,
     pub members: Vec<Member>,
     pub resources: Vec<Resource>,
@@ -70,7 +69,7 @@ pub(crate) fn parse(value: Value, agent_named: bool) -> Result<Option<ThreadCont
         }
     };
     Ok(Some(ThreadContext {
-        thread: ThreadRef::new(wire.thread_id),
+        thread_id: wire.thread_id,
         content,
         members: wire.members,
         resources: wire.resources,
