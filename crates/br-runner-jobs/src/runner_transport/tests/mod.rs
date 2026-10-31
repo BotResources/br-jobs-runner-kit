@@ -4,6 +4,7 @@ mod cancel;
 mod claim;
 mod commands;
 mod commands_outcomes;
+mod commands_session;
 mod cut;
 mod facts;
 mod listing;

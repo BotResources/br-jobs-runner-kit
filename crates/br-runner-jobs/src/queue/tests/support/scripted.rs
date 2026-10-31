@@ -57,6 +57,7 @@ pub struct ScriptedSender {
     attempts: Mutex<Vec<(Write, tokio::time::Instant)>>,
     count: watch::Sender<usize>,
     cancelled: Arc<AtomicUsize>,
+    sessions: AtomicUsize,
 }
 
 impl ScriptedSender {
@@ -67,6 +68,7 @@ impl ScriptedSender {
             attempts: Mutex::new(Vec::new()),
             count: watch::channel(0).0,
             cancelled: Arc::new(AtomicUsize::new(0)),
+            sessions: AtomicUsize::new(0),
         })
     }
 
@@ -140,6 +142,10 @@ impl ScriptedSender {
             .collect()
     }
 
+    pub fn sessions(&self) -> usize {
+        self.sessions.load(Ordering::SeqCst)
+    }
+
     pub fn cancelled(&self) -> usize {
         self.cancelled.load(Ordering::SeqCst)
     }
@@ -151,6 +157,14 @@ impl ScriptedSender {
 }
 
 impl WriteSender for ScriptedSender {
+    fn session<'a>(&'a self, write: &'a Write) -> Box<dyn WriteSession + 'a> {
+        self.sessions.fetch_add(1, Ordering::SeqCst);
+        Box::new(Direct {
+            sender: self,
+            write,
+        })
+    }
+
     fn send<'a>(&'a self, write: &'a Write) -> BoxFuture<'a, Result<(), Error>> {
         let step = self.next_step(write);
         self.attempts

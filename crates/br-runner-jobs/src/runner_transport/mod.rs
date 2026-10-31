@@ -5,6 +5,7 @@ mod connect;
 mod fail;
 mod mode;
 mod mode_sink;
+mod outcomes;
 mod presence;
 mod publish;
 mod surface;
@@ -158,11 +159,7 @@ impl Backend for Live {
         Box::pin(self.mark(run_id, item_ids, wait))
     }
 
-    fn child_command(
-        &self,
-        command: ChildCommand,
-        wait: Duration,
-    ) -> BoxFuture<'_, Result<(), Error>> {
-        Box::pin(self.child(command, wait))
+    fn child_session(&self, command: ChildCommand) -> Box<dyn ChildSession + '_> {
+        self.child(command)
     }
 }

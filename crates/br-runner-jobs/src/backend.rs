@@ -100,6 +100,10 @@ pub enum ChildCommand {
     },
 }
 
+pub(crate) trait ChildSession: Send {
+    fn attempt(&mut self, wait: Duration) -> BoxFuture<'_, Result<(), Error>>;
+}
+
 pub(crate) trait Backend: Send + Sync {
     fn runner_type(&self) -> &str;
 
@@ -164,9 +168,13 @@ pub(crate) trait Backend: Send + Sync {
         wait: Duration,
     ) -> BoxFuture<'_, Result<(), Error>>;
 
+    fn child_session(&self, command: ChildCommand) -> Box<dyn ChildSession + '_>;
+
     fn child_command(
         &self,
         command: ChildCommand,
         wait: Duration,
-    ) -> BoxFuture<'_, Result<(), Error>>;
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(async move { self.child_session(command).attempt(wait).await })
+    }
 }

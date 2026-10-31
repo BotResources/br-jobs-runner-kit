@@ -7,7 +7,9 @@ use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
 use super::scripted_inputs::{Inputs, PresenceRecord};
-use crate::backend::{Backend, BoxFuture, ChildCommand, Fact, LogRecord, RawFeed, TriggerSource};
+use crate::backend::{
+    Backend, BoxFuture, ChildCommand, ChildSession, Fact, LogRecord, RawFeed, TriggerSource,
+};
 use crate::client::JobsClient;
 use crate::error::{Error, Operation};
 use crate::model::{
@@ -283,15 +285,25 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn child_command(
-        &self,
-        command: ChildCommand,
-        _wait: Duration,
-    ) -> BoxFuture<'_, Result<(), Error>> {
+    fn child_session(&self, command: ChildCommand) -> Box<dyn ChildSession + '_> {
+        Box::new(ScriptedChild {
+            jobs: self,
+            command,
+        })
+    }
+}
+
+struct ScriptedChild<'a> {
+    jobs: &'a ScriptedJobs,
+    command: ChildCommand,
+}
+
+impl ChildSession for ScriptedChild<'_> {
+    fn attempt(&mut self, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
-            self.gate().await;
-            let mut script = self.script();
-            script.calls.push(Call::Command(command));
+            self.jobs.gate().await;
+            let mut script = self.jobs.script();
+            script.calls.push(Call::Command(self.command.clone()));
             answer(&mut script.command, ())
         })
     }

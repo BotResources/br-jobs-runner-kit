@@ -22,7 +22,7 @@ pub use report::{
 pub use shared::Gate;
 pub use write::{Removal, WriteEnd, WriteKind, WriteName, WriteResult};
 
-pub(crate) use sender::WriteSender;
+pub(crate) use sender::{Direct, WriteSender, WriteSession};
 pub(crate) use shared::Shared;
 pub(crate) use write::Write;
 

@@ -1,4 +1,6 @@
 use super::support::*;
+use std::time::Duration;
+
 use crate::error::{Error, Operation};
 use crate::queue::{QueueReport, Removal, Write, WriteKind};
 
@@ -192,4 +194,18 @@ async fn given_a_retrying_write_when_its_reports_are_read_then_each_names_the_sa
         kinds,
         vec!["delivered", "retrying", "retrying", "delivered"]
     );
+}
+
+#[tokio::test]
+async fn given_a_write_sent_in_several_attempts_then_one_session_serves_all_of_them_and_a_hung_attempt_does_not_end_it()
+ {
+    let sender = ScriptedSender::new();
+    let write = create(41, 42);
+    sender.script_write(&write, vec![Step::Hang, fail(lost()), fail(lost())]);
+    let rig = Rig::timed(sender, Duration::from_millis(30), Duration::from_millis(1));
+    assert_eq!(rig.hand(write.clone()).await, Ok(()));
+    assert_eq!(rig.sender.attempts_of(WriteKind::Create).len(), 4);
+    let other = finish(43, 44);
+    assert_eq!(rig.hand(other).await, Ok(()));
+    assert_eq!(rig.sender.sessions(), 3);
 }

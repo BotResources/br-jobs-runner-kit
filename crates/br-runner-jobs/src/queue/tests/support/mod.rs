@@ -14,8 +14,8 @@ use crate::model::{
     AgentDeclaration, CallMode, Content, Failed, FailureKind, NewMailInput, PayloadForm,
 };
 use crate::queue::{
-    DeliveryQueue, Gate, QueueObserver, QueueReport, QueueSettings, Removal, Write, WriteEnd,
-    WriteKind, WriteName, WriteResult, WriteSender,
+    DeliveryQueue, Direct, Gate, QueueObserver, QueueReport, QueueSettings, Removal, Write,
+    WriteEnd, WriteKind, WriteName, WriteResult, WriteSender, WriteSession,
 };
 
 mod builders;

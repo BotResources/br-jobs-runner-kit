@@ -27,9 +27,9 @@ pub(crate) fn resendable(write: &Write, error: &Error) -> bool {
 
 async fn attempts(shared: Arc<Shared>, seq: u64, write: Write) -> WriteResult {
     let name = write.name();
+    let mut session = shared.sender.session(&write);
     loop {
-        let sent =
-            tokio::time::timeout(shared.settings.outcome_wait, shared.sender.send(&write)).await;
+        let sent = tokio::time::timeout(shared.settings.outcome_wait, session.send()).await;
         let error = match sent {
             Ok(Ok(())) => return Ok(()),
             Ok(Err(error)) => error,
