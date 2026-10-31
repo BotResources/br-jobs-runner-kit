@@ -52,20 +52,23 @@ pub struct DeliveryQueue {
 }
 
 impl DeliveryQueue {
-    pub(crate) fn start(
-        sender: Arc<dyn WriteSender>,
-        settings: QueueSettings,
-        run_id: Uuid,
-    ) -> Result<(Self, WriteEnd), Error> {
+    pub(crate) fn check(settings: &QueueSettings) -> Result<tokio::runtime::Handle, Error> {
         if settings.outcome_wait.is_zero() {
             return Err(Error::invalid("the outcome wait is zero"));
         }
         if settings.retry_wait.is_zero() {
             return Err(Error::invalid("the wait between attempts is zero"));
         }
-        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            return Err(Error::invalid("the delivery queue needs an async runtime"));
-        };
+        tokio::runtime::Handle::try_current()
+            .map_err(|_| Error::invalid("the delivery queue needs an async runtime"))
+    }
+
+    pub(crate) fn start(
+        sender: Arc<dyn WriteSender>,
+        settings: QueueSettings,
+        run_id: Uuid,
+    ) -> Result<(Self, WriteEnd), Error> {
+        let runtime = Self::check(&settings)?;
         let start_id = settings.start_id;
         let shared = Shared::new(sender, settings);
         runtime.spawn(task::run(Arc::clone(&shared)));

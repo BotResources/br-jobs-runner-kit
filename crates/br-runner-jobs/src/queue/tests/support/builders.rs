@@ -78,6 +78,18 @@ pub fn create(job: u128, command: u128) -> Write {
     })
 }
 
+pub fn background_create(job: u128, command: u128, caller: u128) -> Write {
+    match create(job, command) {
+        Write::Create(mut child) => {
+            child.mode = CallMode::Background {
+                caller_address: id(caller),
+            };
+            Write::Create(child)
+        }
+        other => other,
+    }
+}
+
 pub fn finish(job: u128, command: u128) -> Write {
     Write::Finish {
         run_id: id(RUN),

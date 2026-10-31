@@ -37,9 +37,10 @@ impl CancelFeed {
                 Ok(_) => self.pending.push_back(Err(Error::Unreadable(format!(
                     "the cancel order of the key {run_id} names another Run"
                 )))),
-                Err(e) => self.pending.push_back(Err(Error::Unreadable(format!(
-                    "the cancel order of the key {run_id}: {e}"
-                )))),
+                Err(e) => self.pending.push_back(Err(Error::unreadable_json(
+                    &format!("the cancel order of the key {run_id}"),
+                    &e,
+                ))),
             },
             Operation::Delete | Operation::Purge => {
                 if self.replayed {

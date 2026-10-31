@@ -190,8 +190,8 @@ impl Arrivals {
                 let _ = delivered.ack().await;
                 self.send_to_run(run_id, &Ok(arrived));
             }
-            Err(e) => {
-                let unreadable = Error::Unreadable(e.to_string());
+            Err(_) => {
+                let unreadable = Error::unreadable_payload(delivered.subject());
                 let _ = delivered.term().await;
                 self.send_to_all(&Err(unreadable));
             }

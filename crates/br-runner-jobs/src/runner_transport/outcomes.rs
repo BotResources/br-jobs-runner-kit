@@ -47,7 +47,7 @@ enum Heard {
 fn decode<T: DeserializeOwned>(found: &CorrelatedMatch) -> Result<T, Error> {
     serde_json::from_slice::<IntegrationEvent<T>>(&found.payload)
         .map(|event| event.payload)
-        .map_err(|e| Error::Unreadable(format!("the outcome of a command: {e}")))
+        .map_err(|e| Error::unreadable_json("the outcome of a command", &e))
 }
 
 impl<T: Serialize + Send + Sync> Session<T> {

@@ -62,7 +62,7 @@ impl TriggerFeed {
             Err(e) => {
                 let _ = incoming.delivery.terminate().await;
                 return Err(Unreadable {
-                    error: Error::Unreadable(format!("the trigger is not JSON: {e}")),
+                    error: Error::unreadable_json("the trigger is not JSON", &e),
                     job_id: None,
                     run_id: None,
                 });
@@ -136,7 +136,7 @@ impl JobsClient {
         }
         let raw = self.backend.claim(claim_id, wait).await?;
         let value: serde_json::Value = serde_json::from_slice(&raw)
-            .map_err(|e| Error::Unreadable(format!("the claim reply: {e}")))?;
+            .map_err(|e| Error::unreadable_json("the claim reply", &e))?;
         if !value.is_object() {
             return Err(Error::Unreadable(
                 "the claim reply is not an object".to_owned(),
@@ -150,10 +150,10 @@ impl JobsClient {
                     object.remove("run");
                 }
                 serde_json::from_value(shell)
-                    .map_err(|e| Error::Unreadable(format!("the claim reply: {e}")))?
+                    .map_err(|e| Error::unreadable_json("the claim reply", &e))?
             }
             None => serde_json::from_value(value)
-                .map_err(|e| Error::Unreadable(format!("the claim reply: {e}")))?,
+                .map_err(|e| Error::unreadable_json("the claim reply", &e))?,
         };
         if let Some(reason) = reply.reason {
             let word = match &reason {

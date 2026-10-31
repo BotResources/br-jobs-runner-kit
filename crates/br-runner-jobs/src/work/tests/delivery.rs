@@ -183,8 +183,11 @@ async fn given_an_unreadable_trigger_then_a_failing_source_when_asked_then_the_u
         feed.next().await.expect_err("ended").error,
         Error::InfraMissing(_)
     ));
+    let again = tokio::time::timeout(Duration::from_secs(5), feed.next())
+        .await
+        .expect("an ended feed answers at once and does not wait for the source");
     assert!(matches!(
-        feed.next().await.expect_err("still ended").error,
+        again.expect_err("still ended").error,
         Error::InfraMissing(_)
     ));
 }

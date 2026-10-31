@@ -163,6 +163,24 @@ impl Error {
         Self::Lost(Failure::transport(text))
     }
 
+    pub(crate) fn unreadable_json(what: &str, error: &serde_json::Error) -> Self {
+        let class = match error.classify() {
+            serde_json::error::Category::Io => "a read failure",
+            serde_json::error::Category::Syntax => "a syntax error",
+            serde_json::error::Category::Data => "a value of the wrong shape",
+            serde_json::error::Category::Eof => "an unexpected end",
+        };
+        Self::Unreadable(format!(
+            "{what}: {class} at line {} column {}",
+            error.line(),
+            error.column()
+        ))
+    }
+
+    pub(crate) fn unreadable_payload(subject: &str) -> Self {
+        Self::Unreadable(format!("{subject}: the payload cannot be decoded"))
+    }
+
     pub(crate) fn wait_fired(text: impl Into<String>) -> Self {
         Self::Lost(Failure::wait(text))
     }

@@ -44,7 +44,7 @@ pub(super) fn read(value: &Value) -> ModeItem {
                 WireMode::Claim => DispatchMode::Claim,
             })
         })
-        .map_err(|e| Error::Unreadable(format!("the dispatch mode entry: {e}")))
+        .map_err(|e| Error::unreadable_json("the dispatch mode entry", &e))
 }
 
 type Done<'a, T> = Pin<Box<dyn Future<Output = Result<T, SinkClosed>> + Send + 'a>>;

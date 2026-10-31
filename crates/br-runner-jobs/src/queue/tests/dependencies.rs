@@ -109,6 +109,27 @@ async fn given_a_removed_registration_when_its_agent_sends_mail_then_the_mail_de
 }
 
 #[tokio::test]
+async fn given_a_removed_registration_when_its_agent_makes_a_background_create_then_the_create_depends_on_it_and_a_sync_create_or_another_agent_is_not_touched()
+ {
+    let sender = ScriptedSender::new();
+    sender.script_write(
+        &registration(10),
+        vec![fail(refused(Operation::Registration))],
+    );
+    let rig = Rig::with(sender);
+    let reg = rig.hand(registration(10));
+    let caller_10 = rig.hand(background_create(41, 42, 10));
+    let caller_11 = rig.hand(background_create(43, 44, 11));
+    let sync = rig.hand(create(45, 46));
+    assert!(reg.await.is_err());
+    assert_eq!(caller_10.await, Err(Removal::DependsOnRemoved));
+    assert_eq!(caller_11.await, Ok(()));
+    assert_eq!(sync.await, Ok(()));
+    let mut late = rig.hand(background_create(47, 48, 10));
+    assert_eq!(ready(&mut late), Some(Err(Removal::DependsOnRemoved)));
+}
+
+#[tokio::test]
 async fn given_a_delivered_registration_when_its_agent_sends_mail_then_the_mail_is_sent_after_it() {
     let rig = Rig::new();
     let reg = rig.hand(registration(10));

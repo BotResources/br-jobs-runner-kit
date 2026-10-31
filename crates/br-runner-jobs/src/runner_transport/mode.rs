@@ -64,9 +64,7 @@ impl ModeFeed {
         let initial = match self.reader.get(&self.key).await {
             Ok(Some(value)) => read(&value),
             Ok(None) => Ok(ModeEvent::NoEntry),
-            Err(FabricError::Decode { subject, detail }) => {
-                Err(Error::Unreadable(format!("{subject}: {detail}")))
-            }
+            Err(FabricError::Decode { subject, .. }) => Err(Error::unreadable_payload(&subject)),
             Err(error) => {
                 self.ended = Some(bucket_error(error));
                 return;
@@ -80,9 +78,9 @@ impl ModeFeed {
         self.drain();
         self.ended = Some(match outcome {
             Ok(()) => Error::lost("the dispatch mode watch ended"),
-            Err(ProjectionError::Fabric(FabricError::Decode { subject, detail })) => {
+            Err(ProjectionError::Fabric(FabricError::Decode { subject, .. })) => {
                 self.pending
-                    .push_back(Err(Error::Unreadable(format!("{subject}: {detail}"))));
+                    .push_back(Err(Error::unreadable_payload(&subject)));
                 Error::lost("the dispatch mode watch ended on an entry that is not JSON")
             }
             Err(ProjectionError::Fabric(error)) => {

@@ -120,9 +120,7 @@ pub(super) fn fabric(object: &str, error: FabricError) -> Error {
             kind: FabricPublish::Timeout,
             detail,
         } => Error::wait_fired(format!("{object}: {detail}")),
-        FabricError::Decode { subject, detail } => {
-            Error::Unreadable(format!("{subject}: {detail}"))
-        }
+        FabricError::Decode { subject, .. } => Error::unreadable_payload(&subject),
         other => Error::lost(format!("{object}: {other}")),
     }
 }

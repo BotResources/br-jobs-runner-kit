@@ -96,11 +96,12 @@ fn call_mode(trigger: &TriggerV2) -> Result<Option<CallMode>, String> {
 pub(crate) fn trigger(value: Value) -> Result<Parsed, Unreadable> {
     let job_id = lenient_id(&value, "job_id");
     let run_id = lenient_id(&value, "run_id");
-    let unreadable = |text: String| Unreadable {
-        error: Error::Unreadable(text),
+    let failed = |error: Error| Unreadable {
+        error,
         job_id,
         run_id,
     };
+    let unreadable = |text: String| failed(Error::Unreadable(text));
     let Some(object) = value.as_object() else {
         return Err(unreadable("the trigger is not an object".to_owned()));
     };
@@ -109,8 +110,8 @@ pub(crate) fn trigger(value: Value) -> Result<Parsed, Unreadable> {
         .filter(|(key, _)| !KNOWN.contains(&key.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
-    let wire: TriggerV2 =
-        serde_json::from_value(value).map_err(|e| unreadable(format!("the trigger: {e}")))?;
+    let wire: TriggerV2 = serde_json::from_value(value)
+        .map_err(|e| failed(Error::unreadable_json("the trigger", &e)))?;
     let passport: Passport = serde_json::from_value(wire.passport.clone())
         .map_err(|_| unreadable("the Passport of the trigger cannot be read".to_owned()))?;
     let call = call_mode(&wire).map_err(unreadable)?;

@@ -209,9 +209,7 @@ impl Work {
         &self,
         settings: QueueSettings,
     ) -> Result<(DeliveryQueue, WriteEnd), Error> {
-        if settings.outcome_wait.is_zero() || settings.retry_wait.is_zero() {
-            return Err(Error::invalid("a wait of the delivery queue is zero"));
-        }
+        DeliveryQueue::check(&settings)?;
         WorkCore::claim_once(&self.core.queue_made, "delivery queue")?;
         let sender = Arc::new(WorkSender {
             core: Arc::clone(&self.core),

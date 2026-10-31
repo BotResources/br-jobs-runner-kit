@@ -130,7 +130,7 @@ impl Live {
             .request(subject, body, wait, Operation::AgentList)
             .await?;
         let reply: ListAgentsReply = serde_json::from_slice(&reply)
-            .map_err(|e| Error::Unreadable(format!("the agent list reply: {e}")))?;
+            .map_err(|e| Error::unreadable_json("the agent list reply", &e))?;
         if !reply.accepted {
             return Err(Error::refused(
                 Operation::AgentList,
@@ -158,7 +158,7 @@ impl Live {
 
 fn accepted(reply: &[u8], operation: Operation) -> Result<(), Error> {
     let reply: SurfaceReply = serde_json::from_slice(reply)
-        .map_err(|e| Error::Unreadable(format!("the {} reply: {e}", operation.as_str())))?;
+        .map_err(|e| Error::unreadable_json(&format!("the {} reply", operation.as_str()), &e))?;
     if reply.accepted {
         return Ok(());
     }

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::backend::Fact;
 use crate::error::Error;
+use crate::model::CallMode;
 use crate::queue::write::{Removal, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,7 +58,12 @@ pub(crate) fn depends_on(write: &Write) -> Vec<DepKey> {
     match write {
         Write::Mail { mail } => keys.push(DepKey::Registration(mail.from_address)),
         Write::Marker { agent_id, .. } => keys.push(DepKey::Registration(*agent_id)),
-        Write::Create(create) => keys.push(DepKey::Upload(create.job_id)),
+        Write::Create(create) => {
+            keys.push(DepKey::Upload(create.job_id));
+            if let CallMode::Background { caller_address } = create.mode {
+                keys.push(DepKey::Registration(caller_address));
+            }
+        }
         Write::Finish { job_id, .. } | Write::Cancel { job_id, .. } => {
             keys.push(DepKey::Create(*job_id));
         }

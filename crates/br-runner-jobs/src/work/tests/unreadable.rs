@@ -146,3 +146,24 @@ fn given_an_attempt_that_is_not_a_number_when_read_then_it_is_unreadable() {
         json!(-1)
     )]))));
 }
+
+#[test]
+fn given_a_payload_or_a_config_of_the_wrong_shape_when_read_then_the_text_does_not_echo_the_value()
+{
+    let wrong = [
+        ("attempt", json!("secret-marmot-value")),
+        ("payload", json!("secret-marmot-value")),
+        (
+            "payload",
+            json!({ "form": "INLINE", "message": 5, "secret": "secret-marmot-value" }),
+        ),
+        ("mode", json!("secret-marmot-value")),
+        ("restart", json!("secret-marmot-value")),
+    ];
+    for (key, value) in wrong {
+        let unreadable = refused(trigger_with(&[(key, value)]));
+        assert!(is_unreadable(&unreadable), "{key}");
+        let text = unreadable.error.to_string();
+        assert!(!text.contains("marmot"), "{key}: {text}");
+    }
+}

@@ -82,3 +82,15 @@ async fn given_a_work_when_the_mail_handle_is_taken_twice_then_both_work() {
     work.mail_handle().list_agents().await.expect("first");
     work.mail_handle().list_agents().await.expect("second");
 }
+
+#[test]
+fn given_no_async_runtime_when_the_queue_is_made_then_invalid_input_and_the_once_is_not_spent() {
+    let jobs = jobs();
+    let work = work(&jobs);
+    let refused = futures::executor::block_on(work.delivery_queue(settings()));
+    assert!(matches!(refused, Err(Error::InvalidInput(_))));
+    let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+    runtime.block_on(async {
+        assert!(work.delivery_queue(settings()).await.is_ok());
+    });
+}
