@@ -187,6 +187,8 @@ jobs:
           done
       - name: br-runner-connection reaches no br-llm-clients library
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-connection
+      - name: br-runner-jobs reaches only br-llm-clients-core
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-jobs --allow br-llm-clients-core
       - name: br-runner-jobs keeps the bus in runner_transport and names no subject
         run: bash .github/scripts/check-bus-access.sh br-runner-jobs runner_transport
 
