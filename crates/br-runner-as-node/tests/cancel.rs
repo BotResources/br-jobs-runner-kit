@@ -2,31 +2,11 @@ mod support;
 
 use std::sync::Arc;
 
-use br_graph_contract::{CancelToken, Cause, Event, InstanceId, State};
-use br_runner_as_node::{JobSpec, Payload, RunnerAsNode};
-use br_runner_jobs::SyncEnd;
+use br_graph_contract::{CancelToken, Cause, Event};
 use br_runner_jobs::test_double::Answer;
+use br_runner_jobs::{Removal, SyncEnd};
 use support::*;
-
-fn hung_request(source: impl br_runner_as_node::CallerSource) -> RunnerAsNode<Flow> {
-    RunnerAsNode::new(
-        "ask",
-        runner_type(),
-        |_state: Arc<State<Flow>>| std::future::pending::<Result<JobSpec, Cause>>(),
-        |_state, _outcome| async { Ok::<_, Cause>(FlowUpdate::default()) },
-        source,
-    )
-}
-
-fn hung_response(source: impl br_runner_as_node::CallerSource) -> RunnerAsNode<Flow> {
-    RunnerAsNode::new(
-        "ask",
-        runner_type(),
-        |_state: Arc<State<Flow>>| async { Ok(JobSpec::new(Payload::Kept(content("q")))) },
-        |_state, _outcome| std::future::pending::<Result<FlowUpdate, Cause>>(),
-        source,
-    )
-}
+use tokio::sync::Notify;
 
 #[tokio::test]
 async fn given_no_input_yet_when_the_cancel_view_fires_then_the_event_cancelled_is_sent_with_no_call()
@@ -45,10 +25,11 @@ async fn given_no_input_yet_when_the_cancel_view_fires_then_the_event_cancelled_
 async fn given_a_request_function_that_waits_when_the_cancel_view_fires_then_the_wait_ends_with_the_event_cancelled_and_no_call()
  {
     let rig = rig();
-    let node = hung_request(source_of(&rig.handle));
+    let waiting = Arc::new(Notify::new());
+    let node = hung_request(source_of(&rig.handle), Arc::clone(&waiting));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");
-    assert!(stays_pending(run.events.recv()).await);
+    started(&waiting).await;
 
     rig.token.handle().trigger();
 
@@ -60,12 +41,12 @@ async fn given_a_request_function_that_waits_when_the_cancel_view_fires_then_the
 async fn given_a_caller_source_that_waits_when_the_cancel_view_fires_then_the_event_cancelled_is_sent_with_no_cancel_handed_over()
  {
     let rig = rig();
-    let node = standard(|_id: InstanceId| {
-        std::future::pending::<Result<br_runner_jobs::CallerHandle, Cause>>()
-    });
+    let waiting = Arc::new(Notify::new());
+    let (held, _gone) = probe();
+    let node = standard(hung_source(held, Arc::clone(&waiting)));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");
-    assert!(stays_pending(run.events.recv()).await);
+    started(&waiting).await;
 
     rig.token.handle().trigger();
 
@@ -118,7 +99,8 @@ async fn given_a_create_whose_end_is_pending_when_the_cancel_view_fires_then_the
 async fn given_a_response_function_that_waits_when_the_cancel_view_fires_then_the_event_cancelled_is_sent_with_the_finish_kept_and_no_cancel()
  {
     let rig = rig();
-    let node = hung_response(source_of(&rig.handle));
+    let waiting = Arc::new(Notify::new());
+    let node = hung_response(source_of(&rig.handle), Arc::clone(&waiting));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");
     let create = the_create(&rig.script).await;
@@ -129,7 +111,7 @@ async fn given_a_response_function_that_waits_when_the_cancel_view_fires_then_th
             result_ref: None,
         }),
     );
-    assert!(stays_pending(run.events.recv()).await);
+    started(&waiting).await;
 
     rig.token.handle().trigger();
 
@@ -156,17 +138,72 @@ async fn given_the_cancel_view_fired_before_the_instance_starts_when_a_state_com
 }
 
 #[tokio::test]
-async fn given_a_dropped_instance_when_the_node_waits_for_the_end_then_nothing_more_is_handed_over()
-{
+async fn given_a_create_that_ended_refused_when_the_cancel_view_fires_before_the_end_is_heard_then_the_event_cancelled_is_sent_with_no_cancel_handed_over()
+ {
     let rig = rig();
-    let node = standard(source_of(&rig.handle));
-    let run = start(&node, rig.token.view()).await;
+    rig.script.create(Answer::Now(Err(Removal::Refused(
+        a_jobs_refusal("unknown_runner_type").await,
+    ))));
+    let trigger = rig.token.handle().clone();
+    let handle = rig.handle.clone();
+    let node = standard(move |_id: br_graph_contract::InstanceId| {
+        let trigger = trigger.clone();
+        let handle = handle.clone();
+        async move {
+            trigger.trigger();
+            Ok::<_, Cause>(handle)
+        }
+    });
+    let mut run = start(&node, rig.token.view()).await;
+
     run.give("q");
-    let _ = the_create(&rig.script).await;
 
-    drop(run);
-    rig.token.handle().trigger();
-    settle_calls().await;
-
+    assert!(matches!(run.event().await, Event::Cancelled));
     assert_eq!(kinds(&rig.script), ["end_wait", "upload", "create"]);
+}
+
+#[tokio::test]
+async fn given_a_create_removed_after_a_report_when_the_cancel_view_fires_before_the_end_is_heard_then_the_event_cancelled_is_sent_with_no_cancel_handed_over()
+ {
+    let rig = rig();
+    rig.script.create(Answer::Now(Err(Removal::LeftUnsent)));
+    let trigger = rig.token.handle().clone();
+    let handle = rig.handle.clone();
+    let node = standard(move |_id: br_graph_contract::InstanceId| {
+        let trigger = trigger.clone();
+        let handle = handle.clone();
+        async move {
+            trigger.trigger();
+            Ok::<_, Cause>(handle)
+        }
+    });
+    let mut run = start(&node, rig.token.view()).await;
+
+    run.give("q");
+
+    assert!(matches!(run.event().await, Event::Cancelled));
+    assert_eq!(kinds(&rig.script), ["end_wait", "upload", "create"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn given_the_cancel_view_triggered_at_the_instant_of_the_end_when_many_instances_run_then_a_cancel_and_a_finish_never_both_reach_the_same_child_job()
+ {
+    for _ in 0..200 {
+        let rig = rig();
+        let node = standard(source_of(&rig.handle));
+        let mut run = start(&node, rig.token.view()).await;
+        run.give("q");
+        let create = the_create(&rig.script).await;
+        let trigger = rig.token.handle().clone();
+        let racer = tokio::spawn(async move { trigger.trigger() });
+
+        rig.script
+            .end(create.job_id, Answer::Now(completed("done")));
+        racer.await.expect("the racer ended");
+        let event = run.event().await;
+
+        let kinds = kinds(&rig.script);
+        assert!(matches!(event, Event::Cancelled | Event::Result(_)));
+        assert!(!(kinds.contains(&"finish") && kinds.contains(&"cancel")));
+    }
 }

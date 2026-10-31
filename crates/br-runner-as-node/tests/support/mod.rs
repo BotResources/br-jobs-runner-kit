@@ -4,6 +4,8 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::{Notify, oneshot};
+
 use br_graph_contract::{
     CancelToken, CancelView, Cause, Event, EventEnd, Fields, Input, InputEnd, InstanceId, Node,
     Reason, State,
@@ -78,6 +80,99 @@ pub fn source_of(handle: &CallerHandle) -> impl CallerSource + use<> {
         let handle = handle.clone();
         async move { Ok::<_, Cause>(handle) }
     }
+}
+
+pub struct Probe(Option<oneshot::Sender<()>>);
+
+impl Drop for Probe {
+    fn drop(&mut self) {
+        if let Some(sender) = self.0.take() {
+            let _ = sender.send(());
+        }
+    }
+}
+
+pub fn probe() -> (Probe, oneshot::Receiver<()>) {
+    let (sender, receiver) = oneshot::channel();
+    (Probe(Some(sender)), receiver)
+}
+
+pub fn probed_source(handle: &CallerHandle, probe: Probe) -> impl CallerSource + use<> {
+    let handle = handle.clone();
+    move |_id: InstanceId| {
+        let _ = &probe;
+        let handle = handle.clone();
+        async move { Ok::<_, Cause>(handle) }
+    }
+}
+
+pub fn hung_source(probe: Probe, started: Arc<Notify>) -> impl CallerSource {
+    move |_id: InstanceId| {
+        let _ = &probe;
+        let started = Arc::clone(&started);
+        async move {
+            started.notify_one();
+            std::future::pending::<Result<CallerHandle, Cause>>().await
+        }
+    }
+}
+
+pub fn hung_request(source: impl CallerSource, started: Arc<Notify>) -> RunnerAsNode<Flow> {
+    RunnerAsNode::new(
+        "ask",
+        runner_type(),
+        move |_state: Arc<State<Flow>>| {
+            let started = Arc::clone(&started);
+            async move {
+                started.notify_one();
+                std::future::pending::<Result<JobSpec, Cause>>().await
+            }
+        },
+        |_state, _outcome| async { Ok::<_, Cause>(FlowUpdate::default()) },
+        source,
+    )
+}
+
+pub fn hung_response(source: impl CallerSource, started: Arc<Notify>) -> RunnerAsNode<Flow> {
+    RunnerAsNode::new(
+        "ask",
+        runner_type(),
+        |_state: Arc<State<Flow>>| async { Ok(JobSpec::new(Payload::Kept(content("q")))) },
+        move |_state, _outcome| {
+            let started = Arc::clone(&started);
+            async move {
+                started.notify_one();
+                std::future::pending::<Result<FlowUpdate, Cause>>().await
+            }
+        },
+        source,
+    )
+}
+
+pub fn completed(message: &str) -> br_runner_jobs::SyncEnd {
+    br_runner_jobs::SyncEnd::Completed {
+        inline: Some(content(message)),
+        result_ref: None,
+    }
+}
+
+pub async fn a_jobs_refusal(reason: &str) -> br_runner_jobs::Error {
+    use br_runner_jobs::test_double::ScriptedJobs;
+    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let body = format!(r#"{{"version":2,"reason":"{reason}","retry_after_ms":250}}"#);
+    jobs.push_claim_reply(Ok(body.into_bytes()));
+    match jobs
+        .client()
+        .claim(Uuid::now_v7(), Duration::from_secs(1))
+        .await
+    {
+        Err(error @ br_runner_jobs::Error::Refused(_)) => error,
+        other => panic!("expected a refusal, got {:?}", other.map(|_| ())),
+    }
+}
+
+pub async fn started(started: &Notify) {
+    within(started.notified()).await;
 }
 
 pub fn describe(outcome: &Outcome) -> FlowUpdate {
@@ -181,12 +276,6 @@ pub async fn the_create(script: &MemoryScript) -> br_runner_jobs::CreateChildInp
         }
     })
     .await
-}
-
-pub async fn settle_calls() -> Duration {
-    let pause = Duration::from_millis(100);
-    tokio::time::sleep(pause).await;
-    pause
 }
 
 pub fn kinds(script: &MemoryScript) -> Vec<&'static str> {

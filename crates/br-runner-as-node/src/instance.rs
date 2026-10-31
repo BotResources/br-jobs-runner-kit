@@ -5,6 +5,7 @@ use br_runner_jobs::{CallMode, CallerHandle, CreateChildInput, PayloadForm, Writ
 use uuid::Uuid;
 
 use crate::error::Error;
+use crate::finish;
 use crate::node::Parts;
 use crate::signals::{Signals, Stop};
 use crate::spec::{JobSpec, Payload};
@@ -66,12 +67,7 @@ async fn step<F: Fields>(
     let end_wait = caller.end_wait(child);
     let create_end = hand_over(&caller, parts, max_attempts, child, spec)?;
     let outcome = sync_call::wait(&caller, child, end_wait, create_end, signals).await?;
-    if cancel.is_triggered() {
-        return Ok(Event::Cancelled);
-    }
-    if matches!(outcome, crate::outcome::Outcome::Completed { .. }) {
-        let _ = caller.finish(child, Uuid::now_v7());
-    }
+    finish::hand_over_unless_cancelled(cancel, &caller, child, &outcome)?;
     let update = signals
         .guard((parts.response)(state, outcome))
         .await?

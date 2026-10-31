@@ -165,3 +165,25 @@ async fn given_an_end_wait_that_gives_an_error_when_the_node_waits_then_the_canc
         ["end_wait", "upload", "create", "cancel"]
     );
 }
+
+#[tokio::test]
+async fn given_a_request_function_that_panics_when_the_instance_runs_then_the_instance_ends_with_no_event_and_no_call_is_made()
+ {
+    let rig = rig();
+    let node = RunnerAsNode::new(
+        "ask",
+        runner_type(),
+        |_state: Arc<State<Flow>>| async { panic!("the author's function panicked") },
+        |_state, outcome| {
+            let update = describe(&outcome);
+            async move { Ok::<_, Cause>(update) }
+        },
+        source_of(&rig.handle),
+    );
+    let mut run = start(&node, rig.token.view()).await;
+
+    run.give("q");
+
+    assert!(within(run.events.recv()).await.is_err());
+    assert!(rig.script.calls().is_empty());
+}

@@ -305,6 +305,7 @@ dependencies = [
  "br-graph-contract",
  "br-runner-jobs",
  "contract-jobs 0.7.0",
+ "futures",
  "serde",
  "serde_json",
  "thiserror",

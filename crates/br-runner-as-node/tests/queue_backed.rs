@@ -8,7 +8,7 @@ use br_graph_contract::Event;
 use br_runner_jobs::test_double::{
     Call, ChildCommand, ScriptedJobs, trigger_json, work_from_trigger,
 };
-use br_runner_jobs::{Arrival, Error as JobsError, IgnoreReports, QueueSettings, SyncEnd};
+use br_runner_jobs::{Arrival, IgnoreReports, QueueSettings, SyncEnd};
 use serde_json::{Value, json};
 use support::*;
 use uuid::Uuid;
@@ -66,16 +66,6 @@ fn commands(jobs: &ScriptedJobs) -> Vec<ChildCommand> {
         .collect()
 }
 
-async fn refused_claim(reason: &str) -> JobsError {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
-    let body = format!(r#"{{"version":2,"reason":"{reason}","retry_after_ms":250}}"#);
-    jobs.push_claim_reply(Ok(body.into_bytes()));
-    jobs.client()
-        .claim(Uuid::now_v7(), Duration::from_secs(1))
-        .await
-        .expect_err("a refusal")
-}
-
 #[tokio::test]
 async fn given_the_real_delivery_queue_when_the_runner_completes_then_jobs_gets_the_upload_the_create_and_the_finish_in_order_and_never_a_cancel()
  {
@@ -131,7 +121,7 @@ async fn given_a_refused_upload_when_the_real_queue_drops_the_create_then_the_ou
 async fn given_a_create_that_jobs_refuses_when_the_real_queue_sends_it_then_the_outcome_is_the_refusal_and_no_cancel_follows()
  {
     let stack = stack(succeeds("jobsUploadPayload")).await;
-    let refusal = refused_claim("unknown_runner_type").await;
+    let refusal = a_jobs_refusal("unknown_runner_type").await;
     stack.jobs.answer_commands(move || Err(refusal.clone()));
     let node = standard(source_of(&stack.book.caller_handle()));
     let token = br_graph_contract::CancelToken::new();

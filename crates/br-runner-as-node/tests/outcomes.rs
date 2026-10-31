@@ -1,32 +1,11 @@
 mod support;
 
 use br_graph_contract::Event;
+use br_runner_as_node::{Outcome, Refusal};
 use br_runner_jobs::test_double::{Answer, MemoryCall, result_ref};
-use br_runner_jobs::{CallMode, Error as JobsError, PayloadForm, Removal, SyncEnd};
+use br_runner_jobs::{CallMode, PayloadForm, Removal, SyncEnd};
 use support::*;
 use uuid::Uuid;
-
-fn completed(message: &str) -> SyncEnd {
-    SyncEnd::Completed {
-        inline: Some(content(message)),
-        result_ref: None,
-    }
-}
-
-async fn a_refusal(reason: &str) -> JobsError {
-    use br_runner_jobs::test_double::ScriptedJobs;
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
-    let body = format!(r#"{{"version":2,"reason":"{reason}","retry_after_ms":250}}"#);
-    jobs.push_claim_reply(Ok(body.into_bytes()));
-    match jobs
-        .client()
-        .claim(Uuid::now_v7(), std::time::Duration::from_secs(1))
-        .await
-    {
-        Err(error @ JobsError::Refused(_)) => error,
-        other => panic!("expected a refusal, got {:?}", other.map(|_| ())),
-    }
-}
 
 #[tokio::test]
 async fn given_a_kept_payload_when_the_runner_completes_then_the_answer_goes_in_the_event_result_after_the_finish()
@@ -131,7 +110,7 @@ async fn given_a_refused_create_when_the_node_waits_then_the_response_function_g
  {
     let rig = rig();
     rig.script.create(Answer::Now(Err(Removal::Refused(
-        a_refusal("unknown_runner_type").await,
+        a_jobs_refusal("unknown_runner_type").await,
     ))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
@@ -148,7 +127,7 @@ async fn given_a_refused_upload_when_it_comes_in_the_end_of_the_create_then_the_
  {
     let rig = rig();
     rig.script.create(Answer::Late(Err(Removal::Refused(
-        a_refusal("payload_too_big").await,
+        a_jobs_refusal("payload_too_big").await,
     ))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
@@ -197,8 +176,9 @@ async fn given_an_end_that_comes_before_the_late_delivery_of_the_create_then_the
 async fn given_the_node_never_sends_the_event_refused_when_every_outcome_is_tried_then_none_is_a_refused_event()
  {
     let rig = rig();
-    rig.script
-        .create(Answer::Now(Err(Removal::Refused(a_refusal("busy").await))));
+    rig.script.create(Answer::Now(Err(Removal::Refused(
+        a_jobs_refusal("busy").await,
+    ))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");
@@ -206,4 +186,40 @@ async fn given_the_node_never_sends_the_event_refused_when_every_outcome_is_trie
     let event = run.event().await;
 
     assert!(!matches!(event, Event::Refused(_)));
+}
+
+#[tokio::test]
+async fn given_an_end_and_a_removal_of_the_create_both_ready_when_the_node_hears_them_then_the_end_settles_the_call_and_the_removal_is_ignored()
+ {
+    let rig = rig();
+    rig.script.create(Answer::Late(Err(Removal::LeftUnsent)));
+    let node = standard(source_of(&rig.handle));
+    let mut run = start(&node, rig.token.view()).await;
+    run.give("q");
+    let create = the_create(&rig.script).await;
+
+    rig.script
+        .end(create.job_id, Answer::Now(completed("both")));
+    rig.script.release();
+    let update = update_of(run.event().await);
+
+    assert_eq!(update.answer.as_deref(), Some("both"));
+    assert_eq!(
+        kinds(&rig.script),
+        ["end_wait", "upload", "create", "finish"]
+    );
+}
+
+#[tokio::test]
+async fn given_a_refusal_made_by_the_author_when_the_response_function_decides_then_it_maps_the_refusal_like_a_refusal_of_jobs()
+ {
+    let made = Outcome::Refusal(Refusal::new("busy", "come back later"));
+
+    let update = describe(&made);
+
+    assert_eq!(update.note.as_deref(), Some("refused:busy"));
+    assert_eq!(
+        made,
+        Outcome::Refusal(Refusal::new(String::from("busy"), "come back later"))
+    );
 }

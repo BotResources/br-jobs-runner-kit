@@ -21,7 +21,7 @@ A crate that names the types of a sibling in its public API must reach that sibl
 
 ## Quickstart
 
-This is `examples/call_a_runner_as_node.rs`. It makes a node that sends the question of the state to the runner type `analyst` as a payload kept by jobs, waits for the end of the child Job, and puts the inline answer in the state. A failed, cancelled or refused call fails the instance with the message of jobs. The example takes the caller source as a parameter; to run it needs a caller source made by the host. The tests run it against an in-memory caller handle.
+This is `examples/call_a_runner_as_node.rs`. It makes a node that sends the question of the state to the runner type `analyst` as a payload kept by jobs, waits for the end of the child Job, and puts the inline answer in the state. A failed or refused call, and a cancelled end where the jobs service gives one (see Limits), fails the instance with the message of jobs. The example takes the caller source as a parameter; to run it needs a caller source made by the host. The tests run it against an in-memory caller handle.
 
 ```rust,no_run
 use br_graph_contract::{Fields, Reason};
@@ -102,7 +102,7 @@ fn main() {
 
 ## What an instance does
 
-An instance does one step and sends one event. In this order:
+An instance does one step and sends one event, unless it is dropped or no input ever comes (see the end of this section). In this order:
 
 1. It waits for the first input, closes its input, and keeps the last state it was given.
 2. It awaits your request function with that state. The function gives a `JobSpec`: the payload and the configuration.
@@ -115,6 +115,8 @@ An instance does one step and sends one event. In this order:
 9. It sends the event: `Result` with the update, or `Failed` with the error.
 
 The node never sends the event `Refused`.
+
+If the input end is dropped before any input comes, or the event end is dropped, the instance ends with no event and hands over nothing. A panic in your request function, your response function or your caller source ends the instance with no event; the host sees an instance that vanished.
 
 ### Waits and hand-overs
 
@@ -152,18 +154,18 @@ The response function takes the state and the `Outcome`, may be async, and gives
 |---|---|
 | `Completed { inline, result_ref }` | the child Job completed, with the Result inline or a Result reference |
 | `Failed { report, message }` | the child Job failed |
-| `Cancelled { message }` | the child Job was cancelled |
+| `Cancelled { message }` | the end of the child Job says it was cancelled. The jobs service gives no such end today for a child Job cancelled by another party (see Limits) |
 | `Refusal(Refusal)` | the create ended `Refused`: the `reason` and the `message` of jobs. It is not the event `Refused` |
 
-The library never decodes or fetches a Result, and never decides what a failure or a refusal means. A Result reference passes on as it came, and an inline Result is given in the form of `br-runner-jobs`; either may go in the state, and a later node reads a Result reference with the caller handle. You may turn a failed end into an update (an item of a map-reduce marked failed) or into an error. An update goes in the event `Result`, whatever the Outcome was; an error goes in the event `Failed`, unchanged.
+The library never decodes or fetches a Result, and never decides what a failure or a refusal means. A Result reference passes on as it came, and an inline Result is given in the form of `br-runner-jobs`; either may go in the state, and a later node may read a Result reference with the caller handle. The node hands over the finish before it calls your response function; whether a Result reference can still be read after the finish is decided by the jobs service, not by this library. You may turn a failed end into an update (an item of a map-reduce marked failed) or into an error. An update goes in the event `Result`, whatever the Outcome was; an error goes in the event `Failed`, unchanged.
 
 ## Caller source
 
-The caller handle depends on the instance, as one graph serves many Runs. A caller source is an async function from the `InstanceId` to a `CallerHandle` or an error (`CallerSource`; any `Fn(InstanceId) -> impl Future<Output = Result<CallerHandle, Cause>>` is one). It is asked once for each instance. The host makes it.
+The caller handle depends on the instance, as one graph serves many Runs. A caller source is an async function from the `InstanceId` to a `CallerHandle` or an error (`CallerSource`; any `Fn(InstanceId) -> impl Future<Output = Result<CallerHandle, Cause>>` is one). It is asked once for each instance. The host makes it. A closure form needs `Fn(InstanceId) -> Fut` with `Send + Sync + 'static`, and a future that is `Send + 'static`.
 
 ## Faults
 
-A fault fails the instance with the event `Failed`, carrying an `Error`. The error holds the error of the caller source or of `br-runner-jobs` as its source and names no error type of `br-runner-jobs`.
+A fault fails the instance with the event `Failed`, carrying an `Error`. The error holds the error of the caller source or of `br-runner-jobs` as its source when it has one (`UnknownEnd` and some `CreateRemoved` cases have none), and names no error type of `br-runner-jobs`.
 
 | `Error` | Cause | Cancel handed over |
 |---|---|---|
@@ -181,10 +183,17 @@ An error of your own function is not a fault.
 The node hands over a cancel of the child Job, once, as Requester, only when the create was handed over and the sync call is not settled, and then only when the cancel view fires (the event `Cancelled` follows) or the end wait gives an error (the event `Failed` follows). The cancel view fires also while the end of the create is pending.
 
 - Before the create is handed over, the cancel view gives the event `Cancelled` and a fault gives the event `Failed`, with no cancel.
-- Once the sync call is settled (an end in hand, a refused create, or a create removed after a report), no cancel is handed over. A cancel view while your response function waits ends that wait and gives the event `Cancelled`.
+- Once the sync call is settled (an end in hand, a refused create, or a create removed after a report), no cancel is handed over. This holds also when the cancel view fires before the node has heard that the create was refused or removed. A cancel view while your response function waits ends that wait and gives the event `Cancelled`.
 - If two errors come together, or an error and the cancel view come together, the one the node sees first gives the event.
 - A finish or a cancel that cannot be handed over changes nothing; the node does not read the end of either. No finish is handed over after the cancel view.
 - Whenever the instance ends before an end is in hand, the node abandons the end wait. A dropped instance hands over nothing more. Cancel is best effort.
+
+## Limits
+
+| Limit | What happens today |
+|---|---|
+| A child Job cancelled by another party | The jobs service sends no end for it. `Outcome::Cancelled` for such a child Job does not arrive on a live wire; it arrives only from an end that a test script gives. The instance keeps waiting until the cancel view fires (event `Cancelled`, one cancel handed over) or the end wait gives an error (fault `EndWait`, one cancel handed over). |
+| A Result reference after the finish | The node hands over the finish before the response function runs. The jobs service decides whether the reference stays readable. |
 
 ## Ids and identity
 
@@ -197,6 +206,8 @@ Put a `RunnerAsNode` as the internal node of the map-reduce: each element gets a
 ## Testing your node
 
 The `test-double` feature of `br-runner-jobs` gives `memory_caller()`, a caller handle with a script: answer each write, give an end for a child Job id, and read the recorded calls. The child Job id is made by the node, so read it from the recorded create and then give the end:
+
+A refusal can be made with `Refusal::new(reason, message)`, so you can call your response function with `Outcome::Refusal(Refusal::new("busy", "come back later"))` and check the update it gives.
 
 ```rust,ignore
 let (handle, script) = memory_caller();

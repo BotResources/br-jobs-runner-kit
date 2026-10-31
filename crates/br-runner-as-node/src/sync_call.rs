@@ -1,5 +1,6 @@
 use br_graph_contract::{Event, Fields};
-use br_runner_jobs::{CallerHandle, EndWait, Removal, WriteEnd, WriteResult};
+use br_runner_jobs::{CallerHandle, EndWait, Error as JobsError, Removal, WriteEnd, WriteResult};
+use futures::FutureExt;
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -26,14 +27,27 @@ async fn hear(end_wait: &mut EndWait, create_end: &mut Option<WriteEnd>) -> Hear
     }
 }
 
-fn hand_over_cancel(caller: &CallerHandle, child: Uuid) {
-    let _ = caller.cancel(child, Uuid::now_v7());
+fn hand_over_cancel_unless_dead(
+    caller: &CallerHandle,
+    child: Uuid,
+    create_end: &mut Option<WriteEnd>,
+) {
+    let dead = create_end
+        .as_mut()
+        .is_some_and(|end| matches!(end.now_or_never(), Some(Err(_))));
+    if !dead {
+        let _ = caller.cancel(child, Uuid::now_v7());
+    }
 }
 
 fn removed(removal: Removal) -> Error {
     match removal {
         Removal::Failed(error) => Error::CreateRemoved {
-            what: error.to_string(),
+            what: "the delivery queue gave it up after a failure".to_owned(),
+            source: Some(Box::new(error)),
+        },
+        Removal::Refused(error) => Error::CreateRemoved {
+            what: "the delivery queue refused it with an error that is no refusal".to_owned(),
             source: Some(Box::new(error)),
         },
         Removal::DependsOnRemoved => Error::CreateRemoved {
@@ -63,7 +77,7 @@ pub(crate) async fn wait<F: Fields>(
         let heard = match signals.guard(hear(&mut end_wait, &mut create_end)).await {
             Ok(heard) => heard,
             Err(Stop::Event(Event::Cancelled)) => {
-                hand_over_cancel(caller, child);
+                hand_over_cancel_unless_dead(caller, child, &mut create_end);
                 return Err(Stop::Event(Event::Cancelled));
             }
             Err(other) => return Err(other),
@@ -73,12 +87,12 @@ pub(crate) async fn wait<F: Fields>(
                 return Outcome::from_end(end).ok_or_else(|| Stop::failed(Error::UnknownEnd));
             }
             Heard::End(Err(error)) => {
-                hand_over_cancel(caller, child);
+                hand_over_cancel_unless_dead(caller, child, &mut create_end);
                 return Err(Stop::failed(Error::EndWait(Box::new(error))));
             }
             Heard::Create(Ok(())) => create_end = None,
-            Heard::Create(Err(Removal::Refused(error))) => {
-                return Ok(Outcome::from_refusal(error));
+            Heard::Create(Err(Removal::Refused(JobsError::Refused(refusal)))) => {
+                return Ok(Outcome::from_refusal(refusal));
             }
             Heard::Create(Err(removal)) => {
                 return Err(Stop::failed(removed(removal)));

@@ -1,10 +1,19 @@
-use br_runner_jobs::{Content, Error, FailureReportView, ResultRef, SyncEnd};
+use br_runner_jobs::{Content, FailureReportView, Refusal as JobsRefusal, ResultRef, SyncEnd};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Refusal {
     pub reason: String,
     pub message: String,
+}
+
+impl Refusal {
+    pub fn new(reason: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            message: message.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,16 +45,7 @@ impl Outcome {
         }
     }
 
-    pub(crate) fn from_refusal(error: Error) -> Self {
-        match error {
-            Error::Refused(refusal) => Self::Refusal(Refusal {
-                reason: refusal.reason,
-                message: refusal.message,
-            }),
-            other => Self::Refusal(Refusal {
-                reason: "refused".to_owned(),
-                message: other.to_string(),
-            }),
-        }
+    pub(crate) fn from_refusal(refusal: JobsRefusal) -> Self {
+        Self::Refusal(Refusal::new(refusal.reason, refusal.message))
     }
 }
