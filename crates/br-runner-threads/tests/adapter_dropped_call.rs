@@ -1,19 +1,20 @@
 mod support;
 
-use std::time::Duration;
-
-use br_agentic_contract::ThreadAccess;
-use br_runner_threads::EntryOutcome;
+use br_llm_messages::{ClosureReason, TurnClosure};
+use br_runner_threads::test_double::CommandBody;
+use br_runner_threads::{EntryOutcome, Error};
 use support::adapter_wire::*;
 use support::adapter_x::*;
 use support::gate_store::GateStore;
 use support::queue_kit::pends;
 use support::*;
 
-const SHORT: Duration = Duration::from_millis(50);
-
-async fn dropped<T>(future: impl std::future::Future<Output = T>) {
-    let _ = tokio::time::timeout(SHORT, future).await;
+async fn dropped<T>(store: &GateStore, future: impl std::future::Future<Output = T>) {
+    tokio::pin!(future);
+    tokio::select! {
+        _ = &mut future => panic!("the call ended before its append was parked"),
+        () = store.a_gated_append_started() => {}
+    }
 }
 
 #[tokio::test]
@@ -25,7 +26,7 @@ async fn a_port_call_dropped_while_its_append_is_in_flight_ends_as_if_it_had_bee
     let first = notice("first");
     let first_entry = first.id();
 
-    dropped(rig.access().add_entry(&thread, turn.clone(), first)).await;
+    dropped(&store, rig.access().add_entry(&thread, turn.clone(), first)).await;
     store.release_appends();
     rig.access()
         .add_entry(&thread, turn.clone(), notice("second"))
@@ -53,7 +54,7 @@ async fn entry_stored_waits_for_the_entry_of_a_dropped_call_until_it_is_delivere
     let (thread, turn) = (thread_ref(), turn_ref(agent));
     let first = notice("first");
     let first_entry = first.id();
-    dropped(rig.access().add_entry(&thread, turn, first)).await;
+    dropped(&store, rig.access().add_entry(&thread, turn, first)).await;
     store.release_appends();
     eventually("the item is queued", || {
         rig.adapter
@@ -82,6 +83,7 @@ async fn a_later_operation_on_the_thread_waits_behind_the_detached_one() {
     let rig = rig_over(store.clone(), fixed_context(context_of(agent)), agent).await;
     let (thread, turn) = (thread_ref(), turn_ref(agent));
     dropped(
+        &store,
         rig.access()
             .add_entry(&thread, turn.clone(), notice("first")),
     )
@@ -119,7 +121,7 @@ async fn a_sink_delta_dropped_while_its_append_is_in_flight_still_counts_as_sent
         .await
         .expect("accepted");
 
-    dropped(sink.send(started(turn.id, entry))).await;
+    dropped(&store, sink.send(started(turn.id, entry))).await;
     store.release_appends();
     rig.access()
         .discard_response(&thread, entry)
@@ -149,6 +151,7 @@ async fn a_sink_delta_of_a_response_that_ended_while_it_waited_does_nothing() {
         .expect("accepted");
     let response = text_response(entry, block_id(), "the answer");
     dropped(
+        &store,
         rig.access()
             .add_entry(&thread, turn_ref(agent), notice("other turn")),
     )
@@ -173,4 +176,43 @@ async fn a_sink_delta_of_a_response_that_ended_while_it_waited_does_nothing() {
     let deltas = deltas_of(&rig.threads, turn.id.as_uuid());
     assert_eq!(folded(&deltas, turn.id, entry), Some(response));
     assert_eq!(deltas.len(), 3, "{deltas:?}");
+}
+
+#[tokio::test]
+async fn a_call_on_a_turn_waits_behind_a_detached_closing_and_is_refused_after_it() {
+    let store = GateStore::after_free_appends(2);
+    let agent = agent_id();
+    let rig = rig_over(store.clone(), fixed_context(context_of(agent)), agent).await;
+    let (thread, turn) = (thread_ref(), turn_ref(agent));
+    rig.access()
+        .add_entry(&thread, turn.clone(), notice("first"))
+        .await
+        .expect("accepted");
+    dropped(
+        &store,
+        rig.access().close_turn(
+            &thread,
+            turn.clone(),
+            TurnClosure::new(entry_id(), ClosureReason::cancelled()),
+        ),
+    )
+    .await;
+
+    let (result, ()) = tokio::join!(
+        rig.access()
+            .add_entry(&thread, turn.clone(), notice("too late")),
+        async {
+            settle().await;
+            store.release_appends();
+        }
+    );
+
+    assert!(matches!(fault_of(result), Error::InvalidInput(_)));
+    rig.idle().await;
+    assert_eq!(chunks_of(&rig.threads, turn.id.as_uuid()).len(), 1);
+    let commands = rig.threads.commands();
+    assert!(matches!(
+        commands.last().expect("a command").body,
+        CommandBody::Fail(_)
+    ));
 }

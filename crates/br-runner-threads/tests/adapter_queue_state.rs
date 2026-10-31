@@ -100,6 +100,46 @@ async fn the_state_gives_the_last_failed_attempt_until_an_item_is_delivered() {
 }
 
 #[tokio::test]
+async fn the_last_failed_attempt_is_cleared_when_its_item_ends_refused() {
+    let world = world().await;
+    let thread = thread_ref();
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let holder = world.threads.clone();
+    let counted = attempts.clone();
+    world.threads.answer_commands(move |command| {
+        match counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) {
+            0 => Err(unavailable()),
+            _ => {
+                holder.pause();
+                Err(br_runner_threads::Error::Refused(
+                    br_runner_threads::test_double::refusal(
+                        "thread_closed",
+                        "no",
+                        Some(command.id),
+                    ),
+                ))
+            }
+        }
+    });
+    let (_, _) = write_input(&world, &thread).await;
+    let (second, _) = write_input(&world, &thread).await;
+
+    eventually(
+        "the second item is the head and nothing is shown as failed",
+        || {
+            let state = world.adapter.queue_state();
+            attempts.load(std::sync::atomic::Ordering::SeqCst) >= 2
+                && state.threads.first().is_some_and(|t| {
+                    t.last_failure.is_none()
+                        && t.oldest.as_ref().is_some_and(|o| o.message_id == second)
+                })
+        },
+    )
+    .await;
+    world.threads.resume();
+}
+
+#[tokio::test]
 async fn the_state_of_a_stuck_thread_is_read_without_waiting_for_threads() {
     let world = world().await;
     let thread = thread_ref();

@@ -100,7 +100,14 @@ impl Inner {
             let mut mem = slot.mem.lock().await;
             inner.ensure_turn(&slot, &mut mem, &turn, &ctx).await?;
             inner
-                .push_chunk(&slot, &mut mem, turn.id.as_uuid(), vec![entry], chunk)
+                .push_chunk(
+                    &slot,
+                    &mut mem,
+                    turn.id.as_uuid(),
+                    vec![entry],
+                    chunk,
+                    Uuid::now_v7(),
+                )
                 .await
         })
         .await

@@ -57,6 +57,7 @@ impl ThreadAccessAdapter {
     pub async fn new(client: &ThreadClient, settings: ThreadAccessSettings) -> Result<Self, Error> {
         require_wait(settings.outcome_wait, "the outcome wait")?;
         require_wait(settings.retry_wait, "the wait between attempts")?;
+        require_wait(settings.keepalive_interval, "the keepalive interval")?;
         let kept = settings.store.list().await.map_err(Error::from_store)?;
         let leftovers = kept
             .iter()
@@ -66,6 +67,7 @@ impl ThreadAccessAdapter {
             client: client.clone(),
             outcome_wait: settings.outcome_wait,
             retry_wait: settings.retry_wait,
+            keepalive_interval: settings.keepalive_interval,
             store: settings.store,
             write_context: settings.write_context,
             slots: Mutex::new(HashMap::new()),

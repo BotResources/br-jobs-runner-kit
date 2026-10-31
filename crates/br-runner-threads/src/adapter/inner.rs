@@ -37,10 +37,32 @@ pub(crate) struct QueueInner {
     pub(crate) last_no: u64,
 }
 
+pub(crate) struct KeepaliveTask(pub(crate) tokio::task::AbortHandle);
+
+impl Drop for KeepaliveTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 pub(crate) struct TurnState {
     pub(crate) agent: AgentId,
     pub(crate) chunks: Vec<Chunk>,
     pub(crate) closed: bool,
+    pub(crate) last_item_at: Instant,
+    pub(crate) keepalive: Option<KeepaliveTask>,
+}
+
+impl TurnState {
+    pub(crate) fn closed_by(agent: AgentId) -> Self {
+        Self {
+            agent,
+            chunks: Vec::new(),
+            closed: true,
+            last_item_at: Instant::now(),
+            keepalive: None,
+        }
+    }
 }
 
 pub(crate) struct OpenResponse {
@@ -82,6 +104,7 @@ pub(crate) struct Inner {
     pub(crate) client: ThreadClient,
     pub(crate) outcome_wait: Duration,
     pub(crate) retry_wait: Duration,
+    pub(crate) keepalive_interval: Duration,
     pub(crate) store: Arc<dyn QueueStore>,
     pub(crate) write_context: WriteContextFn,
     pub(crate) slots: Mutex<HashMap<ThreadRef, Arc<Slot>>>,

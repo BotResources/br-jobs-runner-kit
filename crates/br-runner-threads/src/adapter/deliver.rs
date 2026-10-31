@@ -68,9 +68,9 @@ impl Inner {
         {
             let mut queue = locked(&slot.queue);
             queue.items.pop_front();
-            match how {
-                Ended::Delivered => queue.last_failure = None,
-                Ended::Refused | Ended::Unsent => queue.dropped.extend(head.item.entries.iter()),
+            queue.last_failure = None;
+            if how != Ended::Delivered {
+                queue.dropped.extend(head.item.entries.iter());
             }
         }
         slot.bump();

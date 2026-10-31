@@ -63,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = ThreadAccessSettings {
         outcome_wait: Duration::from_secs(10),
         retry_wait: Duration::from_secs(1),
+        keepalive_interval: Duration::from_secs(30),
         store: Arc::new(MemoryQueueStore::new()),
         observer: Arc::new(IgnoreReports),
         write_context,

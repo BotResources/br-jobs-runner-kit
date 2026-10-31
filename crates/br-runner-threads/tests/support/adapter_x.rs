@@ -141,6 +141,7 @@ pub fn settings_for(
     ThreadAccessSettings {
         outcome_wait: Duration::from_secs(5),
         retry_wait: Duration::from_millis(20),
+        keepalive_interval: Duration::from_secs(3600),
         store,
         observer: recorder,
         write_context,
@@ -189,4 +190,30 @@ pub async fn rig_with_context(context: WriteContext) -> Rig {
 pub async fn rig_with_store(store: Arc<dyn QueueStore>) -> Rig {
     let agent = agent_id();
     rig_over(store, fixed_context(context_of(agent)), agent).await
+}
+
+pub async fn rig_keeping_alive(
+    interval: Duration,
+    store: Arc<dyn QueueStore>,
+    threads: MemoryThreads,
+) -> Rig {
+    let agent = agent_id();
+    let recorder = Arc::new(Recorder::default());
+    let settings = ThreadAccessSettings {
+        keepalive_interval: interval,
+        ..settings_for(
+            store,
+            Arc::clone(&recorder),
+            fixed_context(context_of(agent)),
+        )
+    };
+    let adapter = ThreadAccessAdapter::new(&threads.client(), settings)
+        .await
+        .expect("adapter");
+    Rig {
+        threads,
+        recorder,
+        adapter,
+        agent,
+    }
 }

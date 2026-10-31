@@ -108,6 +108,7 @@ pub async fn build_adapter(
         ThreadAccessSettings {
             outcome_wait: Duration::from_secs(5),
             retry_wait: Duration::from_millis(20),
+            keepalive_interval: Duration::from_secs(3600),
             store,
             observer,
             write_context: write_context(agent),

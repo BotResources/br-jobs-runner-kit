@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use br_agentic_contract::{AiTurnRef, PortError, ThreadRef};
 use contract_threads::{AiDelivery, AiTurn, Chunk};
@@ -89,6 +90,8 @@ impl Inner {
                 agent: turn.agent,
                 chunks: Vec::new(),
                 closed: false,
+                last_item_at: Instant::now(),
+                keepalive: self.start_keepalives(slot, message),
             },
         );
         Ok(())
@@ -101,6 +104,7 @@ impl Inner {
         message: Uuid,
         entries: Vec<Uuid>,
         chunk: Chunk,
+        item_id: Uuid,
     ) -> Result<(), Error> {
         let state = mem.turns.get_mut(&message).ok_or(Error::StreamClosed)?;
         if state.closed {
@@ -109,7 +113,7 @@ impl Inner {
         let seq =
             u64::try_from(state.chunks.len()).map_err(|_| Error::invalid("too many chunks"))?;
         let item = Item {
-            id: Uuid::now_v7(),
+            id: item_id,
             thread: slot.thread.as_uuid(),
             agent: state.agent.as_uuid(),
             message,
@@ -122,6 +126,7 @@ impl Inner {
         };
         self.accept(slot, item).await?;
         state.chunks.push(chunk);
+        state.last_item_at = Instant::now();
         Ok(())
     }
 

@@ -50,14 +50,12 @@ impl Inner {
             })?;
             let item = Inner::closing_item(&slot, command, turn.agent.as_uuid(), message);
             inner.accept(&slot, item).await?;
-            mem.turns
+            let state = mem
+                .turns
                 .entry(message)
-                .or_insert_with(|| TurnState {
-                    agent: turn.agent,
-                    chunks: Vec::new(),
-                    closed: true,
-                })
-                .closed = true;
+                .or_insert_with(|| TurnState::closed_by(turn.agent));
+            state.closed = true;
+            state.keepalive = None;
             Ok(())
         })
         .await

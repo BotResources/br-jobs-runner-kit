@@ -43,6 +43,7 @@ impl WriteContextFn {
 pub struct ThreadAccessSettings {
     pub outcome_wait: Duration,
     pub retry_wait: Duration,
+    pub keepalive_interval: Duration,
     pub store: Arc<dyn QueueStore>,
     pub observer: Arc<dyn QueueObserver>,
     pub write_context: WriteContextFn,

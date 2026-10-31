@@ -41,6 +41,7 @@ impl DeltaLane for QueueLane {
                     self.message,
                     vec![delta.entry().as_uuid()],
                     chunk,
+                    Uuid::now_v7(),
                 )
                 .await
         })
