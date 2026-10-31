@@ -137,3 +137,40 @@ async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed
             .any(|fact| matches!(fact, br_runner_jobs::test_double::Fact::Completed { .. }))
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run_fails_with_panic_and_the_next_run_is_served()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.graphql_default(writes_ok());
+    jobs.push_trigger(sync_trigger(1));
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = std::sync::Arc::clone(&calls);
+    let running = run(
+        &jobs,
+        |b| b,
+        1,
+        args(single(Behavior::Result("x")), false).with_answer(move |_state| {
+            if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                panic!("the answer panics");
+            }
+            Ok(Content {
+                message: "fine".to_owned(),
+                attachments: Vec::new(),
+            })
+        }),
+    );
+    until(|| has_terminal(&jobs)).await;
+    assert_eq!(failed_fact(&jobs).expect("failed").reason_code, "panic");
+    jobs.push_trigger(sync_trigger(2));
+    until(|| {
+        kinds(&jobs)
+            .iter()
+            .filter(|kind| **kind == "completed")
+            .count()
+            == 1
+    })
+    .await;
+    running.stop().await;
+}

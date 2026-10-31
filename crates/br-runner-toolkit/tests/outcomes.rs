@@ -217,3 +217,32 @@ async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_t
         "start_refused"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn given_a_run_start_function_that_panics_when_a_trigger_arrives_then_the_run_fails_with_panic_and_the_next_run_is_served()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.push_trigger(trigger(1));
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = std::sync::Arc::clone(&calls);
+    let args = StartArgs::new(
+        single(Behavior::Result("x")),
+        run_start(move |_input| {
+            let first = counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
+            async move {
+                if first {
+                    panic!("the start panics");
+                }
+                Ok::<_, RunRefusal>(StartedRun::new(Flow::default(), vec!["work".to_owned()]))
+            }
+        }),
+        false,
+    );
+    let running = run(&jobs, |b| b, 1, args);
+    until(|| has_terminal(&jobs)).await;
+    assert_eq!(failed_fact(&jobs).expect("failed").reason_code, "panic");
+    jobs.push_trigger(trigger(2));
+    until(|| kinds(&jobs).contains(&"completed")).await;
+    running.stop().await;
+}

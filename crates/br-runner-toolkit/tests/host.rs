@@ -1,10 +1,11 @@
 mod support;
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use br_runner_jobs::test_double::ScriptedJobs;
 use br_runner_jobs::{CancelEvent, PresenceStatus};
-use br_runner_toolkit::{HostEvent, Settings, TestHost};
+use br_runner_toolkit::{HostEvent, InstanceEnded, Settings, TestHost, lifecycle_hook};
 use support::*;
 
 fn host_settings() -> br_runner_toolkit::SettingsBuilder {
@@ -117,4 +118,75 @@ async fn given_invalid_settings_when_a_test_host_is_made_then_it_is_an_error() {
     .err()
     .expect("an error");
     assert_eq!(error.code(), br_runner_toolkit::ErrorCode::SettingMissing);
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_cancel_handle_taken_first_when_a_hook_is_added_then_the_hook_is_still_called() {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.push_trigger(trigger(1));
+    let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
+    let seen = Arc::clone(&calls);
+    let hook = lifecycle_hook(move |ended| {
+        let seen = Arc::clone(&seen);
+        async move {
+            seen.lock().expect("lock").push(ended);
+        }
+    });
+    let host = TestHost::new(
+        jobs.client(),
+        host_settings(),
+        args(single(Behavior::Result("x")), false),
+    )
+    .expect("a host");
+    let _cancel = host.cancel_handle();
+    let host = host.with_lifecycle_hook(hook);
+    host.run().await.expect("a run");
+    let calls = calls.lock().expect("lock");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].node, "work");
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_presence_ttl_that_cannot_be_read_when_the_host_runs_then_it_returns_an_error_and_does_not_hang()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.push_trigger(trigger(1));
+    jobs.set_presence_ttl(Err(br_runner_jobs::Error::Unreadable("ttl".to_owned())));
+    let host = TestHost::new(
+        jobs.client(),
+        host_settings(),
+        args(single(Behavior::Result("x")), false),
+    )
+    .expect("a host");
+    let result = tokio::time::timeout(Duration::from_secs(60), host.run())
+        .await
+        .expect("the host returned");
+    assert!(result.is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_test_host_when_the_ttl_is_ninety_seconds_then_presence_is_published_at_every_third_of_the_ttl()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.push_trigger(trigger(1));
+    let host = TestHost::new(
+        jobs.client(),
+        host_settings(),
+        args(single(Behavior::UntilCancelled), false),
+    )
+    .expect("a host");
+    let cancel = host.cancel_handle();
+    let handle = tokio::spawn(host.run());
+    quiet_for(Duration::from_secs(29)).await;
+    let published = |jobs: &ScriptedJobs| jobs.presence_records().len();
+    let first = published(&jobs);
+    quiet_for(Duration::from_secs(2)).await;
+    assert_eq!(published(&jobs), first + 1);
+    quiet_for(Duration::from_secs(30)).await;
+    assert_eq!(published(&jobs), first + 2);
+    cancel.cancel();
+    let _ = handle.await;
 }
