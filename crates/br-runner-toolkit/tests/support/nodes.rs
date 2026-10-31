@@ -47,6 +47,7 @@ pub struct Agent {
     pub lookup: br_runner_toolkit::InstanceLookup,
     pub label: &'static str,
     pub inbox: bool,
+    pub seen_run: Arc<std::sync::Mutex<Option<uuid::Uuid>>>,
 }
 
 pub struct Worker {
@@ -77,6 +78,8 @@ impl Node<Flow> for Worker {
             tokio::spawn(async move {
                 if let Some(agent) = agent {
                     let book = agent.lookup.book(id).await.expect("a book");
+                    let context = agent.lookup.run_context(id).await.expect("a context");
+                    *agent.seen_run.lock().expect("lock") = Some(context.run_id());
                     let label = br_agentic_contract::AgentLabel::new(agent.label).expect("label");
                     let entry = if agent.inbox {
                         br_runner_jobs::NodeEntry::with_inbox(

@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 ```
 
-Two more examples: `restartable_agent` (an instance lookup, a lifecycle hook, a restartable runner and a custom answer) and `test_host` (one run under `TestHost`). The tests run all three.
+Two more examples: `restartable_agent` (an instance lookup, a lifecycle hook, a restartable runner and a custom answer) and `test_host` (one run under `TestHost`). The tests run all three, and the first in push mode and in claim mode.
 
 ## What the runner does
 
@@ -135,7 +135,7 @@ For each Run the runner, in this order: registers the Run (a cancel order alread
 
 ### Lookup and hooks
 
-`RunnerBuilder::instance_lookup` gives an `InstanceLookup` a node uses, while it creates its instance, to get the `AgentBook` and the `RunContext` of its Run from an `InstanceId`, and the `BookLookup` that `br-runner-jobs` needs to make an agent entry. Before `start` the lookup returns `NotStarted`. For an instance the runner does not yet hold it waits. After the Run ended it returns `InstanceEnded`. A `RunContext` holds weak references: author code cannot keep a Run alive with it, and its calls return an error after the Run ended.
+`RunnerBuilder::instance_lookup` gives an `InstanceLookup` a node uses, while it creates its instance, to get the `AgentBook` and the `RunContext` of its Run from an `InstanceId`, and the `BookLookup` that `br-runner-jobs` needs to make an agent entry. Before `start` the lookup returns `NotStarted`. For an instance the runner does not hold it waits, and that includes the instances of a Run the runner has dropped. Between the return of the executor (or the abort of a drain) and the drop of the Run it returns `InstanceEnded`. A `RunContext` holds weak references to the delivery queue and the agent book: author code cannot keep a Run alive with it, and `agent_book`, `caller_handle`, `plan_declared` and `step_started` return an error after the Run ended. Its other calls (the ids, `passport`, `payload`, `log`, `mail_handle`) go on working.
 
 A lifecycle hook runs once for each instance when the executor has returned for it, with the node name and the agents the instance registered. The Run is not settled until every hook has returned.
 

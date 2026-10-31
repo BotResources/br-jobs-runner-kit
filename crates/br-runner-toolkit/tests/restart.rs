@@ -184,6 +184,7 @@ fn inbox_agent(builder: &RunnerBuilder, inbox: bool) -> Agent {
         lookup: builder.instance_lookup(),
         label: "main",
         inbox,
+        seen_run: Default::default(),
     }
 }
 

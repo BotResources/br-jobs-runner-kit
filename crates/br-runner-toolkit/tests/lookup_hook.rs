@@ -57,17 +57,65 @@ async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_b
         lookup: builder.instance_lookup(),
         label: "main",
         inbox: true,
+        seen_run: Default::default(),
     };
+    let seen = Arc::clone(&agent.seen_run);
     let shutdown = CancellationToken::new();
     let done = tokio::spawn(builder.start(
         args(agent_graph(Behavior::Result("x"), agent), false).with_shutdown(shutdown.clone()),
     ));
     until(|| has_terminal(&jobs)).await;
+    shutdown.cancel();
+    done.await.expect("joined").expect("started");
+    assert_eq!(*seen.lock().expect("lock"), Some(id(101)));
     let registered = jobs
         .calls()
         .into_iter()
-        .any(|call| matches!(call, br_runner_jobs::test_double::Call::Register { .. }));
+        .any(|call| matches!(call, br_runner_jobs::test_double::Call::Register { run_id, .. } if run_id == id(101)));
     assert!(registered);
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_an_instance_whose_executor_returned_when_it_is_looked_up_then_the_error_is_instance_ended_and_after_the_run_is_dropped_the_lookup_waits()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.push_trigger(trigger(1));
+    let release = Arc::new(Notify::new());
+    let gate = Arc::clone(&release);
+    let ended: Arc<Mutex<Option<InstanceId>>> = Arc::default();
+    let capture = Arc::clone(&ended);
+    let hook = lifecycle_hook(move |event| {
+        let gate = Arc::clone(&gate);
+        let capture = Arc::clone(&capture);
+        async move {
+            *capture.lock().expect("lock") = Some(event.instance_id);
+            gate.notified().await;
+        }
+    });
+    let builder = RunnerBuilder::new(jobs.client(), settings(1)).with_lifecycle_hook(hook);
+    let lookup = builder.instance_lookup();
+    let agent = Agent {
+        lookup: lookup.clone(),
+        label: "main",
+        inbox: false,
+        seen_run: Default::default(),
+    };
+    let shutdown = CancellationToken::new();
+    let done = tokio::spawn(builder.start(
+        args(agent_graph(Behavior::Result("x"), agent), false).with_shutdown(shutdown.clone()),
+    ));
+    until(|| ended.lock().expect("lock").is_some()).await;
+    let instance = ended.lock().expect("lock").expect("an id");
+    let book = lookup.book(instance).await.expect_err("an error");
+    assert_eq!(book.code(), ErrorCode::InstanceEnded);
+    let context = lookup.run_context(instance).await.expect_err("an error");
+    assert_eq!(context.code(), ErrorCode::InstanceEnded);
+    release.notify_waiters();
+    until(|| has_terminal(&jobs)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let waited = tokio::time::timeout(Duration::from_secs(30), lookup.book(instance)).await;
+    assert!(waited.is_err());
     shutdown.cancel();
     done.await.expect("joined").expect("started");
 }
@@ -91,6 +139,7 @@ async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_on
         lookup: builder.instance_lookup(),
         label: "main",
         inbox: true,
+        seen_run: Default::default(),
     };
     let shutdown = CancellationToken::new();
     let done = tokio::spawn(builder.start(
@@ -127,6 +176,7 @@ async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_
         lookup: builder.instance_lookup(),
         label: "main",
         inbox: false,
+        seen_run: Default::default(),
     };
     let shutdown = CancellationToken::new();
     let done = tokio::spawn(builder.start(
@@ -157,6 +207,7 @@ async fn given_a_hook_that_panics_when_an_instance_ends_then_the_panic_is_caught
         lookup: builder.instance_lookup(),
         label: "main",
         inbox: false,
+        seen_run: Default::default(),
     };
     let shutdown = CancellationToken::new();
     let done = tokio::spawn(builder.start(
