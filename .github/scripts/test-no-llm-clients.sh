@@ -39,6 +39,21 @@ with open(target, "w") as handle:
 PY
 }
 
+write_kinds() {
+    local target="$1" root="$2" edges="$3"
+    python3 -I - "$target" "$root" "$edges" <<'PY'
+import json
+import sys
+
+target, root, edges = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+ids = sorted({name for name in edges} | {dep for deps in edges.values() for dep, _ in deps})
+packages = [{"id": f"id-{name}", "name": name} for name in ids]
+nodes = [{"id": f"id-{name}", "deps": [{"pkg": f"id-{dep}", "dep_kinds": [{"kind": kind, "target": None}]} for dep, kind in edges.get(name, [])]} for name in ids]
+with open(target, "w") as handle:
+    json.dump({"packages": packages, "workspace_members": [f"id-{root}"], "resolve": {"nodes": nodes}}, handle)
+PY
+}
+
 clean="$WORK/clean.json"
 write_metadata "$clean" '{"br-runner-connection": ["tokio", "async-nats"], "tokio": ["bytes"]}'
 expect 0 "reaches no br-llm-clients* library" "a crate with no family library passes" \
@@ -80,9 +95,54 @@ expect 0 "reaches no br-llm-clients* library" "a sibling crate may depend on the
 expect 1 "is not exactly one workspace member" "an unknown crate fails" \
     env CARGO_METADATA_FILE="$clean" bash "$GATE" br-no-such-crate
 
+core_only="$WORK/core-only.json"
+write_kinds "$core_only" br-runner-jobs '{"br-runner-jobs": [["contract", null]], "contract": [["br-llm-clients-core", null]]}'
+expect 0 "reaches only the allowed br-llm-clients* libraries: br-llm-clients-core" "a library reached through a dependency passes when it is allowed" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs --allow br-llm-clients-core
+expect 1 "br-llm-clients-core (br-llm-clients-core <- contract <- br-runner-jobs)" "the same library fails without the allow list" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs
+expect 1 "br-llm-clients-core (br-llm-clients-core <- contract <- br-runner-jobs)" "a library allowed only for dev fails when a normal edge reaches it" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs --allow-dev br-llm-clients-core
+
+other_family="$WORK/other-family.json"
+write_kinds "$other_family" br-runner-jobs '{"br-runner-jobs": [["contract", null]], "contract": [["br-llm-clients-core", null], ["br-llm-clients-common-http", null]]}'
+expect 1 "br-llm-clients-common-http (br-llm-clients-common-http <- contract <- br-runner-jobs)" "a family library outside the allow list fails beside an allowed one" \
+    env CARGO_METADATA_FILE="$other_family" bash "$GATE" br-runner-jobs --allow br-llm-clients-core
+
+deep="$WORK/deep.json"
+write_kinds "$deep" br-runner-jobs '{"br-runner-jobs": [["a", null]], "a": [["b", null]], "b": [["br-llm-clients-mock", null]]}'
+expect 1 "br-llm-clients-mock (br-llm-clients-mock <- b <- a <- br-runner-jobs)" "a deep dependency on a library that is not allowed fails" \
+    env CARGO_METADATA_FILE="$deep" bash "$GATE" br-runner-jobs --allow br-llm-clients-core
+
+mock_dev="$WORK/mock-dev.json"
+write_kinds "$mock_dev" br-runner-jobs '{"br-runner-jobs": [["contract", null], ["br-llm-clients-mock", "dev"]], "contract": [["br-llm-clients-core", null]], "br-llm-clients-mock": [["br-llm-clients-core", null]]}'
+expect 0 "reaches only the allowed br-llm-clients* libraries: br-llm-clients-core, br-llm-clients-mock" "a mock reached only as a dev-dependency passes when it is allowed for dev" \
+    env CARGO_METADATA_FILE="$mock_dev" bash "$GATE" br-runner-jobs --allow br-llm-clients-core --allow-dev br-llm-clients-mock
+expect 1 "br-llm-clients-mock (br-llm-clients-mock <- br-runner-jobs)" "a mock reached as a dev-dependency fails when it is not allowed" \
+    env CARGO_METADATA_FILE="$mock_dev" bash "$GATE" br-runner-jobs --allow br-llm-clients-core
+
+mock_normal="$WORK/mock-normal.json"
+write_kinds "$mock_normal" br-runner-jobs '{"br-runner-jobs": [["br-llm-clients-mock", null]]}'
+expect 1 "br-llm-clients-mock (br-llm-clients-mock <- br-runner-jobs)" "a mock reached as a normal dependency fails when it is allowed for dev only" \
+    env CARGO_METADATA_FILE="$mock_normal" bash "$GATE" br-runner-jobs --allow-dev br-llm-clients-mock
+
+expect 1 "is not a br-llm-clients* library" "an allowed name outside the family fails" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs --allow tokio
+expect 2 "unknown argument --permit" "an unknown option fails" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs --permit br-llm-clients-core
+expect 2 "--allow needs a library name" "an allow option with no name fails" \
+    env CARGO_METADATA_FILE="$core_only" bash "$GATE" br-runner-jobs --allow
+expect 1 "cannot read the cargo metadata" "malformed JSON fails with an allow list" \
+    env CARGO_METADATA_FILE="$malformed" bash "$GATE" br-runner-jobs --allow br-llm-clients-core
+
 ROOT="$(cd "$HERE/../.." && pwd)"
 expect 0 "reaches no br-llm-clients* library" "the real br-runner-connection reaches no family library" \
     bash -c 'cd "$1" && bash "$2" br-runner-connection' _ "$ROOT" "$GATE"
+
+expect 0 "reaches only the allowed br-llm-clients* libraries: br-llm-clients-core" "the real br-runner-jobs reaches only br-llm-clients-core" \
+    bash -c 'cd "$1" && bash "$2" br-runner-jobs --allow br-llm-clients-core' _ "$ROOT" "$GATE"
+expect 1 "br-llm-clients-core" "the real br-runner-jobs fails without the allow list" \
+    bash -c 'cd "$1" && bash "$2" br-runner-jobs' _ "$ROOT" "$GATE"
 
 echo
 if [[ "$failures" -gt 0 ]]; then

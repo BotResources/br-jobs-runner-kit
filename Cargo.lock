@@ -183,6 +183,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-core-auth"
+version = "0.1.0"
+source = "git+https://github.com/BotResources/br-rust-common?tag=br-core-auth%2Fv0.1.0#7f028db1498ded2b3c5469bb2baa8e52597100b8"
+dependencies = [
+ "base64 0.22.1",
+ "br-core-kernel",
+ "br-core-scope",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "br-core-events"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/br-rust-common?tag=br-core-events%2Fv0.1.0#7f028db1498ded2b3c5469bb2baa8e52597100b8"
@@ -216,6 +231,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-core-scope"
+version = "0.1.0"
+source = "git+https://github.com/BotResources/br-rust-common?tag=br-core-scope%2Fv0.1.0#d7fd2f174735b5c6a24cc87b41daaa0ea890baaa"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "br-graph-contract"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-graph-contract%2Fv0.1.0#c19d55c290e3a0566389a5254d3e413068383c3f"
@@ -241,7 +265,7 @@ dependencies = [
  "async-nats",
  "br-jobs-runner-core",
  "chrono",
- "contract-jobs",
+ "contract-jobs 0.1.0",
  "futures",
  "serde",
  "serde_json",
@@ -294,6 +318,29 @@ dependencies = [
  "tokio-rustls",
  "uuid",
  "webpki-roots 1.0.11",
+]
+
+[[package]]
+name = "br-runner-jobs"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "br-agentic-contract",
+ "br-core-auth",
+ "br-core-kernel",
+ "br-llm-messages",
+ "br-runner-connection",
+ "br-runner-jobs",
+ "br-util-nats-fabric",
+ "chrono",
+ "contract-jobs 0.7.0",
+ "futures",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]
@@ -410,6 +457,18 @@ name = "contract-jobs"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/svc-jobs?tag=contract-jobs%2Fv0.1.0#4a2ba22f75b671792cf5dd7121e1819a68397159"
 dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "contract-jobs"
+version = "0.7.0"
+source = "git+https://github.com/BotResources/svc-jobs?tag=contract-jobs%2Fv0.7.0#fdbc11cb313a175dabc83812b5d8edc9bed89765"
+dependencies = [
+ "br-core-integration",
  "chrono",
  "serde",
  "serde_json",
