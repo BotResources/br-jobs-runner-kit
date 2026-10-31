@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use br_util_nats_fabric::{
-    ConsumeErrorKind, EventConsumer, EventCoords, Fabric, FabricError, INTEGRATION_EVT,
+    ConsumeErrorKind, Delivered, EventConsumer, EventCoords, Fabric, FabricError, INTEGRATION_EVT,
+    IntegrationEvent,
 };
 use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrived};
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
@@ -26,10 +27,17 @@ struct Route {
     sender: mpsc::UnboundedSender<Item>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Consumer {
+    Closed,
+    Open,
+    Failed,
+}
+
 struct Routes {
     next: u64,
     open: HashMap<u64, Route>,
+    consumer: Consumer,
 }
 
 pub(super) struct Arrivals {
@@ -71,7 +79,11 @@ impl Arrivals {
                 runner_type.len()
             ),
             slot: AsyncMutex::new(Slot::Closed),
-            routes: Mutex::new(Routes::default()),
+            routes: Mutex::new(Routes {
+                next: 0,
+                open: HashMap::new(),
+                consumer: Consumer::Closed,
+            }),
         })
     }
 
@@ -82,18 +94,7 @@ impl Arrivals {
     }
 
     pub(super) async fn open(self: &Arc<Self>, run_id: Uuid) -> Result<ArrivalFeed, Error> {
-        {
-            let mut slot = self.slot.lock().await;
-            if !matches!(*slot, Slot::Open(_)) {
-                *slot = Slot::Closed;
-                let consumer = self
-                    .fabric
-                    .ensure_event_consumer::<RunItemArrived>(&self.coords, &self.durable)
-                    .await
-                    .map_err(consume_error)?;
-                *slot = Slot::Open(Box::new(consumer));
-            }
-        }
+        self.ensure_consumer().await?;
         let (sender, receiver) = mpsc::unbounded_channel();
         let mut routes = self.routes();
         routes.next += 1;
@@ -104,6 +105,26 @@ impl Arrivals {
             id,
             receiver,
         })
+    }
+
+    async fn ensure_consumer(&self) -> Result<(), Error> {
+        if self.routes().consumer == Consumer::Open {
+            return Ok(());
+        }
+        let mut slot = self.slot.lock().await;
+        if self.routes().consumer == Consumer::Open {
+            return Ok(());
+        }
+        *slot = Slot::Closed;
+        self.routes().consumer = Consumer::Closed;
+        let consumer = self
+            .fabric
+            .ensure_event_consumer::<RunItemArrived>(&self.coords, &self.durable)
+            .await
+            .map_err(consume_error)?;
+        *slot = Slot::Open(Box::new(consumer));
+        self.routes().consumer = Consumer::Open;
+        Ok(())
     }
 
     fn send_to_run(&self, run_id: Uuid, item: &Item) {
@@ -133,44 +154,49 @@ impl Arrivals {
         }
     }
 
-    async fn pump(&self, slot: &mut Slot) -> Result<(), Error> {
-        let consumer = match slot {
+    async fn take(&self) -> Result<Option<Delivered<IntegrationEvent<RunItemArrived>>>, Error> {
+        let mut slot = self.slot.lock().await;
+        let consumer = match &mut *slot {
             Slot::Open(consumer) => consumer,
             Slot::Failed(error) => return Err(error.clone()),
             Slot::Closed => return Err(Error::lost("the arrival consumer is not open")),
         };
-        let outcome = consumer.recv().await;
-        let failure = match outcome {
-            Ok(Some(delivered)) => {
-                match delivered.payload() {
-                    Ok(event) => {
-                        let arrived = &event.payload;
-                        self.send_to_run(
-                            arrived.run_id,
-                            &Ok(ItemArrived {
-                                address: arrived.address,
-                                item_id: arrived.item_id,
-                                kind: kind_of(arrived.item_kind),
-                            }),
-                        );
-                        let _ = delivered.ack().await;
-                    }
-                    Err(e) => {
-                        self.send_to_all(&Err(Error::Unreadable(e.to_string())));
-                        let _ = delivered.term().await;
-                    }
-                }
-                return Ok(());
-            }
+        let failure = match consumer.recv().await {
+            Ok(Some(delivered)) => return Ok(Some(delivered)),
             Ok(None) => Error::lost("the arrival consumer ended"),
             Err(FabricError::Consume {
                 kind: ConsumeErrorKind::HeartbeatMissed,
                 ..
-            }) => return Ok(()),
+            }) => return Ok(None),
             Err(error) => self.failure(error).await,
         };
         *slot = Slot::Failed(failure.clone());
+        self.routes().consumer = Consumer::Failed;
         Err(failure)
+    }
+
+    async fn pump(&self) -> Result<(), Error> {
+        let Some(delivered) = self.take().await? else {
+            return Ok(());
+        };
+        match delivered.payload() {
+            Ok(event) => {
+                let arrived = ItemArrived {
+                    address: event.payload.address,
+                    item_id: event.payload.item_id,
+                    kind: kind_of(event.payload.item_kind),
+                };
+                let run_id = event.payload.run_id;
+                let _ = delivered.ack().await;
+                self.send_to_run(run_id, &Ok(arrived));
+            }
+            Err(e) => {
+                let unreadable = Error::Unreadable(e.to_string());
+                let _ = delivered.term().await;
+                self.send_to_all(&Err(unreadable));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -189,9 +215,7 @@ impl RawFeed<ItemArrived> for ArrivalFeed {
                     item = self.receiver.recv() => {
                         return item.unwrap_or_else(|| Err(Error::lost("the arrival feed was closed")));
                     }
-                    mut slot = self.arrivals.slot.lock() => {
-                        self.arrivals.pump(&mut slot).await?;
-                    }
+                    pumped = self.arrivals.pump() => pumped?,
                 }
             }
         })

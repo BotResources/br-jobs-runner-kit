@@ -192,3 +192,32 @@ async fn given_an_open_feed_when_the_event_stream_is_deleted_then_the_feed_ends_
     let again = next(&mut feed).await.expect_err("still ended");
     assert_eq!(again, error);
 }
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_a_feed_waiting_with_no_arrival_when_a_second_feed_opens_then_it_opens_without_waiting()
+ {
+    let world = World::ready().await;
+    let live = std::sync::Arc::new(live(&world, "analyst", "pod-1").await);
+    let (run_a, run_b) = (Uuid::now_v7(), Uuid::now_v7());
+    let mut feed_a = live
+        .arrival_feed(run_a)
+        .await
+        .map_err(|e| e.to_string())
+        .expect("feed");
+    let waiting = tokio::spawn(async move { feed_a.next().await });
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let opened =
+        tokio::time::timeout(std::time::Duration::from_secs(5), live.arrival_feed(run_b)).await;
+    waiting.abort();
+    let mut feed_b = opened
+        .expect("the second feed opened while the first one waits")
+        .map_err(|e| e.to_string())
+        .expect("feed");
+    let item_id = Uuid::now_v7();
+    arrive(&world, run_b, item_id, WireKind::Mail, None).await;
+    assert_eq!(
+        next(&mut feed_b).await.map(|item| item.item_id),
+        Ok(item_id)
+    );
+}
