@@ -18,3 +18,4 @@ First release. The main loop of a runner with the jobs service: registration thr
 - `DrainReport` and `DrainedRun`.
 - Feature `test-host`: `TestHost`, `HostRun`, `HostEvent`, `HostCancel`. The host uses the clock of the runtime of the test and turns on no feature of tokio.
 - Four examples: `serve_push` and `serve_claim` over `shared/serve.rs` (the quickstart of the README, checked word for word by a test), `restartable_agent` (a tool that reads the run context from the lookup, a gate for the inbox, a lifecycle hook, with stand-ins for the threads service) and `test_host`; the tests run all four.
+- The companion Helm library chart `br-runner-toolkit-chart`: one required value for each setting, no default, with a schema; a test checks that its values are exactly the settings.

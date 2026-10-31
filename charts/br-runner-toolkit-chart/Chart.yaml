@@ -1,0 +1,15 @@
+apiVersion: v2
+name: br-runner-toolkit-chart
+description: The values of the settings of br-runner-toolkit at the level of the runner, written once as one named template and consumed by a thin chart of each runner. Named after its library; it has its own version line. The library gives no default for any value.
+type: library
+version: 0.1.0
+home: https://github.com/BotResources/br-jobs-runner-kit
+sources:
+  - https://github.com/BotResources/br-jobs-runner-kit
+maintainers:
+  - name: BotResources
+    url: https://github.com/BotResources
+keywords:
+  - runner
+  - settings
+  - library

@@ -1,1 +1,3 @@
 /target
+/charts/*/ci/*/charts
+/charts/*/ci/*/Chart.lock

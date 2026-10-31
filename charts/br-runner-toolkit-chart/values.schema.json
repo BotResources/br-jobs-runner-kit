@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "runner_version",
+    "max_concurrent_runs",
+    "ack_wait",
+    "drain_timeout",
+    "cancel_grace",
+    "claim_wait",
+    "outcome_wait",
+    "retry_wait"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "runner_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The version of the runner, published in the presence"
+    },
+    "max_concurrent_runs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The number of run slots"
+    },
+    "ack_wait": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Milliseconds"
+    },
+    "drain_timeout": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Milliseconds"
+    },
+    "cancel_grace": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Milliseconds"
+    },
+    "claim_wait": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Milliseconds"
+    },
+    "outcome_wait": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Milliseconds"
+    },
+    "retry_wait": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Milliseconds"
+    },
+    "global": {
+      "type": "object"
+    }
+  }
+}

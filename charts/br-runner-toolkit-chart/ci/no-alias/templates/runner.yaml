@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-runner
+spec:
+  selector:
+    matchLabels:
+      app: example-runner
+  template:
+    metadata:
+      labels:
+        app: example-runner
+    spec:
+      containers:
+        - name: runner
+          image: ghcr.io/example/runner:1.0.0
+          env:
+            {{- include "br-runner-toolkit-chart.env" . | nindent 12 }}
