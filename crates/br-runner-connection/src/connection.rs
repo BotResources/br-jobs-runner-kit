@@ -1,14 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_nats::Client;
 use br_core_kernel::ServiceAccountId;
-use br_util_nats_fabric::Fabric;
 use bytes::Bytes;
 use http::HeaderValue;
 use serde_json::{Value, json};
 
-use crate::bus;
+use crate::bus::{self, Client};
 use crate::credential::{Credential, CredentialFailure};
 use crate::endpoint::Endpoint;
 use crate::error::Error;
@@ -20,7 +18,6 @@ struct Inner {
     secure: bool,
     credential: Arc<dyn Credential>,
     bus: Client,
-    fabric: Fabric,
     service_account: ServiceAccountId,
     reply_wait: Duration,
 }
@@ -53,14 +50,12 @@ impl Connection {
         }
         let endpoint = Endpoint::parse(endpoint)?;
         let secure = endpoint.secure;
-        let fabric = Fabric::new(async_nats::jetstream::new(bus.clone()));
         Ok(Self {
             inner: Arc::new(Inner {
                 gateway: Gateway::new(endpoint, default_config()),
                 secure,
                 credential,
                 bus,
-                fabric,
                 service_account,
                 reply_wait,
             }),
@@ -76,26 +71,21 @@ impl Connection {
     }
 
     pub async fn graphql(&self, document: &str, variables: Value) -> Result<Value, Error> {
+        let body = graphql_body(document, variables)?;
         let token = self
             .inner
             .credential
             .token()
             .await
             .map_err(Error::Credential)?;
-        let secret = token.expose();
-        let authorization = bearer(secret).map_err(Error::Credential)?;
-        let body = serde_json::to_vec(&json!({ "query": document, "variables": variables }))
-            .map_err(|e| Error::InvalidInput(e.to_string()))?;
-        let outcome = match self
+        let authorization = bearer(token.expose()).map_err(Error::Credential)?;
+        drop(token);
+        let reply = self
             .inner
             .gateway
             .post(authorization, body, self.inner.reply_wait)
-            .await
-        {
-            Ok(reply) => judge(reply),
-            Err(error) => Err(error),
-        };
-        outcome.map_err(|error| error.scrubbed(secret))
+            .await?;
+        judge(reply)
     }
 
     pub async fn bus_request(
@@ -104,8 +94,25 @@ impl Connection {
         body: Bytes,
         wait: Duration,
     ) -> Result<Bytes, Error> {
-        bus::request(&self.inner.fabric, &self.inner.bus, subject, body, wait).await
+        bus::request(&self.inner.bus, subject, body, wait).await
     }
+}
+
+fn graphql_body(document: &str, variables: Value) -> Result<Vec<u8>, Error> {
+    if document.is_empty() {
+        return Err(Error::InvalidInput("the document is empty".to_owned()));
+    }
+    let variables = match variables {
+        Value::Null => json!({}),
+        object @ Value::Object(_) => object,
+        _ => {
+            return Err(Error::InvalidInput(
+                "the variables are not a JSON object".to_owned(),
+            ));
+        }
+    };
+    serde_json::to_vec(&json!({ "query": document, "variables": variables }))
+        .map_err(|e| Error::InvalidInput(e.to_string()))
 }
 
 fn bearer(secret: &str) -> Result<HeaderValue, CredentialFailure> {

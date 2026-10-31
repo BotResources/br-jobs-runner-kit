@@ -7,6 +7,7 @@ use crate::credential::CredentialFailure;
 pub enum Cause {
     WaitFired,
     Transport,
+    NoListener,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +25,13 @@ impl Failure {
         }
     }
 
+    pub(crate) fn no_listener(text: impl Into<String>) -> Self {
+        Self {
+            cause: Cause::NoListener,
+            text: text.into(),
+        }
+    }
+
     pub(crate) fn transport(text: impl Into<String>) -> Self {
         Self {
             cause: Cause::Transport,
@@ -37,6 +45,7 @@ impl std::fmt::Display for Failure {
         let cause = match self.cause {
             Cause::WaitFired => "the wait fired",
             Cause::Transport => "the transport failed",
+            Cause::NoListener => "no listener",
         };
         write!(f, "{cause}: {}", self.text)
     }

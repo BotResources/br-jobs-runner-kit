@@ -16,6 +16,10 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
 - `br-runner-connection` 0.1.0 (new library): the one connection of a runner to the platform, a bearer-authenticated GraphQL call and one request-reply on the bus.
 
+### Fixed
+
+- `br-runner-connection` 0.1.1: input checks and error reading fixed (readable `UNAUTHENTICATED`, input checks, subject and size checks of the bus, the text of the service carried as given and no longer redacted, `Cause::NoListener`, the four examples). A dependency gate (`check-no-llm-clients.sh`) forbids any `br-llm-clients*` library in its graph. See `crates/br-runner-connection/CHANGELOG.md`.
+
 ### Security
 
 - `Cargo.lock` only: `rustls` 0.23.43 → 0.23.45 (RUSTSEC-2026-0285, TLS 1.3

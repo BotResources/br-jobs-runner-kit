@@ -33,7 +33,8 @@ async fn failing_with(
 }
 
 #[tokio::test]
-async fn no_text_of_a_failed_call_holds_the_token_whatever_the_failure() {
+async fn no_text_written_by_the_library_holds_the_token_and_the_text_of_the_service_is_carried_as_given()
+ {
     let long = Duration::from_secs(10);
     let echo = format!("echo of {TOKEN} in the text");
     let mut errors = Vec::new();
@@ -95,22 +96,23 @@ async fn no_text_of_a_failed_call_holds_the_token_whatever_the_failure() {
             .expect_err("connect refused"),
     );
     assert!(errors.len() >= 10);
-    for error in &errors {
+    let service_texts = 2;
+    for error in &errors[service_texts..] {
         let text = rendered(error);
         assert!(!text.contains(TOKEN), "a token leaked in {text}");
+    }
+    for error in &errors[..service_texts] {
+        assert!(matches!(error, Error::Refused(_)), "{error:?}");
     }
     let Error::Refused(refusal) = &errors[0] else {
         panic!("expected Refused first, got {:?}", errors[0]);
     };
-    assert!(refusal.message.contains("[redacted]"));
-    assert!(refusal.code.contains("[redacted]"));
-    assert_eq!(
-        refusal.reason.as_deref(),
-        Some("echo of [redacted] in the text")
-    );
+    assert_eq!(refusal.message, echo);
+    assert_eq!(refusal.code, format!("CODE_{TOKEN}"));
+    assert_eq!(refusal.reason.as_deref(), Some(echo.as_str()));
     assert_eq!(
         Value::Object(refusal.params.clone()),
-        json!({ "k": "echo of [redacted] in the text", "list": ["echo of [redacted] in the text"], "key_[redacted]": "v" })
+        json!({ "k": echo, "list": [echo], format!("key_{TOKEN}"): "v" })
     );
 }
 

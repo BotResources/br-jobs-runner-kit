@@ -183,6 +183,8 @@ jobs:
           for crate in $TRACKED_LIBRARIES; do
             bash .github/scripts/check-readme-pins.sh "$crate"
           done
+      - name: br-runner-connection reaches no br-llm-clients library
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-connection
 
   shellcheck:
     name: shellcheck
@@ -210,6 +212,8 @@ jobs:
         run: bash .github/scripts/test-release-order.sh
       - name: a second library joins, a frozen crate stays out
         run: bash .github/scripts/test-second-library.sh
+      - name: test the br-llm-clients dependency gate
+        run: bash .github/scripts/test-no-llm-clients.sh
 
   registry-gate:
     name: registry gate
