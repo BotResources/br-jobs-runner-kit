@@ -1,10 +1,13 @@
 [package]
 name = "br-runner-threads"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Typed client of the Threads service for code that runs inside a runner: threads, whole and streamed messages, annotations, keepalives, closures, the projected context, the title and artifact uploads"
+description = "The Threads side of a runner: the adapters of the thread port and the thread access of the agentic contract, with a durable-ready thread queue, over a typed client of the Threads service"
+
+[features]
+test-double = []
 
 [dependencies]
 async-nats.workspace = true
@@ -12,13 +15,11 @@ br-agentic-contract.workspace = true
 br-core-events.workspace = true
 br-core-integration.workspace = true
 br-core-kernel.workspace = true
-br-llm-clients-common-auth.workspace = true
-br-llm-clients-common-http.workspace = true
 br-llm-messages.workspace = true
+br-runner-connection.workspace = true
 br-util-nats-fabric.workspace = true
 chrono.workspace = true
 contract-threads.workspace = true
-futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -26,4 +27,6 @@ tokio = { workspace = true, features = ["rt", "sync", "time"] }
 uuid.workspace = true
 
 [dev-dependencies]
+br-runner-threads = { path = ".", version = ">=0.2.0", features = ["test-double"] }
+futures.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }

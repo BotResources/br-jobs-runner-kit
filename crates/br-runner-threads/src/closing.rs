@@ -15,8 +15,19 @@ pub enum ClosureKind {
 }
 
 impl ClosureKind {
-    pub(crate) fn is_sealed(self) -> bool {
-        matches!(self, Self::Completed | Self::BudgetExhausted)
+    pub(crate) fn of(reason: &ClosureReason) -> Result<Self, Error> {
+        Ok(match reason {
+            ClosureReason::Completed { .. } => Self::Completed,
+            ClosureReason::Cancelled { .. } => Self::Cancelled,
+            ClosureReason::Interrupted { .. } => Self::Interrupted,
+            ClosureReason::BudgetExhausted { .. } => Self::BudgetExhausted,
+            ClosureReason::Failed { .. } => Self::Failed,
+            _ => {
+                return Err(Error::invalid(
+                    "a closure reason this library does not know",
+                ));
+            }
+        })
     }
 
     pub(crate) fn reason(self, detail: Option<&str>) -> Result<ClosureReason, Error> {
@@ -26,7 +37,8 @@ impl ClosureKind {
             Self::Interrupted => ClosureReason::interrupted(),
             Self::BudgetExhausted => ClosureReason::budget_exhausted(),
             Self::Failed => {
-                let detail = detail.ok_or_else(|| Error::invalid("invalid_content"))?;
+                let detail =
+                    detail.ok_or_else(|| Error::invalid("a Failed closing needs a detail"))?;
                 return ClosureReason::failed(detail).map_err(|e| Error::library(&e));
             }
         };
@@ -40,10 +52,10 @@ impl ClosureKind {
 #[derive(Debug, Clone)]
 pub struct Closing {
     pub command_id: Uuid,
-    pub thread: br_agentic_contract::ThreadRef,
+    pub thread_id: Uuid,
     pub message_id: Uuid,
     pub kind: ClosureKind,
     pub detail: Option<String>,
     pub acting_user_id: Option<Uuid>,
-    pub wait: Option<Duration>,
+    pub wait: Duration,
 }

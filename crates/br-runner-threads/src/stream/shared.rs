@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
-use contract_threads::{Chunk, ChunkFrame};
+use contract_threads::Chunk;
 use uuid::Uuid;
 
+use crate::backend::Backend;
 use crate::error::Error;
-use crate::transport::{BusTransport, OutboundChunk};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Closing {
@@ -23,8 +24,9 @@ struct Flags {
 }
 
 pub(crate) struct Core {
-    pub(crate) bus: Arc<dyn BusTransport>,
+    pub(crate) backend: Arc<dyn Backend>,
     pub(crate) message_id: Uuid,
+    pub(crate) wait: Duration,
     pub(crate) gate: tokio::sync::Mutex<Vec<Chunk>>,
     flags: Mutex<Flags>,
 }
@@ -36,18 +38,23 @@ fn locked(flags: &Mutex<Flags>) -> MutexGuard<'_, Flags> {
 }
 
 impl Core {
-    pub(crate) fn new(bus: Arc<dyn BusTransport>, message_id: Uuid) -> Arc<Self> {
+    pub(crate) fn new(backend: Arc<dyn Backend>, message_id: Uuid, wait: Duration) -> Arc<Self> {
         Arc::new(Self {
-            bus,
+            backend,
             message_id,
+            wait,
             gate: tokio::sync::Mutex::new(Vec::new()),
             flags: Mutex::new(Flags::default()),
         })
     }
 
+    fn confirmed(flags: &Flags) -> bool {
+        flags.closings.values().any(|c| *c == Closing::Confirmed)
+    }
+
     pub(crate) fn judge_chunk(&self) -> Result<(), Error> {
         let flags = locked(&self.flags);
-        if flags.closings.values().any(|c| *c == Closing::Confirmed) {
+        if Self::confirmed(&flags) {
             return Err(Error::StreamClosed);
         }
         if flags.broken {
@@ -59,23 +66,20 @@ impl Core {
         Ok(())
     }
 
-    pub(crate) fn judge_sealed_closing(&self) -> Result<(), Error> {
+    pub(crate) fn judge_closing(&self, sealed: bool) -> Result<(), Error> {
         let flags = locked(&self.flags);
-        if flags.closings.values().any(|c| *c == Closing::Confirmed) {
+        if Self::confirmed(&flags) {
             return Err(Error::StreamClosed);
         }
-        if flags.broken {
+        if sealed && flags.broken {
             return Err(Error::StreamBroken);
         }
         Ok(())
     }
 
-    pub(crate) fn judge_unsealed_closing(&self) -> Result<(), Error> {
+    pub(crate) fn healthy(&self) -> bool {
         let flags = locked(&self.flags);
-        if flags.closings.values().any(|c| *c == Closing::Confirmed) {
-            return Err(Error::StreamClosed);
-        }
-        Ok(())
+        !flags.broken && flags.closings.values().all(|c| *c == Closing::Refused)
     }
 
     pub(crate) async fn push(
@@ -86,17 +90,11 @@ impl Core {
         self.judge_chunk()?;
         let chunk = build()?;
         let seq = u64::try_from(chunks.len()).map_err(|_| Error::StreamBroken)?;
-        let frame = serde_json::to_value(ChunkFrame::new(self.message_id, seq, chunk.clone()))
-            .map_err(|e| Error::invalid(e.to_string()))?;
-        chunks.push(chunk);
+        chunks.push(chunk.clone());
         let guard = BreakOnDrop::arm(self);
         let published = self
-            .bus
-            .publish_chunk(OutboundChunk {
-                message_id: self.message_id,
-                seq,
-                frame,
-            })
+            .backend
+            .chunk(self.message_id, seq, chunk, self.wait)
             .await;
         guard.disarm();
         match published {

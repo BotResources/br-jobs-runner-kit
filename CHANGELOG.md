@@ -15,6 +15,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
 - `br-runner-connection` 0.1.0 (new library): the one connection of a runner to the platform, a bearer-authenticated GraphQL call and one request-reply on the bus.
+- `br-runner-threads` 0.2.0: rebuilt on the Connection, with the thread-port and thread-access adapters and the thread queue. See `crates/br-runner-threads/CHANGELOG.md`.
 
 ### Fixed
 

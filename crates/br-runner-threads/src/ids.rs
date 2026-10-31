@@ -9,3 +9,11 @@ pub(crate) fn require_v7(id: Uuid, what: &str) -> Result<Uuid, Error> {
         Err(Error::invalid(format!("{what} is not a UUIDv7")))
     }
 }
+
+pub(crate) fn require_wait(wait: std::time::Duration, what: &str) -> Result<(), Error> {
+    if wait.is_zero() {
+        Err(Error::invalid(format!("{what} is zero")))
+    } else {
+        Ok(())
+    }
+}

@@ -171,8 +171,8 @@ dependencies = [
 
 [[package]]
 name = "br-agentic-contract"
-version = "0.1.0"
-source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-contract%2Fv0.1.0#586d49c84c1a6c65b62a5fe1df0d17dcfc4c680b"
+version = "0.2.0"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-contract%2Fv0.2.0#b5209a1cddead2c0794fe4cbc7e52de5692b4094"
 dependencies = [
  "br-graph-contract",
  "br-llm-clients-core",
@@ -253,36 +253,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "br-llm-clients-common-auth"
-version = "0.1.0"
-source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-common-auth%2Fv0.1.0#8e7d9389f1016aaf7f7545eec195184a1004ac0c"
-dependencies = [
- "br-llm-clients-common-http",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "br-llm-clients-common-http"
-version = "0.2.0"
-source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-common-http%2Fv0.2.0#f16adaef1d12be8e0b33117e1deedef0f73bd282"
-dependencies = [
- "bytes",
- "h2",
- "http",
- "httpdate",
- "hyper",
- "hyper-util",
- "rustls",
- "rustls-pki-types",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "webpki-roots 1.0.11",
-]
-
-[[package]]
 name = "br-llm-clients-core"
 version = "0.5.0"
 source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-core%2Fv0.5.0#337094a8cdd1d169b3e8602e2d7a4ca67eaf9f31"
@@ -328,16 +298,16 @@ dependencies = [
 
 [[package]]
 name = "br-runner-threads"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-nats",
  "br-agentic-contract",
  "br-core-events",
  "br-core-integration",
  "br-core-kernel",
- "br-llm-clients-common-auth",
- "br-llm-clients-common-http",
  "br-llm-messages",
+ "br-runner-connection",
+ "br-runner-threads",
  "br-util-nats-fabric",
  "chrono",
  "contract-threads",
@@ -634,12 +604,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "equivalent"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,12 +624,6 @@ name = "find-msvc-tools"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
-
-[[package]]
-name = "fnv"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "form_urlencoded"
@@ -798,31 +756,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "h2"
-version = "0.4.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d29020232d6aa3fb1daca64c1127cf662cf97f254ae16c18c05b8ab635fc118"
-dependencies = [
- "atomic-waker",
- "bytes",
- "fnv",
- "futures-core",
- "futures-sink",
- "http",
- "indexmap",
- "slab",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "hashbrown"
-version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
-
-[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -862,12 +795,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
-name = "httpdate"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
-
-[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -884,9 +811,7 @@ checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
 dependencies = [
  "atomic-waker",
  "bytes",
- "futures-channel",
  "futures-core",
- "h2",
  "http",
  "http-body",
  "httparse",
@@ -1037,16 +962,6 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
-]
-
-[[package]]
-name = "indexmap"
-version = "2.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
-dependencies = [
- "equivalent",
- "hashbrown",
 ]
 
 [[package]]
