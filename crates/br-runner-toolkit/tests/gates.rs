@@ -39,7 +39,8 @@ async fn given_a_no_entry_event_when_a_trigger_is_made_then_the_runner_takes_not
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_cancel_replay_that_is_not_complete_when_a_trigger_is_made_then_the_runner_takes_nothing_until_it_is_complete() {
+async fn given_a_cancel_replay_that_is_not_complete_when_a_trigger_is_made_then_the_runner_takes_nothing_until_it_is_complete()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     jobs.push_mode(Ok(ModeEvent::Mode(DispatchMode::Push)));
     jobs.push_trigger(trigger(1));
@@ -62,7 +63,8 @@ async fn given_claim_mode_and_a_cancel_replay_that_is_not_complete_then_no_claim
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_mode_that_goes_from_push_to_no_entry_and_back_when_a_trigger_waits_then_it_is_taken_after_the_return() {
+async fn given_a_mode_that_goes_from_push_to_no_entry_and_back_when_a_trigger_waits_then_it_is_taken_after_the_return()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_mode(Ok(ModeEvent::NoEntry));

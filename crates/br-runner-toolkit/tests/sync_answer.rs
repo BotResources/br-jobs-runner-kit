@@ -1,7 +1,7 @@
 mod support;
 
-use br_runner_jobs::{Content, FailureKind};
 use br_runner_jobs::test_double::{Call, ScriptedJobs};
+use br_runner_jobs::{Content, FailureKind};
 use serde_json::{Value, json};
 use support::*;
 
@@ -13,14 +13,18 @@ fn graphql_calls(jobs: &ScriptedJobs, root: &str) -> Vec<Value> {
     jobs.calls()
         .into_iter()
         .filter_map(|call| match call {
-            Call::Graphql { document, variables } if document.contains(root) => Some(variables),
+            Call::Graphql {
+                document,
+                variables,
+            } if document.contains(root) => Some(variables),
             _ => None,
         })
         .collect()
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_sync_call_when_the_graph_ends_then_the_answer_is_the_fields_as_text_and_the_run_completes() {
+async fn given_a_sync_call_when_the_graph_ends_then_the_answer_is_the_fields_as_text_and_the_run_completes()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
@@ -61,7 +65,8 @@ async fn given_an_answer_function_when_a_sync_call_ends_then_its_content_is_the_
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_an_answer_function_that_refuses_when_a_sync_call_ends_then_the_run_fails_with_answer_not_made() {
+async fn given_an_answer_function_that_refuses_when_a_sync_call_ends_then_the_run_fails_with_answer_not_made()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
@@ -82,7 +87,8 @@ async fn given_an_answer_function_that_refuses_when_a_sync_call_ends_then_the_ru
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run_fails_with_panic() {
+async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run_fails_with_panic()
+{
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
@@ -111,7 +117,8 @@ async fn given_a_call_that_is_not_sync_when_the_graph_ends_then_no_answer_is_upl
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed_fact_is_removed_and_the_run_fails_with_answer_refused() {
+async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed_fact_is_removed_and_the_run_fails_with_answer_refused()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({

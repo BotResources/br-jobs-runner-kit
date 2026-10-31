@@ -27,7 +27,8 @@ fn refusal(reason: &str) -> Vec<u8> {
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_claim_mode_and_a_served_run_when_the_graph_ends_then_the_run_is_reported_and_no_trigger_acknowledged() {
+async fn given_claim_mode_and_a_served_run_when_the_graph_ends_then_the_run_is_reported_and_no_trigger_acknowledged()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
     jobs.push_claim_reply(Ok(served(1)));
@@ -40,7 +41,8 @@ async fn given_claim_mode_and_a_served_run_when_the_graph_ends_then_the_run_is_r
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_claim_mode_when_the_runner_has_free_slots_then_it_sends_one_first_claim_per_slot_each_with_a_new_id() {
+async fn given_claim_mode_when_the_runner_has_free_slots_then_it_sends_one_first_claim_per_slot_each_with_a_new_id()
+ {
     let gate = std::sync::Arc::new(tokio::sync::Notify::new());
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
@@ -79,10 +81,13 @@ async fn given_an_empty_answer_when_it_comes_then_the_next_claim_has_a_new_claim
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_claim_without_answer_when_the_next_beat_comes_then_the_same_claim_id_is_sent_again() {
+async fn given_a_claim_without_answer_when_the_next_beat_comes_then_the_same_claim_id_is_sent_again()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
-    jobs.push_claim_reply(Err(br_runner_jobs::Error::InfraMissing("the bus".to_owned())));
+    jobs.push_claim_reply(Err(br_runner_jobs::Error::InfraMissing(
+        "the bus".to_owned(),
+    )));
     jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     until(|| claim_ids(&jobs).len() == 2).await;
@@ -92,7 +97,8 @@ async fn given_a_claim_without_answer_when_the_next_beat_comes_then_the_same_cla
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_busy_refusal_when_it_carries_a_delay_then_the_same_claim_id_is_sent_after_the_delay() {
+async fn given_a_busy_refusal_when_it_carries_a_delay_then_the_same_claim_id_is_sent_after_the_delay()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
     jobs.push_claim_reply(Ok(serde_json::to_vec(
@@ -111,7 +117,8 @@ async fn given_a_busy_refusal_when_it_carries_a_delay_then_the_same_claim_id_is_
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_an_unknown_instance_refusal_when_the_next_beat_comes_then_the_same_claim_id_is_sent_again() {
+async fn given_an_unknown_instance_refusal_when_the_next_beat_comes_then_the_same_claim_id_is_sent_again()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
     jobs.push_claim_reply(Ok(refusal("instance_unknown")));
@@ -137,7 +144,8 @@ async fn given_a_spent_claim_refusal_when_it_comes_then_the_next_claim_has_a_new
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_not_in_claim_mode_refusal_when_it_comes_then_no_claim_is_sent_until_the_mode_feed_gives_a_value() {
+async fn given_a_not_in_claim_mode_refusal_when_it_comes_then_no_claim_is_sent_until_the_mode_feed_gives_a_value()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     claim_mode(&jobs);
     jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
@@ -146,7 +154,9 @@ async fn given_a_not_in_claim_mode_refusal_when_it_comes_then_no_claim_is_sent_u
     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
     assert_eq!(claim_ids(&jobs).len(), 1);
     jobs.push_claim_reply(Ok(refusal("malformed_claim")));
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(br_runner_jobs::DispatchMode::Claim)));
+    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
+        br_runner_jobs::DispatchMode::Claim,
+    )));
     until(|| claim_ids(&jobs).len() == 2).await;
     running.stop().await;
 }

@@ -52,16 +52,18 @@ fn writes(jobs: &ScriptedJobs) -> Vec<Value> {
     jobs.calls()
         .into_iter()
         .filter_map(|call| match call {
-            Call::Graphql { document, variables } if document.contains("jobsSaveState") => {
-                Some(variables)
-            }
+            Call::Graphql {
+                document,
+                variables,
+            } if document.contains("jobsSaveState") => Some(variables),
             _ => None,
         })
         .collect()
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_restart_when_the_run_starts_then_the_saved_state_is_read_once_and_given_to_the_run_start_function() {
+async fn given_a_restart_when_the_run_starts_then_the_saved_state_is_read_once_and_given_to_the_run_start_function()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     let mut reply = saved_state_reply(saved(json!({ "steps": ["old"] })));
@@ -83,7 +85,9 @@ async fn given_a_restart_when_the_run_starts_then_the_saved_state_is_read_once_a
     assert_eq!(reads(&jobs), 1);
     assert_eq!(
         seen.lock().expect("lock").clone(),
-        vec![Some(Flow { steps: vec!["old".to_owned()] })]
+        vec![Some(Flow {
+            steps: vec!["old".to_owned()]
+        })]
     );
 }
 
@@ -129,7 +133,8 @@ async fn given_a_run_that_is_not_a_restart_when_it_starts_then_the_saved_state_i
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_saved_state_that_jobs_refuses_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid() {
+async fn given_a_saved_state_that_jobs_refuses_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({
@@ -145,7 +150,8 @@ async fn given_a_saved_state_that_jobs_refuses_when_a_restart_starts_then_the_ru
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_saved_state_that_does_not_fit_the_fields_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid() {
+async fn given_a_saved_state_that_does_not_fit_the_fields_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(saved_state_reply(json!("garbage")));
@@ -160,7 +166,8 @@ async fn given_a_saved_state_that_does_not_fit_the_fields_when_a_restart_starts_
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_saved_state_that_cannot_be_reached_when_a_restart_starts_then_the_run_fails_as_transient_with_saved_state_unavailable() {
+async fn given_a_saved_state_that_cannot_be_reached_when_a_restart_starts_then_the_run_fails_as_transient_with_saved_state_unavailable()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(restart_trigger(1));
@@ -188,10 +195,12 @@ async fn run_with_agent(can_restart: bool, inbox: bool) -> Arc<ScriptedJobs> {
     let builder = RunnerBuilder::new(jobs.client(), settings(1));
     let agent = inbox_agent(&builder, inbox);
     let shutdown = CancellationToken::new();
-    let done = tokio::spawn(builder.start(
-        args(agent_graph(Behavior::Result("x"), agent), can_restart)
-            .with_shutdown(shutdown.clone()),
-    ));
+    let done = tokio::spawn(
+        builder.start(
+            args(agent_graph(Behavior::Result("x"), agent), can_restart)
+                .with_shutdown(shutdown.clone()),
+        ),
+    );
     until(|| has_terminal(&jobs)).await;
     shutdown.cancel();
     done.await.expect("joined").expect("started");
@@ -199,7 +208,8 @@ async fn run_with_agent(can_restart: bool, inbox: bool) -> Arc<ScriptedJobs> {
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_restartable_runner_and_an_agent_with_an_inbox_when_the_graph_ends_then_the_state_and_the_agents_are_saved() {
+async fn given_a_restartable_runner_and_an_agent_with_an_inbox_when_the_graph_ends_then_the_state_and_the_agents_are_saved()
+ {
     let jobs = run_with_agent(true, true).await;
     let saves = writes(&jobs);
     assert_eq!(saves.len(), 1);
@@ -223,7 +233,8 @@ async fn given_agents_without_an_inbox_when_the_graph_ends_then_no_state_is_save
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_refused_state_save_when_the_run_completes_then_the_run_fails_with_saved_state_refused() {
+async fn given_a_refused_state_save_when_the_run_completes_then_the_run_fails_with_saved_state_refused()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({

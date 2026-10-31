@@ -60,7 +60,8 @@ async fn given_more_triggers_than_slots_when_runs_are_in_flight_then_only_slot_c
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_trigger_of_a_run_in_flight_when_it_arrives_again_then_it_is_acknowledged_and_dropped() {
+async fn given_a_trigger_of_a_run_in_flight_when_it_arrives_again_then_it_is_acknowledged_and_dropped()
+ {
     let gate = std::sync::Arc::new(tokio::sync::Notify::new());
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);

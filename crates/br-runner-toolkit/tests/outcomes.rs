@@ -21,17 +21,24 @@ async fn failed_run(graph: Arc<br_graph_contract::Graph<Flow>>) -> br_runner_job
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_node_that_fails_when_the_run_ends_then_the_failed_fact_has_node_failed_permanent_and_the_reason_as_diagnostic() {
+async fn given_a_node_that_fails_when_the_run_ends_then_the_failed_fact_has_node_failed_permanent_and_the_reason_as_diagnostic()
+ {
     let failed = failed_run(single(Behavior::Fail("the model is down"))).await;
     assert_eq!(failed.reason_code, "node_failed");
     assert_eq!(failed.kind, FailureKind::Permanent);
     assert_eq!(failed.params, json!({}));
     assert_eq!(failed.retry_after_seconds, None);
-    assert!(failed.diagnostic.as_str().is_some_and(|text| text.contains("the model is down")));
+    assert!(
+        failed
+            .diagnostic
+            .as_str()
+            .is_some_and(|text| text.contains("the model is down"))
+    );
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_node_that_refuses_its_input_when_the_run_ends_then_the_reason_code_is_node_refused_an_input() {
+async fn given_a_node_that_refuses_its_input_when_the_run_ends_then_the_reason_code_is_node_refused_an_input()
+ {
     let failed = failed_run(single(Behavior::Refuse("bad input"))).await;
     assert_eq!(failed.reason_code, "node_refused_an_input");
 }
@@ -67,7 +74,8 @@ async fn given_a_failure_mapping_when_a_run_fails_then_the_mapping_overrides_onl
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_failure_mapping_that_panics_when_a_run_fails_then_the_failed_fact_has_the_reason_code_panic() {
+async fn given_a_failure_mapping_that_panics_when_a_run_fails_then_the_failed_fact_has_the_reason_code_panic()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -95,7 +103,8 @@ fn refusing_args(refusal: RunRefusal) -> StartArgs<Flow> {
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_refusal_of_the_run_start_function_when_it_carries_fields_then_they_reach_jobs_and_the_mapping_is_not_called() {
+async fn given_a_refusal_of_the_run_start_function_when_it_carries_fields_then_they_reach_jobs_and_the_mapping_is_not_called()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -122,7 +131,8 @@ async fn given_a_refusal_of_the_run_start_function_when_it_carries_fields_then_t
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_refusal_with_no_diagnostic_when_it_is_sent_then_the_diagnostic_is_empty_and_the_kind_permanent() {
+async fn given_a_refusal_with_no_diagnostic_when_it_is_sent_then_the_diagnostic_is_empty_and_the_kind_permanent()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -136,7 +146,8 @@ async fn given_a_refusal_with_no_diagnostic_when_it_is_sent_then_the_diagnostic_
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_run_start_function_that_panics_when_the_run_is_taken_then_the_run_fails_with_panic_and_the_slot_is_free() {
+async fn given_a_run_start_function_that_panics_when_the_run_is_taken_then_the_run_fails_with_panic_and_the_slot_is_free()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -158,7 +169,8 @@ async fn given_a_run_start_function_that_panics_when_the_run_is_taken_then_the_r
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_fields_over_the_state_limit_when_the_run_starts_then_the_run_fails_with_start_refused() {
+async fn given_fields_over_the_state_limit_when_the_run_starts_then_the_run_fails_with_start_refused()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -178,11 +190,15 @@ async fn given_fields_over_the_state_limit_when_the_run_starts_then_the_run_fail
     let running = run(&jobs, |b| b, 1, big);
     until(|| has_terminal(&jobs)).await;
     running.stop().await;
-    assert_eq!(failed_fact(&jobs).expect("failed").reason_code, "start_refused");
+    assert_eq!(
+        failed_fact(&jobs).expect("failed").reason_code,
+        "start_refused"
+    );
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_the_run_fails_with_start_refused() {
+async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_the_run_fails_with_start_refused()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -196,5 +212,8 @@ async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_t
     let running = run(&jobs, |b| b, 1, unknown);
     until(|| has_terminal(&jobs)).await;
     running.stop().await;
-    assert_eq!(failed_fact(&jobs).expect("failed").reason_code, "start_refused");
+    assert_eq!(
+        failed_fact(&jobs).expect("failed").reason_code,
+        "start_refused"
+    );
 }

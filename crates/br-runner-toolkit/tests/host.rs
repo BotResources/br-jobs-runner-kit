@@ -37,7 +37,10 @@ async fn given_a_test_host_when_one_run_ends_then_the_host_returns_its_events_in
     let published = position(&|event| {
         matches!(
             event,
-            HostEvent::PresencePublished { status: PresenceStatus::Ready, .. }
+            HostEvent::PresencePublished {
+                status: PresenceStatus::Ready,
+                ..
+            }
         )
     });
     let acknowledged = position(&|event| matches!(event, HostEvent::TriggerAcknowledged));
@@ -65,7 +68,8 @@ async fn given_a_test_host_when_it_runs_then_it_takes_one_run_even_if_more_trigg
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_then_the_run_ends_without_a_terminal_fact() {
+async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_then_the_run_ends_without_a_terminal_fact()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -85,7 +89,8 @@ async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_t
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_and_the_clock_can_be_advanced() {
+async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_and_the_clock_can_be_advanced()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));

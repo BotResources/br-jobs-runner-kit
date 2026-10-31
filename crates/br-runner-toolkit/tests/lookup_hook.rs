@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use br_graph_contract::InstanceId;
 use br_runner_jobs::test_double::ScriptedJobs;
-use br_runner_toolkit::{
-    ErrorCode, InstanceEnded, RunnerBuilder, lifecycle_hook,
-};
+use br_runner_toolkit::{ErrorCode, InstanceEnded, RunnerBuilder, lifecycle_hook};
 use support::*;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
@@ -37,16 +35,20 @@ async fn given_an_instance_the_library_does_not_hold_when_looked_up_then_the_loo
     let builder = RunnerBuilder::new(jobs.client(), settings(1));
     let lookup = builder.instance_lookup();
     let shutdown = CancellationToken::new();
-    let done = tokio::spawn(builder.start(args(single(Behavior::Result("x")), false).with_shutdown(shutdown.clone())));
+    let done = tokio::spawn(
+        builder.start(args(single(Behavior::Result("x")), false).with_shutdown(shutdown.clone())),
+    );
     tokio::time::sleep(Duration::from_secs(1)).await;
-    let waited = tokio::time::timeout(Duration::from_secs(30), lookup.book(unknown_instance())).await;
+    let waited =
+        tokio::time::timeout(Duration::from_secs(30), lookup.book(unknown_instance())).await;
     assert!(waited.is_err());
     shutdown.cancel();
     done.await.expect("joined").expect("started");
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_book_and_the_run_context_of_its_run() {
+async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_book_and_the_run_context_of_its_run()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -71,7 +73,8 @@ async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_b
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_once_with_the_node_and_its_agents() {
+async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_once_with_the_node_and_its_agents()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -105,7 +108,8 @@ async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_on
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_the_run_is_not_settled_until_the_hook_returns() {
+async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_the_run_is_not_settled_until_the_hook_returns()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -138,7 +142,8 @@ async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_hook_that_panics_when_an_instance_ends_then_the_panic_is_caught_and_the_run_settles() {
+async fn given_a_hook_that_panics_when_an_instance_ends_then_the_panic_is_caught_and_the_run_settles()
+ {
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -159,5 +164,11 @@ async fn given_a_hook_that_panics_when_an_instance_ends_then_the_panic_is_caught
     ));
     until(|| has_terminal(&jobs)).await;
     shutdown.cancel();
-    assert!(done.await.expect("joined").expect("started").runs.is_empty());
+    assert!(
+        done.await
+            .expect("joined")
+            .expect("started")
+            .runs
+            .is_empty()
+    );
 }

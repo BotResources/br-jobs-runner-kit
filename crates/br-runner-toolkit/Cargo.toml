@@ -34,5 +34,9 @@ br-runner-jobs = { workspace = true, features = ["test-double"] }
 br-runner-toolkit = { path = ".", version = ">=0.1.0", features = ["test-host"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
 
+[[example]]
+name = "test_host"
+required-features = ["test-host"]
+
 [lints.rust]
 unsafe_code = "forbid"

@@ -51,7 +51,10 @@ fn given_no_runner_version_when_built_then_the_error_is_setting_missing() {
 
 #[test]
 fn given_zero_slots_when_built_then_the_error_is_setting_invalid() {
-    let error = complete().max_concurrent_runs(0).build().expect_err("an error");
+    let error = complete()
+        .max_concurrent_runs(0)
+        .build()
+        .expect_err("an error");
     assert_eq!(error.code(), ErrorCode::SettingInvalid);
 }
 
