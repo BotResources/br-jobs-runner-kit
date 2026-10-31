@@ -18,15 +18,28 @@ use crate::model::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Call {
-    Graphql { document: String, variables: Value },
-    Claim { claim_id: Uuid },
+    Graphql {
+        document: String,
+        variables: Value,
+    },
+    Claim {
+        claim_id: Uuid,
+    },
     Fact(Fact),
     Log(LogRecord),
     PresencePut,
     PresenceDelete,
-    Register { run_id: Uuid, agents: Vec<AgentDeclaration> },
-    ListAgents { run_id: Uuid },
-    MarkRead { run_id: Uuid, item_ids: Vec<Uuid> },
+    Register {
+        run_id: Uuid,
+        agents: Vec<AgentDeclaration>,
+    },
+    ListAgents {
+        run_id: Uuid,
+    },
+    MarkRead {
+        run_id: Uuid,
+        item_ids: Vec<Uuid>,
+    },
     Command(ChildCommand),
 }
 
@@ -189,7 +202,11 @@ impl Backend for ScriptedJobs {
         self.reply_wait
     }
 
-    fn graphql<'a>(&'a self, document: &'a str, variables: Value) -> BoxFuture<'a, Result<Value, Error>> {
+    fn graphql<'a>(
+        &'a self,
+        document: &'a str,
+        variables: Value,
+    ) -> BoxFuture<'a, Result<Value, Error>> {
         Box::pin(async move {
             self.gate().await;
             let mut script = self.script();
@@ -214,7 +231,10 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn open_triggers(&self, _ack_wait: Duration) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
+    fn open_triggers(
+        &self,
+        _ack_wait: Duration,
+    ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
         Box::pin(async { Ok(Box::new(NoTriggers) as Box<dyn TriggerSource>) })
     }
 
@@ -234,7 +254,12 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn presence_put(&self, _v: String, _s: PresenceStatus, _c: u32) -> BoxFuture<'_, Result<(), Error>> {
+    fn presence_put(
+        &self,
+        _v: String,
+        _s: PresenceStatus,
+        _c: u32,
+    ) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.record(Call::PresencePut);
             Ok(())
@@ -266,7 +291,10 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn arrival_feed(&self, _run_id: Uuid) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
+    fn arrival_feed(
+        &self,
+        _run_id: Uuid,
+    ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
         Box::pin(async move {
             let receiver = self
                 .arrivals
@@ -292,7 +320,11 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn list_agents(&self, run_id: Uuid, _wait: Duration) -> BoxFuture<'_, Result<Vec<ListedAgent>, Error>> {
+    fn list_agents(
+        &self,
+        run_id: Uuid,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<Vec<ListedAgent>, Error>> {
         Box::pin(async move {
             let mut script = self.script();
             script.calls.push(Call::ListAgents { run_id });
@@ -300,7 +332,12 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn mark_read(&self, run_id: Uuid, item_ids: Vec<Uuid>, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
+    fn mark_read(
+        &self,
+        run_id: Uuid,
+        item_ids: Vec<Uuid>,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.gate().await;
             let mut script = self.script();
@@ -309,7 +346,11 @@ impl Backend for ScriptedJobs {
         })
     }
 
-    fn child_command(&self, command: ChildCommand, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
+    fn child_command(
+        &self,
+        command: ChildCommand,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.gate().await;
             let mut script = self.script();
@@ -318,5 +359,3 @@ impl Backend for ScriptedJobs {
         })
     }
 }
-
-

@@ -1,91 +1,168 @@
+mod arrivals;
+mod cancel;
+mod commands;
+mod connect;
+mod fail;
+mod mode;
+mod mode_sink;
+mod presence;
+mod publish;
+mod surface;
+#[cfg(test)]
+mod tests;
+mod triggers;
+
+use std::sync::Arc;
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::Store;
 use br_runner_connection::Connection;
+use br_util_nats_fabric::Fabric;
+use contract_jobs::segment::SubjectSegment;
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::backend::*;
-use crate::error::Error;
+use crate::error::{Error, Operation};
+use crate::from_connection;
 use crate::model::*;
 
 pub(crate) struct Live {
     runner_type: String,
     instance_key: String,
     reply_wait: Duration,
+    segments: Segments,
+    connection: Connection,
+    wire: Wire,
+    presence: Store,
+    cancel: Store,
+    arrivals: Arc<arrivals::Arrivals>,
 }
 
-fn stub<T>() -> BoxFuture<'static, Result<T, Error>> {
-    Box::pin(async { Err(Error::invalid("not implemented yet")) })
+#[derive(Clone)]
+struct Segments {
+    runner_type: SubjectSegment,
+    instance_key: SubjectSegment,
 }
 
-impl Live {
-    pub(crate) async fn connect(
-        runner_type: &str,
-        instance_key: &str,
-        reply_wait: Duration,
-        _connection: Connection,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            runner_type: runner_type.to_owned(),
-            instance_key: instance_key.to_owned(),
-            reply_wait,
-        })
-    }
+#[derive(Clone)]
+struct Wire {
+    jetstream: Context,
+    fabric: Fabric,
 }
 
 impl Backend for Live {
     fn runner_type(&self) -> &str {
         &self.runner_type
     }
+
     fn instance_key(&self) -> &str {
         &self.instance_key
     }
+
     fn reply_wait(&self) -> Duration {
         self.reply_wait
     }
-    fn graphql<'a>(&'a self, _d: &'a str, _v: Value) -> BoxFuture<'a, Result<Value, Error>> {
-        stub()
+
+    fn graphql<'a>(
+        &'a self,
+        document: &'a str,
+        variables: Value,
+    ) -> BoxFuture<'a, Result<Value, Error>> {
+        Box::pin(async move {
+            self.connection
+                .graphql(document, variables)
+                .await
+                .map_err(|error| from_connection::error(error, Operation::Read))
+        })
     }
-    fn claim(&self, _c: Uuid, _w: Duration) -> BoxFuture<'_, Result<Vec<u8>, Error>> {
-        stub()
+
+    fn claim(&self, claim_id: Uuid, claim_wait: Duration) -> BoxFuture<'_, Result<Vec<u8>, Error>> {
+        Box::pin(self.claim_request(claim_id, claim_wait))
     }
-    fn open_triggers(&self, _a: Duration) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
-        stub()
+
+    fn open_triggers(
+        &self,
+        ack_wait: Duration,
+    ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
+        Box::pin(self.trigger_source(ack_wait))
     }
-    fn publish_fact(&self, _f: Fact, _w: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn publish_fact(&self, fact: Fact, wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.fact(fact, wait))
     }
-    fn publish_log(&self, _l: LogRecord) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn publish_log(&self, line: LogRecord) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.log(line))
     }
-    fn presence_put(&self, _v: String, _s: PresenceStatus, _c: u32) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn presence_put(
+        &self,
+        runner_version: String,
+        status: PresenceStatus,
+        capacity: u32,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.put_presence(runner_version, status, capacity))
     }
+
     fn presence_delete(&self) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+        Box::pin(self.delete_presence())
     }
+
     fn presence_ttl(&self) -> BoxFuture<'_, Result<Duration, Error>> {
-        stub()
+        Box::pin(self.time_to_live())
     }
+
     fn cancel_feed(&self) -> BoxFuture<'_, Result<Box<dyn RawFeed<CancelEvent>>, Error>> {
-        stub()
+        Box::pin(self.open_cancel_feed())
     }
+
     fn mode_feed(&self) -> BoxFuture<'_, Result<Box<dyn RawFeed<ModeEvent>>, Error>> {
-        stub()
+        Box::pin(self.open_mode_feed())
     }
-    fn arrival_feed(&self, _r: Uuid) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
-        stub()
+
+    fn arrival_feed(
+        &self,
+        run_id: Uuid,
+    ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
+        Box::pin(async move {
+            let feed = self.arrivals.open(run_id).await?;
+            Ok(Box::new(feed) as Box<dyn RawFeed<ItemArrived>>)
+        })
     }
-    fn register_agents(&self, _r: Uuid, _a: Vec<AgentDeclaration>, _w: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn register_agents(
+        &self,
+        run_id: Uuid,
+        agents: Vec<AgentDeclaration>,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.register(run_id, agents, wait))
     }
-    fn list_agents(&self, _r: Uuid, _w: Duration) -> BoxFuture<'_, Result<Vec<ListedAgent>, Error>> {
-        stub()
+
+    fn list_agents(
+        &self,
+        run_id: Uuid,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<Vec<ListedAgent>, Error>> {
+        Box::pin(self.list(run_id, wait))
     }
-    fn mark_read(&self, _r: Uuid, _i: Vec<Uuid>, _w: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn mark_read(
+        &self,
+        run_id: Uuid,
+        item_ids: Vec<Uuid>,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.mark(run_id, item_ids, wait))
     }
-    fn child_command(&self, _c: ChildCommand, _w: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        stub()
+
+    fn child_command(
+        &self,
+        command: ChildCommand,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.child(command, wait))
     }
 }

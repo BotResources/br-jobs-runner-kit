@@ -31,7 +31,9 @@ impl WriteSender for WorkSender {
                         .await
                 }
                 Write::Registration { run_id, agent } => {
-                    backend.register_agents(*run_id, vec![agent.clone()], wait).await
+                    backend
+                        .register_agents(*run_id, vec![agent.clone()], wait)
+                        .await
                 }
                 Write::Mail { mail } => graphql::send_mail(backend, &ids, mail).await,
                 Write::Marker {

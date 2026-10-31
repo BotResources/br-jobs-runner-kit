@@ -14,7 +14,9 @@ use crate::backend::Fact;
 use crate::error::Error;
 use crate::model::{Content, Failed};
 
-pub use report::{IgnoreReports, LastFailure, QueueObserver, QueueReport, QueueSettings, QueueState};
+pub use report::{
+    IgnoreReports, LastFailure, QueueObserver, QueueReport, QueueSettings, QueueState,
+};
 pub use shared::Gate;
 pub use write::{Removal, WriteEnd, WriteKind, WriteName, WriteResult};
 
@@ -66,9 +68,7 @@ impl DeliveryQueue {
             writer: QueueWriter { shared },
             run_id,
         };
-        let started = queue
-            .writer
-            .hand_over(Write::Started { run_id, start_id });
+        let started = queue.writer.hand_over(Write::Started { run_id, start_id });
         Ok((queue, started))
     }
 
@@ -99,7 +99,12 @@ impl DeliveryQueue {
         })))
     }
 
-    pub fn step_started(&self, index: u32, label: String, started_at: chrono::DateTime<chrono::Utc>) -> WriteEnd {
+    pub fn step_started(
+        &self,
+        index: u32,
+        label: String,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> WriteEnd {
         self.writer.hand_over(Write::Fact(Fact::Step {
             run_id: self.run_id,
             index,
@@ -109,8 +114,9 @@ impl DeliveryQueue {
     }
 
     pub fn completed(&self) -> WriteEnd {
-        self.writer
-            .hand_over(Write::Fact(Fact::Completed { run_id: self.run_id }))
+        self.writer.hand_over(Write::Fact(Fact::Completed {
+            run_id: self.run_id,
+        }))
     }
 
     pub fn failed(&self, failed: Failed) -> WriteEnd {

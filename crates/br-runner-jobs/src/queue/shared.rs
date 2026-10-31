@@ -75,7 +75,9 @@ impl Shared {
     }
 
     pub(crate) fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     pub(crate) fn report(&self, report: QueueReport) {
@@ -121,7 +123,12 @@ impl Shared {
         end
     }
 
-    pub(crate) fn hold(&self, write: Write, follow: Option<Write>, gate: BoxFuture<'static, Gate>) -> WriteEnd {
+    pub(crate) fn hold(
+        &self,
+        write: Write,
+        follow: Option<Write>,
+        gate: BoxFuture<'static, Gate>,
+    ) -> WriteEnd {
         let (end_tx, end) = WriteEnd::pair();
         let mut state = self.lock();
         if state.stopped {

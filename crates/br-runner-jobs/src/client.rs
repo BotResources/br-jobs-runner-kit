@@ -2,13 +2,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_runner_connection::Connection;
-use contract_jobs::runner::{ClaimReplyV2, ClaimRefusal};
+use contract_jobs::runner::{ClaimRefusal, ClaimReplyV2};
 use uuid::Uuid;
 
 use crate::backend::{Backend, TriggerSource};
 use crate::error::{Error, Operation, Refusal};
 use crate::feed::Feed;
-use crate::model::{Capacity, CancelEvent, ModeEvent, PresenceStatus};
+use crate::model::{CancelEvent, Capacity, ModeEvent, PresenceStatus};
 use crate::work::{Unreadable, Work};
 
 #[derive(Clone)]
@@ -78,9 +78,13 @@ impl JobsClient {
         reply_wait: Duration,
         connection: Connection,
     ) -> Result<Self, Error> {
-        let live =
-            crate::runner_transport::Live::connect(runner_type, instance_key, reply_wait, connection)
-                .await?;
+        let live = crate::runner_transport::Live::connect(
+            runner_type,
+            instance_key,
+            reply_wait,
+            connection,
+        )
+        .await?;
         Ok(Self::from_backend(Arc::new(live)))
     }
 

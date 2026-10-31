@@ -19,7 +19,10 @@ pub struct Content {
 pub enum PayloadForm {
     Inline(Content),
     Kept,
-    Reference { service: String, document_id: String },
+    Reference {
+        service: String,
+        document_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,6 +203,7 @@ pub struct Mail {
 #[non_exhaustive]
 pub struct CallNotice {
     pub item_id: Uuid,
+    pub address: Option<Uuid>,
     pub kind: CallNoticeKind,
     pub child_job_id: Option<Uuid>,
     pub position: Option<i64>,
@@ -212,10 +216,24 @@ pub struct CallNotice {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum UnreadItem {
-    DirectMail { item_id: Uuid, mail: Mail },
-    CcNotice { item_id: Uuid, mail_id: Uuid, subject: String },
+    DirectMail {
+        item_id: Uuid,
+        address: Option<Uuid>,
+        mail: Mail,
+    },
+    CcNotice {
+        item_id: Uuid,
+        address: Option<Uuid>,
+        mail_id: Uuid,
+        subject: String,
+    },
     CallNotice(CallNotice),
-    MailNotice { item_id: Uuid, mail_id: Option<Uuid>, text: String },
+    MailNotice {
+        item_id: Uuid,
+        address: Option<Uuid>,
+        mail_id: Option<Uuid>,
+        text: String,
+    },
 }
 
 impl UnreadItem {
@@ -225,6 +243,15 @@ impl UnreadItem {
             | Self::CcNotice { item_id, .. }
             | Self::MailNotice { item_id, .. } => *item_id,
             Self::CallNotice(notice) => notice.item_id,
+        }
+    }
+
+    pub fn address(&self) -> Option<Uuid> {
+        match self {
+            Self::DirectMail { address, .. }
+            | Self::CcNotice { address, .. }
+            | Self::MailNotice { address, .. } => *address,
+            Self::CallNotice(notice) => notice.address,
         }
     }
 }

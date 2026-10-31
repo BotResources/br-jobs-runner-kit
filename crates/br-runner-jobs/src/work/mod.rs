@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::backend::{Backend, ChildCommand, LogRecord, TriggerDelivery};
 use crate::error::Error;
 use crate::graphql;
-use crate::model::{CallMode, Content, LogLevel, PayloadForm, ResultRef, Restart, SavedState};
+use crate::model::{CallMode, Content, LogLevel, PayloadForm, Restart, ResultRef, SavedState};
 use crate::queue::{DeliveryQueue, QueueSettings, WriteEnd};
 
 pub(crate) use core::WorkCore;
@@ -164,11 +164,7 @@ impl Work {
         graphql::saved_state(self.core.backend.as_ref(), &self.core.ids()).await
     }
 
-    pub async fn read_result(
-        &self,
-        result: ResultRef,
-        keep: bool,
-    ) -> Result<Content, Error> {
+    pub async fn read_result(&self, result: ResultRef, keep: bool) -> Result<Content, Error> {
         graphql::read_result(self.core.backend.as_ref(), &self.core.ids(), result, keep).await
     }
 
@@ -221,4 +217,3 @@ impl Work {
         DeliveryQueue::start(sender, settings, self.core.run_id)
     }
 }
-

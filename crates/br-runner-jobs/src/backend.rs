@@ -112,8 +112,7 @@ pub(crate) trait Backend: Send + Sync {
         variables: Value,
     ) -> BoxFuture<'a, Result<Value, Error>>;
 
-    fn claim(&self, claim_id: Uuid, claim_wait: Duration)
-    -> BoxFuture<'_, Result<Vec<u8>, Error>>;
+    fn claim(&self, claim_id: Uuid, claim_wait: Duration) -> BoxFuture<'_, Result<Vec<u8>, Error>>;
 
     fn open_triggers(
         &self,
