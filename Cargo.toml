@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs"]
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs", "crates/br-runner-as-node"]
 
 [workspace.package]
 edition = "2024"
@@ -41,3 +41,4 @@ br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-k
 
 [patch."https://github.com/BotResources/br-jobs-runner-kit"]
 br-runner-connection = { path = "crates/br-runner-connection" }
+br-runner-jobs = { path = "crates/br-runner-jobs" }
