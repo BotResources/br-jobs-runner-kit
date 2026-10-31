@@ -22,16 +22,18 @@ A crate that names the types of a sibling in its public API must reach that sibl
 
 ## Quickstart
 
-This is `examples/run_one_work.rs`. It builds the `Connection` and the `JobsClient`, opens the trigger feed and reads one `Work`, makes the delivery queue (its first write is the started fact), acknowledges the trigger, reads the payload, hands over the answer and the saved state, hands over the completed fact, and waits until the queue holds nothing.
+This is `examples/run_one_work.rs`. It builds the `Connection` and the `JobsClient`, opens the trigger feed and reads one `Work`, makes the delivery queue (its first write is the started fact), acknowledges the trigger, makes the agent book and a node entry and takes one agent id from it (its registration joins the queue), reads the payload, hands over the answer and the saved state (which names that agent), hands over the completed fact, and waits until the queue holds nothing.
 
 ```rust,no_run
 use std::sync::Arc;
 use std::time::Duration;
 
+use br_agentic_contract::AgentLabel;
 use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
 use br_runner_jobs::{
-    Content, DeliveryQueue, Error, IgnoreReports, JobsClient, QueueSettings, Removal, Work,
+    AgentBook, Content, DeliveryQueue, Error, IgnoreReports, JobsClient, NodeEntry, QueueSettings,
+    Removal, Work, book_lookup,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -77,16 +79,30 @@ pub async fn start_queue(work: &Work) -> Result<DeliveryQueue, Box<dyn std::erro
     Ok(queue)
 }
 
+pub fn node_entry_of(book: &Arc<AgentBook>) -> NodeEntry {
+    let book = Arc::clone(book);
+    NodeEntry::new(
+        "analyst",
+        book_lookup(move |_instance| {
+            let book = Arc::clone(&book);
+            async move { Ok(book) }
+        }),
+    )
+}
+
 pub async fn run_one_work(work: Work) -> Result<String, Box<dyn std::error::Error>> {
     let queue = start_queue(&work).await?;
     work.ack().await?;
+    let book = Arc::new(work.agent_book(&queue, Vec::new(), false)?);
+    let label = AgentLabel::new("writer")?;
+    let agent = node_entry_of(&book).agent_id(&book, &label)?;
     let payload = work.payload().await?;
     let answer = Content {
         message: format!("received: {}", payload.message),
         attachments: Vec::new(),
     };
     let answered = queue.answer(answer);
-    let saved = queue.saved_state(json!({ "steps_done": 1 }));
+    let saved = queue.saved_state(json!({ "steps_done": 1, "agents": [agent.as_uuid()] }));
     answered.await.map_err(removal_text)?;
     saved.await.map_err(removal_text)?;
     queue.completed().await.map_err(removal_text)?;

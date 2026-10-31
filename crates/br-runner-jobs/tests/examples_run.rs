@@ -61,6 +61,29 @@ async fn the_work_of_run_one_work_ends_with_the_answer_the_saved_state_and_the_c
     assert!(graphql_documents[2].contains(SAVE_STATE_ROOT));
     assert_eq!(graphql_documents.len(), 3);
     assert_eq!(jobs.deliveries(), vec![Delivery::Ack]);
+    let registered = calls
+        .iter()
+        .position(|call| matches!(call, Call::Register { agents, .. } if agents.len() == 1))
+        .expect("the registration of the agent");
+    let saved_at = calls
+        .iter()
+        .position(|call| matches!(call, Call::Graphql { document, .. } if document.contains(SAVE_STATE_ROOT)))
+        .expect("the saved state");
+    assert!(registered < saved_at);
+    let Call::Register { agents, .. } = &calls[registered] else {
+        unreachable!()
+    };
+    let saved = calls
+        .iter()
+        .find_map(|call| match call {
+            Call::Graphql {
+                variables,
+                document,
+            } if document.contains(SAVE_STATE_ROOT) => Some(variables.to_string()),
+            _ => None,
+        })
+        .expect("the saved state");
+    assert!(saved.contains(&agents[0].agent_id.to_string()), "{saved}");
     let uploaded = calls
         .iter()
         .find_map(|call| match call {
