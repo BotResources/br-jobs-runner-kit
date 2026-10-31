@@ -72,6 +72,22 @@ pub struct Refusal {
     pub command_id: Option<Uuid>,
 }
 
+impl Refusal {
+    pub fn new(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        command_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            code: code.into(),
+            reason: None,
+            params: Map::new(),
+            message: message.into(),
+            command_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
