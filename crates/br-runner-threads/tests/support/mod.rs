@@ -6,6 +6,7 @@ pub mod client_closing_x;
 pub mod client_graphql_x;
 pub mod client_streaming;
 pub mod client_x;
+pub mod gate_store;
 pub mod ids;
 pub mod nats_fixtures;
 pub mod nats_gateway;
@@ -15,6 +16,7 @@ pub mod nats_server;
 pub mod nats_streams;
 pub mod queue_kit;
 pub mod queue_store;
+pub mod store_setup;
 pub mod world;
 
 pub use ids::*;

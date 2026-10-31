@@ -108,7 +108,7 @@ pub(crate) async fn run(inner: Arc<Inner>, slot: Arc<Slot>) {
         }
         match inner.attempt(&head).await {
             Ok(status) => {
-                if head.item.kind == ItemKind::Closing && status == Some(MessageStatus::Failed) {
+                if status == Some(MessageStatus::Failed) {
                     inner.report(report(ReportKind::ClosingFailed, &slot, &head, None));
                 }
                 inner.end_item(&slot, &head, Ended::Delivered).await;

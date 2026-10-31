@@ -24,13 +24,80 @@ fn the_install_pin_names_the_version_of_the_crate() {
     assert!(README.contains(&pin), "{pin}");
 }
 
-#[test]
-fn the_install_block_pins_the_connection_with_the_tag_string_of_the_workspace() {
-    let pin = WORKSPACE
+fn install_block() -> Vec<(String, String)> {
+    let after = README
+        .split("## Install")
+        .nth(1)
+        .expect("the install section");
+    let block = after
+        .split("```toml")
+        .nth(1)
+        .and_then(|rest| rest.split("```").next())
+        .expect("the install block");
+    block
         .lines()
-        .find(|line| line.starts_with("br-runner-connection = "))
-        .and_then(|line| line.split_once("package = "))
-        .map(|(_, pin)| format!("package = {}", pin.trim_end_matches(" }")))
-        .expect("the pin of br-runner-connection in the workspace");
-    assert!(README.contains(&pin), "{pin}");
+        .filter_map(|line| line.split_once(" = "))
+        .map(|(name, value)| (name.trim().to_owned(), value.trim().to_owned()))
+        .collect()
+}
+
+fn workspace_line(name: &str) -> &'static str {
+    WORKSPACE
+        .lines()
+        .find(|line| line.starts_with(&format!("{name} = ")))
+        .unwrap_or_else(|| panic!("{name} is not in the workspace manifest"))
+}
+
+fn first_quoted(text: &str) -> &str {
+    text.split('"').nth(1).expect("a quoted version")
+}
+
+#[test]
+fn every_pin_of_the_install_block_is_the_pin_the_crate_is_built_with() {
+    let pins = install_block();
+    assert!(pins.len() >= 8, "{pins:?}");
+    for (name, value) in pins.iter().filter(|(name, _)| name != "br-runner-threads") {
+        let line = workspace_line(name);
+        if value.contains("git = ") {
+            assert_eq!(line, format!("{name} = {value}"), "{name}");
+        } else {
+            let version = first_quoted(line.split_once(" = ").expect("a pin").1);
+            assert!(
+                value.contains(&format!("\"{version}\"")),
+                "{name}: {value} does not hold version {version}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_install_block_holds_every_crate_the_quickstart_names() {
+    let pinned: Vec<String> = install_block()
+        .into_iter()
+        .map(|(name, _)| name.replace('-', "_"))
+        .collect();
+    let mut named = Vec::new();
+    for line in QUICKSTART.lines() {
+        for (at, _) in line.match_indices("::") {
+            let before = &line[..at];
+            let start = before
+                .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .map_or(0, |i| i + 1);
+            let ident = &before[start..];
+            let continues_a_path = before[..start].ends_with("::");
+            if !continues_a_path && ident.starts_with(|c: char| c.is_ascii_lowercase()) {
+                named.push(ident.to_owned());
+            }
+        }
+    }
+    named.retain(|ident| ident != "std");
+    named.sort();
+    named.dedup();
+    assert!(named.len() >= 6, "{named:?}");
+    for ident in named {
+        assert!(
+            pinned.contains(&ident),
+            "{ident} is used by the quickstart and not pinned in the install block"
+        );
+    }
 }

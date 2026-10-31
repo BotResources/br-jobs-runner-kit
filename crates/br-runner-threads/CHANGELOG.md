@@ -8,11 +8,12 @@ Rebuilds the crate on the `Connection` of `br-runner-connection` and adds the ad
 
 - `ThreadClient`, built from a `Connection` with a check wait: `create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `fail_title_job`, `request_upload`. Every wait is a required `Duration`; zero is `InvalidInput`.
 - `StreamHandle`, `StreamWriter`, `ResponseSink` and `ResponseControl` (`complete`, `discard`, `failure`): chunks numbered from 0 with no gap, `StreamBroken` on a chunk the bus did not take, `StreamClosed` after a closing. A keepalive is numbered like any other chunk and is counted in the seal.
-- The closing table of the client (`Closing`, `ClosureKind`): Completed sends a complete, BudgetExhausted, Failed and Interrupted send a fail, Cancelled sends a cancel; the seal is sent as the README states. The three commands carry no closure reason and no detail.
+- The closing table of the client (`Closing`, `ClosureKind`): Completed sends a complete, BudgetExhausted, Failed and Interrupted send a fail, Cancelled sends a cancel; the seal of the chunks is sent with a `Completed` closing, and with the other closings only when the handle is healthy and holds at least one chunk. The three commands carry no closure reason and no detail.
 - `ThreadPortAdapter` and `ThreadAccessAdapter` with the thread queue: first in, first out for each thread, one delivery task for each thread, sending again on `Unavailable`, `Lost`, `Unreadable` (commands) and `StreamBroken` (chunks), reports through `QueueObserver`, items kept through `QueueStore` (`MemoryQueueStore` provided), `queue_state()`, `entry_stored()` and `instance_ended()`. The adapter sends no keepalive and no parent message id. On one thread, `complete_response`, `open_response`, `open_result`, `close_turn`, `add_entry`, `complete_result`, `add_input_turn` and `discard_response` run one at a time: no other of these operations goes between the deltas that `complete_response` queues.
 - `WriteContext` and `WriteContextFn`, `ThreadAccessSettings`.
 - `OpenStream::impersonator_id`, sent in the opening message as `WholeMessage::impersonator_id` is sent in a whole message.
 - Feature `test-double`: `test_double::MemoryThreads`, `test_double::refusal(code, message, command_id)` and `test_double::failure(cause, text)`.
+- `test_double` also exports `Operation`, `Command`, `CommandBody` and `Outcome`, and `MemoryThreads` has `operations`, `commands`, `chunks`, `answer_commands`, `answer_chunks`, `answer_graphql`, `pause` and `resume`; `pause` and `resume` hold and release the answers.
 - Six examples; `runner_wiring` is the quickstart of the README.
 
 ### Changed

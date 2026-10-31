@@ -3,10 +3,7 @@ use std::time::Duration;
 
 use br_agentic_contract::{PortError, ThreadAccess, ThreadRef};
 use br_core_kernel::ServiceAccountId;
-use br_llm_messages::{
-    AgentId, Author, BlockId, EntryId, HumanId, HumanMessage, InputTurn, PlainBlock, TextBlock,
-    TurnId,
-};
+use br_llm_messages::{AgentId, Author, EntryId, IncomingEntry, InputTurn, RuntimeNotice, TurnId};
 use br_runner_connection::{Connection, FixedToken};
 use br_runner_threads::{
     EntryOutcome, Error, IgnoreReports, MemoryQueueStore, NewThread, ThreadAccessAdapter,
@@ -81,9 +78,11 @@ pub async fn lifecycle_hook(adapter: &ThreadAccessAdapter, ended_agents: &[Agent
 
 pub fn mail_turn(text: &str) -> Result<(EntryId, InputTurn), br_llm_messages::Error> {
     let mail = EntryId::from_uuid(Uuid::now_v7())?;
-    let block = PlainBlock::Text(TextBlock::new(BlockId::from_uuid(Uuid::now_v7())?, text)?);
-    let human = HumanMessage::new(mail, HumanId::from_uuid(Uuid::now_v7())?, vec![block])?;
-    let turn = InputTurn::new(TurnId::from_uuid(Uuid::now_v7())?, vec![human.into()])?;
+    let notice = RuntimeNotice::new(mail, text)?;
+    let turn = InputTurn::new(
+        TurnId::from_uuid(Uuid::now_v7())?,
+        vec![IncomingEntry::from(notice)],
+    )?;
     Ok((mail, turn))
 }
 

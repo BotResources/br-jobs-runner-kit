@@ -6,6 +6,7 @@ use super::deliver;
 use super::inner::{Inner, Queued, Slot, locked};
 use crate::error::Error;
 use crate::queue::item::Item;
+use crate::queue::{QueueReport, ReportKind};
 
 impl Inner {
     pub(crate) async fn accept(
@@ -26,6 +27,18 @@ impl Inner {
         let no = self.numbers.fetch_add(1, Ordering::SeqCst) + 1;
         let spawn = {
             let mut queue = locked(&slot.queue);
+            if self.stopped.load(Ordering::SeqCst) {
+                drop(queue);
+                self.report(QueueReport {
+                    kind: ReportKind::Unsent,
+                    thread: slot.thread,
+                    message_id: item.message,
+                    item_kind: item.kind,
+                    item_id: item.id,
+                    error: None,
+                });
+                return;
+            }
             for entry in &item.entries {
                 queue.dropped.remove(entry);
             }
@@ -43,6 +56,9 @@ impl Inner {
             let mut aborts = locked(&self.aborts);
             aborts.retain(|handle| !handle.is_finished());
             aborts.push(task.abort_handle());
+            if self.stopped.load(Ordering::SeqCst) {
+                task.abort();
+            }
         }
     }
 }

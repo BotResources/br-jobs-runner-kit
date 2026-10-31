@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tokio::sync::MutexGuard;
+
 use br_agentic_contract::{AiTurnRef, PortError, ResponseStream, ThreadRef};
 use br_llm_messages::{EntryId, ModelResponse};
 
@@ -18,16 +20,20 @@ impl Inner {
         }
     }
 
-    async fn opening_context(
+    async fn ordered_with_context<'a>(
         &self,
         thread: &ThreadRef,
-        slot: &Slot,
+        slot: &'a Slot,
         turn: &AiTurnRef,
-    ) -> Result<Option<WriteContext>, PortError> {
-        if self.needs_opening(slot, turn).await? {
-            Ok(Some(self.context_for(thread).await?))
-        } else {
-            Ok(None)
+    ) -> Result<(MutexGuard<'a, ()>, Option<WriteContext>), PortError> {
+        let mut context = None;
+        loop {
+            let order = slot.order.lock().await;
+            if context.is_some() || !self.needs_opening(slot, turn).await? {
+                return Ok((order, context));
+            }
+            drop(order);
+            context = Some(self.context_for(thread).await?);
         }
     }
 
@@ -49,8 +55,7 @@ impl Inner {
         entry: EntryId,
     ) -> Result<ResponseStream, PortError> {
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let ctx = self.opening_context(thread, &slot, &turn).await?;
+        let (_order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
         let earlier = {
             let mut mem = slot.mem.lock().await;
             if let Some(ctx) = &ctx {
@@ -137,8 +142,8 @@ impl Inner {
         turn: AiTurnRef,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let Some(ctx) = self.opening_context(thread, &slot, &turn).await? else {
+        let (_order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
+        let Some(ctx) = ctx else {
             return Ok(());
         };
         let mut mem = slot.mem.lock().await;
