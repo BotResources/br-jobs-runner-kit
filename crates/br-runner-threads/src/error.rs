@@ -17,7 +17,7 @@ pub struct Failure {
 }
 
 impl Failure {
-    pub fn new(cause: Cause, text: impl Into<String>) -> Self {
+    pub(crate) fn new(cause: Cause, text: impl Into<String>) -> Self {
         Self {
             cause,
             text: text.into(),
@@ -72,22 +72,6 @@ pub struct Refusal {
     pub command_id: Option<Uuid>,
 }
 
-impl Refusal {
-    pub fn new(
-        code: impl Into<String>,
-        message: impl Into<String>,
-        command_id: Option<Uuid>,
-    ) -> Self {
-        Self {
-            code: code.into(),
-            reason: None,
-            params: Map::new(),
-            message: message.into(),
-            command_id,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -122,6 +106,13 @@ impl Error {
 
     pub(crate) fn library(error: &br_llm_messages::Error) -> Self {
         Self::InvalidInput(error.code().as_str().to_owned())
+    }
+
+    pub(crate) fn from_store(error: Self) -> Self {
+        match error {
+            Self::Store(text) => Self::Store(text),
+            other => Self::Store(other.to_string()),
+        }
     }
 
     pub(crate) fn unavailable(text: impl Into<String>) -> Self {

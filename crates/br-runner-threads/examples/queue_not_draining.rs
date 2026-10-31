@@ -1,3 +1,4 @@
+use br_runner_threads::test_double;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -5,7 +6,7 @@ use br_agentic_contract::{PortError, ThreadAccess, ThreadRef};
 use br_llm_messages::{AgentId, Author, EntryId, IncomingEntry, InputTurn, RuntimeNotice, TurnId};
 use br_runner_threads::test_double::MemoryThreads;
 use br_runner_threads::{
-    Cause, Error, Failure, ItemKind, MemoryQueueStore, QueueObserver, QueueReport, ReportKind,
+    Cause, Error, ItemKind, MemoryQueueStore, QueueObserver, QueueReport, ReportKind,
     ThreadAccessAdapter, ThreadAccessSettings, ThreadClient, WriteContext, WriteContextFn,
 };
 use uuid::Uuid;
@@ -97,7 +98,7 @@ pub async fn accept_an_input_turn(adapter: &ThreadAccessAdapter, thread: &Thread
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let threads = MemoryThreads::new();
     threads.answer_commands(|_| {
-        Err(Error::Unavailable(Failure::new(
+        Err(Error::Unavailable(test_double::failure(
             Cause::Transport,
             "the bus is down",
         )))

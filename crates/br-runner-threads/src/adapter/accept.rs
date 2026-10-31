@@ -17,10 +17,7 @@ impl Inner {
             return Err(Error::Store("the adapter is stopped".to_owned()));
         }
         let stored = item.stored(slot.thread)?;
-        self.store
-            .append(stored)
-            .await
-            .map_err(|e| Error::Store(e.to_string()))?;
+        self.store.append(stored).await.map_err(Error::from_store)?;
         self.enqueue(slot, item);
         Ok(())
     }

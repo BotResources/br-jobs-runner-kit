@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 pub use crate::backend::{Command, CommandBody, Outcome};
 use crate::client::ThreadClient;
-use crate::error::Error;
+use crate::error::{Cause, Error, Failure, Refusal};
 use script::Script;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -114,6 +114,24 @@ impl MemoryThreads {
     pub fn resume(&self) {
         self.inner.paused.send_replace(false);
     }
+}
+
+pub fn refusal(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    command_id: Option<Uuid>,
+) -> Refusal {
+    Refusal {
+        code: code.into(),
+        reason: None,
+        params: serde_json::Map::new(),
+        message: message.into(),
+        command_id,
+    }
+}
+
+pub fn failure(cause: Cause, text: impl Into<String>) -> Failure {
+    Failure::new(cause, text)
 }
 
 pub(crate) fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

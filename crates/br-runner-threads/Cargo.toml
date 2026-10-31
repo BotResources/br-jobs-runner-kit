@@ -27,6 +27,6 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 uuid.workspace = true
 
 [dev-dependencies]
-br-runner-threads = { path = ".", version = "0.2.0", features = ["test-double"] }
+br-runner-threads = { path = ".", version = ">=0.2.0", features = ["test-double"] }
 futures.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }

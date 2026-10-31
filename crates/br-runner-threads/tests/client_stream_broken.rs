@@ -1,25 +1,24 @@
 mod support;
 
-use std::time::Duration;
+use br_runner_threads::test_double;
 
 use br_runner_threads::test_double::MemoryThreads;
-use br_runner_threads::{Cause, Error, Failure};
+use br_runner_threads::{Cause, Error};
 use support::client_x::*;
 use support::*;
 
 fn lost() -> Error {
-    Error::Lost(Failure::new(Cause::WaitFired, "the bus did not answer"))
-}
-
-async fn quiet() {
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    Error::Lost(test_double::failure(
+        Cause::WaitFired,
+        "the bus did not answer",
+    ))
 }
 
 #[tokio::test]
 async fn a_chunk_the_bus_does_not_take_breaks_the_stream_whatever_the_cause() {
     let causes = [
         lost(),
-        Error::Unavailable(Failure::new(Cause::NoListener, "none")),
+        Error::Unavailable(test_double::failure(Cause::NoListener, "none")),
         Error::Unauthenticated,
         Error::Unreadable("garbled".to_owned()),
     ];
@@ -74,7 +73,7 @@ async fn a_chunk_operation_returns_only_when_the_bus_has_taken_the_chunk() {
     let task = tokio::spawn(async move { writer.keepalive().await });
     eventually("the chunk reached the bus", || threads.chunks().len() == 1).await;
 
-    quiet().await;
+    settle().await;
     let finished_while_paused = task.is_finished();
     threads.resume();
     let result = task.await.expect("joined");
@@ -125,7 +124,7 @@ async fn dropping_the_handle_a_writer_a_sink_and_a_control_sends_nothing() {
     let operations = threads.operations().len();
 
     drop((sink, control, writer_sink, writer_control, writer, handle));
-    quiet().await;
+    settle().await;
 
     assert_eq!(threads.operations().len(), operations);
 }

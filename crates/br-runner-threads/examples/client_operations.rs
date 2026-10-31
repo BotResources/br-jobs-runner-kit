@@ -43,6 +43,7 @@ pub async fn stream_a_message(client: &ThreadClient, thread_id: Uuid) -> Result<
         author_name: "Analyst".to_owned(),
         job_id: None,
         acting_user_id: None,
+        impersonator_id: None,
         wait: WAIT,
     };
     let handle = client.open_stream(&open).await?;

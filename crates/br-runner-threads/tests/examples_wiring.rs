@@ -4,12 +4,13 @@ mod support;
 #[allow(dead_code)] // the example is included for its functions; its main is unused here
 mod runner_wiring;
 
+use br_runner_threads::test_double;
 use std::time::Duration;
 
 use br_agentic_contract::{ThreadAccess, ThreadRef};
 use br_llm_messages::{AgentId, Author, EntryId};
 use br_runner_threads::test_double::{CommandBody, MemoryThreads};
-use br_runner_threads::{Error, Refusal, ThreadAccessAdapter, ThreadClient};
+use br_runner_threads::{Error, ThreadAccessAdapter, ThreadClient};
 use contract_threads::ReasonCode;
 use runner_wiring::{
     Mark, build_connection, build_thread_access, lifecycle_hook, mail_turn, node_entry,
@@ -91,7 +92,7 @@ async fn the_mark_waits_while_threads_does_not_take_the_input_turn() {
 async fn a_mail_is_left_unread_when_threads_refuses_its_input_turn_for_good() {
     let wiring = wiring().await;
     wiring.threads.answer_commands(|command| {
-        Err(Error::Refused(Refusal::new(
+        Err(Error::Refused(test_double::refusal(
             "THREAD_NOT_OPEN",
             "the thread is closed",
             Some(command.id),

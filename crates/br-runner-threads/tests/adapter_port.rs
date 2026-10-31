@@ -1,8 +1,9 @@
+use br_runner_threads::test_double;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use br_agentic_contract::{Fields, PortError, Reason, ThreadPort};
-use br_runner_threads::{Cause, Error, Failure, ThreadPortAdapter};
+use br_runner_threads::{Cause, Error, ThreadPortAdapter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -91,7 +92,7 @@ async fn an_id_that_is_not_a_uuid_v7_is_a_fault_with_invalid_input_as_cause() {
 async fn a_failure_of_the_function_reaches_the_node_unchanged() {
     let port: ThreadPortAdapter<Snapshot> = ThreadPortAdapter::new(|_snapshot| {
         Box::pin(async {
-            Err(PortError::fault(Error::Unavailable(Failure::new(
+            Err(PortError::fault(Error::Unavailable(test_double::failure(
                 Cause::Transport,
                 "the lookup is down",
             ))))
@@ -102,7 +103,7 @@ async fn a_failure_of_the_function_reaches_the_node_unchanged() {
 
     assert_eq!(
         fault_of(result),
-        Error::Unavailable(Failure::new(Cause::Transport, "the lookup is down"))
+        Error::Unavailable(test_double::failure(Cause::Transport, "the lookup is down"))
     );
 }
 

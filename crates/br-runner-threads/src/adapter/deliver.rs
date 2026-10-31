@@ -79,7 +79,7 @@ impl Inner {
                 ReportKind::RemoveFailed,
                 slot,
                 head,
-                Some(Error::Store(error.to_string())),
+                Some(Error::from_store(error)),
             ));
         }
     }

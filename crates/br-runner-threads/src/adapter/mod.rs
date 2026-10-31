@@ -57,11 +57,7 @@ impl ThreadAccessAdapter {
     pub async fn new(client: &ThreadClient, settings: ThreadAccessSettings) -> Result<Self, Error> {
         require_wait(settings.outcome_wait, "the outcome wait")?;
         require_wait(settings.retry_wait, "the wait between attempts")?;
-        let kept = settings
-            .store
-            .list()
-            .await
-            .map_err(|e| Error::Store(e.to_string()))?;
+        let kept = settings.store.list().await.map_err(Error::from_store)?;
         let leftovers = kept
             .iter()
             .map(Item::read)

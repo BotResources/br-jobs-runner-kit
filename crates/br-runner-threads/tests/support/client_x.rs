@@ -1,3 +1,4 @@
+use br_runner_threads::test_double;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -57,6 +58,7 @@ pub fn open_request(thread_id: Uuid) -> OpenStream {
         author_name: "Analyst".to_owned(),
         job_id: None,
         acting_user_id: None,
+        impersonator_id: None,
         wait: WAIT,
     }
 }
@@ -120,7 +122,7 @@ pub fn contiguous(count: usize) -> Vec<u64> {
 }
 
 pub fn refusal_error() -> Error {
-    Error::Refused(br_runner_threads::Refusal::new(
+    Error::Refused(test_double::refusal(
         "thread-closed",
         "the thread is closed",
         Some(Uuid::now_v7()),

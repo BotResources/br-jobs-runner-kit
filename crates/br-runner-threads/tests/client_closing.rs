@@ -201,9 +201,11 @@ async fn a_failed_closing_needs_a_detail_the_library_accepts() {
     let missing = client.close_message(&without, None).await;
     let blank = client.close_message(&empty, None).await;
 
-    assert!(
-        matches!(missing, Err(Error::InvalidInput(_))),
-        "{missing:?}"
+    assert_eq!(
+        missing,
+        Err(Error::InvalidInput(
+            "a Failed closing needs a detail".to_owned()
+        ))
     );
     assert!(matches!(blank, Err(Error::InvalidInput(_))), "{blank:?}");
     assert!(threads.operations().is_empty());

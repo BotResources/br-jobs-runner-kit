@@ -1,3 +1,4 @@
+use br_runner_threads::test_double;
 use br_runner_threads::test_double::{CommandBody, MemoryThreads};
 use br_runner_threads::{Cause, ClosureKind, Error, Failure, OpenStream, StreamHandle};
 use contract_threads::{StreamSeal, seal_hash};
@@ -42,9 +43,9 @@ pub fn seal_in(body: &CommandBody) -> Option<StreamSeal> {
 }
 
 pub fn unavailable() -> Error {
-    Error::Unavailable(Failure::new(Cause::NoListener, "none"))
+    Error::Unavailable(test_double::failure(Cause::NoListener, "none"))
 }
 
 pub fn lost() -> Error {
-    Error::Lost(Failure::new(Cause::WaitFired, "no outcome"))
+    Error::Lost(test_double::failure(Cause::WaitFired, "no outcome"))
 }

@@ -70,7 +70,7 @@ pub(crate) fn open_message(open: &OpenStream) -> Result<Command, Error> {
             parent_message_id: open.parent_message_id,
             job_id: open.job_id,
             acting_user_id: open.acting_user_id,
-            impersonator_id: None,
+            impersonator_id: open.impersonator_id,
         },
         AiTurn {
             agent_id: open.agent_id.as_uuid(),

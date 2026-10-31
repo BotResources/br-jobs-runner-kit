@@ -21,6 +21,7 @@ impl Inner {
         let ctx = self.context_for(thread).await?;
         let slot = self.slot(*thread);
         let message = turn.id.as_uuid();
+        let _order = slot.order.lock().await;
         let mut mem = slot.mem.lock().await;
         let chunks = match mem.turns.get(&message) {
             Some(state) if state.closed => return Err(fault(closed_turn())),

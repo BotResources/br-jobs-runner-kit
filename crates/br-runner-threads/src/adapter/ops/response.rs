@@ -49,6 +49,7 @@ impl Inner {
         entry: EntryId,
     ) -> Result<ResponseStream, PortError> {
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let ctx = self.opening_context(thread, &slot, &turn).await?;
         let earlier = {
             let mut mem = slot.mem.lock().await;
@@ -84,6 +85,7 @@ impl Inner {
     ) -> Result<(), PortError> {
         let ctx = self.context_for(thread).await?;
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let entry = response.id();
         let held = {
             let mut mem = slot.mem.lock().await;
@@ -112,6 +114,7 @@ impl Inner {
         entry: EntryId,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let held = slot
             .mem
             .lock()
@@ -134,6 +137,7 @@ impl Inner {
         turn: AiTurnRef,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let Some(ctx) = self.opening_context(thread, &slot, &turn).await? else {
             return Ok(());
         };

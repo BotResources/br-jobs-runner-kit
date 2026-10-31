@@ -6,8 +6,9 @@ mod client_operations;
 
 use br_agentic_contract::ThreadRef;
 use br_llm_messages::DeltaOp;
+use br_runner_threads::test_double;
 use br_runner_threads::test_double::{CommandBody, MemoryThreads};
-use br_runner_threads::{ContextContent, Error, Refusal};
+use br_runner_threads::{ContextContent, Error};
 use client_operations::{create_thread, read_context, stream_a_message};
 use contract_threads::{Chunk, seal_hash};
 use serde_json::json;
@@ -37,7 +38,7 @@ async fn the_created_thread_reaches_threads_with_its_id_and_its_title() {
 async fn a_thread_that_threads_refuses_is_an_error_of_the_client() {
     let threads = MemoryThreads::new();
     threads.answer_commands(|command| {
-        Err(Error::Refused(Refusal::new(
+        Err(Error::Refused(test_double::refusal(
             "KEY_REUSED",
             "the thread exists",
             Some(command.id),

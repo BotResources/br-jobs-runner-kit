@@ -1,7 +1,5 @@
 mod support;
 
-use std::time::Duration;
-
 use br_runner_threads::test_double::{CommandBody, MemoryThreads, Outcome};
 use br_runner_threads::{ClosureKind, Error, MessageStatus};
 use support::client_closing_x::*;
@@ -106,7 +104,7 @@ async fn a_closing_goes_after_every_chunk_sent_before_it() {
         client.close_message(&closing, Some(&handle)).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    settle().await;
     let commands_while_chunk_in_flight = threads.commands().len();
     threads.resume();
     chunk_task.await.expect("joined").expect("taken");

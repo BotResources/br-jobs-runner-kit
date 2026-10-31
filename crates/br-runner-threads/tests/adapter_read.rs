@@ -1,12 +1,13 @@
 mod support;
 
+use br_runner_threads::test_double;
 use std::sync::Arc;
 use std::time::Duration;
 
 use br_agentic_contract::ThreadRef;
 use br_llm_messages::Conversation;
 use br_runner_threads::test_double::{CommandBody, MemoryThreads, Operation, Outcome};
-use br_runner_threads::{Cause, Error, Failure, MemoryQueueStore, MessageStatus};
+use br_runner_threads::{Cause, Error, MemoryQueueStore, MessageStatus};
 use serde_json::json;
 use support::adapter_wire::*;
 use support::adapter_x::*;
@@ -32,7 +33,7 @@ fn stored_outcome(command_id: uuid::Uuid) -> Outcome {
 }
 
 #[tokio::test]
-async fn a_read_asks_threads_for_the_whole_active_branch_of_the_thread_and_gives_its_turns() {
+async fn a_read_asks_threads_for_the_context_of_the_thread_with_no_agent_and_gives_its_turns() {
     let w = world().await;
     let thread = thread_ref();
     let held = small_conversation(thread.as_uuid());
@@ -76,7 +77,7 @@ async fn a_read_waits_until_the_items_accepted_before_it_have_ended() {
 
     let reader = w.access().read(&thread);
     let releaser = async {
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        settle().await;
         let asked_before_release = graphql_count(&w.threads);
         w.threads.resume();
         asked_before_release
@@ -120,7 +121,7 @@ async fn a_read_waits_for_the_leftovers_of_the_store_and_they_go_first() {
 
     let reader = second.access().read(&thread);
     let releaser = async {
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        settle().await;
         let asked_before_release = graphql_count(&threads);
         threads.resume();
         asked_before_release
@@ -159,7 +160,7 @@ async fn a_read_of_one_thread_does_not_wait_for_the_blocked_items_of_another_thr
     w.threads
         .answer_commands(move |command| match &command.body {
             CommandBody::Store(store) if store.thread_id == blocked_id => Err(Error::Unavailable(
-                Failure::new(Cause::Transport, "threads is down for this thread"),
+                test_double::failure(Cause::Transport, "threads is down for this thread"),
             )),
             _ => Ok(stored_outcome(command.id)),
         });
@@ -191,7 +192,7 @@ async fn a_thread_that_does_not_exist_is_a_fault_with_invalid_input_as_cause() {
 #[tokio::test]
 async fn a_failure_of_threads_is_a_fault_with_that_error_as_cause_and_is_not_repeated() {
     let w = world().await;
-    let failure = Error::Unavailable(Failure::new(Cause::Transport, "no gateway"));
+    let failure = Error::Unavailable(test_double::failure(Cause::Transport, "no gateway"));
     let answer = failure.clone();
     w.threads
         .answer_graphql(move |_document, _variables| Err(answer.clone()));

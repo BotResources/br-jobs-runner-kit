@@ -1,3 +1,4 @@
+use br_runner_threads::test_double;
 use std::future::Future;
 use std::time::Duration;
 
@@ -43,11 +44,11 @@ pub fn taken(command: &Command, status: MessageStatus) -> Outcome {
 }
 
 pub fn unavailable() -> Error {
-    Error::Unavailable(Failure::new(Cause::Transport, "the bus is down"))
+    Error::Unavailable(test_double::failure(Cause::Transport, "the bus is down"))
 }
 
 pub fn lost() -> Error {
-    Error::Lost(Failure::new(Cause::WaitFired, "no outcome"))
+    Error::Lost(test_double::failure(Cause::WaitFired, "no outcome"))
 }
 
 pub fn unreadable() -> Error {

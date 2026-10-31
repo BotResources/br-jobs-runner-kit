@@ -42,6 +42,7 @@ impl Inner {
             },
         );
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let _ordered = slot.mem.lock().await;
         let item = Inner::whole_item(&slot, command, ctx.agent.as_uuid(), message, entries);
         self.accept(&slot, item).await.map_err(fault)
@@ -89,6 +90,7 @@ impl Inner {
         chunk: contract_threads::Chunk,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
+        let _order = slot.order.lock().await;
         let mut mem = slot.mem.lock().await;
         self.ensure_turn(&slot, &mut mem, turn, ctx)
             .await

@@ -37,7 +37,8 @@ impl ClosureKind {
             Self::Interrupted => ClosureReason::interrupted(),
             Self::BudgetExhausted => ClosureReason::budget_exhausted(),
             Self::Failed => {
-                let detail = detail.ok_or_else(|| Error::invalid("invalid_content"))?;
+                let detail =
+                    detail.ok_or_else(|| Error::invalid("a Failed closing needs a detail"))?;
                 return ClosureReason::failed(detail)
                     .map(drop)
                     .map_err(|e| Error::library(&e));

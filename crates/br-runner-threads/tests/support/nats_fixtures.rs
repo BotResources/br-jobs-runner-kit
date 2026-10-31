@@ -93,6 +93,7 @@ pub fn open_stream(thread_id: Uuid) -> OpenStream {
         author_name: "Analyst".to_owned(),
         job_id: None,
         acting_user_id: None,
+        impersonator_id: None,
         wait: WAIT,
     }
 }

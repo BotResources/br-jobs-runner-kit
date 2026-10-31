@@ -1,9 +1,8 @@
 mod support;
 
+use br_runner_threads::test_double;
 use br_runner_threads::test_double::MemoryThreads;
-use br_runner_threads::{
-    Cause, Error, FailTitleJob, Failure, SetTitle, UploadAccess, UploadRequest,
-};
+use br_runner_threads::{Cause, Error, FailTitleJob, SetTitle, UploadAccess, UploadRequest};
 use serde_json::{Value, json};
 use support::client_graphql_x::*;
 use support::client_x::*;
@@ -224,7 +223,7 @@ async fn an_upload_access_that_is_missing_or_malformed_is_unreadable() {
 #[tokio::test]
 async fn a_failure_of_the_graphql_request_reaches_the_caller_for_every_operation() {
     let threads = MemoryThreads::new();
-    let failure = Error::Lost(Failure::new(Cause::WaitFired, "no reply"));
+    let failure = Error::Lost(test_double::failure(Cause::WaitFired, "no reply"));
     let expected = failure.clone();
     threads.answer_graphql(move |_, _| Err(failure.clone()));
     let client = threads.client();

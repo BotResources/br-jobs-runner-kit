@@ -1,7 +1,8 @@
 mod support;
 
+use br_runner_threads::test_double;
 use br_runner_threads::test_double::MemoryThreads;
-use br_runner_threads::{Cause, ContextContent, ContextQuery, Error, Failure};
+use br_runner_threads::{Cause, ContextContent, ContextQuery, Error};
 use serde_json::{Value, json};
 use support::client_graphql_x::*;
 use support::*;
@@ -158,8 +159,8 @@ async fn with_an_agent_the_context_holds_the_projected_thread_of_that_agent() {
 #[tokio::test]
 async fn a_failure_of_the_graphql_request_reaches_the_caller_unchanged() {
     let failures = [
-        Error::Unavailable(Failure::new(Cause::NoListener, "none")),
-        Error::Lost(Failure::new(Cause::WaitFired, "no reply")),
+        Error::Unavailable(test_double::failure(Cause::NoListener, "none")),
+        Error::Lost(test_double::failure(Cause::WaitFired, "no reply")),
         Error::Unauthenticated,
     ];
     for failure in failures {

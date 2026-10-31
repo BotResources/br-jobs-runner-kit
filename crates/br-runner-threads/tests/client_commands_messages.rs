@@ -194,10 +194,11 @@ async fn opening_a_stream_sends_a_streaming_message_with_no_turn_and_no_annotati
     let threads = MemoryThreads::new();
     let client = threads.client();
     let mut open = open_request(v7());
-    let (parent, job, acting) = (v7(), v7(), v7());
+    let (parent, job, acting, impersonator) = (v7(), v7(), v7(), v7());
     open.parent_message_id = Some(parent);
     open.job_id = Some(job);
     open.acting_user_id = Some(acting);
+    open.impersonator_id = Some(impersonator);
 
     let handle = client.open_stream(&open).await.expect("the handle");
 
@@ -211,7 +212,7 @@ async fn opening_a_stream_sends_a_streaming_message_with_no_turn_and_no_annotati
     assert_eq!(store.parent_message_id, Some(parent));
     assert_eq!(store.job_id, Some(job));
     assert_eq!(store.acting_user_id, Some(acting));
-    assert_eq!(store.impersonator_id, None);
+    assert_eq!(store.impersonator_id, Some(impersonator));
     assert_eq!(ai.agent_id, open.agent_id.as_uuid());
     assert_eq!(ai.author_name, open.author_name);
     assert_eq!(ai.delivery, AiDelivery::Streaming);

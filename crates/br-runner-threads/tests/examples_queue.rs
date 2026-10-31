@@ -7,11 +7,12 @@ mod close_left_open_turn;
 #[allow(dead_code)] // the example is included for its functions; its main is unused here
 mod queue_not_draining;
 
+use br_runner_threads::test_double;
 use std::sync::Arc;
 use std::time::Duration;
 
 use br_runner_threads::test_double::{CommandBody, MemoryThreads};
-use br_runner_threads::{Error, ItemKind, MessageStatus, Refusal, ReportKind};
+use br_runner_threads::{Error, ItemKind, MessageStatus, ReportKind};
 use close_left_open_turn::{close_by_message_id, leave_a_turn_open};
 use queue_not_draining::{
     CollectedReports, StuckThread, accept_an_input_turn, adapter_observed_by, stuck_threads,
@@ -190,7 +191,7 @@ async fn a_message_this_process_never_opened_is_closed_by_its_id_too() {
 async fn a_closing_that_threads_refuses_gives_the_refusal_to_the_runner() {
     let world = world().await;
     world.threads.answer_commands(|command| {
-        Err(Error::Refused(Refusal::new(
+        Err(Error::Refused(test_double::refusal(
             "MESSAGE_NOT_STREAMING",
             "the message is closed",
             Some(command.id),

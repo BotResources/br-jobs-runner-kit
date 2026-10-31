@@ -1,7 +1,8 @@
 mod support;
 
+use br_runner_threads::test_double;
 use br_runner_threads::test_double::{MemoryThreads, Outcome};
-use br_runner_threads::{Cause, Error, Failure, MessageStatus};
+use br_runner_threads::{Cause, Error, MessageStatus};
 use support::client_x::*;
 use support::*;
 
@@ -36,7 +37,7 @@ async fn a_command_gives_back_the_status_that_threads_confirmed() {
 #[tokio::test]
 async fn an_unavailable_outcome_reaches_the_caller_as_unavailable() {
     let threads = MemoryThreads::new();
-    let failure = Failure::new(Cause::NoListener, "nobody listens");
+    let failure = test_double::failure(Cause::NoListener, "nobody listens");
     let expected = failure.clone();
     threads.answer_commands(move |_| Err(Error::Unavailable(failure.clone())));
     let client = threads.client();
@@ -53,7 +54,7 @@ async fn an_unavailable_outcome_reaches_the_caller_as_unavailable() {
 #[tokio::test]
 async fn a_command_that_got_no_outcome_in_time_reaches_the_caller_as_lost() {
     let threads = MemoryThreads::new();
-    let failure = Failure::new(Cause::WaitFired, "no outcome");
+    let failure = test_double::failure(Cause::WaitFired, "no outcome");
     let expected = failure.clone();
     threads.answer_commands(move |_| Err(Error::Lost(failure.clone())));
     let client = threads.client();
@@ -105,7 +106,12 @@ async fn an_unreadable_outcome_reaches_the_caller_as_unreadable() {
 #[tokio::test]
 async fn a_failed_opening_gives_no_handle_and_sends_no_chunk() {
     let threads = MemoryThreads::new();
-    threads.answer_commands(|_| Err(Error::Unavailable(Failure::new(Cause::Transport, "down"))));
+    threads.answer_commands(|_| {
+        Err(Error::Unavailable(test_double::failure(
+            Cause::Transport,
+            "down",
+        )))
+    });
     let result = threads.client().open_stream(&open_request(v7())).await;
 
     assert!(result.is_err());

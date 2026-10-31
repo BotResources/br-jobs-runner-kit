@@ -119,7 +119,10 @@ async fn a_store_that_cannot_append_refuses_the_operation_with_a_store_error() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(fault_of(refused), Error::Store(_)));
+    assert_eq!(
+        fault_of(refused),
+        Error::Store("the test store refuses to append".to_owned())
+    );
     assert!(adapter.queue_state().threads.is_empty());
     assert!(threads.operations().is_empty());
     assert!(setup.store.kept().await.is_empty());
@@ -139,7 +142,10 @@ async fn when_a_later_append_of_an_operation_fails_the_items_already_kept_stay_q
         .await
         .expect_err("refused");
 
-    assert!(matches!(fault_of(refused), Error::Store(_)));
+    assert_eq!(
+        fault_of(refused),
+        Error::Store("the test store refuses to append".to_owned())
+    );
     eventually("the opening that was kept is delivered", || {
         threads.commands().len() == 1
     })
@@ -202,7 +208,10 @@ async fn a_failed_remove_is_reported_counts_as_ended_and_the_next_adapter_sends_
 
     let report = &setup.recorder.reports()[0];
     assert_eq!(report.kind, ReportKind::RemoveFailed);
-    assert!(matches!(report.error, Some(Error::Store(_))));
+    assert_eq!(
+        report.error,
+        Some(Error::Store("the test store refuses to remove".to_owned()))
+    );
     assert_eq!(report.message_id, message);
     assert_eq!(report.thread, thread);
     assert_eq!(report.item_id, threads.commands()[0].id);
@@ -237,7 +246,10 @@ async fn building_fails_with_a_store_error_when_the_store_cannot_list_and_sends_
         .err()
         .expect("building fails");
 
-    assert!(matches!(failed, Error::Store(_)));
+    assert_eq!(
+        failed,
+        Error::Store("the test store refuses to list".to_owned())
+    );
     quiet().await;
     assert!(threads.operations().is_empty());
     assert_eq!(setup.store.kept().await.len(), 2);

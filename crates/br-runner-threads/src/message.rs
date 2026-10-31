@@ -50,5 +50,6 @@ pub struct OpenStream {
     pub author_name: String,
     pub job_id: Option<Uuid>,
     pub acting_user_id: Option<Uuid>,
+    pub impersonator_id: Option<Uuid>,
     pub wait: Duration,
 }

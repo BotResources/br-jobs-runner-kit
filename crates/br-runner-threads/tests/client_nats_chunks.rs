@@ -2,11 +2,12 @@ mod support;
 
 use std::time::Duration;
 
+use br_core_integration::IntegrationCommand;
 use br_runner_threads::{ClosureKind, Error, MessageStatus, StreamHandle};
 use br_util_nats_fabric::command_subject;
 use contract_threads::{
-    CancelMessage, Chunk, ChunkFrame, CompleteMessage, TURN_CONTENT_ACCUMULATOR, ThreadsCommand,
-    chunk_subject, seal_hash,
+    CancelMessage, Chunk, ChunkFrame, CompleteMessage, StoreMessageV2, TURN_CONTENT_ACCUMULATOR,
+    ThreadsCommand, chunk_subject, seal_hash,
 };
 use support::nats_fixtures::*;
 use support::nats_responder::Responder;
@@ -191,4 +192,31 @@ async fn a_chunk_after_the_server_went_away_is_stream_broken_within_the_wait() {
         .expect("the chunk ended within its wait");
 
     assert_eq!(result, Err(Error::StreamBroken));
+}
+
+#[tokio::test]
+#[ignore = "needs a nats-server binary"]
+async fn an_opening_carries_its_job_acting_user_and_impersonator_to_the_command_stream() {
+    let (_server, bus) = infra().await;
+    let _responder = Responder::start(&bus).await;
+    let client = built(&bus).await;
+    let mut open = open_stream(v7());
+    let (job, acting, impersonator) = (v7(), v7(), v7());
+    open.job_id = Some(job);
+    open.acting_user_id = Some(acting);
+    open.impersonator_id = Some(impersonator);
+
+    client.open_stream(&open).await.expect("opened");
+
+    let commands = stored(&bus, COMMANDS).await;
+    assert_eq!(commands.len(), 1);
+    assert_eq!(
+        commands[0].subject,
+        command_subject(&StoreMessageV2::coords())
+    );
+    let envelope: IntegrationCommand<StoreMessageV2> = commands[0].json();
+    assert_eq!(envelope.command_id, open.command_id);
+    assert_eq!(envelope.payload.job_id, Some(job));
+    assert_eq!(envelope.payload.acting_user_id, Some(acting));
+    assert_eq!(envelope.payload.impersonator_id, Some(impersonator));
 }

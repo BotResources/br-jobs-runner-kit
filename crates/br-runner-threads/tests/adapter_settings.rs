@@ -71,7 +71,10 @@ async fn a_store_that_cannot_list_fails_the_building_with_store_and_delivers_not
 
     let built = build(&threads, flaky, |_settings| {}).await;
 
-    assert!(matches!(built.err(), Some(Error::Store(_))));
+    assert_eq!(
+        built.err(),
+        Some(Error::Store("the store cannot list".to_owned()))
+    );
     assert!(threads.operations().is_empty());
 }
 

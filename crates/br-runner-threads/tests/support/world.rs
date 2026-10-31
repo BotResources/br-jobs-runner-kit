@@ -99,3 +99,9 @@ pub async fn eventually(what: &str, mut condition: impl FnMut() -> bool) {
     }
     panic!("never true: {what}");
 }
+
+pub async fn settle() {
+    for _ in 0..100 {
+        tokio::task::yield_now().await;
+    }
+}
