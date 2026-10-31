@@ -17,11 +17,14 @@ use crate::model::{
 };
 
 mod call;
+mod session;
 mod setters;
 
 pub use call::Call;
+pub(super) use session::Channel;
+use session::{ScriptedChild, answer};
 
-type Answer<T> = Box<dyn FnMut() -> Result<T, Error> + Send>;
+pub(super) type Answer<T> = Box<dyn FnMut() -> Result<T, Error> + Send>;
 
 pub(super) struct Script {
     calls: Vec<Call>,
@@ -97,26 +100,6 @@ impl ScriptedJobs {
 
     fn record(&self, call: Call) {
         self.script().calls.push(call);
-    }
-}
-
-pub(super) struct Channel<T>(pub(super) mpsc::UnboundedReceiver<Result<T, Error>>);
-
-impl<T: Send + 'static> RawFeed<T> for Channel<T> {
-    fn next(&mut self) -> BoxFuture<'_, Result<T, Error>> {
-        Box::pin(async move {
-            self.0
-                .recv()
-                .await
-                .unwrap_or_else(|| Err(Error::lost("the scripted feed was dropped")))
-        })
-    }
-}
-
-fn answer<T>(slot: &mut Option<Answer<T>>, default: T) -> Result<T, Error> {
-    match slot {
-        Some(answer) => answer(),
-        None => Ok(default),
     }
 }
 
@@ -294,22 +277,6 @@ impl Backend for ScriptedJobs {
         Box::new(ScriptedChild {
             jobs: self,
             command,
-        })
-    }
-}
-
-struct ScriptedChild<'a> {
-    jobs: &'a ScriptedJobs,
-    command: ChildCommand,
-}
-
-impl ChildSession for ScriptedChild<'_> {
-    fn attempt(&mut self, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        Box::pin(async move {
-            self.jobs.gate().await;
-            let mut script = self.jobs.script();
-            script.calls.push(Call::Command(self.command.clone()));
-            answer(&mut script.command, ())
         })
     }
 }

@@ -3,8 +3,10 @@ mod documents;
 mod lifting;
 mod mail;
 mod state;
+mod unknown;
 mod unread;
 mod unreadable;
+mod unreadable_each;
 mod unreadable_mail;
 
 use std::sync::Arc;

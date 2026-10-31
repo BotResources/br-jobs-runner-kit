@@ -18,3 +18,33 @@ First release. The jobs side of a runner: a typed client of the jobs service, a 
 - Feature `test-double`: `test_double::ScriptedJobs` with `Call`, `Delivery` and `PresenceRecord`, `trigger_json`, `work_from_trigger`, `memory_caller` with `MemoryScript`, `MemoryCall`, `Answer` and `result_ref`, and the recorded types `ChildCommand`, `CreateChild`, `Fact` and `LogRecord`.
 - Three examples: `run_one_work` (the quickstart of the README, checked word for word by a test), `call_a_runner` and `agent_and_inbox`; the tests run all three.
 - The tests of the live client run against a real `nats-server -js` and are `#[ignore]`d: `cargo test -p br-runner-jobs -- --ignored --test-threads=1`.
+
+### Behavior
+
+- Opening an arrival feed does not wait for another feed that waits for an event.
+- For each child create, finish and cancel, one outcome subscription is opened before the first publish and kept for all the attempts of the write; the queue looks for the outcome (20 ms) before it sends the command again.
+- The status facts (started, plan declared, step started, completed, failed) carry a message id; a resend carries the same id.
+- The replay read and the run-level read of the arrival feed decode each item alone. A notice type or an item kind that is not known is kept as `Unknown` (`CallNoticeKind::Unknown` with `CallNotice::notice_type`, `ItemKind::Unknown`, `UnreadItem::Unknown`). A bad item ends only the wait of its own child Job.
+- A background create depends on the registration of the calling agent.
+- Making the delivery queue checks the waits and the async runtime before it spends the single making of the `Work`.
+- `Unreadable` errors carry the class and the position of a parse failure and never a value of the payload.
+- The `Debug` form of a recorded `CreateChild` hides the Passport.
+- The observer of the queue is not called while the agent book holds its lock.
+- If the async runtime stops before the queue task has run, the writes left are reported `LeftUnsent` and `drained()` returns.
+- The CI fails when `br-runner-jobs` can reach a library of the `br-llm-clients` family other than `br-llm-clients-core`.
+
+### Limits
+
+- Started fact: a publish on the status stream with a message id built from the Run id and the start id. A refusal of jobs for an unknown instance does not reach the crate; the queue sends again a started fact refused with `instance_unknown`.
+- The wire carries no fact id for the step started, the completed and the failed facts.
+- Outcome of a child create, finish and cancel: no event within the outcome wait is `Lost`; the queue looks for the outcome, then sends the command again, with no maximum, and holds every later write. A cut of the bus session, or a subscription that the bus drops because it is slow, loses the events published during the gap.
+- A create whose first send was applied and whose outcome was missed is sent again and keeps being sent again, because jobs gives no event for a repeat it absorbs. A finish sent again after an applied first send ends with the cause `Refused` (`job_terminal`), although the first send was applied.
+- The wire gives no notice of a cancelled or refused call and no item for a mail notice. `SyncEnd::Cancelled`, `JobCancelled`, `Refused` and `MailNotice` are never produced from the wire. The end wait of a cancelled sync child Job stays pending until the book is dropped, with no time limit.
+- In `MailHandle::unread` and in the inbox listing of an address, one item that cannot be read makes the whole read `Unreadable`. A reply that is malformed as a whole is `Unreadable`, and the queue sends a write again for it with no maximum.
+- The arrival consumer is durable, is never deleted, holds the instance key in its name, sees the events of every Run, and its first open replays the whole retained history; each new instance key replays it again. An event for a Run with no open feed is acknowledged and dropped.
+- The dispatch mode feed ends with `Lost` after an entry that is not JSON, after an `Unreadable` event.
+- The queue is in memory: a crash loses the writes still queued.
+- A `Work` from a claim has no trigger: `ack`, `give_back` and `terminate` are `InvalidInput`.
+- `delivery_queue` and `agent_book` can be made once for a `Work`.
+- Restart data holds `restart_of_run_id` only.
+- Feature `test-double`: `ScriptedJobs`, `trigger_json`, `work_from_trigger`, `Delivery`, `PresenceRecord`, `memory_caller`, `MemoryScript`, `MemoryCall`, `Answer` and `result_ref` are off by default and check no wire.
