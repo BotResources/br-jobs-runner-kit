@@ -9,6 +9,10 @@ use support::queue_kit::*;
 use support::queue_store::*;
 use support::*;
 
+fn store_error(text: &str) -> Error {
+    Error::Store(text.to_owned())
+}
+
 struct Setup {
     store: Arc<FlakyStore>,
     recorder: Arc<Recorder>,
@@ -121,7 +125,7 @@ async fn a_store_that_cannot_append_refuses_the_operation_with_a_store_error() {
 
     assert_eq!(
         fault_of(refused),
-        Error::Store("the test store refuses to append".to_owned())
+        store_error("the test store refuses to append")
     );
     assert!(adapter.queue_state().threads.is_empty());
     assert!(threads.operations().is_empty());
@@ -144,7 +148,7 @@ async fn when_a_later_append_of_an_operation_fails_the_items_already_kept_stay_q
 
     assert_eq!(
         fault_of(refused),
-        Error::Store("the test store refuses to append".to_owned())
+        store_error("the test store refuses to append")
     );
     eventually("the opening that was kept is delivered", || {
         threads.commands().len() == 1
@@ -210,7 +214,7 @@ async fn a_failed_remove_is_reported_counts_as_ended_and_the_next_adapter_sends_
     assert_eq!(report.kind, ReportKind::RemoveFailed);
     assert_eq!(
         report.error,
-        Some(Error::Store("the test store refuses to remove".to_owned()))
+        Some(store_error("the test store refuses to remove"))
     );
     assert_eq!(report.message_id, message);
     assert_eq!(report.thread, thread);
@@ -246,10 +250,7 @@ async fn building_fails_with_a_store_error_when_the_store_cannot_list_and_sends_
         .err()
         .expect("building fails");
 
-    assert_eq!(
-        failed,
-        Error::Store("the test store refuses to list".to_owned())
-    );
+    assert_eq!(failed, store_error("the test store refuses to list"));
     quiet().await;
     assert!(threads.operations().is_empty());
     assert_eq!(setup.store.kept().await.len(), 2);

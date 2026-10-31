@@ -9,19 +9,18 @@ Rebuilds the crate on the `Connection` of `br-runner-connection` and adds the ad
 - `ThreadClient`, built from a `Connection` with a check wait: `create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `fail_title_job`, `request_upload`. Every wait is a required `Duration`; zero is `InvalidInput`.
 - `StreamHandle`, `StreamWriter`, `ResponseSink` and `ResponseControl` (`complete`, `discard`, `failure`): chunks numbered from 0 with no gap, `StreamBroken` on a chunk the bus did not take, `StreamClosed` after a closing. A keepalive is numbered like any other chunk and is counted in the seal.
 - The closing table of the client (`Closing`, `ClosureKind`): Completed sends a complete, BudgetExhausted, Failed and Interrupted send a fail, Cancelled sends a cancel; the seal is sent as the README states. The three commands carry no closure reason and no detail.
-- `ThreadPortAdapter` and `ThreadAccessAdapter` with the thread queue: first in, first out for each thread, one delivery task for each thread, sending again on `Unavailable`, `Lost`, `Unreadable` (commands) and `StreamBroken` (chunks), reports through `QueueObserver`, items kept through `QueueStore` (`MemoryQueueStore` provided), `queue_state()`, `entry_stored()` and `instance_ended()`. The adapter sends no keepalive and no parent message id.
+- `ThreadPortAdapter` and `ThreadAccessAdapter` with the thread queue: first in, first out for each thread, one delivery task for each thread, sending again on `Unavailable`, `Lost`, `Unreadable` (commands) and `StreamBroken` (chunks), reports through `QueueObserver`, items kept through `QueueStore` (`MemoryQueueStore` provided), `queue_state()`, `entry_stored()` and `instance_ended()`. The adapter sends no keepalive and no parent message id. On one thread, `complete_response`, `open_response`, `open_result`, `close_turn`, `add_entry`, `complete_result`, `add_input_turn` and `discard_response` run one at a time: no other of these operations goes between the deltas that `complete_response` queues.
 - `WriteContext` and `WriteContextFn`, `ThreadAccessSettings`.
 - `OpenStream::impersonator_id`, sent in the opening message as `WholeMessage::impersonator_id` is sent in a whole message.
 - Feature `test-double`: `test_double::MemoryThreads`, `test_double::refusal(code, message, command_id)` and `test_double::failure(cause, text)`.
-- Six examples; `runner_wiring` is the quickstart of the README. The real-bus tests are `#[ignore]` and need a `nats-server` binary.
+- Six examples; `runner_wiring` is the quickstart of the README.
 
 ### Changed
 
-- One error type owned by the crate: `InvalidInput`, `Credential`, `Unauthenticated`, `Unavailable`, `Lost`, `Refused`, `Unreadable`, `StreamBroken`, `StreamClosed`, `InfraMissing`, `Store`. A `Store` error from a `QueueStore` keeps its text as it is, without a second `store:` prefix.
+- One error type owned by the crate: `InvalidInput`, `Credential`, `Unauthenticated`, `Unavailable`, `Lost`, `Refused`, `Unreadable`, `StreamBroken`, `StreamClosed`, `InfraMissing`, `Store`. A `Store` error that a `QueueStore` returns reaches the caller with its text unchanged.
 - A `Failed` closing with no detail is `InvalidInput("a Failed closing needs a detail")`.
 - The chunk path gives `StreamBroken` or `InvalidInput` only, never `Unavailable`.
 - The client depends on `br-runner-connection` 0.1.1 and `br-agentic-contract` 0.2.0, and no longer on `br-llm-clients-common-auth` or `br-llm-clients-common-http`.
-- `complete_response`, `open_response`, `open_result`, `close_turn`, `add_entry`, `complete_result`, `add_input_turn` and `discard_response` of one thread run one at a time: no other of these operations goes between the deltas of a response that `complete_response` queues.
 
 ### Migrating from 0.1
 

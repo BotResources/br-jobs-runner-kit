@@ -21,6 +21,7 @@ pub enum Reply {
     Confirm,
     Refuse(ReasonCode, Map<String, Value>),
     Unreadable,
+    UnknownCode,
     Silence,
     StrayThenConfirm,
 }
@@ -170,6 +171,7 @@ fn outcome(arrived: &Received, reply: &Reply) -> (String, String, Value) {
     let is_thread = command_type.starts_with("thread.");
     let refusal = match reply {
         Reply::Refuse(code, params) => Some((*code, params.clone())),
+        Reply::UnknownCode => Some((ReasonCode::KeyReused, Map::new())),
         _ => None,
     };
     let (subject, event_type, mut body) = match (is_thread, refusal) {
@@ -205,6 +207,9 @@ fn outcome(arrived: &Received, reply: &Reply) -> (String, String, Value) {
     if matches!(reply, Reply::Unreadable) {
         let key = if is_thread { "thread_id" } else { "status" };
         body[key] = Value::String("NOT_VALID".to_owned());
+    }
+    if matches!(reply, Reply::UnknownCode) {
+        body["reason_code"] = Value::String("NOT_A_CODE".to_owned());
     }
     (subject, event_type, body)
 }

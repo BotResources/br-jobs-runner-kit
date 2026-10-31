@@ -179,6 +179,24 @@ async fn an_answer_that_cannot_be_read_is_unreadable() {
 
 #[tokio::test]
 #[ignore = "needs a nats-server binary"]
+async fn a_refusal_with_a_code_this_crate_does_not_know_is_unreadable_not_refused() {
+    let (_server, bus) = infra().await;
+    let responder = Responder::start(&bus).await;
+    let client = built(&bus).await;
+    let thread_request = new_thread();
+    let message_request = whole_message(Uuid::now_v7());
+    responder.script(thread_request.command_id, [Reply::UnknownCode]);
+    responder.script(message_request.command_id, [Reply::UnknownCode]);
+
+    let thread_result = client.create_thread(&thread_request).await;
+    let message_result = client.write_message(&message_request).await;
+
+    assert!(matches!(thread_result, Err(Error::Unreadable(_))));
+    assert!(matches!(message_result, Err(Error::Unreadable(_))));
+}
+
+#[tokio::test]
+#[ignore = "needs a nats-server binary"]
 async fn concurrent_commands_each_get_their_own_answer_when_answers_come_back_reversed() {
     let (_server, bus) = infra().await;
     let responder = Responder::batching(&bus, 6).await;
