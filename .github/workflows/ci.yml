@@ -195,6 +195,8 @@ jobs:
         run: bash .github/scripts/check-bus-access.sh br-runner-jobs runner_transport
       - name: br-runner-as-node reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-as-node --allow br-llm-clients-core
+      - name: br-runner-toolkit reaches only br-llm-clients-core
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-toolkit --allow br-llm-clients-core
 
   shellcheck:
     name: shellcheck

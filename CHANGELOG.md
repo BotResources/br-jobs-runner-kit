@@ -18,6 +18,7 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-threads` 0.2.0: rebuilt on the Connection, with the thread-port and thread-access adapters and the thread queue. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-jobs` 0.1.0 (new library): the jobs side of a runner, with a typed client of the jobs service, a delivery queue for each Run, and the adapters of the agent port and the inbox port. See `crates/br-runner-jobs/CHANGELOG.md`.
 - `br-runner-as-tool` 0.1.0 (new library): a runner type as a tool, the `Tool` of the agentic contract that makes another runner do a piece of work in sync or background mode. See `crates/br-runner-as-tool/CHANGELOG.md`.
+- `br-runner-toolkit` 0.1.0 (new library): the main loop of a runner with the jobs service, with the registration through the presence, parallel run slots, the delivery of the facts of each run, the cancel orders, the drain and a test host. See `crates/br-runner-toolkit/CHANGELOG.md`.
 - `br-runner-as-node` 0.1.0 (new library): `RunnerAsNode`, a node of a graph that makes another runner do one step by a sync child Job of the jobs service. See `crates/br-runner-as-node/CHANGELOG.md`.
 
 ### Fixed

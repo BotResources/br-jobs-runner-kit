@@ -251,6 +251,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-graph-executor"
+version = "0.1.0"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-graph-executor%2Fv0.1.0#b63c54fe7f90ab304046c32697e758e9530456a4"
+dependencies = [
+ "br-graph-contract",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "br-jobs-runner-core"
 version = "0.1.2"
 dependencies = [
@@ -396,6 +409,31 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-toolkit"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "br-agentic-contract",
+ "br-core-auth",
+ "br-core-kernel",
+ "br-graph-contract",
+ "br-graph-executor",
+ "br-runner-connection",
+ "br-runner-jobs",
+ "br-runner-toolkit",
+ "chrono",
+ "contract-jobs 0.7.0",
+ "futures",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "uuid",
 ]
 
