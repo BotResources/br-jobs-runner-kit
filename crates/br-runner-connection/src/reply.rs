@@ -40,12 +40,7 @@ fn coded(error: &Value) -> Option<Refusal> {
 }
 
 fn unauthenticated(error: &Value) -> bool {
-    error
-        .get("extensions")
-        .and_then(Value::as_object)
-        .and_then(|extensions| extensions.get("code"))
-        .and_then(Value::as_str)
-        == Some(UNAUTHENTICATED)
+    coded(error).is_some_and(|refusal| refusal.code == UNAUTHENTICATED)
 }
 
 fn error_list(body: Option<&Value>) -> Result<Vec<&Value>, ()> {
@@ -59,7 +54,8 @@ fn error_list(body: Option<&Value>) -> Result<Vec<&Value>, ()> {
 fn data_of(body: &mut Value) -> Result<Value, Error> {
     match body.get_mut("data").map(Value::take) {
         Some(Value::Null) | None => Err(Error::Unreadable("the response holds no data".to_owned())),
-        Some(data) => Ok(data),
+        Some(data @ Value::Object(_)) => Ok(data),
+        Some(_) => Err(Error::Unreadable("the data is not an object".to_owned())),
     }
 }
 

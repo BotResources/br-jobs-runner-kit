@@ -13,6 +13,7 @@ pub struct Server {
     child: Option<Child>,
     port: u16,
     store: Option<PathBuf>,
+    config: Option<PathBuf>,
 }
 
 fn free_port() -> u16 {
@@ -23,12 +24,15 @@ fn free_port() -> u16 {
         .port()
 }
 
-fn spawn(port: u16, store: Option<&PathBuf>) -> Child {
+fn spawn(port: u16, store: Option<&PathBuf>, config: Option<&PathBuf>) -> Child {
     let binary = std::env::var("NATS_SERVER_BIN").unwrap_or_else(|_| "nats-server".to_owned());
     let mut command = Command::new(binary);
     command.args(["-a", "127.0.0.1", "-p", &port.to_string()]);
     if let Some(store) = store {
         command.arg("-js").arg("-sd").arg(store);
+    }
+    if let Some(config) = config {
+        command.arg("-c").arg(config);
     }
     command
         .stdout(Stdio::null())
@@ -41,9 +45,10 @@ impl Server {
     pub fn start() -> Self {
         let port = free_port();
         Self {
-            child: Some(spawn(port, None)),
+            child: Some(spawn(port, None, None)),
             port,
             store: None,
+            config: None,
         }
     }
 
@@ -54,9 +59,25 @@ impl Server {
             std::process::id()
         ));
         Self {
-            child: Some(spawn(port, Some(&store))),
+            child: Some(spawn(port, Some(&store), None)),
             port,
             store: Some(store),
+            config: None,
+        }
+    }
+
+    pub fn start_with_max_payload(bytes: usize) -> Self {
+        let port = free_port();
+        let config = std::env::temp_dir().join(format!(
+            "br-runner-connection-conf-{port}-{}.conf",
+            std::process::id()
+        ));
+        std::fs::write(&config, format!("max_payload: {bytes}\n")).expect("config written");
+        Self {
+            child: Some(spawn(port, None, Some(&config))),
+            port,
+            store: None,
+            config: Some(config),
         }
     }
 
@@ -73,7 +94,7 @@ impl Server {
 
     pub fn restart(&mut self) {
         self.kill();
-        self.child = Some(spawn(self.port, self.store.as_ref()));
+        self.child = Some(spawn(self.port, self.store.as_ref(), self.config.as_ref()));
     }
 
     pub async fn client(&self) -> async_nats::Client {
@@ -92,6 +113,9 @@ impl Drop for Server {
         self.kill();
         if let Some(store) = &self.store {
             let _ = std::fs::remove_dir_all(store);
+        }
+        if let Some(config) = &self.config {
+            let _ = std::fs::remove_file(config);
         }
     }
 }

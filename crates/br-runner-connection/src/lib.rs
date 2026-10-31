@@ -7,7 +7,6 @@ mod endpoint;
 mod error;
 mod http;
 mod reply;
-mod scrub;
 
 pub use connection::Connection;
 pub use credential::{BoxFuture, Credential, CredentialFailure, CredentialKind, FixedToken, Token};

@@ -68,7 +68,7 @@ async fn a_request_that_no_service_listens_to_is_unavailable() {
     let server = Server::start();
     let (connection, _) = connect_to(server.client().await).await;
     match request(&connection, "svc.nobody", Bytes::new(), WAIT).await {
-        Err(Error::Unavailable(failure)) => assert_eq!(failure.cause, Cause::Transport),
+        Err(Error::Unavailable(failure)) => assert_eq!(failure.cause, Cause::NoListener),
         other => panic!("expected Unavailable, got {other:?}"),
     }
 }
