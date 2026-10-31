@@ -8,20 +8,20 @@ use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use futures::FutureExt;
-use uuid::Uuid;
+use uuid::{Uuid, Variant};
 
 use crate::arrival::Arrival;
 use crate::caller::CallerHandle;
 use crate::endwait::EndStore;
 use crate::error::Error;
-use crate::model::AgentDeclaration;
+use crate::model::{AgentDeclaration, UnreadItem};
 use crate::queue::{QueueWriter, Write};
 use crate::work::WorkCore;
 use agents::Agents;
-use inbox::{Inbox, Wake};
+use inbox::Inbox;
 
 pub(crate) use agents::{BookedAgentRef, RegistrationEnd};
-pub(crate) use inbox::{EntryKind, ItemWatch, MailEntry};
+pub(crate) use inbox::{EntryKind, ItemWatch, MailEntry, Recipients, Wake};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AgentKey {
@@ -101,6 +101,10 @@ fn check_restored(restored: &[RestoredAgent]) -> Result<(), Error> {
     let mut keys = HashSet::new();
     let mut ids = HashSet::new();
     for agent in restored {
+        if agent.agent_id.get_version_num() != 7 || agent.agent_id.get_variant() != Variant::RFC4122
+        {
+            return Err(Error::invalid("a restored agent id is not a UUIDv7"));
+        }
         if !keys.insert(&agent.key) {
             return Err(Error::invalid("a restored agent key is given twice"));
         }
@@ -132,6 +136,7 @@ impl AgentBook {
             let mut agents = inner.agents();
             for agent in restored {
                 inner.register(&mut agents, agent.key, agent.agent_id, agent.has_inbox);
+                agents.mark_restored(agent.agent_id);
             }
         }
         Ok(Self { inner })
@@ -192,8 +197,22 @@ impl AgentBook {
         self.inner.agents().holds_inbox(agent_id)
     }
 
+    pub(crate) fn key_of(&self, agent_id: Uuid) -> Option<AgentKey> {
+        self.inner.agents().key_of(agent_id)
+    }
+
     pub(crate) fn registration_end(&self, agent_id: Uuid) -> Option<RegistrationEnd> {
         self.inner.agents().registration(agent_id)
+    }
+
+    pub(crate) fn registration_queued(&self, agent_id: Uuid) -> bool {
+        let agents = self.inner.agents();
+        if agents.is_restored(agent_id) {
+            return false;
+        }
+        agents
+            .registration(agent_id)
+            .is_some_and(|registration| registration.now_or_never().is_none())
     }
 
     pub(crate) fn record_listed(&self, agent_id: Uuid, entry_id: Uuid, entry: MailEntry) {
@@ -208,14 +227,36 @@ impl AgentBook {
         self.inner.inbox().take_mail(mail_id)
     }
 
+    #[cfg(test)]
     pub(crate) fn mail_taken(&self, mail_id: Uuid) -> bool {
         self.inner.inbox().mail_taken(mail_id)
     }
 
-    pub(crate) fn mark(&self, agent_id: Uuid, item_id: Uuid) {
-        self.inner.inbox().mark(agent_id, item_id);
+    pub(crate) fn mark(&self, agent_id: Uuid, item_id: Uuid) -> bool {
+        self.inner.inbox().mark(agent_id, item_id)
     }
 
+    pub(crate) fn keep_snapshot(&self, agent_id: Uuid, items: Vec<UnreadItem>) {
+        self.inner.inbox().keep_snapshot(agent_id, items);
+    }
+
+    pub(crate) fn snapshot(&self, agent_id: Uuid) -> Option<Vec<UnreadItem>> {
+        self.inner.inbox().snapshot(agent_id)
+    }
+
+    pub(crate) fn drop_snapshot(&self, agent_id: Uuid) {
+        self.inner.inbox().drop_snapshot(agent_id);
+    }
+
+    pub(crate) fn keep_recipients(&self, mail_id: Uuid, recipients: Recipients) {
+        self.inner.inbox().keep_recipients(mail_id, recipients);
+    }
+
+    pub(crate) fn recipients(&self, mail_id: Uuid) -> Option<Recipients> {
+        self.inner.inbox().recipients(mail_id)
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_marked(&self, agent_id: Uuid, item_id: Uuid) -> bool {
         self.inner.inbox().is_marked(agent_id, item_id)
     }

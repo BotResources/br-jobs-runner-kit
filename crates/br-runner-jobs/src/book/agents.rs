@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use futures::future::Shared;
 use uuid::Uuid;
@@ -11,8 +11,11 @@ pub(crate) type RegistrationEnd = Shared<WriteEnd>;
 #[derive(Clone)]
 pub(crate) struct BookedAgentRef {
     pub agent_id: Uuid,
+    #[cfg(test)]
     pub has_inbox: bool,
+    #[cfg(test)]
     pub created: bool,
+    #[cfg(test)]
     pub registration: RegistrationEnd,
 }
 
@@ -25,10 +28,15 @@ struct Slot {
 
 impl Slot {
     fn reference(&self, created: bool) -> BookedAgentRef {
+        #[cfg(not(test))]
+        let _ = created;
         BookedAgentRef {
             agent_id: self.agent_id,
+            #[cfg(test)]
             has_inbox: self.has_inbox,
+            #[cfg(test)]
             created,
+            #[cfg(test)]
             registration: self.registration.clone(),
         }
     }
@@ -39,6 +47,7 @@ pub(super) struct Agents {
     order: Vec<AgentKey>,
     by_key: HashMap<AgentKey, Slot>,
     by_id: HashMap<Uuid, AgentKey>,
+    restored: HashSet<Uuid>,
 }
 
 impl Agents {
@@ -69,6 +78,18 @@ impl Agents {
         self.by_id
             .get(&agent_id)
             .and_then(|key| self.by_key.get(key))
+    }
+
+    pub(super) fn key_of(&self, agent_id: Uuid) -> Option<AgentKey> {
+        self.by_id.get(&agent_id).cloned()
+    }
+
+    pub(super) fn mark_restored(&mut self, agent_id: Uuid) {
+        self.restored.insert(agent_id);
+    }
+
+    pub(super) fn is_restored(&self, agent_id: Uuid) -> bool {
+        self.restored.contains(&agent_id)
     }
 
     pub(super) fn holds_inbox(&self, agent_id: Uuid) -> bool {

@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::error::Error;
-use crate::model::{CallNoticeKind, ItemArrived};
+use crate::model::{CallNoticeKind, ItemArrived, UnreadItem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntryKind {
@@ -19,6 +19,12 @@ pub(crate) struct MailEntry {
     pub item_id: Uuid,
     pub child_job_id: Option<Uuid>,
     pub kind: EntryKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Recipients {
+    pub to: Vec<Uuid>,
+    pub cc: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +50,8 @@ pub(super) struct Inbox {
     listed: HashMap<(Uuid, Uuid), MailEntry>,
     taken: HashSet<Uuid>,
     marked: HashMap<Uuid, HashSet<Uuid>>,
+    snapshots: HashMap<Uuid, Vec<UnreadItem>>,
+    recipients: HashMap<Uuid, Recipients>,
     watchers: Vec<(Uuid, mpsc::UnboundedSender<Wake>)>,
 }
 
@@ -60,14 +68,36 @@ impl Inbox {
         self.taken.insert(mail_id)
     }
 
+    #[cfg(test)]
     pub(super) fn mail_taken(&self, mail_id: Uuid) -> bool {
         self.taken.contains(&mail_id)
     }
 
-    pub(super) fn mark(&mut self, agent_id: Uuid, item_id: Uuid) {
-        self.marked.entry(agent_id).or_default().insert(item_id);
+    pub(super) fn mark(&mut self, agent_id: Uuid, item_id: Uuid) -> bool {
+        self.marked.entry(agent_id).or_default().insert(item_id)
     }
 
+    pub(super) fn keep_snapshot(&mut self, agent_id: Uuid, items: Vec<UnreadItem>) {
+        self.snapshots.insert(agent_id, items);
+    }
+
+    pub(super) fn snapshot(&self, agent_id: Uuid) -> Option<Vec<UnreadItem>> {
+        self.snapshots.get(&agent_id).cloned()
+    }
+
+    pub(super) fn drop_snapshot(&mut self, agent_id: Uuid) {
+        self.snapshots.remove(&agent_id);
+    }
+
+    pub(super) fn keep_recipients(&mut self, mail_id: Uuid, recipients: Recipients) {
+        self.recipients.insert(mail_id, recipients);
+    }
+
+    pub(super) fn recipients(&self, mail_id: Uuid) -> Option<Recipients> {
+        self.recipients.get(&mail_id).cloned()
+    }
+
+    #[cfg(test)]
     pub(super) fn is_marked(&self, agent_id: Uuid, item_id: Uuid) -> bool {
         self.marked
             .get(&agent_id)
