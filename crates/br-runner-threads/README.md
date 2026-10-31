@@ -1,63 +1,197 @@
 # br-runner-threads
 
-The typed client of the Threads service for code that runs inside a runner. It creates threads, writes whole messages or streams, closes a message with a named reason, reads the projected context, sets or fails the title, and requests an artifact upload. Conversation types are those of `br-llm-messages`; thread references are those of `br-agentic-contract`. No wire type appears in the API.
-
-It is thin. It sends what the importer gives, sends nothing twice, and invents no id, limit or timeout.
+The Threads side of a runner. It gives the adapters of the Threads ports of `br-agentic-contract` (`ThreadPortAdapter` for the thread port, `ThreadAccessAdapter` for the thread access, with the response stream and the result stream it gives) and, under them, `ThreadClient`, a typed client of the Threads service that a runner can also use alone. The client does one operation once. The adapter keeps a durable-by-seam queue for each thread and sends again what Threads did not take for a reason that can pass. It knows no job, run, mail, node or tool.
 
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.1.0", version = "0.1.0" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.2.0", version = "0.2.0" }
 ```
+
+## Quickstart
+
+This is `examples/runner_wiring.rs`, built by `cargo test` and checked word for word against this page by a test. It builds the `Connection`, the `ThreadClient` and the `ThreadAccessAdapter`, writes an input turn, reads the mark of the mail with `entry_stored`, and ends the agent with `instance_ended`.
+
+```rust,no_run
+use std::sync::Arc;
+use std::time::Duration;
+
+use br_agentic_contract::{PortError, ThreadAccess, ThreadRef};
+use br_core_kernel::ServiceAccountId;
+use br_llm_messages::{
+    AgentId, Author, BlockId, EntryId, HumanId, HumanMessage, InputTurn, PlainBlock, TextBlock,
+    TurnId,
+};
+use br_runner_connection::{Connection, FixedToken};
+use br_runner_threads::{
+    EntryOutcome, Error, IgnoreReports, MemoryQueueStore, NewThread, ThreadAccessAdapter,
+    ThreadAccessSettings, ThreadClient, WriteContext, WriteContextFn,
+};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mark {
+    Read,
+    LeaveUnread,
+}
+
+pub fn build_connection(
+    endpoint: &str,
+    token: &str,
+    bus: async_nats::Client,
+    service_account: ServiceAccountId,
+) -> Result<Connection, br_runner_connection::Error> {
+    Connection::new(
+        endpoint,
+        Arc::new(FixedToken::new(token)),
+        bus,
+        service_account,
+        Duration::from_secs(30),
+    )
+}
+
+pub async fn build_thread_access(
+    client: &ThreadClient,
+    agent: AgentId,
+    author: Author,
+) -> Result<ThreadAccessAdapter, Error> {
+    let write_context = WriteContextFn::new(move |_thread| {
+        let context = WriteContext {
+            agent,
+            author: author.clone(),
+            job_id: None,
+            acting_user_id: None,
+            impersonator_id: None,
+        };
+        async move { Ok::<_, PortError>(context) }
+    });
+    let settings = ThreadAccessSettings {
+        outcome_wait: Duration::from_secs(10),
+        retry_wait: Duration::from_secs(1),
+        store: Arc::new(MemoryQueueStore::new()),
+        observer: Arc::new(IgnoreReports),
+        write_context,
+    };
+    ThreadAccessAdapter::new(client, settings).await
+}
+
+pub async fn node_entry(
+    adapter: &ThreadAccessAdapter,
+    thread: &ThreadRef,
+    mail: EntryId,
+    turn: InputTurn,
+) -> Result<Mark, PortError> {
+    adapter.add_input_turn(thread, turn).await?;
+    Ok(match adapter.entry_stored(thread, mail).await {
+        EntryOutcome::Stored => Mark::Read,
+        EntryOutcome::Dropped => Mark::LeaveUnread,
+    })
+}
+
+pub async fn lifecycle_hook(adapter: &ThreadAccessAdapter, ended_agents: &[AgentId]) {
+    for agent in ended_agents {
+        adapter.instance_ended(*agent).await;
+    }
+}
+
+pub fn mail_turn(text: &str) -> Result<(EntryId, InputTurn), br_llm_messages::Error> {
+    let mail = EntryId::from_uuid(Uuid::now_v7())?;
+    let block = PlainBlock::Text(TextBlock::new(BlockId::from_uuid(Uuid::now_v7())?, text)?);
+    let human = HumanMessage::new(mail, HumanId::from_uuid(Uuid::now_v7())?, vec![block])?;
+    let turn = InputTurn::new(TurnId::from_uuid(Uuid::now_v7())?, vec![human.into()])?;
+    Ok((mail, turn))
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    let [_, endpoint, nats_url, token, account] = args.as_slice() else {
+        return Err("usage: runner_wiring <endpoint> <nats-url> <token> <account-uuid>".into());
+    };
+    let bus = async_nats::connect(nats_url).await?;
+    let connection = build_connection(endpoint, token, bus, ServiceAccountId(account.parse()?))?;
+    let client = ThreadClient::new(&connection, Duration::from_secs(10)).await?;
+    let agent = AgentId::from_uuid(Uuid::now_v7())?;
+    let adapter = build_thread_access(&client, agent, Author::new("Analyst")?).await?;
+    let thread = ThreadRef::from_uuid(Uuid::now_v7())?;
+    let creation = NewThread {
+        command_id: Uuid::now_v7(),
+        thread_id: thread.as_uuid(),
+        owner_id: None,
+        member_ids: Vec::new(),
+        title: None,
+        resources: Default::default(),
+        origin: None,
+        acting_user_id: None,
+        wait: Duration::from_secs(10),
+    };
+    client.create_thread(&creation).await?;
+    let (mail, turn) = mail_turn("Please summarize the open tickets")?;
+    let mark = node_entry(&adapter, &thread, mail, turn).await?;
+    lifecycle_hook(&adapter, &[agent]).await;
+    println!("the mail is marked: {mark:?}");
+    Ok(())
+}
+```
+
+The other examples are in `examples/` and run in the tests: `runner_ports` (the two adapters given to a node builder, the concrete adapter kept by the runner), `agent_turn_through_adapter` (a turn through the thread queue, one streamed response completed and one discarded), `queue_not_draining` (`queue_state` and the observer), `close_left_open_turn` (close a message by its id), `client_operations` (the client without a node).
 
 ## Surface
 
 | Item | Role |
 |---|---|
-| `ThreadsClient::new(actor, bus, graphql)` | Builds the client. Publishes nothing, runs no timer, is `Clone`. |
-| `create_thread`, `write_message` | Bus commands. Return `Confirmed { command_id, status }`. |
-| `open_stream` | Bus command with status `STREAMING`. Returns a `StreamHandle` only after the confirmation. |
-| `close_message(&Closing, Option<&StreamHandle>)` | Closes with `Completed`, `BudgetExhausted`, `Failed`, `Interrupted` or `Cancelled`. |
-| `read_context`, `set_title`, `fail_title_job`, `request_upload` | GraphQL operations. |
-| `StreamHandle` | `delta`, `entry`, `annotation`, `keepalive`, `writer()`, `sink_factory()`. |
-| `StreamWriter` | Cloned write side: `entry`, `annotation`, `keepalive`. Shares the sequence and the seal. |
-| `SinkFactory` / `ResponseSink` | `sink()` gives a sink; `send(ResponseDelta)` publishes one delta chunk and waits for the broker. |
-| `transport::{BusTransport, GraphqlTransport}` | The two seams the importer can replace. `BusTransport::ready` is awaited before each `send`. |
-| `transport::NatsBus`, `transport::HttpGraphql` | Ready transports. |
-| `transport::{MemoryBus, MemoryGraphql}` | In-memory transports for tests. They record and answer as the test says and apply no Threads rule. |
-| `Error` | The single error type. |
+| `ThreadClient::new(connection, check_wait)` | Builds the client on a `Connection`. Checks the three streams that Threads uses; sends nothing else. |
+| `ThreadClient::create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `fail_title_job`, `request_upload` | The operations. Each sends once and keeps nothing once it ends, except the stream handle. |
+| `StreamHandle`, `StreamWriter` | The open message of a stream and the clones of its write side: `delta`, `entry`, `annotation`, `keepalive`, `response(entry)`. |
+| `ResponseSink`, `ResponseControl` | The stream sink of one model response over a handle, and the object that completes or discards it. |
+| `Closing`, `ClosureKind` | A closing request: Completed, BudgetExhausted, Failed, Interrupted or Cancelled. |
+| `ThreadAccessAdapter::new(client, ThreadAccessSettings)` | The adapter of the thread access port, with the thread queue. Also `queue_state()`, `entry_stored(thread, entry)` and `instance_ended(agent)`, which are not methods of the port. |
+| `ThreadPortAdapter::new(find)` | The adapter of the thread port: `find` gives the thread id of a snapshot. |
+| `WriteContext`, `WriteContextFn` | The seam that gives agent, author, job, acting user and impersonator for the writes of a thread. |
+| `QueueStore`, `MemoryQueueStore`, `StoredItem` | The seam that keeps the items of the thread queue (`append`, `list`, `remove`) and its in-memory implementation. |
+| `QueueObserver`, `QueueReport`, `ReportKind`, `ItemKind`, `IgnoreReports` | The seam that receives the reports of the thread queue. |
+| `QueueState`, `ThreadQueueState`, `OldestItem`, `FailedAttempt` | The state of the thread queue, read at once. |
+| `Error`, `Failure`, `Cause`, `Refusal`, `CredentialFailure`, `CredentialKind` | The single error type and its parts. All are `#[non_exhaustive]`: match with a final `_` arm. `Refusal::new` builds one. |
+| `test_double::MemoryThreads` (feature `test-double`) | A client over memory that records the commands, the chunks and the GraphQL operations and answers as the caller scripts. |
 
-```ignore
-let client = ThreadsClient::new(actor, Arc::new(NatsBus::connect(nats).await?), Arc::new(graphql));
-let handle = client.open_stream(&open).await?;
-let sink = handle.sink_factory().sink();
-handle.keepalive().await?;
-client.close_message(&closing, Some(&handle)).await?;
-```
+## Bus access
+
+The commands and their outcomes go through `br-util-nats-fabric` on the bus connection of the `Connection`: the client gives the Fabric typed coordinates only and writes no subject, stream or bucket name. Chunks go on the streaming stream of `contract-threads` as `ChunkFrame` messages with a message id; `async-nats` is named in one module only, `src/chunk_lane/`. At building the client checks that the command stream, the event stream and the streaming stream exist: a missing one is `InfraMissing`, and a check that does not end within the check wait is `Unavailable`. This crate never creates a stream, a bucket or a consumer.
 
 ## Rules the code keeps
 
-- Every id of a new object must be a UUIDv7 of the RFC 4122 variant and is refused before sending otherwise (`InvalidInput`). Reference ids are sent as given.
-- A command ends with its answer. Without `wait`, the operation waits for the answer or for the closing of the answer subscription. With `wait`, a missing answer is `AnswerLost`.
-- Chunks are numbered from 0 without a gap, one at a time per handle and its writers, each ending at the broker acknowledgement. A chunk the broker does not acknowledge breaks the handle (`StreamBroken`), and so does a chunk operation abandoned after it took its number.
-- A closing is sent after every chunk that took a number and after each acknowledgement. While a closing waits for its answer, the handle takes no chunk (`StreamClosed`). The handle is free again only when every closing sent with it was answered `Refused`. A closing counts as sent when its publish starts. Before that, the bus is asked to be ready (`BusTransport::ready`: connected, answer subscription open, `Unavailable` otherwise), and a closing abandoned or failed there changes nothing. A closing answered `AnswerLost` or `Unreadable`, or abandoned once its publish has started, closes the handle for good. A confirmed closing spends it. A closing refused before sending changes nothing.
-- `Completed` and `BudgetExhausted` need the handle and go on the completion command with the seal. A handle with no chunk has no seal, so the reason goes on the fail command. `Failed`, `Interrupted` and `Cancelled` go on the fail command, carry no seal, and need no handle.
-- The closing detail is checked by `br-llm-messages`: `Failed` requires one; no detail may be blank.
-- A command is published with no broker dedup id, so a resend under the same command id always reaches Threads, which gives the same answer. An answer is read as the Threads contract event of its exact subject; any other subject is no answer.
-- A missing thread in `read_context` is `Ok(None)` (the field `threadsContext` is explicitly null). A response with no `threadsContext` field is `Unreadable`. A document `br-llm-messages` refuses is `Unreadable` with its stable reason.
-- GraphQL: one token per request from the token cache, sent as bearer. After a rejection no other token is fetched and nothing is sent again. The secrets that the token source declares are removed from error texts; a token it does not declare is not.
+- A wait that is zero is `InvalidInput`. A thread id, message id, turn id or entry id that is not a UUIDv7 is `InvalidInput`.
+- A command is published once with its command id and the client waits for its outcome: a confirmation is the result, a refusal is `Refused` with the code, the reason, the parameters and the command id. A command that no stream takes is `Unavailable`; a command whose outcome did not come within the wait, or whose outcome cannot be read as a known one, is `Lost` or `Unreadable`.
+- A chunk is numbered from 0 by the handle, in the order the calls take it, with no gap even when many tasks write; it returns when the bus has taken it. A chunk the bus did not take within the wait breaks the handle: that chunk and every later one is `StreamBroken`.
+- Closing table: `Completed` sends a complete, with the seal of the chunks, and needs a handle that holds at least one chunk; `BudgetExhausted`, `Failed` and `Interrupted` send a fail; `Cancelled` sends a cancel. The seal is sent for the other kinds only when the handle is healthy and holds a chunk. The commands carry no closure and no detail: the detail of a `Failed` is checked and not sent.
+- A closing goes after every chunk sent before it. After it the handle, its writers and its sinks take no chunk (`StreamClosed`). A closing that Threads refuses frees the handle again; a closing that is waiting, lost or unreadable keeps it closed; a closing that ends `Unavailable` frees it; a confirmed closing spends it.
+- The thread queue of the adapter is first in, first out for each thread, with one delivery task for each thread: a stuck thread blocks its own later items and no other thread. Every write operation of the port returns when the item is in the store; none waits for Threads. The only waiting call is `read`: it waits until the items accepted on that thread before it have ended, leftovers of the store included, with no limit, then reads the whole active branch.
+- Sending again: a command is sent again, with the same command id, on `Unavailable`, `Lost` and `Unreadable`; a chunk is sent again, with the same number, on `StreamBroken`. Any other error is final: the item is removed from the store, reported as `ItemRefused`, and the entries it held are `Dropped`. A refused opening drops the later items of its message unsent (`ItemDroppedUnsent`). A closing that Threads confirms as `FAILED`, or that ends for good with an error, is reported as `ClosingFailed`.
+- `entry_stored` gives `Stored` when the item that holds the entry has been taken by Threads, and `Dropped` when an item of that entry was removed after a report. `instance_ended(agent)` waits for the items accepted before the call on the threads that the agent used, then drops the states and open objects of that agent; it queues nothing.
+- A response sink that is re-opened with the same entry, or discarded, queues the delta that ends the earlier response as interrupted. A response that is completed queues the deltas that the draft still lacks, then the completion, and the result is checked by folding the deltas on a copy of the draft.
+- Dropping the adapter stops its tasks and reports every waiting item as `Unsent`; the items stay in the store.
+- Building the adapter fails with `Store` when the store cannot list, when a kept item cannot be read, or when a kept item does not match the id it is kept under; nothing is sent or removed in that case.
+- The adapter never reads the conversation back except in `read`. The adapter gives faults only: every error of the port is `PortError::Fault` with the error of this crate as its cause.
+- Dependency gate: the crate reaches `br-llm-clients-core` through `br-agentic-contract` and no other library of the `br-llm-clients` family.
 
-## Errors
+## Limits of this version
 
-| Error | Meaning |
+| What | State |
 |---|---|
-| `InvalidInput` | Refused before sending by a rule above, or by `br-llm-messages` (stable reason as text). |
-| `Refused(Refusal)` | Threads answered with a code, parameters, and the command id for a command. A 403 with no readable code is `FORBIDDEN`. With several GraphQL errors, the first one that has a code. |
-| `Unavailable` | Nothing was sent and Threads received nothing. |
-| `AnswerLost` | Sent, no answer. It may or may not have been applied. |
-| `StreamBroken` | A chunk was not acknowledged. The handle stays broken. |
-| `StreamClosed` | The handle is closed, for now or for good. |
-| `Auth` | The token cache gave no token. |
-| `Unauthenticated` | HTTP 401, or a GraphQL error coded `UNAUTHENTICATED`. Wins over `Refused`. |
-| `Unreadable` | An answer or document that cannot be read. It may have been applied. |
-| `Infra` | A stream the bus transport binds is missing or cannot be bound. |
+| Chunk errors | The chunk path gives `StreamBroken` or `InvalidInput` only, never `Unavailable`. |
+| Closure on the wire | The complete, fail and cancel commands are the first version of those commands: no named closure, no detail. |
+| Keepalive | `keepalive` publishes a keepalive chunk; when to send one is the caller's. |
+| Upload | `request_upload` returns the access as Threads gives it and uploads nothing. |
+| Wait while Threads is down | `read`, `entry_stored` and `instance_ended` wait with no limit for the items of the thread queue to end. |
+| Store | `MemoryQueueStore` keeps nothing across a restart; a durable backend is a `QueueStore` the importer gives. |
+
+## Why
+
+| Thing | Why it is the way it is |
+|---|---|
+| `async-nats` in `chunk_lane` | A chunk frame goes on the streaming stream with a message id, and the acknowledgment is awaited inside the outcome wait; the one module that names `async-nats` keeps this out of the rest of the crate, and every other bus use goes through the Fabric |
+| closing table in the client | The adapter and a direct importer close in the same way; the caller gives a reason and the client picks the command |
+| one delivery task for each thread | The order of items of a thread is the order of the chunks and of the closing; threads do not wait for each other |
+| `Drop` reports `Unsent` | The items stay in the store, so a restarted adapter sends them; the observer learns that this instance did not |
+| `instance_ended` is not in the port | The port of the contract has no end-of-life call; the runner holds the concrete adapter and calls it from its lifecycle hook |
+| self dev-dependency with `test-double` | The tests and the examples use `test_double` and CI builds without `--all-features` |

@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 mod adapter;
 mod annotation;
 mod backend;
