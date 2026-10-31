@@ -422,6 +422,8 @@ dependencies = [
  "br-core-kernel",
  "br-graph-contract",
  "br-graph-executor",
+ "br-llm-clients-core",
+ "br-llm-messages",
  "br-runner-connection",
  "br-runner-jobs",
  "br-runner-toolkit",

@@ -1,14 +1,22 @@
 const README: &str = include_str!("../README.md");
-const QUICKSTART: &str = include_str!("../examples/serve_runs.rs");
+const QUICKSTART: &str = include_str!("../examples/shared/serve.rs");
+const SERVE_PUSH: &str = include_str!("../examples/serve_push.rs");
+const SERVE_CLAIM: &str = include_str!("../examples/serve_claim.rs");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 const WORKSPACE: &str = include_str!("../../../Cargo.toml");
 
 #[test]
-fn the_quickstart_of_the_readme_is_the_serve_runs_example_word_for_word() {
-    assert!(
-        README.contains(QUICKSTART.trim_end()),
-        "README.md must hold examples/serve_runs.rs as it is"
-    );
+fn the_quickstart_of_the_readme_is_the_serve_code_of_the_examples_word_for_word() {
+    for (name, code) in [
+        ("examples/shared/serve.rs", QUICKSTART),
+        ("examples/serve_push.rs", SERVE_PUSH),
+        ("examples/serve_claim.rs", SERVE_CLAIM),
+    ] {
+        assert!(
+            README.contains(code.trim_end()),
+            "README.md must hold {name} as it is"
+        );
+    }
 }
 
 #[test]

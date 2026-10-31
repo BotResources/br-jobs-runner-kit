@@ -7,8 +7,8 @@ use br_runner_jobs::JobsClient;
 use br_runner_toolkit::{DrainReport, RunnerBuilder, Settings, StartArgs};
 use tokio_util::sync::CancellationToken;
 
-#[path = "shared/greeter.rs"]
-#[allow(dead_code)]
+#[path = "greeter.rs"]
+#[allow(dead_code)] // each example uses a part of the greeter
 mod greeter;
 
 pub fn settings() -> Result<Settings, br_runner_toolkit::Error> {
@@ -33,8 +33,7 @@ pub async fn serve(
     Ok(RunnerBuilder::new(client, settings()?).start(args).await?)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn main_named(name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args: Vec<String> = std::env::args().collect();
     let [
         _,
@@ -46,10 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         instance_key,
     ] = args.as_slice()
     else {
-        return Err(
-            "usage: serve_runs <endpoint> <nats-url> <token> <account-uuid> <runner-type> <instance-key>"
-                .into(),
-        );
+        return Err(format!(
+            "usage: {name} <endpoint> <nats-url> <token> <account-uuid> <runner-type> <instance-key>"
+        )
+        .into());
     };
     let connection = Connection::new(
         endpoint,

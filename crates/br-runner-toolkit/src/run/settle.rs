@@ -5,6 +5,8 @@ use super::finish::{Ending, Terminal, hand_over};
 
 pub(super) async fn settle_and_hand_over<F: Fields>(ctx: &Ctx<F>, ending: Ending<F>) -> Terminal {
     ctx.record.set_phase(crate::record::Phase::ExecutorReturned);
+    let mut drained = std::pin::pin!(ctx.queue.drained());
+    let drained_early = futures::poll!(drained.as_mut());
     crate::hooks::call_all(&ctx.shared, &ctx.record);
     let waiting_writes = ctx.queue.state().waiting.len();
     let hooks_running = ctx.record.running_hooks();
@@ -19,7 +21,9 @@ pub(super) async fn settle_and_hand_over<F: Fields>(ctx: &Ctx<F>, ending: Ending
         );
     }
     ctx.record.hooks_returned().await;
-    ctx.queue.drained().await;
+    if drained_early.is_pending() {
+        drained.await;
+    }
     if waiting {
         tracing::info!(run_id = %ctx.record.run_id, job_id = %ctx.record.job_id, "the run is settled");
     }
