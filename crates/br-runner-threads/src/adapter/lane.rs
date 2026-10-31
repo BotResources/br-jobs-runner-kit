@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::inner::{Inner, Slot};
 use crate::backend::BoxFuture;
 use crate::error::Error;
-use crate::response::DeltaLane;
+use crate::response::{DeltaLane, OrderGuard};
 use crate::stream::writes::delta_chunk;
 
 pub(crate) struct QueueLane {
@@ -26,6 +26,10 @@ impl QueueLane {
 }
 
 impl DeltaLane for QueueLane {
+    fn order<'a>(&'a self) -> BoxFuture<'a, Option<OrderGuard>> {
+        Box::pin(async move { Some(self.slot.order_guard().await) })
+    }
+
     fn send_delta<'a>(&'a self, delta: &'a ResponseDelta) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
             let chunk = delta_chunk(self.message, delta)?;

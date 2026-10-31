@@ -70,6 +70,7 @@ impl Inner {
             wait_past(&slot, target).await;
         }
         for slot in involved {
+            let _order = slot.order_guard().await;
             let ended = {
                 let mut mem = slot.mem.lock().await;
                 mem.turns.retain(|_, state| state.agent != agent);

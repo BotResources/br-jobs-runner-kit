@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use br_agentic_contract::{AiTurnRef, PortError, ThreadRef};
 use br_llm_messages::{InputTurn, RuntimeToolResults, Turn, TurnEntry, TurnEntryKind};
-use contract_threads::{AiDelivery, AiTurn, LibraryJson};
+use contract_threads::{AiDelivery, AiTurn, Chunk, LibraryJson};
 use uuid::Uuid;
 
 use super::turn::fault;
 use crate::adapter::inner::Inner;
+use crate::adapter::settings::WriteContext;
 use crate::error::Error;
 use crate::stream::writes::entry_chunk;
 use crate::wire::{self, StoreParts};
@@ -42,10 +43,14 @@ impl Inner {
             },
         );
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let _ordered = slot.mem.lock().await;
-        let item = Inner::whole_item(&slot, command, ctx.agent.as_uuid(), message, entries);
-        self.accept(&slot, item).await.map_err(fault)
+        let agent = ctx.agent.as_uuid();
+        self.ordered(&slot, move |inner, slot| async move {
+            let _ordered = slot.mem.lock().await;
+            let item = Inner::whole_item(&slot, command, agent, message, entries);
+            inner.accept(&slot, item).await
+        })
+        .await
+        .map_err(fault)
     }
 
     pub(crate) async fn add_entry(
@@ -85,18 +90,20 @@ impl Inner {
         self: &Arc<Self>,
         thread: &ThreadRef,
         turn: &AiTurnRef,
-        ctx: &crate::adapter::settings::WriteContext,
+        ctx: &WriteContext,
         entry: Uuid,
-        chunk: contract_threads::Chunk,
+        chunk: Chunk,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let mut mem = slot.mem.lock().await;
-        self.ensure_turn(&slot, &mut mem, turn, ctx)
-            .await
-            .map_err(fault)?;
-        self.push_chunk(&slot, &mut mem, turn.id.as_uuid(), vec![entry], chunk)
-            .await
-            .map_err(fault)
+        let (turn, ctx) = (turn.clone(), ctx.clone());
+        self.ordered(&slot, move |inner, slot| async move {
+            let mut mem = slot.mem.lock().await;
+            inner.ensure_turn(&slot, &mut mem, &turn, &ctx).await?;
+            inner
+                .push_chunk(&slot, &mut mem, turn.id.as_uuid(), vec![entry], chunk)
+                .await
+        })
+        .await
+        .map_err(fault)
     }
 }

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::MutexGuard;
-
 use br_agentic_contract::{AiTurnRef, PortError, ResponseStream, ThreadRef};
 use br_llm_messages::{EntryId, ModelResponse};
 
@@ -9,7 +7,7 @@ use super::turn::{closed_turn, fault};
 use crate::adapter::inner::{Inner, OpenResponse, Slot};
 use crate::adapter::lane::QueueLane;
 use crate::adapter::settings::WriteContext;
-use crate::response::{ResponseControl, pair};
+use crate::response::{OrderGuard, ResponseControl, pair};
 
 impl Inner {
     async fn needs_opening(&self, slot: &Slot, turn: &AiTurnRef) -> Result<bool, PortError> {
@@ -20,15 +18,15 @@ impl Inner {
         }
     }
 
-    async fn ordered_with_context<'a>(
+    async fn ordered_with_context(
         &self,
         thread: &ThreadRef,
-        slot: &'a Slot,
+        slot: &Slot,
         turn: &AiTurnRef,
-    ) -> Result<(MutexGuard<'a, ()>, Option<WriteContext>), PortError> {
+    ) -> Result<(OrderGuard, Option<WriteContext>), PortError> {
         let mut context = None;
         loop {
-            let order = slot.order.lock().await;
+            let order = slot.order_guard().await;
             if context.is_some() || !self.needs_opening(slot, turn).await? {
                 return Ok((order, context));
             }
@@ -55,31 +53,33 @@ impl Inner {
         entry: EntryId,
     ) -> Result<ResponseStream, PortError> {
         let slot = self.slot(*thread);
-        let (_order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
-        let earlier = {
-            let mut mem = slot.mem.lock().await;
-            if let Some(ctx) = &ctx {
-                self.ensure_turn(&slot, &mut mem, &turn, ctx)
-                    .await
-                    .map_err(fault)?;
+        let (order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
+        self.run_ordered(&slot, order, move |inner, slot| async move {
+            let earlier = {
+                let mut mem = slot.mem.lock().await;
+                if let Some(ctx) = &ctx {
+                    inner.ensure_turn(&slot, &mut mem, &turn, ctx).await?;
+                }
+                mem.responses
+                    .get(&entry)
+                    .map(|open| Arc::clone(&open.control))
+            };
+            if let Some(earlier) = earlier {
+                earlier.discard().await?;
+                earlier.end().await;
             }
-            mem.responses
-                .get(&entry)
-                .map(|open| Arc::clone(&open.control))
-        };
-        if let Some(earlier) = earlier {
-            earlier.discard().await.map_err(fault)?;
-            earlier.end().await;
-        }
-        let (sink, control) = self.controls(&slot, &turn, entry);
-        slot.mem.lock().await.responses.insert(
-            entry,
-            OpenResponse {
-                agent: turn.agent,
-                control,
-            },
-        );
-        Ok(Box::new(sink))
+            let (sink, control) = inner.controls(&slot, &turn, entry);
+            slot.mem.lock().await.responses.insert(
+                entry,
+                OpenResponse {
+                    agent: turn.agent,
+                    control,
+                },
+            );
+            Ok(Box::new(sink) as ResponseStream)
+        })
+        .await
+        .map_err(fault)
     }
 
     pub(crate) async fn complete_response(
@@ -90,27 +90,28 @@ impl Inner {
     ) -> Result<(), PortError> {
         let ctx = self.context_for(thread).await?;
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let entry = response.id();
-        let held = {
-            let mut mem = slot.mem.lock().await;
-            self.ensure_turn(&slot, &mut mem, &turn, &ctx)
-                .await
-                .map_err(fault)?;
-            mem.responses
-                .get(&entry)
-                .map(|open| Arc::clone(&open.control))
-        };
-        let control = match held {
-            Some(control) => control,
-            None => self.controls(&slot, &turn, entry).1,
-        };
-        let outcome = control.complete(&response).await;
-        if outcome.is_ok() {
-            control.end().await;
-            slot.mem.lock().await.responses.remove(&entry);
-        }
-        outcome.map_err(fault)
+        self.ordered(&slot, move |inner, slot| async move {
+            let entry = response.id();
+            let held = {
+                let mut mem = slot.mem.lock().await;
+                inner.ensure_turn(&slot, &mut mem, &turn, &ctx).await?;
+                mem.responses
+                    .get(&entry)
+                    .map(|open| Arc::clone(&open.control))
+            };
+            let control = match held {
+                Some(control) => control,
+                None => inner.controls(&slot, &turn, entry).1,
+            };
+            let outcome = control.complete(&response).await;
+            if outcome.is_ok() {
+                control.end().await;
+                slot.mem.lock().await.responses.remove(&entry);
+            }
+            outcome
+        })
+        .await
+        .map_err(fault)
     }
 
     pub(crate) async fn discard_response(
@@ -119,21 +120,24 @@ impl Inner {
         entry: EntryId,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
-        let _order = slot.order.lock().await;
-        let held = slot
-            .mem
-            .lock()
-            .await
-            .responses
-            .get(&entry)
-            .map(|open| Arc::clone(&open.control));
-        let Some(control) = held else {
-            return Ok(());
-        };
-        control.discard().await.map_err(fault)?;
-        control.end().await;
-        slot.mem.lock().await.responses.remove(&entry);
-        Ok(())
+        self.ordered(&slot, move |_inner, slot| async move {
+            let held = slot
+                .mem
+                .lock()
+                .await
+                .responses
+                .get(&entry)
+                .map(|open| Arc::clone(&open.control));
+            let Some(control) = held else {
+                return Ok(());
+            };
+            control.discard().await?;
+            control.end().await;
+            slot.mem.lock().await.responses.remove(&entry);
+            Ok(())
+        })
+        .await
+        .map_err(fault)
     }
 
     pub(crate) async fn open_result(
@@ -142,13 +146,15 @@ impl Inner {
         turn: AiTurnRef,
     ) -> Result<(), PortError> {
         let slot = self.slot(*thread);
-        let (_order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
+        let (order, ctx) = self.ordered_with_context(thread, &slot, &turn).await?;
         let Some(ctx) = ctx else {
             return Ok(());
         };
-        let mut mem = slot.mem.lock().await;
-        self.ensure_turn(&slot, &mut mem, &turn, &ctx)
-            .await
-            .map_err(fault)
+        self.run_ordered(&slot, order, move |inner, slot| async move {
+            let mut mem = slot.mem.lock().await;
+            inner.ensure_turn(&slot, &mut mem, &turn, &ctx).await
+        })
+        .await
+        .map_err(fault)
     }
 }

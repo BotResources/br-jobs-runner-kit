@@ -14,7 +14,11 @@ pub use sink::ResponseSink;
 
 pub(crate) use whole::whole_response_deltas;
 
+pub(crate) type OrderGuard = tokio::sync::OwnedMutexGuard<()>;
+
 pub(crate) trait DeltaLane: Send + Sync {
+    fn order<'a>(&'a self) -> BoxFuture<'a, Option<OrderGuard>>;
+
     fn send_delta<'a>(&'a self, delta: &'a ResponseDelta) -> BoxFuture<'a, Result<(), Error>>;
 }
 
@@ -25,7 +29,7 @@ pub(crate) struct State {
 }
 
 pub(crate) struct Shared {
-    pub(crate) state: tokio::sync::Mutex<State>,
+    pub(crate) state: Arc<tokio::sync::Mutex<State>>,
     pub(crate) failure: Mutex<Option<Error>>,
     pub(crate) lane: Arc<dyn DeltaLane>,
 }
@@ -55,11 +59,11 @@ pub(crate) fn pair(
     lane: Arc<dyn DeltaLane>,
 ) -> (ResponseSink, ResponseControl) {
     let shared = Arc::new(Shared {
-        state: tokio::sync::Mutex::new(State {
+        state: Arc::new(tokio::sync::Mutex::new(State {
             draft: ResponseDraft::new(turn, entry),
             sent: false,
             done: false,
-        }),
+        })),
         failure: Mutex::new(None),
         lane,
     });

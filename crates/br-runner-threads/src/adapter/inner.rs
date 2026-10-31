@@ -56,7 +56,7 @@ pub(crate) struct Mem {
 
 pub(crate) struct Slot {
     pub(crate) thread: ThreadRef,
-    pub(crate) order: tokio::sync::Mutex<()>,
+    pub(crate) order: Arc<tokio::sync::Mutex<()>>,
     pub(crate) mem: tokio::sync::Mutex<Mem>,
     pub(crate) queue: Mutex<QueueInner>,
     pub(crate) changed: watch::Sender<u64>,
@@ -66,7 +66,7 @@ impl Slot {
     pub(crate) fn new(thread: ThreadRef) -> Arc<Self> {
         Arc::new(Self {
             thread,
-            order: tokio::sync::Mutex::new(()),
+            order: Arc::new(tokio::sync::Mutex::new(())),
             mem: tokio::sync::Mutex::new(Mem::default()),
             queue: Mutex::new(QueueInner::default()),
             changed: watch::channel(0).0,
