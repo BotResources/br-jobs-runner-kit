@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs", "crates/br-runner-as-node"]
+members = ["crates/br-jobs-runner-core", "crates/br-jobs-runner-kit", "crates/br-runner-threads", "crates/br-runner-connection", "crates/br-runner-jobs", "crates/br-runner-as-node", "crates/br-runner-as-tool"]
 
 [workspace.package]
 edition = "2024"
@@ -38,6 +38,9 @@ br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", 
 br-util-nats-fabric = { git = "https://github.com/BotResources/br-rust-common", package = "br-util-nats-fabric", tag = "br-util-nats-fabric/v0.1.0", version = "0.1.0" }
 contract-threads = { git = "https://github.com/BotResources/svc-threads", package = "contract-threads", tag = "contract-threads/v0.6.0", version = "0.6.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.1.0", version = "0.1.0" }
+br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
+br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
 
 [patch."https://github.com/BotResources/br-jobs-runner-kit"]
 br-runner-connection = { path = "crates/br-runner-connection" }
