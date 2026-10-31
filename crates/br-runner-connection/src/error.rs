@@ -45,7 +45,7 @@ impl std::fmt::Display for Failure {
         let cause = match self.cause {
             Cause::WaitFired => "the wait fired",
             Cause::Transport => "the transport failed",
-            Cause::NoListener => "no service listens to the request",
+            Cause::NoListener => "no listener",
         };
         write!(f, "{cause}: {}", self.text)
     }

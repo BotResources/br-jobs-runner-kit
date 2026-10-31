@@ -1,3 +1,4 @@
+// each test file includes this module and uses only part of it
 #![allow(dead_code, unused_imports)]
 
 pub mod nats;

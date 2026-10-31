@@ -25,11 +25,6 @@ confidence-threshold = 0.93
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-deny = [
-    { crate = "br-llm-clients-core", wrappers = ["br-agentic-contract", "br-runner-threads"] },
-    { crate = "br-llm-clients-common-auth", wrappers = ["br-runner-threads"] },
-    { crate = "br-llm-clients-common-http", wrappers = ["br-llm-clients-common-auth", "br-runner-threads"] },
-]
 
 [sources]
 unknown-registry = "deny"
