@@ -71,7 +71,7 @@ pub(crate) enum Write {
     },
     Answer(Content),
     SavedState(serde_json::Value),
-    Fact(Fact),
+    Fact(Fact, Uuid),
 }
 
 impl Write {
@@ -93,7 +93,7 @@ impl Write {
             } => (WriteKind::Cancel, vec![*job_id, *command_id]),
             Self::Answer(_) => (WriteKind::Answer, Vec::new()),
             Self::SavedState(_) => (WriteKind::SavedState, Vec::new()),
-            Self::Fact(fact) => match fact {
+            Self::Fact(fact, _) => match fact {
                 Fact::Started { run_id, start_id } => {
                     (WriteKind::Started, vec![*run_id, *start_id])
                 }

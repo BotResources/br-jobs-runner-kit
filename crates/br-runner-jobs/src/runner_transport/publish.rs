@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use async_nats::jetstream::message::PublishMessage;
 use contract_jobs::runner::{
     FailureKind as WireKind, FailureReport, LogLine, PlanDeclared, RunCompleted, RunFailed,
     RunStarted, StepStarted, WIRE_VERSION,
@@ -89,11 +90,19 @@ impl Live {
         Ok((status_subject(runner_type, kind), bytes))
     }
 
-    pub(super) async fn fact(&self, fact: Fact, wait: Duration) -> Result<(), Error> {
+    pub(super) async fn fact(
+        &self,
+        fact: Fact,
+        message_id: String,
+        wait: Duration,
+    ) -> Result<(), Error> {
         let (subject, bytes) = self.encode_fact(&fact)?;
         let object = "the status stream";
         let deadline = Instant::now() + wait;
-        let pending = timeout_at(deadline, self.wire.jetstream.publish(subject, bytes.into()))
+        let message = PublishMessage::build()
+            .payload(bytes.into())
+            .message_id(message_id);
+        let pending = timeout_at(deadline, self.wire.jetstream.send_publish(subject, message))
             .await
             .map_err(|_| Error::Unavailable(Failure::wait("the fact was not handed to the bus")))?
             .map_err(|e| fail::unsent(object, &e))?;

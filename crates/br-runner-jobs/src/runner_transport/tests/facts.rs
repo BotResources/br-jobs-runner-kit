@@ -44,6 +44,7 @@ async fn given_a_started_fact_when_published_then_the_status_stream_holds_the_wi
             run_id,
             start_id: Uuid::now_v7(),
         },
+        Uuid::now_v7().to_string(),
         WAIT,
     )
     .await
@@ -72,6 +73,7 @@ async fn given_a_plan_and_a_step_when_published_then_each_is_on_its_own_subject_
             steps: vec!["read".to_owned(), "write".to_owned()],
             declaration_id: Some(declaration_id),
         },
+        Uuid::now_v7().to_string(),
         WAIT,
     )
     .await
@@ -84,6 +86,7 @@ async fn given_a_plan_and_a_step_when_published_then_each_is_on_its_own_subject_
             label: "write".to_owned(),
             started_at,
         },
+        Uuid::now_v7().to_string(),
         WAIT,
     )
     .await
@@ -111,7 +114,7 @@ async fn given_a_completed_and_a_failed_fact_when_published_then_they_carry_the_
     let world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
-    live.publish_fact(Fact::Completed { run_id }, WAIT)
+    live.publish_fact(Fact::Completed { run_id }, Uuid::now_v7().to_string(), WAIT)
         .await
         .map_err(|e| e.to_string())
         .expect("published");
@@ -126,6 +129,7 @@ async fn given_a_completed_and_a_failed_fact_when_published_then_they_carry_the_
                 retry_after_seconds: Some(30),
             },
         },
+        Uuid::now_v7().to_string(),
         WAIT,
     )
     .await
@@ -161,6 +165,7 @@ async fn given_a_permanent_failure_without_a_hint_when_published_then_no_retry_h
                 retry_after_seconds: None,
             },
         },
+        Uuid::now_v7().to_string(),
         WAIT,
     )
     .await
@@ -220,9 +225,46 @@ async fn given_the_status_stream_gone_when_publishing_a_fact_then_infra_missing(
             Fact::Completed {
                 run_id: Uuid::now_v7(),
             },
+            Uuid::now_v7().to_string(),
             WAIT,
         )
         .await
         .expect_err("refused");
     assert!(matches!(error, Error::InfraMissing(_)), "{error:?}");
+}
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_a_fact_published_twice_with_one_message_id_then_the_status_stream_holds_it_once() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let (run_id, message_id) = (Uuid::now_v7(), Uuid::now_v7().to_string());
+    for _ in 0..2 {
+        live.publish_fact(Fact::Completed { run_id }, message_id.clone(), WAIT)
+            .await
+            .map_err(|e| e.to_string())
+            .expect("published");
+    }
+    assert_eq!(
+        published(&world, RunnerStatusFact::Completed).await.len(),
+        1
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_two_facts_of_one_kind_with_two_message_ids_then_the_status_stream_holds_both() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let run_id = Uuid::now_v7();
+    for _ in 0..2 {
+        live.publish_fact(Fact::Completed { run_id }, Uuid::now_v7().to_string(), WAIT)
+            .await
+            .map_err(|e| e.to_string())
+            .expect("published");
+    }
+    assert_eq!(
+        published(&world, RunnerStatusFact::Completed).await.len(),
+        2
+    );
 }

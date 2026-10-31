@@ -26,9 +26,24 @@ fn leaks(text: &str) -> Vec<&'static str> {
 }
 
 #[test]
-fn given_a_create_with_secrets_when_it_is_formatted_whole_then_the_check_for_leaks_sees_them() {
-    let text = format!("{:?}", create(41, 42));
-    assert_eq!(leaks(&text), vec!["passport", "parent", "initial"]);
+fn given_a_create_with_secrets_when_it_is_formatted_whole_then_the_passport_is_not_printed() {
+    let create = create(41, 42);
+    let wrapped = Write::Create(match &create {
+        Write::Create(child) => child.clone(),
+        other => panic!("{other:?}"),
+    });
+    let command = crate::backend::ChildCommand::Create(match create {
+        Write::Create(child) => child,
+        other => panic!("{other:?}"),
+    });
+    for text in [
+        format!("{wrapped:?}"),
+        format!("{command:?}"),
+        format!("{wrapped:#?}"),
+    ] {
+        assert!(!leaks(&text).contains(&"passport"), "{text}");
+        assert!(text.contains("<hidden>"), "{text}");
+    }
 }
 
 #[test]

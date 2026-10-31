@@ -179,7 +179,12 @@ impl Backend for ScriptedJobs {
         Box::pin(async { Ok(self.inputs.trigger_source()) })
     }
 
-    fn publish_fact(&self, fact: Fact, _wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
+    fn publish_fact(
+        &self,
+        fact: Fact,
+        _message_id: String,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.gate().await;
             let mut script = self.script();

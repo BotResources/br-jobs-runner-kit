@@ -115,37 +115,46 @@ pub fn saved() -> Write {
 }
 
 pub fn plan() -> Write {
-    Write::Fact(Fact::Plan {
-        run_id: id(RUN),
-        steps: vec!["one".to_owned()],
-        declaration_id: Some(id(77)),
-    })
+    Write::Fact(
+        Fact::Plan {
+            run_id: id(RUN),
+            steps: vec!["one".to_owned()],
+            declaration_id: Some(id(77)),
+        },
+        id(951),
+    )
 }
 
 pub fn step(index: u32) -> Write {
-    Write::Fact(Fact::Step {
-        run_id: id(RUN),
-        index,
-        label: "label".to_owned(),
-        started_at: chrono::DateTime::UNIX_EPOCH,
-    })
+    Write::Fact(
+        Fact::Step {
+            run_id: id(RUN),
+            index,
+            label: "label".to_owned(),
+            started_at: chrono::DateTime::UNIX_EPOCH,
+        },
+        id(952 + u128::from(index)),
+    )
 }
 
 pub fn completed() -> Write {
-    Write::Fact(Fact::Completed { run_id: id(RUN) })
+    Write::Fact(Fact::Completed { run_id: id(RUN) }, id(953))
 }
 
 pub fn failed_fact() -> Write {
-    Write::Fact(Fact::Failed {
-        run_id: id(RUN),
-        failed: Failed {
-            kind: FailureKind::Permanent,
-            reason_code: "code".to_owned(),
-            params: json!({}),
-            diagnostic: json!({}),
-            retry_after_seconds: None,
+    Write::Fact(
+        Fact::Failed {
+            run_id: id(RUN),
+            failed: Failed {
+                kind: FailureKind::Permanent,
+                reason_code: "code".to_owned(),
+                params: json!({}),
+                diagnostic: json!({}),
+                retry_after_seconds: None,
+            },
         },
-    })
+        id(954),
+    )
 }
 
 pub fn unavailable() -> Error {

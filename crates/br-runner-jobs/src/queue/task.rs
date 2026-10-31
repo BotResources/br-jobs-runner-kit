@@ -189,6 +189,7 @@ impl Drop for Task {
     }
 }
 
-pub(crate) async fn run(shared: Arc<Shared>) {
-    Task::new(shared).run().await;
+pub(crate) fn run(shared: Arc<Shared>) -> impl Future<Output = ()> + Send + 'static {
+    let mut task = Task::new(shared);
+    async move { task.run().await }
 }

@@ -90,8 +90,13 @@ impl Backend for Live {
         Box::pin(self.trigger_source(ack_wait))
     }
 
-    fn publish_fact(&self, fact: Fact, wait: Duration) -> BoxFuture<'_, Result<(), Error>> {
-        Box::pin(self.fact(fact, wait))
+    fn publish_fact(
+        &self,
+        fact: Fact,
+        message_id: String,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.fact(fact, message_id, wait))
     }
 
     fn publish_log(&self, line: LogRecord) -> BoxFuture<'_, Result<(), Error>> {

@@ -67,7 +67,7 @@ pub(crate) fn depends_on(write: &Write) -> Vec<DepKey> {
         Write::Finish { job_id, .. } | Write::Cancel { job_id, .. } => {
             keys.push(DepKey::Create(*job_id));
         }
-        Write::Fact(Fact::Completed { .. }) => {
+        Write::Fact(Fact::Completed { .. }, _) => {
             keys.push(DepKey::Answer);
             keys.push(DepKey::SavedState);
         }

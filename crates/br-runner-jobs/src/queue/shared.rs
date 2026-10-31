@@ -102,6 +102,14 @@ impl Shared {
     }
 
     pub(crate) fn hand_over(&self, write: Write) -> WriteEnd {
+        let (end, report) = self.enqueue(write);
+        if let Some(report) = report {
+            self.report(report);
+        }
+        end
+    }
+
+    pub(crate) fn enqueue(&self, write: Write) -> (WriteEnd, Option<QueueReport>) {
         let (end_tx, end) = WriteEnd::pair();
         let mut state = self.lock();
         if state.stopped {
@@ -120,7 +128,7 @@ impl Shared {
         });
         drop(state);
         self.wake.notify_one();
-        end
+        (end, None)
     }
 
     pub(crate) fn hold(
@@ -133,7 +141,7 @@ impl Shared {
         let mut state = self.lock();
         if state.stopped {
             drop(state);
-            return self.finish_unqueued(write, Removal::LeftUnsent);
+            return self.finish_reported(write, Removal::LeftUnsent);
         }
         let seq = self.register(&mut state, &write);
         state.new_held.push(Held {
@@ -150,7 +158,15 @@ impl Shared {
         end
     }
 
-    fn finish_unqueued(&self, write: Write, removal: Removal) -> WriteEnd {
+    fn finish_reported(&self, write: Write, removal: Removal) -> WriteEnd {
+        let (end, report) = self.finish_unqueued(write, removal);
+        if let Some(report) = report {
+            self.report(report);
+        }
+        end
+    }
+
+    fn finish_unqueued(&self, write: Write, removal: Removal) -> (WriteEnd, Option<QueueReport>) {
         let name = write.name();
         {
             let mut state = self.lock();
@@ -158,11 +174,11 @@ impl Shared {
                 state.ended.insert(key, Ended::of(&Err(removal.clone())));
             }
         }
-        self.report(QueueReport::Removed {
+        let report = QueueReport::Removed {
             write: name,
             removal: removal.clone(),
-        });
-        WriteEnd::ended(Err(removal))
+        };
+        (WriteEnd::ended(Err(removal)), Some(report))
     }
 
     pub(crate) fn complete(&self, entry: Entry, result: WriteResult) {

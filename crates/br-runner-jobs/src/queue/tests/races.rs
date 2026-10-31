@@ -84,7 +84,7 @@ async fn given_many_producers_on_many_threads_when_they_hand_over_then_each_prod
         .attempts_of(WriteKind::StepStarted)
         .iter()
         .map(|write| match write {
-            Write::Fact(crate::backend::Fact::Step { index, .. }) => *index,
+            Write::Fact(crate::backend::Fact::Step { index, .. }, _) => *index,
             _ => u32::MAX,
         })
         .collect();

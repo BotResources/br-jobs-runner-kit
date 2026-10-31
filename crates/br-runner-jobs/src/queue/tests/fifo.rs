@@ -140,7 +140,7 @@ async fn given_many_writes_when_handed_over_then_the_queue_has_no_cap_and_keeps_
         .attempts_of(WriteKind::StepStarted)
         .iter()
         .map(|write| match write {
-            crate::queue::Write::Fact(crate::backend::Fact::Step { index, .. }) => *index,
+            crate::queue::Write::Fact(crate::backend::Fact::Step { index, .. }, _) => *index,
             _ => u32::MAX,
         })
         .collect();

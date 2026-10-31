@@ -1,6 +1,7 @@
 mod inbox;
 mod making;
 mod no_ids;
+mod observer;
 mod outcomes;
 mod waits;
 

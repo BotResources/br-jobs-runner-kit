@@ -77,6 +77,7 @@ impl WriteSender for WorkSender {
                                 run_id: *run_id,
                                 start_id: *start_id,
                             },
+                            format!("started-{run_id}-{start_id}"),
                             wait,
                         )
                         .await
@@ -98,7 +99,11 @@ impl WriteSender for WorkSender {
                 }
                 Write::Answer(content) => graphql::upload_result(backend, &ids, content).await,
                 Write::SavedState(state) => graphql::save_state(backend, &ids, state).await,
-                Write::Fact(fact) => backend.publish_fact(fact.clone(), wait).await,
+                Write::Fact(fact, message_id) => {
+                    backend
+                        .publish_fact(fact.clone(), message_id.to_string(), wait)
+                        .await
+                }
             }
         })
     }

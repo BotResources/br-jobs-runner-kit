@@ -242,3 +242,26 @@ async fn given_a_sender_that_panics_when_the_task_dies_then_every_write_ends_uns
     assert_eq!(ready(&mut late), Some(Err(Removal::LeftUnsent)));
     assert_eq!(removals(&rig).len(), 3);
 }
+
+#[test]
+fn given_the_runtime_shut_down_before_the_queue_task_ran_then_the_writes_end_unsent_are_reported_and_drained_returns()
+ {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("a runtime");
+    let guard = runtime.enter();
+    let rig = Rig::new();
+    let end = rig.hand(answer());
+    drop(guard);
+    drop(runtime);
+    assert_eq!(end.now_or_never(), Some(Err(Removal::LeftUnsent)));
+    assert_eq!(rig.started.now_or_never(), Some(Err(Removal::LeftUnsent)));
+    assert!(rig.queue.drained().now_or_never().is_some());
+    assert!(
+        rig.observer
+            .removed()
+            .iter()
+            .any(|(name, _)| name.kind == WriteKind::Answer)
+    );
+}

@@ -36,6 +36,14 @@ impl QueueWriter {
         self.shared.hand_over(write)
     }
 
+    pub(crate) fn enqueue(&self, write: Write) -> (WriteEnd, Option<QueueReport>) {
+        self.shared.enqueue(write)
+    }
+
+    pub(crate) fn report(&self, report: QueueReport) {
+        self.shared.report(report);
+    }
+
     pub(crate) fn hold(
         &self,
         write: Write,
@@ -84,6 +92,10 @@ impl DeliveryQueue {
         self.writer.clone()
     }
 
+    fn fact(&self, fact: Fact) -> WriteEnd {
+        self.writer.hand_over(Write::Fact(fact, Uuid::now_v7()))
+    }
+
     pub fn answer(&self, answer: Content) -> WriteEnd {
         self.writer.hand_over(Write::Answer(answer))
     }
@@ -100,11 +112,11 @@ impl DeliveryQueue {
         if steps.is_empty() {
             return Err(Error::invalid("a plan declares at least one step"));
         }
-        Ok(self.writer.hand_over(Write::Fact(Fact::Plan {
+        Ok(self.fact(Fact::Plan {
             run_id: self.run_id,
             steps,
             declaration_id,
-        })))
+        }))
     }
 
     pub fn step_started(
@@ -113,25 +125,25 @@ impl DeliveryQueue {
         label: String,
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> WriteEnd {
-        self.writer.hand_over(Write::Fact(Fact::Step {
+        self.fact(Fact::Step {
             run_id: self.run_id,
             index,
             label,
             started_at,
-        }))
+        })
     }
 
     pub fn completed(&self) -> WriteEnd {
-        self.writer.hand_over(Write::Fact(Fact::Completed {
+        self.fact(Fact::Completed {
             run_id: self.run_id,
-        }))
+        })
     }
 
     pub fn failed(&self, failed: Failed) -> WriteEnd {
-        self.writer.hand_over(Write::Fact(Fact::Failed {
+        self.fact(Fact::Failed {
             run_id: self.run_id,
             failed,
-        }))
+        })
     }
 
     pub async fn drained(&self) -> QueueState {

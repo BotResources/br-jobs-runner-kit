@@ -15,7 +15,7 @@ use crate::caller::CallerHandle;
 use crate::endwait::EndStore;
 use crate::error::Error;
 use crate::model::{AgentDeclaration, UnreadItem};
-use crate::queue::{QueueWriter, Write};
+use crate::queue::{QueueReport, QueueWriter, Write};
 use crate::work::WorkCore;
 use agents::Agents;
 use inbox::Inbox;
@@ -77,19 +77,16 @@ impl BookInner {
         key: AgentKey,
         agent_id: Uuid,
         has_inbox: bool,
-    ) -> BookedAgentRef {
-        let registration = self
-            .writer
-            .hand_over(Write::Registration {
-                run_id: self.core.run_id,
-                agent: AgentDeclaration {
-                    agent_id,
-                    has_inbox,
-                    can_restart: self.can_restart,
-                },
-            })
-            .shared();
-        agents.add(key, agent_id, has_inbox, registration)
+    ) -> (BookedAgentRef, Option<QueueReport>) {
+        let (end, report) = self.writer.enqueue(Write::Registration {
+            run_id: self.core.run_id,
+            agent: AgentDeclaration {
+                agent_id,
+                has_inbox,
+                can_restart: self.can_restart,
+            },
+        });
+        (agents.add(key, agent_id, has_inbox, end.shared()), report)
     }
 }
 
@@ -132,12 +129,18 @@ impl AgentBook {
             inbox: Mutex::new(Inbox::default()),
             ends: Arc::new(EndStore::new()),
         });
+        let mut reports = Vec::new();
         {
             let mut agents = inner.agents();
             for agent in restored {
-                inner.register(&mut agents, agent.key, agent.agent_id, agent.has_inbox);
+                let (_, report) =
+                    inner.register(&mut agents, agent.key, agent.agent_id, agent.has_inbox);
+                reports.extend(report);
                 agents.mark_restored(agent.agent_id);
             }
+        }
+        for report in reports {
+            inner.writer.report(report);
         }
         Ok(Self { inner })
     }
@@ -185,12 +188,18 @@ impl AgentBook {
     }
 
     pub(crate) fn agent_for(&self, key: &AgentKey, inbox_label: bool) -> BookedAgentRef {
-        let mut agents = self.inner.agents();
-        if let Some(found) = agents.find(key) {
-            return found;
+        let (reference, report) = {
+            let mut agents = self.inner.agents();
+            if let Some(found) = agents.find(key) {
+                return found;
+            }
+            self.inner
+                .register(&mut agents, key.clone(), Uuid::now_v7(), inbox_label)
+        };
+        if let Some(report) = report {
+            self.inner.writer.report(report);
         }
-        self.inner
-            .register(&mut agents, key.clone(), Uuid::now_v7(), inbox_label)
+        reference
     }
 
     pub(crate) fn holds_inbox(&self, agent_id: Uuid) -> bool {

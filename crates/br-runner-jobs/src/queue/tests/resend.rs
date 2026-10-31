@@ -209,3 +209,42 @@ async fn given_a_write_sent_in_several_attempts_then_one_session_serves_all_of_t
     assert_eq!(rig.hand(other).await, Ok(()));
     assert_eq!(rig.sender.sessions(), 3);
 }
+
+#[tokio::test]
+async fn given_two_facts_of_one_kind_then_each_has_its_own_message_id_and_a_resend_keeps_it() {
+    let sender = ScriptedSender::new();
+    sender.always(WriteKind::StepStarted, Step::Reply(Ok(())));
+    let rig = Rig::with(sender);
+    let at = chrono::DateTime::UNIX_EPOCH;
+    rig.queue.step_started(1, "same".to_owned(), at).await.ok();
+    rig.queue.step_started(1, "same".to_owned(), at).await.ok();
+    let ids: Vec<_> = rig
+        .sender
+        .attempts_of(WriteKind::StepStarted)
+        .into_iter()
+        .map(|write| match write {
+            Write::Fact(_, message_id) => message_id,
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert_ne!(ids[0], ids[1]);
+
+    let flaky = ScriptedSender::new();
+    flaky.always(WriteKind::Completed, fail(lost()));
+    let rig = Rig::timed(flaky, Duration::from_secs(5), Duration::from_millis(1));
+    let end = rig.queue.completed();
+    rig.sender.attempts_reached(4).await;
+    drop(end);
+    let sent: Vec<_> = rig
+        .sender
+        .attempts_of(WriteKind::Completed)
+        .into_iter()
+        .map(|write| match write {
+            Write::Fact(_, message_id) => message_id,
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert!(sent.len() >= 3);
+    assert!(sent.iter().all(|message_id| *message_id == sent[0]));
+}

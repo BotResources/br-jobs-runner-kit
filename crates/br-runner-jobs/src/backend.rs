@@ -69,7 +69,7 @@ pub struct LogRecord {
     pub logged_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct CreateChild {
     pub command_id: Uuid,
     pub job_id: Uuid,
@@ -82,6 +82,24 @@ pub struct CreateChild {
     pub initial_job_id: Uuid,
     pub run_id: Uuid,
     pub max_attempts: Option<i64>,
+}
+
+impl std::fmt::Debug for CreateChild {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateChild")
+            .field("command_id", &self.command_id)
+            .field("job_id", &self.job_id)
+            .field("runner_type", &self.runner_type)
+            .field("mode", &self.mode)
+            .field("config", &self.config)
+            .field("payload", &self.payload)
+            .field("passport", &"<hidden>")
+            .field("parent_job_id", &self.parent_job_id)
+            .field("initial_job_id", &self.initial_job_id)
+            .field("run_id", &self.run_id)
+            .field("max_attempts", &self.max_attempts)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -124,7 +142,12 @@ pub(crate) trait Backend: Send + Sync {
         ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>>;
 
-    fn publish_fact(&self, fact: Fact, wait: Duration) -> BoxFuture<'_, Result<(), Error>>;
+    fn publish_fact(
+        &self,
+        fact: Fact,
+        message_id: String,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>>;
 
     fn publish_log(&self, line: LogRecord) -> BoxFuture<'_, Result<(), Error>>;
 
