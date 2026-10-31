@@ -22,3 +22,4 @@ First release. A runner type as a tool for the agentic contract.
 
 - The runner type is checked at build time with the segment rule of the jobs wire.
 - The crate adds no timeout, no limit and no retry.
+- A sync call whose child Job is cancelled by someone else gets no end from the jobs service today. The call then ends at the cancel view, or as a fault when the book of the run is dropped.

@@ -62,13 +62,6 @@ impl RunnerToolCode {
         }
     }
 
-    fn cancel_unless_dead(&self, child: Uuid, created: &mut Created) {
-        let dead = matches!((&mut *created).now_or_never(), Some(Err(_)));
-        if !dead {
-            self.hand_cancel(child);
-        }
-    }
-
     async fn settle(
         &self,
         child: Uuid,

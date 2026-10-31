@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // each test file uses only some of the shared helpers
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

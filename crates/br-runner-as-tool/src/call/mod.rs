@@ -1,4 +1,6 @@
 mod background;
+#[cfg(test)]
+mod background_tests;
 mod content;
 mod hand;
 mod prepare;

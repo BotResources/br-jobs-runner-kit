@@ -1,13 +1,13 @@
 mod support;
 
 #[path = "../examples/background_tool.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the example main is not called here
 mod background_tool;
 #[path = "../examples/builder_and_processor.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the example main is not called here
 mod builder_and_processor;
 #[path = "../examples/sync_tool.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the example main is not called here
 mod sync_tool;
 
 use br_runner_jobs::test_double::{Answer, memory_caller};

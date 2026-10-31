@@ -71,7 +71,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 **Building**
 
-- The build checks the runner type with the rule that `br-runner-jobs` applies to the runner type of its own client (not empty, at most 64 characters, letters, digits, `_` and `-`, starting with a letter or a digit); a runner type that fails is `RunnerToolError::RunnerType` with `Error::InvalidInput`. The `ToolSpec` is made from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it. The runner type error is `Error::InvalidInput` with the same text that `br-runner-jobs` gives for the runner type of its own client. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
+- The build checks the runner type with the rule that `br-runner-jobs` applies to the runner type of its own client (not empty, at most 64 characters, ASCII letters, digits, `_` and `-`, starting with a letter or a digit); a runner type that fails is `RunnerToolError::RunnerType` with `Error::InvalidInput`, which has the same text that `br-runner-jobs` gives for the runner type of its own client. The `ToolSpec` is made from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
 - A `Tool` is tied to the caller handle and to the tool mode it was built with, so to one run. Build it for each instance and do not keep it from one run to another. It keeps nothing from one call to the next and changes no state of the run. Several calls of one `Tool` run at the same time; each one has its own child Job.
 - The crate sets no priority (a child Job takes the priority of its parent), no timeout, no depth limit and no retry. It hands each write over once. The delivery queue behind the caller handle sends a write again until jobs answers; that is not a retry of this crate.
 
@@ -129,7 +129,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 | Finish, cancel | any outcome or none | ignored |
 | Any step | the cancel view triggered | error flag that says the call was cancelled |
 
-- An error flag is for an outcome that jobs or the called runner decided, or that an author function refused. A fault is for an outcome that is unknown or comes from the infrastructure; its cause is the error that ended the call, with no text added. A failed or cancelled child Job is never a fault. A slow child Job is never an error: the crate measures no time.
+- An error flag is for an outcome that jobs or the called runner decided, or that an author function refused. A fault is for an outcome that is unknown or comes from the infrastructure; its cause is the error that ended the call, with no text added, except `UnknownEnd` and `CreateRemoved`, the two causes this crate makes. A failed or cancelled child Job that the end of the sync call reports is an error flag, not a fault. A slow child Job is never an error: the crate measures no time.
 - A text this crate writes names no Job of the calling run and no Passport. A text that is empty or only white space is replaced by a short fixed text.
 
 **Waiting and slowness**
@@ -153,8 +153,9 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 ## Limits
 
 - The crate does not know whether jobs accepted an upload or a create in background mode.
-- The Result of the called runner is the `Content` that `br-runner-jobs` gives (a message and attachments). A JSON value is given as the JSON text it arrives as.
+- The Result of the called runner is the `Content` that `br-runner-jobs` gives (a message and attachments). A message that holds JSON is given as that text.
 - The runner type is checked with the segment rule of the jobs wire at build time; `br-runner-jobs` has no runner type value of its own.
+- A sync call whose child Job is cancelled by someone else gets no end from the jobs service today. The call then ends at the cancel view, or as a fault when the book of the run is dropped.
 - An end of the sync call of a kind this crate does not know is a fault (`UnknownEnd`).
 - A create removed from the queue without a refusal (`DependsOnRemoved`, `LeftUnsent`) is a fault whose cause is `CreateRemoved`.
 - A `Tool` used after its run ended gives what the caller handle gives; the crate does not check it.

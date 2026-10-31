@@ -1,5 +1,8 @@
 use br_agentic_contract::CancelView;
-use br_runner_jobs::{CreateChildInput, PayloadForm, WriteEnd};
+use std::future::Future;
+
+use br_runner_jobs::{CreateChildInput, PayloadForm, WriteEnd, WriteResult};
+use futures::FutureExt;
 use uuid::Uuid;
 
 use super::prepare::Prepared;
@@ -47,6 +50,16 @@ impl RunnerToolCode {
 
     pub(super) fn hand_cancel(&self, child: Uuid) {
         let _ = self.caller.cancel(child, Uuid::now_v7());
+    }
+
+    pub(super) fn cancel_unless_dead<F>(&self, child: Uuid, created: &mut F)
+    where
+        F: Future<Output = WriteResult> + Unpin,
+    {
+        let dead = matches!(created.now_or_never(), Some(Err(_)));
+        if !dead {
+            self.hand_cancel(child);
+        }
     }
 
     pub(super) fn hand_finish(&self, child: Uuid) {

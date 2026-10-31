@@ -189,6 +189,67 @@ async fn given_a_view_triggered_after_the_end_arrived_with_an_inline_result_when
 }
 
 #[tokio::test]
+async fn given_the_end_received_and_the_view_triggered_in_the_same_moment_when_settled_then_no_cancel_and_no_finish()
+ {
+    let (caller, script) = memory_caller();
+    let tool = sync_tool(caller);
+    let token = CancelToken::new();
+    let call = spawn_with_cancel(&tool, json!({}), &token);
+    let create = create_of(&script).await;
+
+    script.end(create.job_id, Answer::Now(completed("done")));
+    token.handle().trigger();
+    let outcome = call.finished().await.expect("an expected error");
+
+    assert_eq!(texts(&outcome), cancelled_text());
+    assert_eq!(count(&script, is_cancel), 0);
+    assert_eq!(count(&script, is_finish), 0);
+}
+
+#[tokio::test]
+async fn given_the_view_triggered_before_the_end_with_an_inline_result_arrives_when_settled_then_no_cancel_and_no_finish()
+ {
+    let (caller, script) = memory_caller();
+    let tool = sync_tool(caller);
+    let token = CancelToken::new();
+    let call = spawn_with_cancel(&tool, json!({}), &token);
+    let create = create_of(&script).await;
+
+    token.handle().trigger();
+    script.end(create.job_id, Answer::Now(completed("done")));
+    let outcome = call.finished().await.expect("an expected error");
+
+    assert_eq!(texts(&outcome), cancelled_text());
+    assert_eq!(count(&script, is_cancel), 0);
+    assert_eq!(count(&script, is_finish), 0);
+}
+
+#[tokio::test]
+async fn given_a_kept_payload_and_a_view_triggered_before_the_call_when_called_then_no_upload_is_handed_over()
+ {
+    let (caller, script) = memory_caller();
+    let tool = builder("analyst", ToolMode::Sync, caller)
+        .payload_kind(PayloadKind::Kept)
+        .build()
+        .expect("a tool");
+    let token = CancelToken::new();
+    token.handle().trigger();
+
+    let outcome = spawn_with_cancel(&tool, json!({}), &token)
+        .finished()
+        .await
+        .expect("an expected error");
+
+    assert_eq!(texts(&outcome), cancelled_text());
+    assert!(
+        script
+            .calls()
+            .iter()
+            .all(|call| !is_upload(call) && !is_create(call))
+    );
+}
+
+#[tokio::test]
 async fn given_a_background_tool_and_a_view_triggered_before_the_call_when_called_then_nothing_is_sent()
  {
     let (caller, script) = memory_caller();
