@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use br_agentic_contract::{PortFuture, ThreadRef};
 use br_runner_threads::{Error, MemoryQueueStore, QueueStore, StoredItem};
@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub struct GateStore {
     inner: MemoryQueueStore,
-    free: AtomicUsize,
+    free: Mutex<usize>,
     entered: Notify,
     gate: Semaphore,
 }
@@ -17,7 +17,7 @@ impl GateStore {
     pub fn after_free_appends(free: usize) -> Arc<Self> {
         Arc::new(Self {
             inner: MemoryQueueStore::new(),
-            free: AtomicUsize::new(free),
+            free: Mutex::new(free),
             entered: Notify::new(),
             gate: Semaphore::new(0),
         })
@@ -39,12 +39,13 @@ impl GateStore {
 impl QueueStore for GateStore {
     fn append<'a>(&'a self, item: StoredItem) -> PortFuture<'a, Result<(), Error>> {
         Box::pin(async move {
-            let free = self
-                .free
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
-                    left.checked_sub(1)
-                });
-            if free.is_err() {
+            let free = {
+                let mut left = self.free.lock().expect("lock");
+                let free = *left > 0;
+                *left = left.saturating_sub(1);
+                free
+            };
+            if !free {
                 self.entered.notify_one();
                 self.gate
                     .acquire()
