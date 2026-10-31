@@ -15,6 +15,10 @@ use crate::error::{Error, Operation};
 
 const LOOK_BEFORE_RESEND: Duration = Duration::from_millis(20);
 
+fn look_before_resend(deadline: Instant) -> Duration {
+    LOOK_BEFORE_RESEND.min(deadline.saturating_duration_since(Instant::now()) / 4)
+}
+
 pub(super) struct Outcomes {
     pub success: EventCoords,
     pub rejection: EventCoords,
@@ -129,7 +133,7 @@ impl<T: Serialize + Send + Sync> Session<T> {
         let deadline = Instant::now() + wait;
         self.subscribe(deadline).await?;
         if self.published
-            && let Heard::Ended(result) = self.hear(LOOK_BEFORE_RESEND).await
+            && let Heard::Ended(result) = self.hear(look_before_resend(deadline)).await
         {
             return result;
         }

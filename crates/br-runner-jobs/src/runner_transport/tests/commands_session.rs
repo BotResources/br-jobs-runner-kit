@@ -192,3 +192,23 @@ async fn given_no_outcome_for_two_attempts_then_each_attempt_sends_and_an_outcom
     }
     assert!(seen.requests.try_recv().is_err());
 }
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_an_outcome_wait_shorter_than_the_look_then_the_command_is_still_sent_again() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let mut seen = commands_on(
+        &world,
+        contract_jobs::cmd_job_create_v3_coords().expect("coords"),
+    )
+    .await;
+    let command = create_command(Uuid::now_v7(), Uuid::now_v7());
+    let mut session = live.child_session(ChildCommand::Create(command));
+    silence(attempt(session.as_mut(), SHORT).await);
+    let tight = Duration::from_millis(15);
+    let _ = tokio::time::timeout(tight, session.attempt(tight)).await;
+    for _ in 0..2 {
+        seen.request().await;
+    }
+}
