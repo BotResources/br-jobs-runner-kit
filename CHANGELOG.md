@@ -18,7 +18,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Fixed
 
-- `br-runner-connection` 0.1.1: the code follows the corrected intent of 0.1 (readable `UNAUTHENTICATED`, input checks, subject and size checks of the bus, the text of the service carried as given, the four examples). See `crates/br-runner-connection/CHANGELOG.md`.
+- `br-runner-connection` 0.1.1: the code follows the corrected intent of 0.1 (readable `UNAUTHENTICATED`, input checks, subject and size checks of the bus, the text of the service carried as given and no longer redacted, `Cause::NoListener`, the four examples). The bus access extension to this crate is pending jx ratification. See `crates/br-runner-connection/CHANGELOG.md`.
 
 ### Security
 

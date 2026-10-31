@@ -1,15 +1,19 @@
 mod support;
 
 #[path = "../examples/build_connection.rs"]
+// the module is included for its run function; its main is unused here
 #[allow(dead_code)]
 mod build_connection;
 #[path = "../examples/custom_credential.rs"]
+// the module is included for its run function; its main is unused here
 #[allow(dead_code)]
 mod custom_credential;
 #[path = "../examples/graphql_call.rs"]
+// the module is included for its run function; its main is unused here
 #[allow(dead_code)]
 mod graphql_call;
 #[path = "../examples/one_connection_for_all.rs"]
+// the module is included for its run function; its main is unused here
 #[allow(dead_code)]
 mod one_connection_for_all;
 

@@ -69,7 +69,7 @@ The other examples are in `examples/` and run in the tests against a real local 
 
 ## Bus access
 
-The bus connection is an `async_nats::Client`. The importer builds and authenticates it with the bus credentials of the runner; `Connection::bus()` gives it back and `Connection::bus_request` runs on it. `async_nats` is named in one module only, `src/bus/`. The request is generic: the caller gives the subject and the body, and the library has no subject, stream or bucket name of its own (all of them come from the contract crate of the service that owns the wire, in the runner library that calls). The runner libraries that call it are `br-runner-jobs` (its `runner_transport` module) and `br-runner-threads` (its `chunk_lane` module). The published language and `integration.*` do not go through this crate: they go through `br-util-nats-fabric`. The library creates and binds no stream, no bucket and no consumer.
+The bus connection is an `async_nats::Client`. The importer builds and authenticates it with the bus credentials of the runner; `Connection::bus()` gives it back and `Connection::bus_request` runs on it. `async_nats` is named in one module only, `src/bus/`. The request is generic: the caller gives the subject and the body, and the library has no subject, stream or bucket name of its own (all of them come from the contract crate of the service that owns the wire, in the runner library that calls). `async_nats` is named directly here under the runner-transport exception (jx 2026-08-14); the extension of that exception to this crate is pending jx ratification (decision file: derived 2026-10-31). This request is meant to be called only by the `runner_transport` module of `br-runner-jobs` and the `chunk_lane` module of `br-runner-threads`, when they take a `Connection`; neither library calls this crate yet. The published language and `integration.*` do not go through this crate: they go through `br-util-nats-fabric`. The library creates and binds no stream, no bucket and no consumer.
 
 ## Rules the code keeps
 
@@ -89,15 +89,15 @@ The bus connection is an `async_nats::Client`. The importer builds and authentic
 
 | What | State |
 |---|---|
-| `FixedToken::new` | Takes any text. An empty token, or one that is not a header value, is refused at the first call as `Credential` (no usable credential), not at building. |
-| Service account | Typed `ServiceAccountId` of `br-core-kernel`, carried as given. |
-| Bus `Unauthenticated` | Not reported. `async-nats` tells a refusal of the credentials of the bus, or of the right to send on a subject, only to the event callback that the importer sets when it builds the client, and a `Client` has no accessor for it. Such a request ends as `Lost` by its wait, or `Unavailable` when the bus connection is not connected. |
+| `FixedToken::new` | Takes any text. An empty token, or one that is not a header value, is refused at the first call as `Credential` (no usable credential), not at building. Correction of the intent proposed to jx (pending): the intent's sentence on a fixed token refused at building is to be removed, because every credential already fails closed at the call. |
+| Service account | Typed `ServiceAccountId` of `br-core-kernel`, carried as given. Correction of the intent proposed to jx (pending): the service account is the typed `ServiceAccountId` of `br-core-kernel`. |
+| Bus `Unauthenticated` | Not built: the intent keeps it To Be Implemented; a request refused by the bus ends as `Lost` by its wait, or `Unavailable` when the bus is not connected. `async-nats` tells a refusal of the credentials of the bus, or of the right to send on a subject, only to the event callback that the importer sets when it builds the client, and a `Client` has no accessor for it. |
 
 ## Why
 
 | Thing | Why it is the way it is |
 |---|---|
-| direct `async-nats` in `bus` | runner-transport exception (jx 2026-08-14, extended 2026-10-31): wire outside `integration.*`, faces the runners, shape from the contract crate |
+| direct `async-nats` in `bus` | runner-transport exception (jx 2026-08-14); extension to this crate pending jx ratification (decision file: derived 2026-10-31): wire outside `integration.*`, faces the runners, shape from the contract crate |
 | one TCP connection per call, no pool | The connection runs no task and keeps nothing after a call, so an abandoned call leaves nothing behind |
 | no retry | A resend is the importer's decision; only the importer knows if the call was applied (`Lost`) |
 | text of the service not scrubbed | The library cannot find a token in a text it did not write; carrying the text as given keeps `Refusal` faithful to what the service said |
