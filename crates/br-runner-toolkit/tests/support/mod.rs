@@ -171,3 +171,50 @@ pub fn failed_fact(jobs: &ScriptedJobs) -> Option<br_runner_jobs::Failed> {
         _ => None,
     })
 }
+
+pub fn claim_ids(jobs: &ScriptedJobs) -> Vec<Uuid> {
+    jobs.calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::Claim { claim_id } => Some(claim_id),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn served(n: u128) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "version": 2,
+        "run": serde_json::from_slice::<serde_json::Value>(&trigger(n)).expect("trigger")
+    }))
+    .expect("bytes")
+}
+
+pub fn refusal(reason: &str) -> Vec<u8> {
+    serde_json::to_vec(&json!({ "version": 2, "reason": reason })).expect("bytes")
+}
+
+pub async fn refusal_error(reason: &str) -> br_runner_jobs::Error {
+    let jobs = ScriptedJobs::new("analyst", "refusals");
+    jobs.push_claim_reply(Ok(refusal(reason)));
+    jobs.client()
+        .claim(Uuid::now_v7(), Duration::from_secs(1))
+        .await
+        .expect_err("a refusal")
+}
+
+pub fn refuse_the_first_started_fact(jobs: &ScriptedJobs, error: br_runner_jobs::Error) {
+    let mut refused = false;
+    jobs.answer_facts(move || {
+        if refused {
+            Ok(())
+        } else {
+            refused = true;
+            Err(error.clone())
+        }
+    });
+}
+
+pub async fn quiet_for(duration: Duration) {
+    tokio::time::sleep(duration).await;
+}

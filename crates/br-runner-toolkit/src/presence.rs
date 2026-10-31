@@ -67,3 +67,49 @@ async fn wait_for_beat(ticks: &mut Interval, status: &mut watch::Receiver<Presen
         _ = status.changed() => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use br_runner_jobs::PresenceStatus;
+    use tokio::sync::watch;
+
+    use super::beats;
+
+    #[tokio::test(start_paused = true)]
+    async fn given_a_publication_that_never_completes_when_the_next_beat_comes_then_it_is_dropped_and_the_beats_go_on()
+     {
+        let (_status, receiver) = watch::channel(PresenceStatus::Ready);
+        let published = Arc::new(AtomicUsize::new(0));
+        let beaten = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&published);
+        let ticked = Arc::clone(&beaten);
+        let task = tokio::spawn(beats(
+            Duration::from_secs(30),
+            receiver,
+            move |_| {
+                let first = counted.fetch_add(1, Ordering::SeqCst) == 0;
+                async move {
+                    if first {
+                        std::future::pending::<()>().await;
+                    }
+                    Ok(())
+                }
+            },
+            move || {
+                ticked.fetch_add(1, Ordering::SeqCst);
+            },
+        ));
+        tokio::time::sleep(Duration::from_secs(29)).await;
+        assert_eq!(published.load(Ordering::SeqCst), 1);
+        assert_eq!(beaten.load(Ordering::SeqCst), 0);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert_eq!(beaten.load(Ordering::SeqCst), 1);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert_eq!(published.load(Ordering::SeqCst), 2);
+        task.abort();
+    }
+}

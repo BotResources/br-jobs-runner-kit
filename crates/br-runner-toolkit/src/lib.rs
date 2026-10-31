@@ -43,3 +43,6 @@ pub use runner::{RunnerBuilder, StartArgs};
 pub use settings::{Settings, SettingsBuilder};
 #[cfg(feature = "test-host")]
 pub use tap::HostEvent;
+
+#[cfg(test)]
+mod unit_support;

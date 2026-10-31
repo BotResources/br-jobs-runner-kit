@@ -74,11 +74,17 @@ async fn push_step<F: Fields>(
         () = unusable(rx, Mode::Push) => return,
         () = shared.drain.cancelled() => return,
     };
+    if let Some(work) = given_back_when_draining(shared, work) {
+        execute(shared, plan, work, Source::Trigger).await;
+    }
+}
+
+pub(crate) fn given_back_when_draining(shared: &Arc<Shared>, work: Work) -> Option<Work> {
     if shared.draining() {
         shared.calls.give_back(work);
-        return;
+        return None;
     }
-    execute(shared, plan, work, Source::Trigger).await;
+    Some(work)
 }
 
 async fn pause(shared: &Arc<Shared>, delay: Option<Duration>) {
@@ -166,5 +172,34 @@ pub(crate) async fn run<F: Fields>(shared: Arc<Shared>, plan: Arc<Plan<F>>) {
         if shared.host_has_taken_its_run() {
             shared.drain.cancel();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+
+    use super::given_back_when_draining;
+    use crate::instances::Instances;
+    use crate::unit_support::{delivered_work, shared};
+
+    #[tokio::test]
+    async fn given_a_drain_when_a_trigger_arrives_then_it_is_given_back_and_not_executed() {
+        let jobs = ScriptedJobs::new("analyst", "i1");
+        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
+        shared.drain.cancel();
+        assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_none());
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert_eq!(jobs.deliveries(), vec![Delivery::GiveBack]);
+    }
+
+    #[tokio::test]
+    async fn given_no_drain_when_a_trigger_arrives_then_it_is_kept() {
+        let jobs = ScriptedJobs::new("analyst", "i1");
+        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
+        assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_some());
+        assert!(jobs.deliveries().is_empty());
     }
 }

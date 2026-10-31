@@ -1,29 +1,18 @@
 mod support;
 
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
+use std::time::Duration;
+
+use br_runner_jobs::test_double::ScriptedJobs;
 use serde_json::json;
 use support::*;
 
-fn claim_ids(jobs: &ScriptedJobs) -> Vec<uuid::Uuid> {
-    jobs.calls()
-        .into_iter()
-        .filter_map(|call| match call {
-            Call::Claim { claim_id } => Some(claim_id),
-            _ => None,
-        })
-        .collect()
-}
-
-fn served(n: u128) -> Vec<u8> {
-    serde_json::to_vec(&json!({
-        "version": 2,
-        "run": serde_json::from_slice::<serde_json::Value>(&trigger(n)).expect("trigger")
-    }))
-    .expect("bytes")
-}
-
-fn refusal(reason: &str) -> Vec<u8> {
-    serde_json::to_vec(&json!({ "version": 2, "reason": reason })).expect("bytes")
+async fn the_same_claim_id_comes_again_only_after_the_next_beat(jobs: &ScriptedJobs) {
+    until(|| claim_ids(jobs).len() == 1).await;
+    tokio::time::sleep(Duration::from_secs(29)).await;
+    assert_eq!(claim_ids(jobs).len(), 1);
+    until(|| claim_ids(jobs).len() == 2).await;
+    let ids = claim_ids(jobs);
+    assert_eq!(ids[0], ids[1]);
 }
 
 #[tokio::test(start_paused = true)]
@@ -90,9 +79,7 @@ async fn given_a_claim_without_answer_when_the_next_beat_comes_then_the_same_cla
     )));
     jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
-    until(|| claim_ids(&jobs).len() == 2).await;
-    let ids = claim_ids(&jobs);
-    assert_eq!(ids[0], ids[1]);
+    the_same_claim_id_comes_again_only_after_the_next_beat(&jobs).await;
     running.stop().await;
 }
 
@@ -124,9 +111,41 @@ async fn given_an_unknown_instance_refusal_when_the_next_beat_comes_then_the_sam
     jobs.push_claim_reply(Ok(refusal("instance_unknown")));
     jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
+    the_same_claim_id_comes_again_only_after_the_next_beat(&jobs).await;
+    running.stop().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_busy_refusal_that_carries_no_delay_when_it_comes_then_the_same_claim_id_is_sent_after_the_next_beat()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    claim_mode(&jobs);
+    jobs.push_claim_reply(Ok(refusal("busy")));
+    jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
+    let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
+    the_same_claim_id_comes_again_only_after_the_next_beat(&jobs).await;
+    running.stop().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_claim_that_cannot_be_made_when_it_fails_then_it_is_not_repeated_and_the_claims_stop_until_the_mode_feed_gives_a_value()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    claim_mode(&jobs);
+    jobs.push_claim_reply(Err(br_runner_jobs::Error::InvalidInput(
+        "the claim wait is zero".to_owned(),
+    )));
+    let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
+    until(|| claim_ids(&jobs).len() == 1).await;
+    tokio::time::sleep(Duration::from_secs(300)).await;
+    assert_eq!(claim_ids(&jobs).len(), 1);
+    jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
+    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
+        br_runner_jobs::DispatchMode::Claim,
+    )));
     until(|| claim_ids(&jobs).len() == 2).await;
     let ids = claim_ids(&jobs);
-    assert_eq!(ids[0], ids[1]);
+    assert_ne!(ids[0], ids[1]);
     running.stop().await;
 }
 
