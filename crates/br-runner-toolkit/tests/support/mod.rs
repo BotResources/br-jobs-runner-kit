@@ -50,13 +50,22 @@ impl Fields for Flow {
 pub enum Behavior {
     Result(&'static str),
     Fail(&'static str),
+    Refuse(&'static str),
     UntilCancelled,
     UntilReleased(Arc<Notify>, &'static str),
+}
+
+#[derive(Clone)]
+pub struct Agent {
+    pub lookup: br_runner_toolkit::InstanceLookup,
+    pub label: &'static str,
+    pub inbox: bool,
 }
 
 pub struct Worker {
     pub name: String,
     pub behavior: Behavior,
+    pub agent: Option<Agent>,
 }
 
 impl Node<Flow> for Worker {
@@ -74,13 +83,31 @@ impl Node<Flow> for Worker {
 
     fn create(&self, cancel: CancelView, id: InstanceId) -> CreateFuture<'_, Flow> {
         let behavior = self.behavior.clone();
+        let agent = self.agent.clone();
+        let name = self.name.clone();
         Box::pin(async move {
             let (instance, mut reader, sender) = Instance::<Flow>::channel(id);
             tokio::spawn(async move {
+                if let Some(agent) = agent {
+                    let book = agent.lookup.book(id).await.expect("a book");
+                    let label = br_agentic_contract::AgentLabel::new(agent.label).expect("label");
+                    let entry = if agent.inbox {
+                        br_runner_jobs::NodeEntry::with_inbox(
+                            name,
+                            agent.lookup.book_lookup(),
+                            label.clone(),
+                            br_runner_jobs::mark_gate_stored(),
+                        )
+                    } else {
+                        br_runner_jobs::NodeEntry::new(name, agent.lookup.book_lookup())
+                    };
+                    entry.agent_id(&book, &label).expect("an agent id");
+                }
                 let _ = reader.next().await;
                 let event = match behavior {
                     Behavior::Result(text) => Event::Result(Add(text.to_owned())),
-                    Behavior::Fail(text) => Event::refused(text),
+                    Behavior::Fail(text) => Event::failed(text),
+                    Behavior::Refuse(text) => Event::refused(text),
                     Behavior::UntilCancelled => {
                         cancel.triggered().await;
                         Event::Cancelled
@@ -121,10 +148,29 @@ impl Edge<Flow> for Next {
 }
 
 pub fn node(name: &str, behavior: Behavior) -> Arc<dyn Node<Flow>> {
+    agent_node(name, behavior, None)
+}
+
+pub fn agent_node(name: &str, behavior: Behavior, agent: Option<Agent>) -> Arc<dyn Node<Flow>> {
     Arc::new(Worker {
         name: name.to_owned(),
         behavior,
+        agent,
     })
+}
+
+pub fn agent_graph(behavior: Behavior, agent: Agent) -> Arc<Graph<Flow>> {
+    Arc::new(
+        GraphBuilder::<Flow>::new("1")
+            .entry("work")
+            .node(agent_node("work", behavior, Some(agent)))
+            .edge(Arc::new(Next {
+                source: "work".to_owned(),
+                targets: vec![Target::END],
+            }))
+            .build()
+            .expect("a graph"),
+    )
 }
 
 pub fn chain(nodes: Vec<(&str, Behavior)>) -> Arc<Graph<Flow>> {
@@ -269,4 +315,33 @@ pub fn kinds(jobs: &ScriptedJobs) -> Vec<&'static str> {
             Fact::Failed { .. } => "failed",
         })
         .collect()
+}
+
+pub fn call_with(trigger: Vec<u8>, fields: &[(&str, serde_json::Value)]) -> Vec<u8> {
+    let mut value: serde_json::Value = serde_json::from_slice(&trigger).expect("json");
+    let object = value.as_object_mut().expect("object");
+    for (key, field) in fields {
+        object.insert((*key).to_owned(), field.clone());
+    }
+    serde_json::to_vec(&value).expect("bytes")
+}
+
+pub fn saved_state_reply(state: serde_json::Value) -> serde_json::Value {
+    json!({ "jobsSavedState": {
+        "success": true, "state": state, "agentIds": [], "mailAddresses": []
+    } })
+}
+
+pub fn writes_ok() -> serde_json::Value {
+    json!({
+        "jobsUploadResult": { "success": true },
+        "jobsSaveState": { "success": true }
+    })
+}
+
+pub fn failed_fact(jobs: &ScriptedJobs) -> Option<br_runner_jobs::Failed> {
+    facts(jobs).into_iter().find_map(|fact| match fact {
+        Fact::Failed { failed, .. } => Some(failed),
+        _ => None,
+    })
 }
