@@ -140,7 +140,7 @@ async fn given_a_refused_upload_when_it_comes_in_the_end_of_the_create_then_the_
     assert_eq!(update.note.as_deref(), Some("refused:payload_too_big"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn given_a_delivered_create_when_no_end_comes_then_the_node_keeps_waiting_and_hands_over_nothing_more()
  {
     let rig = rig();

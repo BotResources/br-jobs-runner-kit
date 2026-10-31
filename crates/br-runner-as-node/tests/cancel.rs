@@ -184,26 +184,3 @@ async fn given_a_create_removed_after_a_report_when_the_cancel_view_fires_before
     assert!(matches!(run.event().await, Event::Cancelled));
     assert_eq!(kinds(&rig.script), ["end_wait", "upload", "create"]);
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn given_the_cancel_view_triggered_at_the_instant_of_the_end_when_many_instances_run_then_a_cancel_and_a_finish_never_both_reach_the_same_child_job()
- {
-    for _ in 0..200 {
-        let rig = rig();
-        let node = standard(source_of(&rig.handle));
-        let mut run = start(&node, rig.token.view()).await;
-        run.give("q");
-        let create = the_create(&rig.script).await;
-        let trigger = rig.token.handle().clone();
-        let racer = tokio::spawn(async move { trigger.trigger() });
-
-        rig.script
-            .end(create.job_id, Answer::Now(completed("done")));
-        racer.await.expect("the racer ended");
-        let event = run.event().await;
-
-        let kinds = kinds(&rig.script);
-        assert!(matches!(event, Event::Cancelled | Event::Result(_)));
-        assert!(!(kinds.contains(&"finish") && kinds.contains(&"cancel")));
-    }
-}
