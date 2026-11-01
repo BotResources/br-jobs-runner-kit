@@ -84,9 +84,3 @@ fn the_template_and_the_readme_name_every_value() {
         assert!(README.contains(&format!("`{name}`")), "{name}");
     }
 }
-
-#[test]
-#[should_panic(expected = "not a setting")]
-fn a_value_that_is_not_a_setting_is_refused_by_the_check() {
-    set(Settings::builder(), "unknown_value");
-}

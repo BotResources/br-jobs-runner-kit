@@ -66,6 +66,9 @@ async fn given_a_closing_that_waits_when_the_shutdown_comes_then_the_drain_waits
     );
     assert_eq!(jobs.presence_deletions(), 1);
     jobs.resume();
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(!has_terminal(&jobs));
+    assert_eq!(kinds(&jobs), vec!["started"]);
 }
 
 #[tokio::test(start_paused = true)]

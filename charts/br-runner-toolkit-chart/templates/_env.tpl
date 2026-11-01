@@ -1,7 +1,7 @@
 {{- define "br-runner-toolkit-chart.env" -}}
 {{- $runner := required "the runner values are required: declare br-runner-toolkit-chart with alias: runner in the thin chart" .Values.runner -}}
 - name: RUNNER_VERSION
-  value: {{ required "runner.runner_version is required" $runner.runner_version | quote }}
+  value: {{ include "br-runner-toolkit-chart.text" (dict "name" "runner_version" "value" $runner.runner_version) | quote }}
 - name: MAX_CONCURRENT_RUNS
   value: {{ include "br-runner-toolkit-chart.number" (dict "name" "max_concurrent_runs" "value" $runner.max_concurrent_runs) | quote }}
 - name: ACK_WAIT_MS
@@ -23,4 +23,11 @@
 {{- fail (printf "runner.%s is required" .name) -}}
 {{- end -}}
 {{- .value | int64 -}}
+{{- end -}}
+
+{{- define "br-runner-toolkit-chart.text" -}}
+{{- if kindIs "invalid" .value -}}
+{{- fail (printf "runner.%s is required" .name) -}}
+{{- end -}}
+{{- .value -}}
 {{- end -}}

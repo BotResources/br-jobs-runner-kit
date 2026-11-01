@@ -37,7 +37,7 @@ Each value is required and has no default. The name of a value is the name of th
 
 | Value | Environment variable | Rule |
 |---|---|---|
-| `runner_version` | `RUNNER_VERSION` | text, not empty |
+| `runner_version` | `RUNNER_VERSION` | text |
 | `max_concurrent_runs` | `MAX_CONCURRENT_RUNS` | integer, 1 or more |
 | `ack_wait` | `ACK_WAIT_MS` | milliseconds, 1 or more |
 | `drain_timeout` | `DRAIN_TIMEOUT_MS` | milliseconds, 0 or more |

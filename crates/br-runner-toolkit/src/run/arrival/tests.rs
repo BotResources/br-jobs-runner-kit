@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -61,12 +60,10 @@ impl ArrivalSink for Sink {
 struct Feed(VecDeque<Result<Arrival, Error>>);
 
 impl ArrivalSource for Feed {
-    fn next(&mut self) -> impl Future<Output = Result<Arrival, Error>> + Send {
-        async move {
-            match self.0.pop_front() {
-                Some(next) => next,
-                None => std::future::pending().await,
-            }
+    async fn next(&mut self) -> Result<Arrival, Error> {
+        match self.0.pop_front() {
+            Some(next) => next,
+            None => std::future::pending().await,
         }
     }
 }
@@ -79,18 +76,16 @@ struct Opener {
 impl ArrivalOpener for Opener {
     type Source = Feed;
 
-    fn open(&self) -> impl Future<Output = Result<Feed, Error>> + Send {
-        async move {
-            self.opened.fetch_add(1, Ordering::SeqCst);
-            let next = self
-                .script
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .pop_front();
-            match next {
-                Some(next) => next,
-                None => std::future::pending().await,
-            }
+    async fn open(&self) -> Result<Feed, Error> {
+        self.opened.fetch_add(1, Ordering::SeqCst);
+        let next = self
+            .script
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop_front();
+        match next {
+            Some(next) => next,
+            None => std::future::pending().await,
         }
     }
 }

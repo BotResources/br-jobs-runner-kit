@@ -1,9 +1,9 @@
 runner:
-  runner_version: "1.0.0"
+  runner_version: "1.2.3"
   max_concurrent_runs: 4
   ack_wait: 30000
   drain_timeout: 1000000
   cancel_grace: 5000
-  claim_wait: 10000
-  outcome_wait: 10000
+  claim_wait: 11000
+  outcome_wait: 12000
   retry_wait: 1000

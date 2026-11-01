@@ -83,3 +83,24 @@ fn the_install_block_holds_every_crate_the_quickstart_names() {
         assert!(pinned.contains(&ident.to_owned()), "{ident}");
     }
 }
+
+#[test]
+fn the_install_block_holds_the_crate_that_names_the_passport_of_the_run_context() {
+    assert!(
+        install_block()
+            .iter()
+            .any(|(name, _)| name == "br-core-auth")
+    );
+}
+
+#[test]
+fn the_readme_names_every_builder_method_of_the_run_builder_and_of_the_test_host() {
+    for method in [
+        "with_queue_observer",
+        "with_lifecycle_hook",
+        "with_process_signals",
+        "instance_lookup",
+    ] {
+        assert!(README.contains(method), "{method}");
+    }
+}

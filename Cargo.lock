@@ -427,6 +427,7 @@ dependencies = [
  "br-runner-connection",
  "br-runner-jobs",
  "br-runner-toolkit",
+ "br-util-nats-fabric",
  "chrono",
  "contract-jobs 0.7.0",
  "futures",
