@@ -10,6 +10,25 @@ use crate::observer::RunObserver;
 use crate::record::RunRecord;
 use crate::shared::Shared;
 
+fn unmade(
+    shared: &Arc<Shared>,
+    record: &Arc<RunRecord>,
+    work: Work,
+    source: Source,
+    cause: String,
+) {
+    tracing::error!(
+        run_id = %record.run_id,
+        job_id = %record.job_id,
+        cause = %cause,
+        "the delivery queue of the run cannot be made"
+    );
+    if source == Source::Trigger {
+        shared.calls.give_back(work);
+    }
+    shared.forget_run(record.run_id);
+}
+
 pub(super) async fn open_queue(
     shared: &Arc<Shared>,
     record: &Arc<RunRecord>,
@@ -32,13 +51,12 @@ pub(super) async fn open_queue(
         .await;
     let (queue, started) = match made {
         Ok(Ok(pair)) => pair,
-        other => {
-            tracing::error!(run_id = %record.run_id, job_id = %record.job_id, "the delivery queue of the run cannot be made");
-            drop(other);
-            if source == Source::Trigger {
-                shared.calls.give_back(work);
-            }
-            shared.forget_run(record.run_id);
+        Ok(Err(error)) => {
+            unmade(shared, record, work, source, error.to_string());
+            return None;
+        }
+        Err(payload) => {
+            unmade(shared, record, work, source, crate::panic::text_of(payload));
             return None;
         }
     };
@@ -60,5 +78,40 @@ pub(super) async fn open_queue(
             shared.forget_run(record.run_id);
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use br_runner_jobs::test_double::ScriptedJobs;
+    use tracing::Level;
+
+    use super::{Source, open_queue};
+    use crate::instances::Instances;
+    use crate::unit_support::logs::Logs;
+    use crate::unit_support::{queue_of, record, shared, work};
+
+    #[tokio::test]
+    async fn given_a_work_whose_queue_was_made_already_when_the_queue_is_opened_then_the_error_log_names_the_cause()
+     {
+        let (logs, _guard) = Logs::capture();
+        let jobs = ScriptedJobs::new("analyst", "i1");
+        let instances = Arc::new(Instances::default());
+        let shared = shared(&jobs, None, &instances);
+        let work = work(&jobs, 1);
+        let _first = queue_of(&work).await;
+        let record = record(&work);
+        let opened = open_queue(&shared, &record, work, Source::Claim).await;
+        assert!(opened.is_none());
+        assert_eq!(
+            logs.containing(Level::ERROR, "of this Work was made already"),
+            1
+        );
+        assert_eq!(
+            logs.containing(Level::ERROR, "the delivery queue of the run cannot be made"),
+            1
+        );
     }
 }

@@ -8,6 +8,7 @@ use br_runner_toolkit::{RunRefusal, RunnerBuilder, StartArgs, StartedRun, run_st
 use serde_json::{Value, json};
 use support::*;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 fn restart_trigger(n: u128) -> Vec<u8> {
     call_with(
@@ -219,6 +220,10 @@ async fn given_a_restartable_runner_and_an_agent_with_an_inbox_when_the_graph_en
     assert_eq!(state["agents"][0]["node"], json!("work"));
     assert_eq!(state["agents"][0]["label"], json!("main"));
     assert_eq!(state["agents"][0]["has_inbox"], json!(true));
+    assert_eq!(state["agents"].as_array().expect("agents").len(), 1);
+    let registered = registrations(&jobs);
+    assert_eq!(registered.len(), 1);
+    assert_eq!(state["agents"][0]["agent_id"], json!(registered[0].0));
 }
 
 #[tokio::test(start_paused = true)]
@@ -260,4 +265,49 @@ async fn given_a_refused_state_save_when_the_run_completes_then_the_run_fails_wi
             .iter()
             .any(|fact| matches!(fact, Fact::Completed { .. }))
     );
+}
+
+fn registrations(jobs: &ScriptedJobs) -> Vec<(Uuid, bool, bool)> {
+    jobs.calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::Register { agents, .. } => Some(agents),
+            _ => None,
+        })
+        .flatten()
+        .map(|agent| (agent.agent_id, agent.has_inbox, agent.can_restart))
+        .collect()
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_restart_whose_saved_state_holds_an_agent_with_an_inbox_when_the_node_asks_for_its_agent_then_the_registration_carries_the_saved_agent_id_and_inbox_flag()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    let state = json!({
+        "fields": { "steps": ["old"] },
+        "agents": [{
+            "node": "work",
+            "label": "main",
+            "agent_id": id(900),
+            "has_inbox": true
+        }]
+    });
+    let mut reply = saved_state_reply(state);
+    reply
+        .as_object_mut()
+        .expect("object")
+        .extend(writes_ok().as_object().expect("object").clone());
+    jobs.graphql_default(reply);
+    jobs.push_trigger(restart_trigger(1));
+    let builder = RunnerBuilder::new(jobs.client(), settings(1));
+    let agent = inbox_agent(&builder, true);
+    let shutdown = CancellationToken::new();
+    let done = tokio::spawn(builder.start(
+        args(agent_graph(Behavior::Result("x"), agent), true).with_shutdown(shutdown.clone()),
+    ));
+    until(|| has_terminal(&jobs)).await;
+    shutdown.cancel();
+    done.await.expect("joined").expect("started");
+    assert_eq!(registrations(&jobs), vec![(id(900), true, true)]);
 }

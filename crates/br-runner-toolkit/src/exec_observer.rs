@@ -31,8 +31,15 @@ impl Observer for ExecObserver {
             Observation::EventHandled { instance, .. } => {
                 hooks::call_once(&self.shared, &self.record, instance);
             }
+            Observation::Outcome(_) => self.record.end_observations(),
             _ => {}
         }
+    }
+}
+
+impl Drop for ExecObserver {
+    fn drop(&mut self) {
+        self.record.end_observations();
     }
 }
 

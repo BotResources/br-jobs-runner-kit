@@ -57,6 +57,14 @@ pub(crate) fn work(jobs: &Arc<ScriptedJobs>, n: u128) -> Work {
     work_from_trigger(jobs, trigger_of(n)).expect("a work")
 }
 
+pub(crate) fn push_trigger(jobs: &Arc<ScriptedJobs>, n: u128) {
+    jobs.push_trigger(serde_json::to_vec(&trigger_of(n)).expect("bytes"));
+}
+
+pub(crate) fn served(n: u128) -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({ "version": 2, "run": trigger_of(n) })).expect("bytes")
+}
+
 pub(crate) async fn delivered_work(jobs: &Arc<ScriptedJobs>, n: u128) -> Work {
     let mut feed = jobs
         .client()
@@ -108,4 +116,117 @@ pub(crate) fn book_with_agent(work: &Work, queue: &DeliveryQueue, node: &str) ->
         has_inbox: false,
     };
     work.agent_book(queue, vec![agent], false).expect("a book")
+}
+
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Steps {
+    pub steps: Vec<String>,
+}
+
+impl br_graph_contract::Fields for Steps {
+    type Update = ();
+
+    fn empty_update() {}
+
+    fn validate(&self) -> Result<(), br_graph_contract::Reason> {
+        Ok(())
+    }
+
+    fn apply(&mut self, _update: ()) -> Result<(), br_graph_contract::Reason> {
+        Ok(())
+    }
+}
+
+pub(crate) fn book_with_agents(
+    work: &Work,
+    queue: &DeliveryQueue,
+    agents: Vec<br_runner_jobs::RestoredAgent>,
+) -> AgentBook {
+    work.agent_book(queue, agents, false).expect("a book")
+}
+
+struct Idle;
+
+impl br_graph_contract::Node<Steps> for Idle {
+    fn name(&self) -> &str {
+        "work"
+    }
+
+    fn kind(&self) -> &str {
+        "programmatic"
+    }
+
+    fn subkind(&self) -> &str {
+        "worker"
+    }
+
+    fn create(
+        &self,
+        _cancel: br_graph_contract::CancelView,
+        id: InstanceId,
+    ) -> br_graph_contract::CreateFuture<'_, Steps> {
+        Box::pin(async move {
+            let (instance, _reader, _sender) = br_graph_contract::Instance::<Steps>::channel(id);
+            Ok(instance)
+        })
+    }
+}
+
+struct ToEnd;
+
+impl br_graph_contract::Edge<Steps> for ToEnd {
+    fn name(&self) -> &str {
+        "work"
+    }
+
+    fn source(&self) -> &str {
+        "work"
+    }
+
+    fn targets(&self) -> &[br_graph_contract::Target] {
+        &[br_graph_contract::Target::END]
+    }
+
+    fn evaluate(
+        &self,
+        _state: &br_graph_contract::State<Steps>,
+    ) -> Result<Vec<br_graph_contract::Target>, br_graph_contract::Cause> {
+        Ok(vec![br_graph_contract::Target::END])
+    }
+}
+
+pub(crate) fn idle_plan() -> Arc<crate::plan::Plan<Steps>> {
+    let graph = br_graph_contract::GraphBuilder::<Steps>::new("1")
+        .entry("work")
+        .node(Arc::new(Idle))
+        .edge(Arc::new(ToEnd))
+        .build()
+        .expect("a graph");
+    Arc::new(crate::plan::Plan {
+        graph: Arc::new(graph),
+        run_start: crate::run_start::run_start(|_input| async {
+            Ok::<_, crate::failure::RunRefusal>(crate::run_start::StartedRun::new(
+                Steps::default(),
+                vec!["work".to_owned()],
+            ))
+        }),
+        can_restart: false,
+        state_limit: None,
+        mapping: None,
+        answer: None,
+    })
+}
+
+pub(crate) fn started_facts(jobs: &Arc<ScriptedJobs>) -> usize {
+    jobs.calls()
+        .into_iter()
+        .filter(|call| {
+            matches!(
+                call,
+                br_runner_jobs::test_double::Call::Fact(
+                    br_runner_jobs::test_double::Fact::Started { .. }
+                )
+            )
+        })
+        .count()
 }

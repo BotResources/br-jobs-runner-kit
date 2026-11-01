@@ -2,14 +2,15 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use br_graph_contract::{CancelToken, Fields};
-use br_graph_executor::{Outcome, RunConfig, RunFailure, start};
+use br_graph_executor::{Outcome, RunConfig, RunFailure, StartError, start};
 use futures::FutureExt;
 
 use super::Ctx;
 use super::finish::Ending;
 use super::prelude::{Early, prepare};
 use crate::exec_observer::ExecObserver;
-use crate::failure::{Found, failed_of};
+use crate::failure::{FailureMapping, Found, failed_of};
+use crate::record::RunRecord;
 
 fn found_of(failure: RunFailure) -> Found {
     let (code, text, cause) = match failure {
@@ -37,17 +38,20 @@ fn first_found(failures: Vec<RunFailure>) -> Found {
     )
 }
 
-fn ending_of<F: Fields>(ctx: &Ctx<F>, outcome: Outcome<F>) -> Ending<F> {
+fn ending_of<F: Fields>(
+    record: &RunRecord,
+    mapping: Option<&dyn FailureMapping>,
+    outcome: Outcome<F>,
+) -> Ending<F> {
     match outcome {
         Outcome::RunEnded { state } => Ending::Ended(state),
-        Outcome::RunFailed { failures, .. } => Ending::Failed(failed_of(
-            first_found(failures),
-            ctx.plan.mapping.as_deref(),
-        )),
+        Outcome::RunFailed { failures, .. } => {
+            Ending::Failed(failed_of(first_found(failures), mapping))
+        }
         Outcome::RunCancelled { failures, .. } => {
             tracing::info!(
-                run_id = %ctx.record.run_id,
-                job_id = %ctx.record.job_id,
+                run_id = %record.run_id,
+                job_id = %record.job_id,
                 failures = ?failures,
                 "the run was cancelled"
             );
@@ -58,7 +62,25 @@ fn ending_of<F: Fields>(ctx: &Ctx<F>, outcome: Outcome<F>) -> Ending<F> {
                 "run_failed",
                 "the executor gave an outcome that is not known",
             ),
-            ctx.plan.mapping.as_deref(),
+            mapping,
+        )),
+    }
+}
+
+fn after_start<F: Fields>(
+    record: &RunRecord,
+    mapping: Option<&dyn FailureMapping>,
+    started: Result<Outcome<F>, StartError>,
+) -> Ending<F> {
+    record.set_executor_running(false);
+    match started {
+        Ok(outcome) => {
+            record.expect_observations_end();
+            ending_of(record, mapping, outcome)
+        }
+        Err(error) => Ending::Failed(failed_of(
+            Found::permanent("start_refused", error.to_string()),
+            mapping,
         )),
     }
 }
@@ -83,21 +105,14 @@ async fn execute_graph<F: Fields>(ctx: &Ctx<F>, token: CancelToken) -> Ending<F>
         record: Arc::clone(&ctx.record),
     }));
     ctx.record.set_executor_running(true);
-    let outcome = start(
+    let started = start(
         Arc::clone(&ctx.plan.graph),
         ready.state,
         ready.nodes,
         config,
     )
     .await;
-    ctx.record.set_executor_running(false);
-    match outcome {
-        Ok(outcome) => ending_of(ctx, outcome),
-        Err(error) => Ending::Failed(failed_of(
-            Found::permanent("start_refused", error.to_string()),
-            ctx.plan.mapping.as_deref(),
-        )),
-    }
+    after_start(&ctx.record, ctx.plan.mapping.as_deref(), started)
 }
 
 pub(super) async fn body<F: Fields>(ctx: &Ctx<F>, token: CancelToken) -> Ending<F> {

@@ -302,10 +302,10 @@ jobs:
               exit 1
             fi
           done
-      - name: a value of the wrong type, out of range or unknown fails the render
+      - name: a value of the wrong type or out of range fails the render
         run: |
           set -euo pipefail
-          for setting in runner.ack_wait=abc runner.max_concurrent_runs=abc runner.max_concurrent_runs=0 runner.ack_wait=0 runner.claim_wait=0 runner.outcome_wait=0 runner.retry_wait=0 runner.drain_timeout=-1 runner.cancel_grace=-1 runner.unknown=1; do
+          for setting in runner.ack_wait=abc runner.max_concurrent_runs=abc runner.max_concurrent_runs=0 runner.ack_wait=0 runner.claim_wait=0 runner.outcome_wait=0 runner.retry_wait=0 runner.drain_timeout=-1 runner.cancel_grace=-1; do
             if helm template example charts/br-runner-toolkit-chart/ci/example --set "$setting" >/dev/null 2>&1; then
               echo "::error::the render passed with ${setting}"
               exit 1
@@ -316,6 +316,10 @@ jobs:
           set -euo pipefail
           helm template example charts/br-runner-toolkit-chart/ci/example --set runner.drain_timeout=0 --set runner.cancel_grace=0 >/dev/null
           helm template example charts/br-runner-toolkit-chart/ci/example --set runner.runner_version= | grep -A1 -E '^ *- name: RUNNER_VERSION$' | grep -qE '^ *value: ""$'
+      - name: a global value and a key of the thin chart under the alias render
+        run: |
+          set -euo pipefail
+          helm template example charts/br-runner-toolkit-chart/ci/example --set global.team=ocelot --set runner.extra=1 >/dev/null
       - name: a thin chart without the alias fails the render
         run: |
           set -euo pipefail

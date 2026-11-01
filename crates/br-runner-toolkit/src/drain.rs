@@ -16,6 +16,7 @@ pub struct DrainedRun {
     pub job_id: Uuid,
     pub run_id: Uuid,
     pub aborted: bool,
+    pub executor_running: bool,
     pub instances_without_return: Vec<InstanceId>,
     pub unsent: Vec<WriteName>,
 }
@@ -40,6 +41,7 @@ fn drained_run(record: &Arc<RunRecord>, aborted: bool) -> DrainedRun {
         job_id: record.job_id,
         run_id: record.run_id,
         aborted,
+        executor_running: aborted && record.executor_running(),
         instances_without_return,
         unsent,
     }
@@ -47,12 +49,13 @@ fn drained_run(record: &Arc<RunRecord>, aborted: bool) -> DrainedRun {
 
 fn abort_run(shared: &Arc<Shared>, record: &Arc<RunRecord>) -> DrainedRun {
     record.set_phase(Phase::Aborted);
+    record.cancel.trigger();
     hooks::call_all(shared, record);
     let run = drained_run(record, true);
     tracing::error!(
         run_id = %record.run_id,
         job_id = %record.job_id,
-        executor_running = record.executor_running(),
+        executor_running = run.executor_running,
         instances_without_return = ?run.instances_without_return,
         "the drain aborts a run that is still in flight"
     );

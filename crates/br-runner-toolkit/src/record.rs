@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_graph_contract::{CancelHandle, InstanceId};
 use br_runner_jobs::{AgentBook, BookedAgent, DeliveryQueue};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, watch};
 use uuid::Uuid;
 
 use crate::context::RunContext;
@@ -40,6 +40,8 @@ pub(crate) struct RunRecord {
     pub(crate) cancel: CancelHandle,
     started_pending: AtomicBool,
     executor_running: AtomicBool,
+    observations_expected: AtomicBool,
+    observations_over: watch::Sender<bool>,
     inner: Mutex<Inner>,
     hooks_changed: Notify,
 }
@@ -52,6 +54,8 @@ impl RunRecord {
             cancel,
             started_pending: AtomicBool::new(true),
             executor_running: AtomicBool::new(false),
+            observations_expected: AtomicBool::new(false),
+            observations_over: watch::Sender::new(false),
             inner: Mutex::new(Inner {
                 phase: Phase::Live,
                 book: None,
@@ -84,6 +88,23 @@ impl RunRecord {
 
     pub(crate) fn set_executor_running(&self, running: bool) {
         self.executor_running.store(running, Ordering::SeqCst);
+    }
+
+    pub(crate) fn expect_observations_end(&self) {
+        self.observations_expected.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn observations_expected(&self) -> bool {
+        self.observations_expected.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn end_observations(&self) {
+        self.observations_over.send_replace(true);
+    }
+
+    pub(crate) async fn observations_ended(&self) {
+        let mut over = self.observations_over.subscribe();
+        let _ = over.wait_for(|over| *over).await;
     }
 
     pub(crate) fn phase(&self) -> Phase {

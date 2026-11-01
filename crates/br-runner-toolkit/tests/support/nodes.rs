@@ -39,6 +39,7 @@ pub enum Behavior {
     Fail(&'static str),
     Refuse(&'static str),
     UntilCancelled,
+    NotingCancel(Arc<std::sync::atomic::AtomicBool>),
     UntilReleased(Arc<Notify>, &'static str),
 }
 
@@ -100,6 +101,11 @@ impl Node<Flow> for Worker {
                     Behavior::Refuse(text) => Event::refused(text),
                     Behavior::UntilCancelled => {
                         cancel.triggered().await;
+                        Event::Cancelled
+                    }
+                    Behavior::NotingCancel(noted) => {
+                        cancel.triggered().await;
+                        noted.store(true, std::sync::atomic::Ordering::SeqCst);
                         Event::Cancelled
                     }
                     Behavior::UntilReleased(gate, text) => {

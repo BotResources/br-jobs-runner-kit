@@ -11,7 +11,6 @@
     "outcome_wait",
     "retry_wait"
   ],
-  "additionalProperties": false,
   "properties": {
     "runner_version": {
       "type": "string",

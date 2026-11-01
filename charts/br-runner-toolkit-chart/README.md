@@ -48,7 +48,7 @@ Each value is required and has no default. The name of a value is the name of th
 
 The library has no reader of these variables. The runner reads them and gives them to `Settings::builder()`.
 
-A missing value, a value of the wrong type, a value out of range and an unknown value fail the render. A thin chart that does not declare the alias `runner` fails the render too.
+A missing value, a value of the wrong type and a value out of range fail the render. A thin chart that does not declare the alias `runner` fails the render too.
 
 ## Why
 

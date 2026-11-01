@@ -252,6 +252,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Observed::default(),
     )
     .await?;
-    println!("{} runs left in flight", report.runs.len());
+    println!(
+        "{} runs aborted or left with writes not sent",
+        report.runs.len()
+    );
     Ok(())
 }

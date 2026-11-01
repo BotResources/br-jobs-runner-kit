@@ -66,6 +66,9 @@ pub async fn main_named(name: &str) -> Result<(), Box<dyn std::error::Error + Se
     )
     .await?;
     let report = serve(client, CancellationToken::new()).await?;
-    println!("{} runs left in flight", report.runs.len());
+    println!(
+        "{} runs aborted or left with writes not sent",
+        report.runs.len()
+    );
     Ok(())
 }

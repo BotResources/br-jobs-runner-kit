@@ -66,3 +66,35 @@ fn given_a_run_already_registered_when_the_same_run_registers_again_then_the_fir
     let existing = shared.register_run(id(1), id(2)).err().expect("refused");
     assert!(Arc::ptr_eq(&first, &existing));
 }
+
+#[test]
+fn given_a_run_in_flight_when_the_orders_are_replaced_by_a_list_with_its_order_then_its_token_is_triggered_and_the_token_of_another_run_is_not()
+ {
+    let shared = fresh();
+    let (_, token) = shared.register_run(id(1), id(2)).ok().expect("registered");
+    let (_, other) = shared.register_run(id(3), id(4)).ok().expect("registered");
+    shared.replace_orders(std::collections::HashSet::from([id(1)]));
+    assert!(token.handle().is_triggered());
+    assert!(!other.handle().is_triggered());
+}
+
+#[test]
+fn given_a_run_with_a_triggered_token_when_the_orders_are_replaced_by_a_list_without_its_order_then_the_token_stays_triggered()
+ {
+    let shared = fresh();
+    let (_, token) = shared.register_run(id(1), id(2)).ok().expect("registered");
+    shared.replace_orders(std::collections::HashSet::from([id(1)]));
+    shared.replace_orders(std::collections::HashSet::new());
+    assert!(token.handle().is_triggered());
+}
+
+#[test]
+fn given_orders_replaced_by_a_list_when_a_run_registers_then_it_starts_cancelled_only_if_the_list_holds_its_order()
+ {
+    let shared = fresh();
+    shared.replace_orders(std::collections::HashSet::from([id(1)]));
+    let (_, ordered) = shared.register_run(id(1), id(2)).ok().expect("registered");
+    let (_, free) = shared.register_run(id(3), id(4)).ok().expect("registered");
+    assert!(ordered.handle().is_triggered());
+    assert!(!free.handle().is_triggered());
+}

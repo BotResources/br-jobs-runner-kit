@@ -2,6 +2,7 @@ use br_graph_executor::{Checkpoint, RunFailure};
 use br_runner_jobs::FailureKind;
 
 use super::{first_found, found_of};
+use crate::unit_support::Steps;
 
 fn checkpoint() -> Checkpoint {
     serde_json::from_value(serde_json::json!({
@@ -116,4 +117,42 @@ fn given_several_failures_when_they_are_found_then_the_first_one_is_the_reason()
         },
     ]);
     assert_eq!(found.reason_code, "node_vanished");
+}
+
+fn run_record() -> std::sync::Arc<crate::record::RunRecord> {
+    crate::record::RunRecord::new(
+        uuid::Uuid::from_u128(1),
+        uuid::Uuid::from_u128(2),
+        br_graph_contract::CancelToken::new().handle().clone(),
+    )
+}
+
+#[test]
+fn given_an_executor_that_returned_an_outcome_when_the_start_is_followed_up_then_the_run_expects_the_end_of_the_observations()
+ {
+    let record = run_record();
+    record.set_executor_running(true);
+    let outcome = br_graph_executor::Outcome::<Steps>::RunCancelled {
+        failures: Vec::new(),
+        checkpoint: checkpoint(),
+    };
+    let ending = super::after_start(&record, None, Ok(outcome));
+    assert!(matches!(ending, super::Ending::Cancelled));
+    assert!(record.observations_expected());
+    assert!(!record.executor_running());
+}
+
+#[test]
+fn given_a_start_the_executor_refused_when_the_start_is_followed_up_then_the_run_does_not_expect_observations_and_fails_with_start_refused()
+ {
+    let record = run_record();
+    record.set_executor_running(true);
+    let ending =
+        super::after_start::<Steps>(&record, None, Err(br_graph_executor::StartError::NoNodes));
+    assert!(!record.observations_expected());
+    assert!(!record.executor_running());
+    match ending {
+        super::Ending::Failed(failed) => assert_eq!(failed.reason_code, "start_refused"),
+        _ => panic!("a failed ending was expected"),
+    }
 }

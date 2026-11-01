@@ -87,3 +87,29 @@ async fn given_a_started_fact_that_jobs_refuses_in_claim_mode_when_the_run_is_se
     assert_eq!(kinds(&jobs), vec!["started"]);
     running.stop().await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn given_a_started_fact_that_jobs_does_not_answer_when_the_drain_time_ends_then_the_trigger_is_neither_acknowledged_nor_given_back_and_the_report_names_the_aborted_run()
+ {
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    push_mode(&jobs);
+    jobs.answer_facts(|| Err(Error::Unreadable("the bus is down".to_owned())));
+    let executed = Arc::new(AtomicBool::new(false));
+    jobs.push_trigger(trigger(1));
+    let running = run(&jobs, |b| b, 1, marking(&executed));
+    until(|| kinds(&jobs) == vec!["started"]).await;
+    running.shutdown.cancel();
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    let report = running.done.await.expect("joined").expect("started");
+    assert_eq!(report.runs.len(), 1);
+    assert!(report.runs[0].aborted);
+    assert_eq!(report.runs[0].run_id, id(101));
+    assert!(
+        report.runs[0]
+            .unsent
+            .iter()
+            .any(|write| write.kind == br_runner_jobs::WriteKind::Started)
+    );
+    assert!(jobs.deliveries().is_empty());
+    assert!(!executed.load(Ordering::SeqCst));
+}

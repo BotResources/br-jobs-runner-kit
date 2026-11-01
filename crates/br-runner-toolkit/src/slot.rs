@@ -70,8 +70,9 @@ async fn push_step<F: Fields>(
     rx: &mut watch::Receiver<LoopState>,
 ) {
     let work = tokio::select! {
-        work = next_trigger(shared) => work,
+        biased;
         () = unusable(rx, Mode::Push) => return,
+        work = next_trigger(shared) => work,
         () = shared.drain.cancelled() => return,
     };
     if let Some(work) = given_back_when_draining(shared, work) {
@@ -193,89 +194,4 @@ pub(crate) async fn run<F: Fields>(shared: Arc<Shared>, plan: Arc<Plan<F>>) {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
-
-    use tracing::Level;
-
-    use super::{dropped_for_drain, given_back_when_draining, must_wait};
-    use crate::instances::Instances;
-    use crate::shared::{LoopState, Mode};
-    use crate::unit_support::logs::Logs;
-    use crate::unit_support::{delivered_work, id, shared};
-
-    #[tokio::test]
-    async fn given_a_drain_when_a_claim_returns_a_run_then_it_is_not_started_and_one_error_names_the_run()
-     {
-        let (logs, _guard) = Logs::capture();
-        let jobs = ScriptedJobs::new("analyst", "i1");
-        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
-        let work = delivered_work(&jobs, 1).await;
-        shared.drain.cancel();
-        assert!(dropped_for_drain(&shared, id(9), &work));
-        assert_eq!(logs.at(Level::ERROR).len(), 1);
-        assert_eq!(logs.containing(Level::ERROR, &work.run_id().to_string()), 1);
-        assert_eq!(logs.containing(Level::ERROR, "the drain began"), 1);
-    }
-
-    #[tokio::test]
-    async fn given_no_drain_when_a_claim_returns_a_run_then_it_is_started_and_nothing_is_logged() {
-        let (logs, _guard) = Logs::capture();
-        let jobs = ScriptedJobs::new("analyst", "i1");
-        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
-        let work = delivered_work(&jobs, 1).await;
-        assert!(!dropped_for_drain(&shared, id(9), &work));
-        assert!(logs.lines().is_empty());
-    }
-
-    fn state(mode: Mode, replay_complete: bool) -> LoopState {
-        LoopState {
-            mode,
-            replay_complete,
-        }
-    }
-
-    #[test]
-    fn given_a_slot_that_holds_a_claim_id_and_stopped_claims_when_the_mode_is_push_then_it_waits() {
-        assert!(must_wait(state(Mode::Push, true), true, true));
-    }
-
-    #[test]
-    fn given_a_slot_that_holds_nothing_and_stopped_claims_when_the_mode_is_push_then_it_asks_for_a_trigger()
-     {
-        assert!(!must_wait(state(Mode::Push, true), false, false));
-    }
-
-    #[test]
-    fn given_a_slot_that_holds_a_claim_id_when_claims_are_open_in_push_mode_then_it_repeats_the_claim()
-     {
-        assert!(!must_wait(state(Mode::Push, true), true, false));
-    }
-
-    #[test]
-    fn given_stopped_claims_in_claim_mode_then_the_slot_waits_and_a_closed_gate_always_waits() {
-        assert!(must_wait(state(Mode::Claim, true), false, true));
-        assert!(must_wait(state(Mode::NoEntry, true), false, false));
-        assert!(must_wait(state(Mode::Push, false), false, false));
-    }
-
-    #[tokio::test]
-    async fn given_a_drain_when_a_trigger_arrives_then_it_is_given_back_and_not_executed() {
-        let jobs = ScriptedJobs::new("analyst", "i1");
-        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
-        shared.drain.cancel();
-        assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_none());
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        assert_eq!(jobs.deliveries(), vec![Delivery::GiveBack]);
-    }
-
-    #[tokio::test]
-    async fn given_no_drain_when_a_trigger_arrives_then_it_is_kept() {
-        let jobs = ScriptedJobs::new("analyst", "i1");
-        let shared = shared(&jobs, None, &Arc::new(Instances::default()));
-        assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_some());
-        assert!(jobs.deliveries().is_empty());
-    }
-}
+mod tests;
