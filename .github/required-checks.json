@@ -10,6 +10,7 @@
     "shellcheck",
     "release-line law and registry wiring tests",
     "registry gate",
-    "trufflehog (secret scan)"
+    "trufflehog (secret scan)",
+    "helm library chart"
   ]
 }

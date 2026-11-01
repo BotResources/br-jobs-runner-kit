@@ -1,0 +1,9 @@
+apiVersion: v2
+name: no-alias
+description: CI fixture for br-runner-toolkit-chart, a thin chart that does not declare the alias.
+type: application
+version: 0.1.0
+dependencies:
+  - name: br-runner-toolkit-chart
+    version: "0.1.0"
+    repository: "file://../.."

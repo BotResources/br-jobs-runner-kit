@@ -1,0 +1,228 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use br_graph_contract::{CancelHandle, InstanceId};
+use br_runner_jobs::{AgentBook, BookedAgent, DeliveryQueue};
+use tokio::sync::{Notify, watch};
+use uuid::Uuid;
+
+use crate::context::RunContext;
+use crate::hook::InstanceEnded;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Phase {
+    Live,
+    ExecutorReturned,
+    Aborted,
+    Dropped,
+}
+
+struct InstanceInfo {
+    node: String,
+    hooked: bool,
+}
+
+struct Inner {
+    phase: Phase,
+    book: Option<Arc<AgentBook>>,
+    last_agents: Vec<BookedAgent>,
+    running_hooks: Vec<InstanceId>,
+    queue: Option<Arc<DeliveryQueue>>,
+    context: Option<RunContext>,
+    instances: HashMap<InstanceId, InstanceInfo>,
+    arrival: Option<tokio::task::JoinHandle<()>>,
+}
+
+pub(crate) struct RunRecord {
+    pub(crate) run_id: Uuid,
+    pub(crate) job_id: Uuid,
+    pub(crate) cancel: CancelHandle,
+    started_pending: AtomicBool,
+    executor_running: AtomicBool,
+    observations_expected: AtomicBool,
+    observations_over: watch::Sender<bool>,
+    inner: Mutex<Inner>,
+    hooks_changed: Notify,
+}
+
+impl RunRecord {
+    pub(crate) fn new(run_id: Uuid, job_id: Uuid, cancel: CancelHandle) -> Arc<Self> {
+        Arc::new(Self {
+            run_id,
+            job_id,
+            cancel,
+            started_pending: AtomicBool::new(true),
+            executor_running: AtomicBool::new(false),
+            observations_expected: AtomicBool::new(false),
+            observations_over: watch::Sender::new(false),
+            inner: Mutex::new(Inner {
+                phase: Phase::Live,
+                book: None,
+                last_agents: Vec::new(),
+                running_hooks: Vec::new(),
+                queue: None,
+                context: None,
+                instances: HashMap::new(),
+                arrival: None,
+            }),
+            hooks_changed: Notify::new(),
+        })
+    }
+
+    fn inner(&self) -> MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn started_pending(&self) -> bool {
+        self.started_pending.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn started_ended(&self) {
+        self.started_pending.store(false, Ordering::SeqCst);
+    }
+
+    pub(crate) fn executor_running(&self) -> bool {
+        self.executor_running.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn set_executor_running(&self, running: bool) {
+        self.executor_running.store(running, Ordering::SeqCst);
+    }
+
+    pub(crate) fn expect_observations_end(&self) {
+        self.observations_expected.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn observations_expected(&self) -> bool {
+        self.observations_expected.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn end_observations(&self) {
+        self.observations_over.send_replace(true);
+    }
+
+    pub(crate) async fn observations_ended(&self) {
+        let mut over = self.observations_over.subscribe();
+        let _ = over.wait_for(|over| *over).await;
+    }
+
+    pub(crate) fn phase(&self) -> Phase {
+        self.inner().phase
+    }
+
+    pub(crate) fn set_phase(&self, phase: Phase) {
+        self.inner().phase = phase;
+    }
+
+    pub(crate) fn set_queue(&self, queue: Arc<DeliveryQueue>) {
+        self.inner().queue = Some(queue);
+    }
+
+    pub(crate) fn queue(&self) -> Option<Arc<DeliveryQueue>> {
+        self.inner().queue.clone()
+    }
+
+    pub(crate) fn take_queue(&self) -> Option<Arc<DeliveryQueue>> {
+        self.inner().queue.take()
+    }
+
+    pub(crate) fn set_book(&self, book: Arc<AgentBook>) {
+        self.inner().book = Some(book);
+    }
+
+    pub(crate) fn book(&self) -> Option<Arc<AgentBook>> {
+        self.inner().book.clone()
+    }
+
+    pub(crate) fn take_book(&self) -> Option<Arc<AgentBook>> {
+        let mut inner = self.inner();
+        let book = inner.book.take();
+        if let Some(book) = &book {
+            inner.last_agents = book.agents();
+        }
+        book
+    }
+
+    pub(crate) fn set_arrival(&self, handle: tokio::task::JoinHandle<()>) {
+        self.inner().arrival = Some(handle);
+    }
+
+    pub(crate) fn stop_arrival(&self) {
+        if let Some(handle) = self.inner().arrival.take() {
+            handle.abort();
+        }
+    }
+
+    pub(crate) fn set_context(&self, context: RunContext) {
+        self.inner().context = Some(context);
+    }
+
+    pub(crate) fn context(&self) -> Option<RunContext> {
+        self.inner().context.clone()
+    }
+
+    pub(crate) fn instance_created(&self, id: InstanceId, node: String) {
+        self.inner().instances.insert(
+            id,
+            InstanceInfo {
+                node,
+                hooked: false,
+            },
+        );
+    }
+
+    pub(crate) fn unhooked_instances(&self) -> Vec<(InstanceId, String)> {
+        self.inner()
+            .instances
+            .iter()
+            .filter(|(_, info)| !info.hooked)
+            .map(|(id, info)| (*id, info.node.clone()))
+            .collect()
+    }
+
+    pub(crate) fn claim_hook(&self, id: InstanceId) -> Option<InstanceEnded> {
+        let mut inner = self.inner();
+        let agents = match &inner.book {
+            Some(book) => book.agents(),
+            None => inner.last_agents.clone(),
+        };
+        let info = inner.instances.get_mut(&id)?;
+        if info.hooked {
+            return None;
+        }
+        info.hooked = true;
+        let node = info.node.clone();
+        let agents = agents
+            .into_iter()
+            .filter(|agent| agent.key.node == node)
+            .collect();
+        inner.running_hooks.push(id);
+        Some(InstanceEnded {
+            instance_id: id,
+            node,
+            agents,
+        })
+    }
+
+    pub(crate) fn hook_returned(&self, id: InstanceId) {
+        self.inner().running_hooks.retain(|running| *running != id);
+        self.hooks_changed.notify_waiters();
+    }
+
+    pub(crate) fn running_hooks(&self) -> Vec<InstanceId> {
+        self.inner().running_hooks.clone()
+    }
+
+    pub(crate) async fn hooks_returned(&self) {
+        loop {
+            let changed = self.hooks_changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.running_hooks().is_empty() {
+                return;
+            }
+            changed.await;
+        }
+    }
+}

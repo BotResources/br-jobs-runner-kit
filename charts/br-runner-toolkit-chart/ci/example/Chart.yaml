@@ -1,0 +1,10 @@
+apiVersion: v2
+name: example
+description: CI fixture for br-runner-toolkit-chart.
+type: application
+version: 0.1.0
+dependencies:
+  - name: br-runner-toolkit-chart
+    version: "0.1.0"
+    alias: runner
+    repository: "file://../.."

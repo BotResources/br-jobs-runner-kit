@@ -143,6 +143,8 @@ jobs:
         run: cargo test -p br-runner-connection --locked -- --ignored --test-threads=1
       - name: run the br-runner-jobs e2e tests against a real JetStream
         run: cargo test -p br-runner-jobs --locked -- --ignored --test-threads=1
+      - name: run the br-runner-toolkit e2e tests against a real JetStream
+        run: cargo test -p br-runner-toolkit --features test-host --locked -- --ignored --test-threads=1
 
   changelog:
     name: changelog + readme pins
@@ -195,6 +197,8 @@ jobs:
         run: bash .github/scripts/check-bus-access.sh br-runner-jobs runner_transport
       - name: br-runner-as-node reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-as-node --allow br-llm-clients-core
+      - name: br-runner-toolkit reaches only br-llm-clients-core
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-toolkit --allow br-llm-clients-core
 
   shellcheck:
     name: shellcheck
@@ -251,3 +255,75 @@ jobs:
       - uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51 # v3.95.5
         with:
           extra_args: --results=verified,unknown
+
+  chart:
+    name: helm library chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - name: the chart version moves forward when the chart changes
+        run: bash .github/scripts/check-chart-version.sh
+      - name: helm lint the library chart
+        run: helm lint charts/br-runner-toolkit-chart --set runner_version=1.0.0,max_concurrent_runs=4,ack_wait=30000,drain_timeout=0,cancel_grace=0,claim_wait=10000,outcome_wait=10000,retry_wait=1000
+      - name: helm dependency build the fixtures
+        run: |
+          set -euo pipefail
+          helm dependency build charts/br-runner-toolkit-chart/ci/example
+          helm dependency build charts/br-runner-toolkit-chart/ci/no-alias
+      - name: helm lint the fixture
+        run: helm lint charts/br-runner-toolkit-chart/ci/example
+      - name: the render holds the eight values, each name with its own value
+        run: |
+          set -euo pipefail
+          rendered=$(helm template example charts/br-runner-toolkit-chart/ci/example)
+          echo "$rendered"
+          pair() {
+            if ! grep -A1 -E "^ *- name: ${1}\$" <<<"$rendered" | grep -qE "^ *value: \"${2}\"\$"; then
+              echo "::error::the render does not give ${1} the value ${2}"
+              exit 1
+            fi
+          }
+          pair RUNNER_VERSION 1.2.3
+          pair MAX_CONCURRENT_RUNS 4
+          pair ACK_WAIT_MS 30000
+          pair DRAIN_TIMEOUT_MS 1000000
+          pair CANCEL_GRACE_MS 5000
+          pair CLAIM_WAIT_MS 11000
+          pair OUTCOME_WAIT_MS 12000
+          pair RETRY_WAIT_MS 1000
+      - name: a missing value fails the render
+        run: |
+          set -euo pipefail
+          for name in runner_version max_concurrent_runs ack_wait drain_timeout cancel_grace claim_wait outcome_wait retry_wait; do
+            if helm template example charts/br-runner-toolkit-chart/ci/example --set "runner.${name}=null" >/dev/null 2>&1; then
+              echo "::error::the render passed with runner.${name} missing"
+              exit 1
+            fi
+          done
+      - name: a value of the wrong type or out of range fails the render
+        run: |
+          set -euo pipefail
+          for setting in runner.ack_wait=abc runner.max_concurrent_runs=abc runner.max_concurrent_runs=0 runner.ack_wait=0 runner.claim_wait=0 runner.outcome_wait=0 runner.retry_wait=0 runner.drain_timeout=-1 runner.cancel_grace=-1; do
+            if helm template example charts/br-runner-toolkit-chart/ci/example --set "$setting" >/dev/null 2>&1; then
+              echo "::error::the render passed with ${setting}"
+              exit 1
+            fi
+          done
+      - name: a drain timeout and a cancel grace of zero and an empty runner version render
+        run: |
+          set -euo pipefail
+          helm template example charts/br-runner-toolkit-chart/ci/example --set runner.drain_timeout=0 --set runner.cancel_grace=0 >/dev/null
+          helm template example charts/br-runner-toolkit-chart/ci/example --set runner.runner_version= | grep -A1 -E '^ *- name: RUNNER_VERSION$' | grep -qE '^ *value: ""$'
+      - name: a global value and a key of the thin chart under the alias render
+        run: |
+          set -euo pipefail
+          helm template example charts/br-runner-toolkit-chart/ci/example --set global.team=ocelot --set runner.extra=1 >/dev/null
+      - name: a thin chart without the alias fails the render
+        run: |
+          set -euo pipefail
+          if helm template no-alias charts/br-runner-toolkit-chart/ci/no-alias >/dev/null 2>&1; then
+            echo "::error::the render passed without the alias runner"
+            exit 1
+          fi

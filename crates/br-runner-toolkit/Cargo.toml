@@ -1,0 +1,46 @@
+[package]
+name = "br-runner-toolkit"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The main loop of a runner with the jobs service: registration through the presence, parallel run slots, the delivery of the facts of each run and the drain"
+
+[features]
+test-host = []
+
+[dependencies]
+br-agentic-contract.workspace = true
+br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
+br-graph-contract.workspace = true
+br-graph-executor.workspace = true
+br-runner-jobs.workspace = true
+chrono.workspace = true
+contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.7.0", version = "0.7.0" }
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros", "signal"] }
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-nats.workspace = true
+br-core-kernel.workspace = true
+br-llm-clients-core.workspace = true
+br-llm-messages.workspace = true
+br-runner-connection.workspace = true
+br-runner-jobs = { workspace = true, features = ["test-double"] }
+br-runner-toolkit = { path = ".", version = ">=0.1.0", features = ["test-host"] }
+br-util-nats-fabric.workspace = true
+contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.7.0", version = "0.7.0", features = ["integration"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[[example]]
+name = "test_host"
+required-features = ["test-host"]
+
+[lints.rust]
+unsafe_code = "forbid"
