@@ -30,16 +30,20 @@ fn found_of(failure: RunFailure) -> Found {
     found
 }
 
+fn first_found(failures: Vec<RunFailure>) -> Found {
+    failures.into_iter().next().map_or_else(
+        || Found::permanent("run_failed", "the executor reported no failure"),
+        found_of,
+    )
+}
+
 fn ending_of<F: Fields>(ctx: &Ctx<F>, outcome: Outcome<F>) -> Ending<F> {
     match outcome {
         Outcome::RunEnded { state } => Ending::Ended(state),
-        Outcome::RunFailed { failures, .. } => {
-            let first = failures.into_iter().next().map_or_else(
-                || Found::permanent("run_failed", "the executor reported no failure"),
-                found_of,
-            );
-            Ending::Failed(failed_of(first, ctx.plan.mapping.as_deref()))
-        }
+        Outcome::RunFailed { failures, .. } => Ending::Failed(failed_of(
+            first_found(failures),
+            ctx.plan.mapping.as_deref(),
+        )),
         Outcome::RunCancelled { failures, .. } => {
             tracing::info!(
                 run_id = %ctx.record.run_id,
@@ -111,3 +115,6 @@ pub(super) async fn body<F: Fields>(ctx: &Ctx<F>, token: CancelToken) -> Ending<
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

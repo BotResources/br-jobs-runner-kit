@@ -1,5 +1,6 @@
 #![allow(dead_code)] // each test file uses a part of the support
 
+mod boom;
 mod logs;
 mod nodes;
 
@@ -18,6 +19,8 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[allow(unused_imports)] // each test file uses a part of the support
+pub use boom::*;
 #[allow(unused_imports)] // each test file uses a part of the support
 pub use logs::*;
 pub use nodes::*;

@@ -44,6 +44,7 @@ async fn given_a_run_whose_terminal_fact_is_held_when_the_graph_ends_then_the_sl
 #[tokio::test(start_paused = true)]
 async fn given_a_closing_that_waits_when_the_shutdown_comes_then_the_drain_waits_for_it_and_at_the_timeout_it_drops_the_queue_and_the_report_lists_the_unsent_write()
  {
+    let (logs, _guard) = Logs::capture();
     let (jobs, running, _gate) = run_with_a_held_terminal_fact().await;
     tokio::time::sleep(Duration::from_secs(5)).await;
     running.shutdown.cancel();
@@ -59,6 +60,10 @@ async fn given_a_closing_that_waits_when_the_shutdown_comes_then_the_drain_waits
     assert!(drained.instances_without_return.is_empty());
     let unsent: Vec<WriteKind> = drained.unsent.iter().map(|write| write.kind).collect();
     assert_eq!(unsent, vec![WriteKind::Completed]);
+    assert_eq!(
+        logs.containing(tracing::Level::ERROR, "a write of the run was removed"),
+        unsent.len()
+    );
     assert_eq!(jobs.presence_deletions(), 1);
     jobs.resume();
 }
@@ -107,6 +112,7 @@ async fn given_a_run_in_flight_with_a_hook_when_the_drain_time_ends_then_the_hoo
 #[tokio::test(start_paused = true)]
 async fn given_a_hook_that_was_called_and_never_returns_when_the_drain_time_ends_then_the_report_lists_its_instance()
  {
+    let (logs, _guard) = Logs::capture();
     let jobs = ScriptedJobs::new("analyst", "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -141,6 +147,11 @@ async fn given_a_hook_that_was_called_and_never_returns_when_the_drain_time_ends
         report.runs[0].instances_without_return,
         called.lock().expect("lock").clone()
     );
+    assert_eq!(
+        logs.containing(tracing::Level::ERROR, "the drain aborts a run"),
+        1
+    );
+    assert_eq!(logs.containing(tracing::Level::ERROR, "writes_left"), 0);
     assert!(!has_terminal(&jobs));
 }
 
