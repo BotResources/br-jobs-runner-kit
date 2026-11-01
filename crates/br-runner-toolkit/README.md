@@ -156,6 +156,8 @@ For each Run the runner, in this order: registers the Run (a cancel order alread
 - A runner that can restart, when at least one agent of the Run has an inbox, saves a document with the state fields and the agents of the Run at the end. A restart reads that document; a restart whose document cannot be read or decoded fails with `saved_state_invalid`, and so does a Run whose agent book cannot be made, one whose read could not be made fails with `saved_state_unavailable`, and a restart starts at the entry nodes of the graph with the restored fields given to the run start function. `with_state_limit` bounds the state size.
 - If jobs refuses the answer or the saved state, or ends one of them with a final error, the completed fact is removed and a failed fact (`answer_refused` or `saved_state_refused`) is sent in its place. If one of them is removed for another cause, the completed fact is removed and no failed fact follows.
 - The run start function and a lifecycle hook may panic; the panic is caught and logged.
+- A panic of the Run body (the call of the run start function, before it returns its future, or the executor) fires the cancel token of the Run, the one the executor holds, and ends the Run with the reason code `panic`. A panic inside the future that the run start function returns is caught earlier: it ends the Run with the reason code `panic` and does not fire the token.
+- A run start function may refuse the Run with `RunRefusal::new(reason_code)`, with `with_kind`, `with_params`, `with_diagnostic` and `with_retry_after_seconds` to set the other parts of the failed fact; the kind is permanent, the parameters are an empty object, the diagnostic is empty and there is no retry delay unless set.
 - The passport of a trigger is given to the run context and nowhere else: the library does not write it to a log and does not send it to jobs.
 
 ### Lookup and hooks
@@ -173,6 +175,13 @@ A lifecycle hook (`RunnerBuilder::with_lifecycle_hook`, built with `lifecycle_ho
 ### Queue observer
 
 `RunnerBuilder::with_queue_observer` gives the runner an `Arc<dyn QueueObserver>` that receives every `QueueReport` of the delivery queue of each Run. A panic of the observer is caught and logged as an error, and the Run goes on. The library itself logs a failed attempt (a write sent again) as a warning, and a removed write as an error, each with the run id, the job id and the name of the write. It logs no delivery. `TestHost` has the same two methods, `with_queue_observer` and `with_lifecycle_hook`.
+
+### Other public items
+
+- `Settings::runner_version`, `max_concurrent_runs`, `ack_wait`, `drain_timeout`, `cancel_grace`, `claim_wait`, `outcome_wait` and `retry_wait` return the values the settings were built with.
+- `InstanceLookup::book_lookup` gives an `Arc<dyn BookLookup>` over the same instances, for `br-runner-jobs` to make an agent entry.
+- `TestHost::instance_lookup` gives the same `InstanceLookup` as `RunnerBuilder::instance_lookup`, for the host.
+- `TestHost::cancel_handle` gives a `HostCancel`; `HostCancel::cancel` cancels the Run of the host.
 
 ### Drain
 
