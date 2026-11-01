@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use crate::context::RunContext;
 use crate::failure::RunRefusal;
 
+#[non_exhaustive]
 pub struct RunStartInput<F: Fields> {
     pub work: Arc<Work>,
     pub context: RunContext,

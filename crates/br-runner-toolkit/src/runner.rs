@@ -18,7 +18,7 @@ use crate::run_start::RunStart;
 use crate::settings::Settings;
 use crate::shared::Shared;
 use crate::signals::Signals;
-use crate::supervise::{Restart, supervised};
+use crate::spawn::{LoopBodies, LoopTasks, spawn_loop};
 use crate::{feeds, presence, slot};
 
 pub struct StartArgs<F: Fields> {
@@ -157,28 +157,32 @@ impl RunnerBuilder {
             .map_err(|error| Error::new(ErrorCode::SettingInvalid, error.to_string()))?;
         instances.mark_started();
         let plan = Arc::new(args.plan);
-        let presence = supervised(Arc::clone(&shared), "presence", Restart::AtOnce, {
-            let shared = Arc::clone(&shared);
-            move || presence::keep(Arc::clone(&shared), ttl, capacity)
-        });
-        let feeds = [
-            supervised(Arc::clone(&shared), "dispatch mode", Restart::AfterBeat, {
-                let shared = Arc::clone(&shared);
-                move || feeds::dispatch_mode(Arc::clone(&shared))
-            }),
-            supervised(Arc::clone(&shared), "cancel orders", Restart::AfterBeat, {
-                let shared = Arc::clone(&shared);
-                move || feeds::cancel_orders(Arc::clone(&shared))
-            }),
-        ];
-        let slots = (0..shared.settings.max_concurrent_runs())
-            .map(|_| {
-                supervised(Arc::clone(&shared), "slot", Restart::AfterBeat, {
+        let LoopTasks {
+            presence,
+            feeds,
+            slots,
+        } = spawn_loop(
+            &shared,
+            shared.settings.max_concurrent_runs(),
+            LoopBodies {
+                presence: {
+                    let shared = Arc::clone(&shared);
+                    move || presence::keep(Arc::clone(&shared), ttl, capacity)
+                },
+                dispatch_mode: {
+                    let shared = Arc::clone(&shared);
+                    move || feeds::dispatch_mode(Arc::clone(&shared))
+                },
+                cancel_orders: {
+                    let shared = Arc::clone(&shared);
+                    move || feeds::cancel_orders(Arc::clone(&shared))
+                },
+                slot: {
                     let (shared, plan) = (Arc::clone(&shared), Arc::clone(&plan));
                     move || slot::run(Arc::clone(&shared), Arc::clone(&plan))
-                })
-            })
-            .collect();
+                },
+            },
+        );
         #[cfg(feature = "test-host")]
         let host_cancel = shared.host.as_ref().map(|host| {
             let (shared, mut cancel) = (Arc::clone(&shared), host.cancel.subscribe());

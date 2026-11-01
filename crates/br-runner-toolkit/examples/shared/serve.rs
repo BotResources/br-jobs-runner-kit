@@ -28,8 +28,9 @@ pub async fn serve(
     client: JobsClient,
     shutdown: CancellationToken,
 ) -> Result<DrainReport, Box<dyn std::error::Error + Send + Sync>> {
-    let args =
-        StartArgs::new(greeter::graph(None)?, greeter::starter(), false).with_shutdown(shutdown);
+    let args = StartArgs::new(greeter::graph(None)?, greeter::starter(), false)
+        .with_shutdown(shutdown)
+        .with_process_signals();
     Ok(RunnerBuilder::new(client, settings()?).start(args).await?)
 }
 
@@ -64,13 +65,7 @@ pub async fn main_named(name: &str) -> Result<(), Box<dyn std::error::Error + Se
         connection,
     )
     .await?;
-    let shutdown = CancellationToken::new();
-    let stopper = shutdown.clone();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        stopper.cancel();
-    });
-    let report = serve(client, shutdown).await?;
+    let report = serve(client, CancellationToken::new()).await?;
     println!("{} runs left in flight", report.runs.len());
     Ok(())
 }

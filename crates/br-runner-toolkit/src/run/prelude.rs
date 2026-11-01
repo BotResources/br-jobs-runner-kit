@@ -68,7 +68,7 @@ pub(super) async fn prepare<F: Fields>(
     ctx.record.set_book(Arc::clone(&book));
     ctx.record.set_arrival(arrival::spawn(
         Arc::clone(&ctx.shared),
-        Arc::clone(&ctx.record),
+        &ctx.record,
         Arc::clone(&ctx.work),
         Arc::clone(&book),
     ));

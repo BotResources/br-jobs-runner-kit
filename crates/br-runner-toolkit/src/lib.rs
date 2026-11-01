@@ -26,6 +26,7 @@ mod settings;
 mod shared;
 mod signals;
 mod slot;
+mod spawn;
 mod supervise;
 mod tap;
 

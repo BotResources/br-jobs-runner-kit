@@ -7,6 +7,9 @@ use br_runner_jobs::test_double::{ScriptedJobs, trigger_json, work_from_trigger}
 use br_runner_jobs::{AgentBook, DeliveryQueue, IgnoreReports, QueueSettings, Work};
 use uuid::Uuid;
 
+#[path = "../tests/support/logs.rs"]
+pub(crate) mod logs;
+
 use crate::calls::Calls;
 use crate::hook::LifecycleHook;
 use crate::instances::Instances;

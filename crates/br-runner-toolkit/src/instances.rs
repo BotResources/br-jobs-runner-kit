@@ -81,9 +81,7 @@ impl Instances {
                     ));
                 }
                 None => {
-                    if changes.changed().await.is_err() {
-                        return Err(Error::new(ErrorCode::InstanceEnded, "the runner is gone"));
-                    }
+                    let _ = changes.changed().await;
                 }
             }
         }

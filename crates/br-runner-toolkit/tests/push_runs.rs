@@ -19,6 +19,20 @@ async fn given_a_trigger_in_push_mode_when_the_graph_ends_then_started_acknowled
     until(|| has_terminal(&jobs)).await;
     assert_eq!(kinds(&jobs), vec!["started", "completed"]);
     assert_eq!(jobs.deliveries(), vec![Delivery::Ack]);
+    let documents: Vec<String> = jobs
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            br_runner_jobs::test_double::Call::Graphql { document, .. } => Some(document),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        documents
+            .iter()
+            .all(|document| document.contains("jobsUnread")),
+        "{documents:?}"
+    );
     let report = running.stop().await;
     assert!(report.runs.is_empty());
     assert_eq!(jobs.presence_deletions(), 1);

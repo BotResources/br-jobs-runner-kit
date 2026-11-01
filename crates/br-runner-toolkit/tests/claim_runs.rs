@@ -179,3 +179,46 @@ async fn given_a_not_in_claim_mode_refusal_when_it_comes_then_no_claim_is_sent_u
     until(|| claim_ids(&jobs).len() == 2).await;
     running.stop().await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn given_a_slot_that_holds_a_claim_id_when_claims_stop_in_push_mode_then_it_asks_for_no_trigger_and_repeats_the_same_claim_after_a_new_mode_value()
+ {
+    let gate = std::sync::Arc::new(tokio::sync::Notify::new());
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    claim_mode(&jobs);
+    jobs.push_claim_reply(Ok(refusal("busy")));
+    jobs.push_claim_reply(Ok(refusal("busy")));
+    jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
+    jobs.push_trigger(trigger(1));
+    jobs.push_trigger(trigger(2));
+    let running = run(
+        &jobs,
+        |b| b,
+        2,
+        args(single(Behavior::UntilReleased(gate.clone(), "x")), false),
+    );
+    until(|| claim_ids(&jobs).len() == 2).await;
+    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
+        br_runner_jobs::DispatchMode::Push,
+    )));
+    until(|| claim_ids(&jobs).len() == 3).await;
+    until(|| kinds(&jobs) == vec!["started"]).await;
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    assert_eq!(kinds(&jobs), vec!["started"]);
+    assert_eq!(jobs.triggers_waiting(), 1);
+    assert_eq!(claim_ids(&jobs).len(), 3);
+    jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
+    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
+        br_runner_jobs::DispatchMode::Push,
+    )));
+    until(|| claim_ids(&jobs).len() == 4).await;
+    let ids = claim_ids(&jobs);
+    assert_ne!(ids[3], ids[2]);
+    assert!(ids[3] == ids[0] || ids[3] == ids[1]);
+    gate.notify_waiters();
+    gate.notify_one();
+    gate.notify_one();
+    running.shutdown.cancel();
+    gate.notify_waiters();
+    let _ = running.done.await;
+}

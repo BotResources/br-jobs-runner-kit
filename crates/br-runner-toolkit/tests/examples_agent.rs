@@ -1,7 +1,7 @@
 mod support;
 
 #[path = "../examples/restartable_agent.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the example holds code that only its own main uses
 mod restartable_agent;
 
 use br_runner_jobs::test_double::ScriptedJobs;

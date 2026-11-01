@@ -5,6 +5,7 @@ use std::sync::Arc;
 use br_runner_jobs::{Failed, FailureKind};
 use serde_json::{Value, json};
 
+#[non_exhaustive]
 pub struct ReportedFailure<'a> {
     pub reason_code: &'a str,
     pub text: &'a str,

@@ -54,7 +54,6 @@ fn abort_run(shared: &Arc<Shared>, record: &Arc<RunRecord>) -> DrainedRun {
         job_id = %record.job_id,
         executor_running = record.executor_running(),
         instances_without_return = ?run.instances_without_return,
-        writes_left = ?run.unsent,
         "the drain aborts a run that is still in flight"
     );
     record.stop_arrival();
@@ -84,15 +83,15 @@ pub(crate) async fn drain(shared: &Arc<Shared>, slots: Vec<JoinHandle<()>>) -> D
     .await;
     let mut report = DrainReport::default();
     if waited.is_err() {
-        let closings = shared.closings.take_all();
-        for (handle, _) in &closings {
-            handle.abort();
-        }
         for slot in &slots {
             slot.abort();
         }
         for slot in slots {
             let _ = slot.await;
+        }
+        let closings = shared.closings.take_all();
+        for (handle, _) in &closings {
+            handle.abort();
         }
         let mut closing_runs = Vec::new();
         for (handle, record) in closings {

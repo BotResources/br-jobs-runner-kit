@@ -1,7 +1,7 @@
 mod support;
 
 #[path = "../examples/test_host.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the example holds code that only its own main uses
 mod test_host;
 
 use br_runner_jobs::test_double::ScriptedJobs;

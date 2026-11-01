@@ -2,7 +2,7 @@ use br_runner_jobs::JobsClient;
 use br_runner_toolkit::{HostEvent, Settings, StartArgs, TestHost};
 
 #[path = "shared/greeter.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // each example uses a part of the greeter
 mod greeter;
 
 pub async fn events_of_one_run(

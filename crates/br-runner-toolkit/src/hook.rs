@@ -6,6 +6,7 @@ use br_runner_jobs::BookedAgent;
 use futures::future::BoxFuture;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct InstanceEnded {
     pub instance_id: InstanceId,
     pub node: String,

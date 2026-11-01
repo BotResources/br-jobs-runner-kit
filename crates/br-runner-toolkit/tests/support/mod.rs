@@ -1,5 +1,6 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // each test file uses a part of the support
 
+mod logs;
 mod nodes;
 
 use std::sync::Arc;
@@ -17,6 +18,8 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[allow(unused_imports)] // each test file uses a part of the support
+pub use logs::*;
 pub use nodes::*;
 
 pub fn args(graph: Arc<Graph<Flow>>, can_restart: bool) -> StartArgs<Flow> {

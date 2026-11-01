@@ -193,6 +193,7 @@ pub async fn serve(
     let setup = greeter_setup(builder.instance_lookup(), observed);
     let args = StartArgs::new(greeter::graph(Some(setup))?, greeter::starter(), true)
         .with_shutdown(shutdown)
+        .with_process_signals()
         .with_answer(|state| {
             Ok(Content {
                 message: state.fields().lines.join("\n"),
@@ -244,13 +245,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .outcome_wait(Duration::from_secs(10))
         .retry_wait(Duration::from_secs(1))
         .build()?;
-    let shutdown = CancellationToken::new();
-    let stopper = shutdown.clone();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        stopper.cancel();
-    });
-    let report = serve(client, settings, shutdown, Observed::default()).await?;
+    let report = serve(
+        client,
+        settings,
+        CancellationToken::new(),
+        Observed::default(),
+    )
+    .await?;
     println!("{} runs left in flight", report.runs.len());
     Ok(())
 }

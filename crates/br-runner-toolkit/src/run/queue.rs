@@ -44,13 +44,17 @@ pub(super) async fn open_queue(
     };
     let queue = Arc::new(queue);
     record.set_queue(Arc::clone(&queue));
-    let ended = started.await;
-    record.started_ended();
-    match ended {
-        Ok(()) => Some((queue, work)),
+    match started.await {
+        Ok(()) => {
+            record.started_ended();
+            Some((queue, work))
+        }
         Err(removal) => {
-            if source == Source::Trigger && matches!(removal, Removal::Refused(_)) {
-                shared.calls.acknowledge(Arc::new(work));
+            if matches!(removal, Removal::Refused(_)) {
+                record.started_ended();
+                if source == Source::Trigger {
+                    shared.calls.acknowledge(Arc::new(work));
+                }
             }
             record.take_queue();
             shared.forget_run(record.run_id);
