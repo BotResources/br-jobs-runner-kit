@@ -147,14 +147,14 @@ impl RunnerBuilder {
             None
         };
         let (shared, instances) = self.shared();
+        let capacity = Capacity::new(shared.settings.max_concurrent_runs())
+            .map_err(|error| Error::new(ErrorCode::SettingInvalid, error.to_string()))?;
         let ttl = shared
             .calls
             .client()
             .presence_time_to_live()
             .await
             .map_err(|error| Error::jobs(&error))?;
-        let capacity = Capacity::new(shared.settings.max_concurrent_runs())
-            .map_err(|error| Error::new(ErrorCode::SettingInvalid, error.to_string()))?;
         instances.mark_started();
         let plan = Arc::new(args.plan);
         let LoopTasks {

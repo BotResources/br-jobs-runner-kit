@@ -40,6 +40,7 @@ async fn given_a_test_host_when_one_run_ends_then_the_host_returns_its_events_in
             event,
             HostEvent::PresencePublished {
                 status: PresenceStatus::Ready,
+                capacity: 1,
                 ..
             }
         )

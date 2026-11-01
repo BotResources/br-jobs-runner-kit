@@ -7,14 +7,19 @@ use br_runner_jobs::test_double::ScriptedJobs;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
+use tracing::Level;
+
 use super::settle;
 use crate::exec_observer::ExecObserver;
 use crate::hook::{InstanceEnded, lifecycle_hook};
 use crate::instances::Instances;
 use crate::record::RunRecord;
+use crate::unit_support::logs::Logs;
 use crate::unit_support::{book_with_agent, instance, queue_of, record, shared, work};
 
 struct Fixture {
+    jobs: Arc<ScriptedJobs>,
+    queue: Arc<DeliveryQueue>,
     record: Arc<RunRecord>,
     instances: Arc<Instances>,
     observer: ExecObserver,
@@ -57,11 +62,13 @@ async fn settling(expect_observations: bool) -> Fixture {
         record: Arc::clone(&record),
     };
     let settling = tokio::spawn({
-        let record = Arc::clone(&record);
+        let (record, queue) = (Arc::clone(&record), Arc::clone(&queue));
         async move { settle(&shared, &record, &queue).await }
     });
     ticks().await;
     Fixture {
+        jobs,
+        queue,
         record,
         instances,
         observer,
@@ -131,5 +138,59 @@ async fn given_a_run_whose_executor_did_not_start_when_the_run_settles_then_the_
     tokio::time::timeout(Duration::from_secs(5), fixture.settling)
         .await
         .expect("the settle ends with no observation")
+        .expect("joined");
+}
+
+#[tokio::test]
+async fn given_observations_that_are_not_over_when_the_run_settles_then_one_warning_names_the_wait_once()
+ {
+    let (logs, _guard) = Logs::capture();
+    let fixture = settling(true).await;
+    assert_eq!(logs.containing(Level::WARN, "its last observations"), 1);
+    assert_eq!(
+        logs.containing(Level::WARN, &fixture.record.run_id.to_string()),
+        1
+    );
+    fixture
+        .observer
+        .observe(Observation::Outcome(OutcomeKind::RunEnded));
+    tokio::time::timeout(Duration::from_secs(5), fixture.settling)
+        .await
+        .expect("the settle ends")
+        .expect("joined");
+    assert_eq!(logs.containing(Level::WARN, "its last observations"), 1);
+}
+
+#[tokio::test]
+async fn given_observations_that_are_already_over_when_the_run_settles_then_no_wait_is_logged() {
+    let (logs, _guard) = Logs::capture();
+    let jobs = ScriptedJobs::new("analyst", "i1");
+    let instances = Arc::new(Instances::default());
+    let shared = shared(&jobs, None, &instances);
+    let work = work(&jobs, 1);
+    let queue = queue_of(&work).await;
+    let record = record(&work);
+    record.expect_observations_end();
+    record.end_observations();
+    settle(&shared, &record, &queue).await;
+    assert_eq!(logs.containing(Level::WARN, "its last observations"), 0);
+}
+
+#[tokio::test]
+async fn given_a_write_handed_over_while_the_settle_waits_for_the_observations_when_they_end_then_the_settle_does_not_wait_for_that_write()
+ {
+    let fixture = settling(true).await;
+    fixture.jobs.pause();
+    let _write = fixture
+        .queue
+        .step_started(0, "late".to_owned(), chrono::Utc::now());
+    ticks().await;
+    assert!(!fixture.queue.state().waiting.is_empty());
+    fixture
+        .observer
+        .observe(Observation::Outcome(OutcomeKind::RunEnded));
+    tokio::time::timeout(Duration::from_secs(5), fixture.settling)
+        .await
+        .expect("the settle does not wait for a write handed over after the executor returned")
         .expect("joined");
 }

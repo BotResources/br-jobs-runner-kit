@@ -123,6 +123,7 @@ pub(super) async fn body<F: Fields>(ctx: &Ctx<F>, token: CancelToken) -> Ending<
         Ok(ending) => ending,
         Err(payload) => {
             ctx.record.set_executor_running(false);
+            ctx.record.cancel.trigger();
             Ending::Failed(failed_of(
                 Found::permanent("panic", crate::panic::text_of(payload)),
                 ctx.plan.mapping.as_deref(),

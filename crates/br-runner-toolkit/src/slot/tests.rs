@@ -85,9 +85,7 @@ async fn given_no_drain_when_a_trigger_arrives_then_it_is_kept() {
     assert!(jobs.deliveries().is_empty());
 }
 
-#[tokio::test]
-async fn given_a_slot_that_waits_for_a_trigger_when_a_trigger_is_ready_after_the_drain_began_then_the_slot_gives_it_back_and_starts_no_run()
- {
+async fn round_with_a_trigger_ready_when_the_drain_begins() -> Arc<ScriptedJobs> {
     let jobs = ScriptedJobs::new("analyst", "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     shared.mode_changed(Mode::Push);
@@ -98,10 +96,22 @@ async fn given_a_slot_that_waits_for_a_trigger_when_a_trigger_is_ready_after_the
     push_trigger(&jobs, 1);
     shared.drain.cancel();
     push_step(&shared, &idle_plan(), &mut rx).await;
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    assert_eq!(jobs.deliveries(), vec![Delivery::GiveBack]);
     assert_eq!(started_facts(&jobs), 0);
     assert!(shared.runs().is_empty());
+    jobs
+}
+
+#[tokio::test]
+async fn given_a_slot_that_waits_for_a_trigger_when_a_trigger_is_ready_after_the_drain_began_then_the_slot_gives_it_back_and_starts_no_run_in_every_round()
+ {
+    let mut rounds = Vec::new();
+    for _ in 0..96 {
+        rounds.push(round_with_a_trigger_ready_when_the_drain_begins().await);
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    for jobs in rounds {
+        assert_eq!(jobs.deliveries(), vec![Delivery::GiveBack]);
+    }
 }
 
 #[tokio::test]

@@ -7,13 +7,6 @@ use br_runner_jobs::test_double::ScriptedJobs;
 use serde_json::json;
 use support::*;
 
-fn restart_trigger(n: u128) -> Vec<u8> {
-    call_with(
-        trigger(n),
-        &[("restart", json!({ "restart_of_run_id": id(50) }))],
-    )
-}
-
 fn saved_with(steps: &[&str]) -> serde_json::Value {
     let mut reply = saved_state_reply(json!({ "fields": { "steps": steps }, "agents": [] }));
     reply

@@ -3,6 +3,7 @@
 mod boom;
 mod logs;
 mod nodes;
+mod restart;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,6 +25,8 @@ pub use boom::*;
 #[allow(unused_imports)] // each test file uses a part of the support
 pub use logs::*;
 pub use nodes::*;
+#[allow(unused_imports)] // each test file uses a part of the support
+pub use restart::*;
 
 pub fn args(graph: Arc<Graph<Flow>>, can_restart: bool) -> StartArgs<Flow> {
     StartArgs::new(
