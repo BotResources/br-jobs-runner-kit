@@ -165,7 +165,7 @@ For each Run the runner, in this order: registers the Run (a cancel order alread
 
 A `RunContext` holds weak references to the delivery queue and the agent book: author code cannot keep a Run alive with it, and `agent_book`, `caller_handle`, `plan_declared` and `step_started` return an error after the Run ended. Its other calls (the ids, `passport`, `payload`, `log`, `mail_handle`) go on working.
 
-A lifecycle hook (`RunnerBuilder::with_lifecycle_hook`, built with `lifecycle_hook`) runs once for each instance when that instance has ended, with an `InstanceEnded`: the instance id, the node name and the agents the book of the Run holds for that node. The Run is not settled until every hook has returned. An instance reported after its Run was settled is not held by the lookup, and its hook gets the agents the book held when the Run was settled.
+A lifecycle hook (`RunnerBuilder::with_lifecycle_hook`, built with `lifecycle_hook`) runs once for each instance when the end event of that instance is handled (its result, its failure, its refusal or its cancel), with an `InstanceEnded`: the instance id, the node name and the agents the book of the Run holds for that node. The Run is not settled until every hook has returned. An instance reported after its Run was settled is not held by the lookup, and its hook gets the agents the book held when the Run was settled.
 
 ### Queue observer
 
@@ -181,7 +181,7 @@ Every port is async. A slot waits for jobs in these places only, and for no othe
 
 ## Helm values
 
-The companion library chart `br-runner-toolkit-chart` (in `charts/br-runner-toolkit-chart` of this repository, published to `oci://ghcr.io/botresources/charts`, with its own version line) holds one required value for each setting, at the level of the runner, under the alias `runner`: `runner_version`, `max_concurrent_runs`, `ack_wait`, `drain_timeout`, `cancel_grace`, `claim_wait`, `outcome_wait` and `retry_wait`. A duration is an integer in milliseconds. The chart gives no default, and its `values.schema.json` rejects a missing, mistyped, out-of-range or unknown value. Its named template `br-runner-toolkit-chart.env` renders them as the environment of the container. This crate has no reader of that environment: the runner reads the variables and gives them to `Settings::builder()`. A test checks that the values of the chart are exactly the settings of this crate.
+The companion library chart `br-runner-toolkit-chart` (in `charts/br-runner-toolkit-chart` of this repository, published to `oci://ghcr.io/botresources/charts`, with its own version line) holds one required value for each setting, at the level of the runner, under the alias `runner`: `runner_version`, `max_concurrent_runs`, `ack_wait`, `drain_timeout`, `cancel_grace`, `claim_wait`, `outcome_wait` and `retry_wait`. A duration is an integer in milliseconds. The chart gives no default, and its `values.schema.json` rejects a missing, mistyped, out-of-range or unknown value. Its named template `br-runner-toolkit-chart.env` renders them as the environment of the container. This crate has no reader of that environment: the runner reads the variables and gives them to `Settings::builder()`. A test checks that the values of the chart are exactly the settings of this crate. The README of the chart is the contract of the names of the environment variables and of the unit; the library reads none of them.
 
 ## Test host
 

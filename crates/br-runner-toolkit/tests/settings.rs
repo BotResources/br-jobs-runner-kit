@@ -83,3 +83,9 @@ fn given_a_zero_drain_timeout_and_a_zero_cancel_grace_when_built_then_the_settin
     assert_eq!(settings.drain_timeout(), Duration::ZERO);
     assert_eq!(settings.cancel_grace(), Duration::ZERO);
 }
+
+#[test]
+fn given_an_empty_runner_version_when_built_then_the_settings_are_built_as_the_chart_allows() {
+    let settings = complete().runner_version("").build().expect("settings");
+    assert_eq!(settings.runner_version(), "");
+}
