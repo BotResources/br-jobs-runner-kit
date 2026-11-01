@@ -57,7 +57,7 @@ mod tests {
     use crate::unit_support::{book_with_agent, instance, queue_of, record, shared, work};
 
     #[tokio::test]
-    async fn given_an_instance_reported_after_its_run_was_dropped_when_it_is_observed_then_the_lookup_does_not_hold_it_and_the_hook_gets_the_agents_the_book_held()
+    async fn given_an_instance_reported_after_the_drain_aborted_its_run_when_it_is_observed_then_the_lookup_does_not_hold_it_and_the_hook_gets_the_agents_the_book_held()
      {
         let jobs = ScriptedJobs::new("analyst", "i1");
         let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
@@ -72,7 +72,7 @@ mod tests {
         let queue = queue_of(&work).await;
         let record = record(&work);
         record.set_book(Arc::new(book_with_agent(&work, &queue, "work")));
-        instances.remove_run(&record, Phase::Dropped);
+        instances.remove_run(&record, Phase::Aborted);
         drop(record.take_book());
         let observer = ExecObserver {
             shared,
