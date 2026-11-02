@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test(start_paused = true)]
 async fn given_a_write_queued_before_the_executor_returned_that_jobs_keeps_refusing_with_a_resendable_error_when_the_graph_ends_then_the_slot_stays_held_and_no_terminal_fact_is_sent_until_the_write_goes_through()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));
@@ -51,7 +51,7 @@ async fn given_a_write_queued_before_the_executor_returned_that_jobs_keeps_refus
 #[tokio::test(start_paused = true)]
 async fn given_an_acknowledgement_that_fails_when_the_run_starts_then_the_run_goes_on_and_completes()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.fail_next_delivery(Error::InfraMissing("the consumer".to_owned()));
     jobs.push_trigger(trigger(1));

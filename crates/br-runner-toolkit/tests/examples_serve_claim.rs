@@ -7,11 +7,11 @@ mod serve_claim;
 use br_runner_jobs::test_double::ScriptedJobs;
 use tokio_util::sync::CancellationToken;
 
-use support::{has_terminal, kinds, trigger, until};
+use support::{has_terminal, kinds, runner_type, trigger, until};
 
 #[tokio::test(start_paused = true)]
 async fn the_serve_claim_example_takes_a_run_in_claim_mode() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     support::claim_mode(&jobs);
     jobs.push_claim_reply(Ok(serde_json::to_vec(&serde_json::json!({
         "version": 2,
@@ -19,7 +19,7 @@ async fn the_serve_claim_example_takes_a_run_in_claim_mode() {
     }))
     .expect("bytes")));
     jobs.push_claim_reply(Ok(serde_json::to_vec(
-        &serde_json::json!({ "version": 2, "reason": "not_in_claim_mode" }),
+        &serde_json::json!({ "version": 2, "reason": "not_claim_mode" }),
     )
     .expect("bytes")));
     let shutdown = CancellationToken::new();

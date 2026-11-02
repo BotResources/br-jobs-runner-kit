@@ -22,7 +22,7 @@ fn host_settings() -> br_runner_toolkit::SettingsBuilder {
 
 #[tokio::test(start_paused = true)]
 async fn given_a_test_host_when_one_run_ends_then_the_host_returns_its_events_in_order() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let host = TestHost::new(
@@ -55,7 +55,7 @@ async fn given_a_test_host_when_one_run_ends_then_the_host_returns_its_events_in
 
 #[tokio::test(start_paused = true)]
 async fn given_a_test_host_when_it_runs_then_it_takes_one_run_even_if_more_triggers_wait() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));
@@ -72,7 +72,7 @@ async fn given_a_test_host_when_it_runs_then_it_takes_one_run_even_if_more_trigg
 #[tokio::test(start_paused = true)]
 async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_then_the_run_ends_without_a_terminal_fact()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let host = TestHost::new(
@@ -92,7 +92,7 @@ async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_t
 
 #[tokio::test(start_paused = true)]
 async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_without_a_terminal_fact() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let host = TestHost::new(
@@ -110,7 +110,7 @@ async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_without
 
 #[tokio::test(start_paused = true)]
 async fn given_invalid_settings_when_a_test_host_is_made_then_it_is_an_error() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let error = TestHost::new(
         jobs.client(),
         Settings::builder(),
@@ -123,7 +123,7 @@ async fn given_invalid_settings_when_a_test_host_is_made_then_it_is_an_error() {
 
 #[tokio::test(start_paused = true)]
 async fn given_a_cancel_handle_taken_first_when_a_hook_is_added_then_the_hook_is_still_called() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
@@ -151,7 +151,7 @@ async fn given_a_cancel_handle_taken_first_when_a_hook_is_added_then_the_hook_is
 #[tokio::test(start_paused = true)]
 async fn given_a_presence_ttl_that_cannot_be_read_when_the_host_runs_then_it_returns_an_error_and_does_not_hang()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.set_presence_ttl(Err(br_runner_jobs::Error::Unreadable("ttl".to_owned())));
@@ -170,7 +170,7 @@ async fn given_a_presence_ttl_that_cannot_be_read_when_the_host_runs_then_it_ret
 #[tokio::test(start_paused = true)]
 async fn given_a_test_host_when_the_ttl_is_ninety_seconds_then_presence_is_published_at_every_third_of_the_ttl()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let host = TestHost::new(

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_runner_jobs::test_double::{ScriptedJobs, trigger_json};
-use br_runner_jobs::{CancelEvent, DispatchMode, JobsClient, ModeEvent};
+use br_runner_jobs::{CancelEvent, DispatchMode, JobsClient, ModeEvent, RunnerType};
 use br_runner_toolkit::{HostEvent, Settings, SettingsBuilder, StartArgs, TestHost};
 use serde_json::json;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ pub async fn events_of_one_run(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let jobs = ScriptedJobs::new("greeter", "instance-1");
+    let jobs = ScriptedJobs::new(RunnerType::new("greeter")?, "instance-1");
     jobs.push_mode(Ok(ModeEvent::Mode(DispatchMode::Push)));
     jobs.push_cancel(Ok(CancelEvent::ReplayComplete));
     let passport = Passport::human(

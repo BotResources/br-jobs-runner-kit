@@ -9,14 +9,14 @@ use crate::instances::Instances;
 use crate::shared::{LoopState, Mode};
 use crate::unit_support::logs::Logs;
 use crate::unit_support::{
-    delivered_work, id, idle_plan, push_trigger, served, shared, started_facts,
+    delivered_work, id, idle_plan, push_trigger, runner_type, served, shared, started_facts,
 };
 
 #[tokio::test]
 async fn given_a_drain_when_a_claim_returns_a_run_then_it_is_not_started_and_one_error_names_the_run()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     let work = delivered_work(&jobs, 1).await;
     shared.drain.cancel();
@@ -29,7 +29,7 @@ async fn given_a_drain_when_a_claim_returns_a_run_then_it_is_not_started_and_one
 #[tokio::test]
 async fn given_no_drain_when_a_claim_returns_a_run_then_it_is_started_and_nothing_is_logged() {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     let work = delivered_work(&jobs, 1).await;
     assert!(!dropped_for_drain(&shared, id(9), &work));
@@ -69,7 +69,7 @@ fn given_stopped_claims_in_claim_mode_then_the_slot_waits_and_a_closed_gate_alwa
 
 #[tokio::test]
 async fn given_a_drain_when_a_trigger_arrives_then_it_is_given_back_and_not_executed() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     shared.drain.cancel();
     assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_none());
@@ -79,14 +79,14 @@ async fn given_a_drain_when_a_trigger_arrives_then_it_is_given_back_and_not_exec
 
 #[tokio::test]
 async fn given_no_drain_when_a_trigger_arrives_then_it_is_kept() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     assert!(given_back_when_draining(&shared, delivered_work(&jobs, 1).await).is_some());
     assert!(jobs.deliveries().is_empty());
 }
 
 async fn round_with_a_trigger_ready_when_the_drain_begins() -> Arc<ScriptedJobs> {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     shared.mode_changed(Mode::Push);
     shared
@@ -118,7 +118,7 @@ async fn given_a_slot_that_waits_for_a_trigger_when_a_trigger_is_ready_after_the
 async fn given_a_slot_whose_claim_returns_a_run_after_the_drain_began_when_the_claim_step_ends_then_no_run_is_started_and_the_claim_id_is_not_held()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     jobs.push_claim_reply(Ok(served(1)));
     shared.drain.cancel();

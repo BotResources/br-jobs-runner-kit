@@ -53,7 +53,7 @@ fn refusing_upload(jobs: &ScriptedJobs) {
 async fn given_an_observer_of_the_author_when_a_write_is_delivered_and_another_removed_then_it_gets_both_reports_and_the_library_logs_each_removal_once()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     refusing_upload(&jobs);
     let author = Author::new(false);
@@ -94,7 +94,7 @@ async fn given_an_observer_of_the_author_when_a_write_is_delivered_and_another_r
 async fn given_an_observer_of_the_author_that_panics_when_a_report_comes_then_the_panic_is_logged_and_the_run_ends_normally()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let author = Author::new(true);

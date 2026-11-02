@@ -54,12 +54,14 @@ mod tests {
     use crate::hook::{InstanceEnded, lifecycle_hook};
     use crate::instances::Instances;
     use crate::record::Phase;
-    use crate::unit_support::{book_with_agent, instance, queue_of, record, shared, work};
+    use crate::unit_support::{
+        book_with_agent, instance, queue_of, record, runner_type, shared, work,
+    };
 
     #[tokio::test]
     async fn given_an_instance_reported_after_the_drain_aborted_its_run_when_it_is_observed_then_the_lookup_does_not_hold_it_and_the_hook_gets_the_agents_the_book_held()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
         let seen = Arc::clone(&calls);
         let hook = lifecycle_hook(move |ended| {
@@ -98,7 +100,7 @@ mod tests {
     #[tokio::test]
     async fn given_an_instance_reported_while_its_run_is_live_when_it_is_observed_then_the_lookup_holds_it()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let instances = Arc::new(Instances::default());
         let shared = shared(&jobs, None, &instances);
         let work = work(&jobs, 1);

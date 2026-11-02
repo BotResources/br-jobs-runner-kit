@@ -10,7 +10,7 @@ use br_graph_contract::{CancelToken, CancelView, InstanceId};
 use br_llm_clients_core::{Parameters, ToolSpec};
 use br_llm_messages::{EntryId, OpaqueJson, ToolName};
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::{Content, Gate, JobsClient, MarkGate, NodeEntry, mark_gate};
+use br_runner_jobs::{Content, Gate, JobsClient, MarkGate, NodeEntry, RunnerType, mark_gate};
 use br_runner_toolkit::{
     DrainReport, InstanceEnded, InstanceLookup, RunnerBuilder, Settings, StartArgs, lifecycle_hook,
 };
@@ -229,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Duration::from_secs(30),
     )?;
     let client = JobsClient::new(
-        runner_type,
+        RunnerType::new(runner_type)?,
         instance_key,
         Duration::from_secs(10),
         connection,

@@ -9,7 +9,7 @@ use br_runner_jobs::{Arrival, Error};
 use super::{ArrivalOpener, ArrivalSink, ArrivalSource, keep};
 use crate::instances::Instances;
 use crate::shared::Shared;
-use crate::unit_support::{id, shared};
+use crate::unit_support::{id, runner_type, shared};
 
 #[derive(Debug, Clone, PartialEq)]
 enum Seen {
@@ -113,7 +113,7 @@ fn cut() -> Error {
 }
 
 fn start(script: Vec<Result<Feed, Error>>, sink: Sink) -> Rig {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let shared = shared(&jobs, None, &Arc::new(Instances::default()));
     let sink = Arc::new(sink);
     let opened = Arc::new(AtomicUsize::new(0));
