@@ -1,6 +1,6 @@
 [package]
 name = "br-runner-jobs"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -18,7 +18,7 @@ br-llm-messages.workspace = true
 br-runner-connection.workspace = true
 br-util-nats-fabric.workspace = true
 chrono.workspace = true
-contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.7.0", version = "0.7.0", features = ["integration"] }
+contract-jobs = { path = "../../../svc-jobs-wt-contract-0-8/crates/contract-jobs", version = "0.8.0", features = ["integration"] }
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,5 +1,5 @@
 use br_util_nats_fabric::INTEGRATION_EVT;
-use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrived};
+use contract_jobs::event_v2::{ItemKindV1 as WireKind, RunItemArrived};
 use serde_json::json;
 use uuid::Uuid;
 

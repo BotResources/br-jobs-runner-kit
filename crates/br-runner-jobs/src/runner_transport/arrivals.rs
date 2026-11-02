@@ -5,7 +5,7 @@ use br_util_nats_fabric::{
     ConsumeErrorKind, Delivered, EventConsumer, EventCoords, Fabric, FabricError, INTEGRATION_EVT,
     IntegrationEvent,
 };
-use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrived};
+use contract_jobs::event_v2::{ItemKindV1 as WireKind, RunItemArrived};
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
 use uuid::Uuid;
 

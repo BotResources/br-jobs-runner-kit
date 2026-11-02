@@ -316,7 +316,7 @@ version = "0.1.0"
 dependencies = [
  "br-core-auth",
  "br-graph-contract",
- "br-runner-jobs",
+ "br-runner-jobs 0.1.0",
  "contract-jobs 0.7.0",
  "futures",
  "serde",
@@ -334,7 +334,7 @@ dependencies = [
  "br-graph-contract",
  "br-llm-clients-core",
  "br-llm-messages",
- "br-runner-jobs",
+ "br-runner-jobs 0.1.0",
  "contract-jobs 0.7.0",
  "futures",
  "serde_json",
@@ -369,6 +369,7 @@ dependencies = [
 [[package]]
 name = "br-runner-jobs"
 version = "0.1.0"
+source = "git+https://github.com/BotResources/br-jobs-runner-kit?tag=br-runner-jobs%2Fv0.1.0#b54eaef9559b416974a08c5f0c58e109eee1cb95"
 dependencies = [
  "async-nats",
  "br-agentic-contract",
@@ -376,10 +377,32 @@ dependencies = [
  "br-core-kernel",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
  "br-util-nats-fabric",
  "chrono",
  "contract-jobs 0.7.0",
+ "futures",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-jobs"
+version = "0.2.0"
+dependencies = [
+ "async-nats",
+ "br-agentic-contract",
+ "br-core-auth",
+ "br-core-kernel",
+ "br-llm-messages",
+ "br-runner-connection",
+ "br-runner-jobs 0.2.0",
+ "br-util-nats-fabric",
+ "chrono",
+ "contract-jobs 0.8.0",
  "futures",
  "serde",
  "serde_json",
@@ -425,7 +448,7 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
+ "br-runner-jobs 0.1.0",
  "br-runner-toolkit",
  "br-util-nats-fabric",
  "chrono",
@@ -541,6 +564,17 @@ dependencies = [
 name = "contract-jobs"
 version = "0.7.0"
 source = "git+https://github.com/BotResources/svc-jobs?tag=contract-jobs%2Fv0.7.0#fdbc11cb313a175dabc83812b5d8edc9bed89765"
+dependencies = [
+ "br-core-integration",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "contract-jobs"
+version = "0.8.0"
 dependencies = [
  "br-core-integration",
  "chrono",
