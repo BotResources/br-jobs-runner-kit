@@ -2,7 +2,7 @@ use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::pull::{Config, MessagesError, MessagesErrorKind, Stream};
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use br_util_nats_fabric::{INTEGRATION_EVT, IntegrationEvent, event_subject};
-use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrivedV2};
+use contract_jobs::event_v2::{ItemKindV2 as WireKind, RunItemArrivedV2};
 use futures::StreamExt;
 use uuid::Uuid;
 

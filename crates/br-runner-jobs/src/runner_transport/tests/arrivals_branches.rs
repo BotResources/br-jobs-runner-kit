@@ -5,7 +5,7 @@ use async_nats::jetstream::consumer::pull::{Config, MessagesError, MessagesError
 use br_core_kernel::Actor;
 use br_util_nats_fabric::{EventMetadata, INTEGRATION_EVT, IntegrationEvent};
 use chrono::Utc;
-use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrivedV2};
+use contract_jobs::event_v2::{ItemKindV2 as WireKind, RunItemArrivedV2};
 use uuid::Uuid;
 
 use super::live_world::{World, account};

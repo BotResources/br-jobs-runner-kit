@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrivedV2};
+use contract_jobs::event_v2::{ItemKindV2 as WireKind, RunItemArrivedV2};
 use contract_jobs::runner::{CANCEL_BUCKET, TRIGGER_STREAM};
 use contract_jobs::runner_transport::run_cancel_key;
 use uuid::Uuid;

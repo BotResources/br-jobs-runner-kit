@@ -575,6 +575,7 @@ dependencies = [
 [[package]]
 name = "contract-jobs"
 version = "0.8.0"
+source = "git+https://github.com/BotResources/svc-jobs?tag=contract-jobs%2Fv0.8.0#b3fdcaac5ee1ee4521f9b29ab2b7e3572707fa64"
 dependencies = [
  "br-core-integration",
  "chrono",
