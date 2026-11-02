@@ -2,6 +2,7 @@ mod content;
 mod documents;
 mod lifting;
 mod mail;
+mod notices;
 mod state;
 mod unknown;
 mod unread;

@@ -51,6 +51,12 @@ fn item(entry: &Value) -> Result<UnreadItem, Error> {
             subject: decode::string(entry, "subject")?,
         }),
         "NOTICE" => Ok(UnreadItem::CallNotice(notice(entry, item_id, address)?)),
+        "MAIL_NOTICE" => Ok(UnreadItem::MailNotice {
+            item_id,
+            address,
+            mail_id: decode::opt_uuid(entry, "mailId")?,
+            text: decode::string(entry, "message")?,
+        }),
         other => Ok(UnreadItem::Unknown {
             item_id,
             address,
@@ -89,6 +95,8 @@ fn kind(notice_type: &str) -> CallNoticeKind {
         "STARTED" => CallNoticeKind::RunStarted,
         "RUN_COMPLETED" => CallNoticeKind::RunCompleted,
         "JOB_FAILED" => CallNoticeKind::JobFailed,
+        "JOB_CANCELLED" => CallNoticeKind::JobCancelled,
+        "REFUSED" => CallNoticeKind::Refused,
         _ => CallNoticeKind::Unknown,
     }
 }
@@ -102,7 +110,7 @@ fn notice(entry: &Value, item_id: Uuid, address: Option<Uuid>) -> Result<CallNot
         address,
         kind,
         notice_type: (!known).then_some(notice_type),
-        child_job_id: if known {
+        child_job_id: if known && kind != CallNoticeKind::Refused {
             Some(decode::uuid(entry, "jobId")?)
         } else {
             decode::opt_uuid(entry, "jobId")?

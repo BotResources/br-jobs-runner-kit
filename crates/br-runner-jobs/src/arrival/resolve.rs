@@ -72,13 +72,14 @@ fn ended(notice: &CallNotice, child_job_id: Uuid) -> Arrival {
             },
             None => unreadable(Some(child_job_id), "a failure with no message"),
         },
-        _ => match message {
+        CallNoticeKind::JobCancelled => match message {
             Some(message) => Arrival::SyncEnd {
                 child_job_id,
                 end: SyncEnd::Cancelled { message },
             },
             None => unreadable(Some(child_job_id), "a cancel with no message"),
         },
+        _ => unreadable(Some(child_job_id), "a notice that does not end a call"),
     }
 }
 
