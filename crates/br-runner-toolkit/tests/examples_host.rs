@@ -7,11 +7,11 @@ mod test_host;
 use br_runner_jobs::test_double::ScriptedJobs;
 use br_runner_toolkit::HostEvent;
 
-use support::{push_mode, trigger};
+use support::{push_mode, runner_type, trigger};
 
 #[tokio::test(start_paused = true)]
 async fn the_test_host_example_returns_the_events_of_one_run() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let builder = br_runner_toolkit::Settings::builder()

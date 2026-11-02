@@ -20,7 +20,7 @@ fn presence_calls(jobs: &ScriptedJobs) -> Vec<&'static str> {
 #[tokio::test(start_paused = true)]
 async fn given_a_time_to_live_of_ninety_seconds_when_the_runner_runs_then_the_presence_is_published_at_once_and_then_every_thirty_seconds()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let running = run(&jobs, |b| b, 3, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -42,7 +42,7 @@ async fn given_a_time_to_live_of_ninety_seconds_when_the_runner_runs_then_the_pr
 
 #[tokio::test(start_paused = true)]
 async fn given_a_publication_that_fails_when_the_beat_comes_then_the_next_beat_publishes_again() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.fail_next_presence(Error::InfraMissing("the bucket".to_owned()));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
@@ -54,7 +54,7 @@ async fn given_a_publication_that_fails_when_the_beat_comes_then_the_next_beat_p
 #[tokio::test(start_paused = true)]
 async fn given_a_draining_runner_when_the_drain_ends_then_the_presence_is_deleted_once_after_the_last_publication()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(40)).await;

@@ -11,7 +11,7 @@ use serde_json::json;
 use support::*;
 
 async fn failed_run(graph: Arc<br_graph_contract::Graph<Flow>>) -> br_runner_jobs::Failed {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, args(graph, false));
@@ -45,7 +45,7 @@ async fn given_a_node_that_refuses_its_input_when_the_run_ends_then_the_reason_c
 
 #[tokio::test(start_paused = true)]
 async fn given_a_failure_mapping_when_a_run_fails_then_the_mapping_overrides_only_what_it_gives() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let mapping = failure_mapping(|failure| {
@@ -76,7 +76,7 @@ async fn given_a_failure_mapping_when_a_run_fails_then_the_mapping_overrides_onl
 #[tokio::test(start_paused = true)]
 async fn given_a_failure_mapping_that_panics_when_a_run_fails_then_the_failed_fact_has_the_reason_code_panic()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let mapping = failure_mapping(|_| panic!("the mapping panics"));
@@ -105,7 +105,7 @@ fn refusing_args(refusal: RunRefusal) -> StartArgs<Flow> {
 #[tokio::test(start_paused = true)]
 async fn given_a_refusal_of_the_run_start_function_when_it_carries_fields_then_they_reach_jobs_and_the_mapping_is_not_called()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let refusal = RunRefusal::new("quota_over")
@@ -133,7 +133,7 @@ async fn given_a_refusal_of_the_run_start_function_when_it_carries_fields_then_t
 #[tokio::test(start_paused = true)]
 async fn given_a_refusal_with_no_diagnostic_when_it_is_sent_then_the_diagnostic_is_empty_and_the_kind_permanent()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, refusing_args(RunRefusal::new("no")));
@@ -148,7 +148,7 @@ async fn given_a_refusal_with_no_diagnostic_when_it_is_sent_then_the_diagnostic_
 #[tokio::test(start_paused = true)]
 async fn given_a_run_start_function_that_panics_when_the_run_is_taken_then_the_run_fails_with_panic_and_the_slot_is_free()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));
@@ -171,7 +171,7 @@ async fn given_a_run_start_function_that_panics_when_the_run_is_taken_then_the_r
 #[tokio::test(start_paused = true)]
 async fn given_fields_over_the_state_limit_when_the_run_starts_then_the_run_fails_with_start_refused()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let big = StartArgs::new(
@@ -199,7 +199,7 @@ async fn given_fields_over_the_state_limit_when_the_run_starts_then_the_run_fail
 #[tokio::test(start_paused = true)]
 async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_the_run_fails_with_start_refused()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let unknown = StartArgs::new(
@@ -221,7 +221,7 @@ async fn given_a_start_with_unknown_first_nodes_when_the_executor_refuses_then_t
 #[tokio::test(start_paused = true)]
 async fn given_a_run_start_function_that_panics_when_a_trigger_arrives_then_the_run_fails_with_panic_and_the_next_run_is_served()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));

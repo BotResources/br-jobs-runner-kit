@@ -31,7 +31,7 @@ fn replies() -> serde_json::Value {
 #[tokio::test(start_paused = true)]
 async fn given_a_run_start_function_when_it_reads_the_payload_then_the_content_comes_from_the_payload_call_of_jobs_for_this_run()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(replies());
     jobs.push_trigger(trigger(1));
@@ -80,7 +80,7 @@ async fn given_a_run_start_function_when_it_reads_the_payload_then_the_content_c
 async fn given_a_run_with_a_passport_when_it_runs_with_an_answer_a_saved_state_and_a_log_line_then_no_passport_text_is_in_the_calls_to_jobs_or_in_the_library_log()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(replies());
     jobs.push_trigger(sync_trigger(1));
@@ -143,7 +143,7 @@ fn context_kept(kept: Arc<Mutex<Option<br_runner_toolkit::RunContext>>>) -> Star
 #[tokio::test(start_paused = true)]
 async fn given_a_run_with_distinct_ids_when_the_run_start_function_reads_the_context_then_each_id_is_the_one_of_the_work()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -162,7 +162,7 @@ async fn given_a_run_with_distinct_ids_when_the_run_start_function_reads_the_con
 #[tokio::test(start_paused = true)]
 async fn given_a_run_start_function_that_declares_a_plan_and_starts_steps_when_the_run_ends_then_jobs_got_the_exact_plan_and_step_facts()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -228,7 +228,7 @@ async fn given_a_run_start_function_that_declares_a_plan_and_starts_steps_when_t
 #[tokio::test(start_paused = true)]
 async fn given_a_context_kept_after_the_run_ended_when_it_is_used_then_the_book_the_caller_the_plan_and_the_step_are_refused_as_ended()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));

@@ -10,7 +10,7 @@ use support::*;
 
 #[tokio::test]
 async fn given_process_signals_when_the_process_gets_sigterm_then_the_runner_drains_and_returns() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let runner = RunnerBuilder::new(jobs.client(), settings(1));
     let done = tokio::spawn(

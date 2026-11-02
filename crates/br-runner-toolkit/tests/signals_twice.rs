@@ -44,7 +44,7 @@ async fn real_until(mut condition: impl FnMut() -> bool) {
 #[tokio::test]
 async fn given_a_drain_that_a_signal_began_when_a_second_signal_comes_then_the_drain_goes_on_until_its_time_ends()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let runner = RunnerBuilder::new(jobs.client(), settings_with_a_drain_of_two_seconds());

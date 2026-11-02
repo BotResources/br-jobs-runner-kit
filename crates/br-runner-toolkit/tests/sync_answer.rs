@@ -25,7 +25,7 @@ fn graphql_calls(jobs: &ScriptedJobs, root: &str) -> Vec<Value> {
 #[tokio::test(start_paused = true)]
 async fn given_a_sync_call_when_the_graph_ends_then_the_answer_is_the_fields_as_text_and_the_run_completes()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(sync_trigger(1));
@@ -43,7 +43,7 @@ async fn given_a_sync_call_when_the_graph_ends_then_the_answer_is_the_fields_as_
 
 #[tokio::test(start_paused = true)]
 async fn given_an_answer_function_when_a_sync_call_ends_then_its_content_is_the_answer() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(sync_trigger(1));
@@ -67,7 +67,7 @@ async fn given_an_answer_function_when_a_sync_call_ends_then_its_content_is_the_
 #[tokio::test(start_paused = true)]
 async fn given_an_answer_function_that_refuses_when_a_sync_call_ends_then_the_run_fails_with_answer_not_made()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(sync_trigger(1));
@@ -89,7 +89,7 @@ async fn given_an_answer_function_that_refuses_when_a_sync_call_ends_then_the_ru
 #[tokio::test(start_paused = true)]
 async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run_fails_with_panic()
 {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(sync_trigger(1));
@@ -106,7 +106,7 @@ async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run
 
 #[tokio::test(start_paused = true)]
 async fn given_a_call_that_is_not_sync_when_the_graph_ends_then_no_answer_is_uploaded() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -119,7 +119,7 @@ async fn given_a_call_that_is_not_sync_when_the_graph_ends_then_no_answer_is_upl
 #[tokio::test(start_paused = true)]
 async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed_fact_is_removed_and_the_run_fails_with_answer_refused()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({
         "jobsUploadResult": { "success": false, "reason": "too_big", "message": "the answer is too big" }
@@ -141,7 +141,7 @@ async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed
 #[tokio::test(start_paused = true)]
 async fn given_an_answer_function_that_panics_when_a_sync_call_ends_then_the_run_fails_with_panic_and_the_next_run_is_served()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(sync_trigger(1));

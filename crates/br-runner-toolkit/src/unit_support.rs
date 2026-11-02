@@ -4,7 +4,7 @@ use std::time::Duration;
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_graph_contract::{CancelToken, InstanceId};
 use br_runner_jobs::test_double::{ScriptedJobs, trigger_json, work_from_trigger};
-use br_runner_jobs::{AgentBook, DeliveryQueue, IgnoreReports, QueueSettings, Work};
+use br_runner_jobs::{AgentBook, DeliveryQueue, IgnoreReports, QueueSettings, RunnerType, Work};
 use uuid::Uuid;
 
 #[path = "../tests/support/logs.rs"]
@@ -19,6 +19,10 @@ use crate::shared::Shared;
 
 pub(crate) fn id(n: u128) -> Uuid {
     Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0000 + n)
+}
+
+pub(crate) fn runner_type(text: &str) -> RunnerType {
+    RunnerType::new(text).expect("a runner type")
 }
 
 pub(crate) fn instance(n: u128) -> InstanceId {
@@ -220,13 +224,6 @@ pub(crate) fn idle_plan() -> Arc<crate::plan::Plan<Steps>> {
 pub(crate) fn started_facts(jobs: &Arc<ScriptedJobs>) -> usize {
     jobs.calls()
         .into_iter()
-        .filter(|call| {
-            matches!(
-                call,
-                br_runner_jobs::test_double::Call::Fact(
-                    br_runner_jobs::test_double::Fact::Started { .. }
-                )
-            )
-        })
+        .filter(|call| matches!(call, br_runner_jobs::test_double::Call::Started { .. }))
         .count()
 }

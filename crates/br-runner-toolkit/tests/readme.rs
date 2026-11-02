@@ -55,9 +55,9 @@ fn every_git_pin_of_the_install_block_is_the_pin_the_workspace_builds_with() {
         .iter()
         .filter(|(name, value)| name != "br-runner-toolkit" && value.contains("git = "))
     {
-        let line = WORKSPACE
+        let line = MANIFEST
             .lines()
-            .chain(MANIFEST.lines())
+            .chain(WORKSPACE.lines())
             .find(|line| line.starts_with(&format!("{name} = ")) && line.contains("git = "))
             .unwrap_or_else(|| panic!("{name} has no git pin in the manifests"));
         assert_eq!(line, format!("{name} = {value}"), "{name}");

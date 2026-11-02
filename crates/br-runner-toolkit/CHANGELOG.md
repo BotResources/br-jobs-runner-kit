@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+Moves the crate to `br-runner-jobs` 0.2.0.
+
+### Changed
+
+- A claim refusal is matched by its typed reason.
+- A Run whose started fact jobs refuses is not executed: the trigger of a `PUSH` Run is acknowledged and dropped, and a `CLAIM` slot claims again with a new claim id.
+- The arrival feed needs the `br-runner-jobs` 0.2.0 doorbell (version 2 of the item-arrived events).
+
+### Breaking
+
+- `RunnerBuilder::new` and `TestHost::new` take the `JobsClient` of `br-runner-jobs` 0.2.0.
+
 ## 0.1.0
 
 First release. The main loop of a runner with the jobs service: registration through the presence, parallel run slots, the Run steps, the facts of each Run and the drain.
