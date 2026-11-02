@@ -78,6 +78,17 @@ fn given_a_runner_type_the_wire_does_not_accept_when_built_then_invalid_input_an
     }
 }
 
+#[test]
+fn given_a_blank_runner_type_when_built_then_the_error_text_is_the_one_of_the_wire_segment() {
+    let (caller, _script) = memory_caller();
+    let expected = Error::InvalidInput(match br_runner_jobs::RunnerType::new("") {
+        Err(Error::InvalidInput(text)) => text,
+        other => panic!("{other:?}"),
+    });
+    let result = builder("", ToolMode::Sync, caller).build();
+    assert!(matches!(result, Err(RunnerToolError::RunnerType(error)) if error == expected));
+}
+
 #[tokio::test]
 async fn given_two_tools_with_two_handles_when_called_then_each_creates_through_its_own_handle_only()
  {

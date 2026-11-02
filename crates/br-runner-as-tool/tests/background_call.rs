@@ -75,7 +75,7 @@ async fn given_a_create_and_an_upload_that_never_end_when_called_in_background_t
 #[tokio::test]
 async fn given_a_refused_create_when_called_in_background_then_the_library_does_not_hear_it() {
     let (caller, script) = memory_caller();
-    script.create(Answer::Now(Err(Removal::Refused(refused("busy").await))));
+    script.create(Answer::Now(Err(Removal::Refused(refused("busy")))));
     let tool = background_tool(caller, id(77));
     let outcome = spawn_call(&tool, json!({}))
         .finished()

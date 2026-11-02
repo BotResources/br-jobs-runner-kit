@@ -328,14 +328,13 @@ dependencies = [
 
 [[package]]
 name = "br-runner-as-tool"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "br-agentic-contract",
  "br-graph-contract",
  "br-llm-clients-core",
  "br-llm-messages",
- "br-runner-jobs 0.1.0",
- "contract-jobs 0.7.0",
+ "br-runner-jobs 0.2.0",
  "futures",
  "serde_json",
  "thiserror",

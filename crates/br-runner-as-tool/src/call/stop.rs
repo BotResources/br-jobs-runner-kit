@@ -42,7 +42,7 @@ pub(super) fn refusal_text(error: &Error) -> String {
 
 fn refusal_words(refusal: &Refusal) -> String {
     if refusal.message.trim().is_empty() {
-        refusal.reason.clone()
+        refusal.reason.to_string()
     } else {
         refusal.message.clone()
     }

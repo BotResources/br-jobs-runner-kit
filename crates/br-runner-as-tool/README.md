@@ -7,8 +7,8 @@ The calling runner is the runner whose agentic node calls the tool. The called r
 ## Install
 
 ```toml
-br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.1.0", version = "0.1.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.1.0", version = "0.1.0" }
+br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.1.1", version = "0.1.1" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
@@ -71,7 +71,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 **Building**
 
-- The build checks the runner type with the rule that `br-runner-jobs` applies to the runner type of its own client (not empty, at most 64 characters, ASCII letters, digits, `_` and `-`, starting with a letter or a digit); a runner type that fails is `RunnerToolError::RunnerType` with `Error::InvalidInput`, which has the same text that `br-runner-jobs` gives for the runner type of its own client. The `ToolSpec` is made from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
+- The build makes the `RunnerType` of `br-runner-jobs` from the runner type text (not empty, at most 64 characters, ASCII letters, digits, `_` and `-`, starting with a letter or a digit); a runner type that fails is `RunnerToolError::RunnerType` with the `Error::InvalidInput` that `RunnerType::new` gives. The `ToolSpec` is made from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
 - A `Tool` is tied to the caller handle and to the tool mode it was built with, so to one run. Build it for each instance and do not keep it from one run to another. It keeps nothing from one call to the next and changes no state of the run. Several calls of one `Tool` run at the same time; each one has its own child Job.
 - The crate sets no priority (a child Job takes the priority of its parent), no timeout, no depth limit and no retry. It hands each write over once. The delivery queue behind the caller handle sends a write again until jobs answers; that is not a retry of this crate.
 
@@ -154,8 +154,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 - The crate does not know whether jobs accepted an upload or a create in background mode.
 - The Result of the called runner is the `Content` that `br-runner-jobs` gives (a message and attachments). A message that holds JSON is given as that text.
-- The runner type is checked with the segment rule of the jobs wire at build time; `br-runner-jobs` has no runner type value of its own.
-- A sync call whose child Job is cancelled by someone else gets no end from the jobs service. The call then ends at the cancel view, or as a fault when the book of the run is dropped.
+- A sync call whose child Job is cancelled by someone else ends as a cancelled end (an error flag). When the same cancel removes the caller, jobs gives no end: the call then ends at the cancel view, or as a fault when the book of the run is dropped.
 - A completed end that holds neither an inline Result nor a reference is given by the live `br-runner-jobs` as `Unreadable`, not as an end of the sync call. The call then gives a fault and one cancel.
 - An end of the sync call of a kind this crate does not know is a fault (`UnknownEnd`).
 - A create removed from the queue without a refusal (`DependsOnRemoved`, `LeftUnsent`) is a fault whose cause is `CreateRemoved`.

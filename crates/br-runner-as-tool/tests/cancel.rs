@@ -100,7 +100,7 @@ async fn given_a_cancel_that_cannot_be_handed_over_when_the_view_triggers_then_t
 #[tokio::test]
 async fn given_a_create_that_ended_refused_when_the_view_triggers_then_no_cancel_goes() {
     let (caller, script) = memory_caller();
-    let refusal = refused_saying("job_terminal", "over").await;
+    let refusal = refused_saying("job_terminal", "over");
     script.create(Answer::Late(Err(br_runner_jobs::Removal::Refused(refusal))));
     let tool = sync_tool(caller);
     let call = spawn_call(&tool, json!({}));

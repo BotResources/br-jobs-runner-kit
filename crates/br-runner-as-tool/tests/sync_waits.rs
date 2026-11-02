@@ -82,9 +82,10 @@ async fn given_a_slow_child_job_when_nothing_arrives_then_the_call_stays_pending
 async fn given_a_result_read_that_is_refused_when_settled_then_an_error_flag_names_the_step_and_the_child_is_still_finished()
  {
     let (caller, script) = memory_caller();
-    script.read_result(Answer::Fail(
-        refused_saying("result_gone", "the Result was removed").await,
-    ));
+    script.read_result(Answer::Fail(refused_saying(
+        "result_gone",
+        "the Result was removed",
+    )));
     let tool = sync_tool(caller);
     let call = spawn_call(&tool, json!({}));
     let create = create_of(&script).await;
@@ -225,7 +226,7 @@ async fn given_options_of_the_author_when_the_create_is_made_then_it_carries_the
 async fn given_a_wait_that_fails_when_the_create_ended_refused_in_the_same_moment_then_a_fault_and_no_cancel()
  {
     let (caller, script) = memory_caller();
-    let refusal = refused_saying("job_terminal", "over").await;
+    let refusal = refused_saying("job_terminal", "over");
     script.create(Answer::Late(Err(Removal::Refused(refusal))));
     let tool = sync_tool(caller);
     let call = spawn_call(&tool, json!({}));

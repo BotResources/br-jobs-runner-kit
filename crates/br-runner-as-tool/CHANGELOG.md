@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1
+
+Uses `br-runner-jobs` 0.2.0.
+
+### Changed
+
+- The build makes the runner type value of `br-runner-jobs` (`RunnerType`) and gives its error unchanged as `RunnerToolError::RunnerType`.
+- A sync call whose child Job is cancelled by someone else ends with an error flag that names the runner type and the outcome `cancelled`: `br-runner-jobs` 0.2.0 gives that end. When the same cancel removes the caller, jobs gives no end.
+
+### Breaking
+
+- `RunnerTool::new` takes the `CallerHandle` of `br-runner-jobs` 0.2.0, the result processor takes its `Content`, and `RunnerToolError::RunnerType` holds its `Error`; the crate no longer resolves `br-runner-jobs` 0.1.0 or `contract-jobs` 0.7.0.
+
 ## 0.1.0
 
 First release. A runner type as a tool for the agentic contract.

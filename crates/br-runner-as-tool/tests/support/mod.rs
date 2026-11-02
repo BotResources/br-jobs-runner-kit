@@ -10,7 +10,7 @@ use br_graph_contract::{CancelHandle, CancelToken};
 use br_llm_clients_core::Parameters;
 use br_llm_messages::{OpaqueJson, ToolName};
 use br_runner_as_tool::{RunnerTool, ToolMode};
-use br_runner_jobs::test_double::{MemoryCall, MemoryScript, ScriptedJobs};
+use br_runner_jobs::test_double::{MemoryCall, MemoryScript};
 use br_runner_jobs::{CallerHandle, Content, CreateChildInput, Error, Operation, SyncEnd};
 use serde_json::Value;
 use tokio::task::JoinHandle;
@@ -189,26 +189,10 @@ pub fn texts(content: &ToolContent) -> Vec<String> {
         .collect()
 }
 
-pub async fn refused(reason: &str) -> Error {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
-    let client = jobs.client();
-    jobs.push_claim_reply(Ok(format!(
-        r#"{{"version":2,"reason":"{reason}","retry_after_ms":250}}"#
-    )
-    .into_bytes()));
-    match client.claim(id(900), Duration::from_secs(1)).await {
-        Err(error @ Error::Refused(_)) => error,
-        other => panic!("{:?}", other.map(|_| ())),
-    }
+pub fn refused(reason: &str) -> Error {
+    Error::refused(Operation::Create, reason, "")
 }
 
-pub async fn refused_saying(reason: &str, message: &str) -> Error {
-    match refused(reason).await {
-        Error::Refused(mut refusal) => {
-            refusal.operation = Operation::Create;
-            refusal.message = message.to_owned();
-            Error::Refused(refusal)
-        }
-        other => other,
-    }
+pub fn refused_saying(reason: &str, message: &str) -> Error {
+    Error::refused(Operation::Create, reason, message)
 }

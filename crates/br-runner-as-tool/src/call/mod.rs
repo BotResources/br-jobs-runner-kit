@@ -10,7 +10,7 @@ mod sync_call;
 
 use br_agentic_contract::{CancelView, PortFuture, ResultStream, ToolCode, ToolContent, ToolFault};
 use br_llm_messages::OpaqueJson;
-use br_runner_jobs::CallerHandle;
+use br_runner_jobs::{CallerHandle, RunnerType};
 use serde_json::Value;
 
 use crate::author::{PayloadBuilder, ResultProcessor};
@@ -18,7 +18,7 @@ use crate::mode::{PayloadKind, ToolMode};
 use stop::Stop;
 
 pub(crate) struct RunnerToolCode {
-    pub(crate) runner_type: String,
+    pub(crate) runner_type: RunnerType,
     pub(crate) mode: ToolMode,
     pub(crate) caller: CallerHandle,
     pub(crate) config: Option<Value>,
@@ -39,7 +39,7 @@ impl ToolCode for RunnerToolCode {
         Box::pin(async move {
             match self.run(arguments, &cancel).await {
                 Ok(content) => Ok(content),
-                Err(stop) => stop.into_result(&self.runner_type),
+                Err(stop) => stop.into_result(self.runner_type.as_str()),
             }
         })
     }
