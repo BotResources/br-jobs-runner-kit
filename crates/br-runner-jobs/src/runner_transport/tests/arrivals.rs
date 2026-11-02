@@ -140,6 +140,36 @@ async fn given_an_event_that_cannot_be_read_then_unreadable_comes_and_the_feed_g
 
 #[tokio::test]
 #[ignore = "needs nats-server -js on the path"]
+async fn given_a_doorbell_of_my_run_with_an_item_kind_that_is_not_known_then_unreadable_comes_and_the_feed_goes_on()
+ {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let run_id = Uuid::now_v7();
+    let mut feed = live
+        .arrival_feed(run_id)
+        .await
+        .map_err(|e| e.to_string())
+        .expect("feed");
+    publish_event(
+        &world.js,
+        &contract_jobs::evt_run_item_arrived_v2_coords().expect("coords"),
+        Uuid::now_v7(),
+        json!({
+            "run_id": run_id,
+            "address": null,
+            "item_id": Uuid::now_v7(),
+            "item_kind": "a_kind_of_the_future",
+        }),
+    )
+    .await;
+    let item_id = Uuid::now_v7();
+    arrive(&world, run_id, item_id, WireKind::Mail, None).await;
+    assert!(matches!(next(&mut feed).await, Err(Error::Unreadable(_))));
+    assert_eq!(next(&mut feed).await.map(|item| item.item_id), Ok(item_id));
+}
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
 async fn given_a_dropped_next_when_an_item_arrives_then_the_next_call_gets_it() {
     let world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;

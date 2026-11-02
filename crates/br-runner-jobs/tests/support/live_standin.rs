@@ -92,16 +92,28 @@ pub async fn publish_trigger(js: &Context, runner_type: &str, trigger: &TriggerV
     .expect("stored");
 }
 
+pub async fn try_publish_event<T: Serialize>(
+    js: &Context,
+    coords: &EventCoords,
+    correlation_id: Uuid,
+    payload: T,
+) -> Result<(), String> {
+    let metadata = EventMetadata::new(Actor::Service(account()), correlation_id);
+    let event = IntegrationEvent::new(Uuid::now_v7(), "stand-in", 1, Utc::now(), metadata, payload);
+    Fabric::new(js.clone())
+        .publish_event(coords, &event)
+        .await
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
 pub async fn publish_event<T: Serialize>(
     js: &Context,
     coords: &EventCoords,
     correlation_id: Uuid,
     payload: T,
 ) {
-    let metadata = EventMetadata::new(Actor::Service(account()), correlation_id);
-    let event = IntegrationEvent::new(Uuid::now_v7(), "stand-in", 1, Utc::now(), metadata, payload);
-    Fabric::new(js.clone())
-        .publish_event(coords, &event)
+    try_publish_event(js, coords, correlation_id, payload)
         .await
         .expect("the event is published");
 }

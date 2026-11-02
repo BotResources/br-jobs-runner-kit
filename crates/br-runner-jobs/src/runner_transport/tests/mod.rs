@@ -1,4 +1,5 @@
 mod arrivals;
+mod arrivals_branches;
 mod arrivals_consumers;
 mod bind;
 mod cancel;
@@ -7,6 +8,7 @@ mod commands;
 mod commands_outcomes;
 mod commands_session;
 mod cut;
+mod cut_proxy;
 mod facts;
 mod listing;
 mod mode;

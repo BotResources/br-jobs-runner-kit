@@ -49,7 +49,40 @@ async fn given_feeds_opened_and_read_then_every_consumer_of_the_event_stream_is_
             consumer.config.deliver_policy,
             async_nats::jetstream::consumer::DeliverPolicy::New
         );
+        assert_eq!(
+            consumer.config.ack_policy,
+            async_nats::jetstream::consumer::AckPolicy::Explicit
+        );
+        assert_eq!(consumer.config.ack_wait, std::time::Duration::from_secs(10));
     }
+}
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_a_feed_that_read_events_then_the_server_counts_each_one_as_acknowledged() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let run_id = Uuid::now_v7();
+    let mut feed = live
+        .arrival_feed(run_id)
+        .await
+        .map_err(|e| e.to_string())
+        .expect("feed");
+    silent(&mut feed).await;
+    for _ in 0..3 {
+        let item_id = Uuid::now_v7();
+        arrive(&world, run_id, item_id, WireKind::Mail, None).await;
+        assert_eq!(next(&mut feed).await.map(|i| i.item_id), Ok(item_id));
+    }
+    super::live_world::eventually("the three events are acknowledged", || async {
+        consumers_of(&world, INTEGRATION_EVT)
+            .await
+            .iter()
+            .all(|consumer| {
+                consumer.ack_floor.stream_sequence == 3 && consumer.num_ack_pending == 0
+            })
+    })
+    .await;
 }
 
 #[tokio::test]

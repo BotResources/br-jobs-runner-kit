@@ -14,6 +14,7 @@ use crate::error::Error;
 use crate::model::{ItemArrived, ItemKind};
 
 const INACTIVE_THRESHOLD: Duration = Duration::from_secs(120);
+const ACK_WAIT: Duration = Duration::from_secs(10);
 
 fn kind_of(kind: WireKind) -> ItemKind {
     match kind {
@@ -24,15 +25,59 @@ fn kind_of(kind: WireKind) -> ItemKind {
     }
 }
 
-struct Doorbell {
+pub(super) struct Delivered {
+    pub(super) payload: Vec<u8>,
+    pub(super) subject: String,
+}
+
+pub(super) type Pulled = Option<Result<Delivered, MessagesError>>;
+
+pub(super) trait Pull: Send + Sync {
+    fn pull(&mut self) -> BoxFuture<'_, Pulled>;
+}
+
+impl Pull for Stream {
+    fn pull(&mut self) -> BoxFuture<'_, Pulled> {
+        Box::pin(async move {
+            let next = self.next().await?;
+            Some(match next {
+                Ok(message) => {
+                    message.ack().await.ok();
+                    Ok(Delivered {
+                        payload: message.payload.to_vec(),
+                        subject: message.subject.to_string(),
+                    })
+                }
+                Err(error) => Err(error),
+            })
+        })
+    }
+}
+
+pub(super) struct Doorbell {
     run_id: Uuid,
-    messages: Stream,
+    messages: Box<dyn Pull>,
     jetstream: Context,
     consumer: String,
     ended: Option<Error>,
 }
 
 impl Doorbell {
+    pub(super) fn new(
+        run_id: Uuid,
+        messages: Box<dyn Pull>,
+        jetstream: Context,
+        consumer: String,
+    ) -> Self {
+        Self {
+            run_id,
+            messages,
+            jetstream,
+            consumer,
+            ended: None,
+        }
+    }
+
     async fn check(&self) -> Result<(), Error> {
         let object = format!("the stream {INTEGRATION_EVT}");
         let stream = self
@@ -75,13 +120,11 @@ impl Doorbell {
             if let Some(error) = &self.ended {
                 return Err(error.clone());
             }
-            let failure = match self.messages.next().await {
-                Some(Ok(message)) => {
-                    match self.arrived(&message.payload, message.subject.as_str()) {
-                        Some(found) => return found,
-                        None => continue,
-                    }
-                }
+            let failure = match self.messages.pull().await {
+                Some(Ok(message)) => match self.arrived(&message.payload, &message.subject) {
+                    Some(found) => return found,
+                    None => continue,
+                },
                 Some(Err(error)) if error.kind() == MessagesErrorKind::MissingHeartbeat => {
                     match self.check().await {
                         Ok(()) => continue,
@@ -123,7 +166,8 @@ impl Live {
             .create_consumer(Config {
                 filter_subject: event_subject(&coords),
                 deliver_policy: DeliverPolicy::New,
-                ack_policy: AckPolicy::None,
+                ack_policy: AckPolicy::Explicit,
+                ack_wait: ACK_WAIT,
                 inactive_threshold: INACTIVE_THRESHOLD,
                 ..Config::default()
             })
@@ -134,12 +178,11 @@ impl Live {
             .messages()
             .await
             .map_err(|e| fail::unsent("the arrival consumer", &e))?;
-        Ok(Box::new(Doorbell {
+        Ok(Box::new(Doorbell::new(
             run_id,
-            messages,
-            jetstream: self.wire.jetstream.clone(),
-            consumer: name,
-            ended: None,
-        }))
+            Box::new(messages),
+            self.wire.jetstream.clone(),
+            name,
+        )))
     }
 }
