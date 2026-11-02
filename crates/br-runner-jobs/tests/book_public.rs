@@ -40,7 +40,10 @@ fn work(jobs: &Arc<ScriptedJobs>) -> br_runner_jobs::Work {
 #[tokio::test]
 async fn given_a_work_from_a_trigger_when_the_book_the_handle_and_a_create_are_used_through_the_public_api_then_jobs_receives_the_create_of_the_work()
  {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     let work = work(&jobs);
     let (queue, started) = work.delivery_queue(settings()).await.expect("a queue");
     started.await.expect("started");
@@ -57,7 +60,7 @@ async fn given_a_work_from_a_trigger_when_the_book_the_handle_and_a_create_are_u
     let input = CreateChildInput::new(
         id(300),
         id(301),
-        "analyst",
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
         CallMode::Sync,
         PayloadForm::Kept,
     );
@@ -82,7 +85,10 @@ async fn given_a_work_from_a_trigger_when_the_book_the_handle_and_a_create_are_u
 
 #[tokio::test]
 async fn given_a_book_made_when_a_second_is_made_from_the_same_work_then_it_is_invalid_input() {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     let work = work(&jobs);
     let (queue, _) = work.delivery_queue(settings()).await.expect("a queue");
     work.agent_book(&queue, Vec::new(), false).expect("a book");

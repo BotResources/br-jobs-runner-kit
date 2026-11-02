@@ -4,8 +4,8 @@ use contract_jobs::reason::Reason;
 use contract_jobs::runner::{ClaimV2, WIRE_VERSION_V2};
 use contract_jobs::runner_surface::{
     AgentDeclaration as WireAgent, AgentState, ListAgents, ListAgentsReply, MarkRead,
-    RegisterAgents, SURFACE_WIRE_VERSION, SurfaceReason, SurfaceReply, list_agents_subject,
-    mark_read_subject, register_agents_subject,
+    RegisterAgents, SURFACE_WIRE_VERSION, StartedRequest, SurfaceReason, SurfaceReply,
+    list_agents_subject, mark_read_subject, register_agents_subject, started_subject,
 };
 use contract_jobs::runner_transport::claim_v2_subject;
 use serde::Serialize;
@@ -15,6 +15,8 @@ use super::Live;
 use crate::error::{Error, Operation};
 use crate::from_connection;
 use crate::model::{AgentDeclaration, ListedAgent};
+use crate::reason::RefusalReason;
+use crate::runner_type::RunnerType;
 
 fn millis(wait: Duration) -> u64 {
     u64::try_from(wait.as_millis()).unwrap_or(u64::MAX)
@@ -24,14 +26,14 @@ fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(value).map_err(|e| Error::invalid(e.to_string()))
 }
 
-fn word(reason: Option<Reason<SurfaceReason>>) -> String {
+fn word(reason: Option<Reason<SurfaceReason>>) -> RefusalReason {
     match reason {
-        Some(Reason::Unknown(text)) => text,
+        Some(Reason::Unknown(text)) => RefusalReason::from_word(&text),
         Some(Reason::Known(known)) => serde_json::to_value(known)
             .ok()
-            .and_then(|value| value.as_str().map(str::to_owned))
-            .unwrap_or_default(),
-        None => "unspecified".to_owned(),
+            .and_then(|value| value.as_str().map(RefusalReason::from_word))
+            .unwrap_or_else(|| RefusalReason::from_word("unspecified")),
+        None => RefusalReason::from_word("unspecified"),
     }
 }
 
@@ -68,6 +70,25 @@ impl Live {
             Operation::Claim,
         )
         .await
+    }
+
+    pub(super) async fn started_request(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        wait: Duration,
+    ) -> Result<(), Error> {
+        let body = encode(&StartedRequest {
+            version: SURFACE_WIRE_VERSION,
+            run_id,
+            instance_key: self.instance_key.clone(),
+            start_id,
+        })?;
+        let subject = started_subject(&self.segments.runner_type);
+        let reply = self
+            .request(subject, body, wait, Operation::StartedFact)
+            .await?;
+        accepted(&reply, Operation::StartedFact)
     }
 
     pub(super) async fn register(
@@ -141,18 +162,24 @@ impl Live {
         let agents = reply
             .agents
             .ok_or_else(|| Error::Unreadable("the agent list reply holds no agents".to_owned()))?;
-        Ok(agents
+        agents
             .into_iter()
-            .map(|agent| ListedAgent {
-                agent_id: agent.agent_id,
-                run_id: agent.run_id,
-                runner_type: agent.runner_type,
-                running: agent.state == AgentState::Running,
-                has_inbox: agent.has_inbox,
-                mail_address: agent.mail_address,
-                restartable_now: agent.restartable_now,
+            .map(|agent| {
+                Ok(ListedAgent {
+                    agent_id: agent.agent_id,
+                    run_id: agent.run_id,
+                    runner_type: RunnerType::new(&agent.runner_type).map_err(|_| {
+                        Error::Unreadable(
+                            "the agent list holds a runner type the wire refuses".to_owned(),
+                        )
+                    })?,
+                    running: agent.state == AgentState::Running,
+                    has_inbox: agent.has_inbox,
+                    mail_address: agent.mail_address,
+                    restartable_now: agent.restartable_now,
+                })
             })
-            .collect())
+            .collect()
     }
 }
 

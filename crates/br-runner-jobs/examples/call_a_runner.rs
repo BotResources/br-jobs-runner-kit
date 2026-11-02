@@ -1,5 +1,5 @@
 use br_runner_jobs::{
-    CallMode, CallerHandle, Content, CreateChildInput, PayloadForm, Removal, SyncEnd,
+    CallMode, CallerHandle, Content, CreateChildInput, PayloadForm, Removal, RunnerType, SyncEnd,
 };
 use uuid::Uuid;
 
@@ -10,7 +10,7 @@ fn removal_text(removal: Removal) -> String {
 pub async fn call_a_runner(
     caller: &CallerHandle,
     child: Uuid,
-    runner_type: &str,
+    runner_type: RunnerType,
     request: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let payload = Content {

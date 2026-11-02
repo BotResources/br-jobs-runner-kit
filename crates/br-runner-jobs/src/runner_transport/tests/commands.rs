@@ -20,7 +20,7 @@ pub(super) fn create_command(job_id: Uuid, run_id: Uuid) -> CreateChild {
     CreateChild {
         command_id: Uuid::now_v7(),
         job_id,
-        runner_type: "writer".to_owned(),
+        runner_type: crate::RunnerType::new("writer").expect("a runner type"),
         mode: CallMode::Background {
             caller_address: Uuid::now_v7(),
         },

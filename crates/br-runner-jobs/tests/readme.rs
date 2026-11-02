@@ -49,13 +49,18 @@ fn line_of(manifest: &'static str, name: &str) -> Option<&'static str> {
 
 fn built_with(name: &str) -> &'static str {
     line_of(MANIFEST, name)
-        .filter(|line| line.contains("git = "))
+        .filter(|line| line.contains("git = ") || line.contains("path = "))
         .or_else(|| line_of(WORKSPACE, name))
         .unwrap_or_else(|| panic!("{name} is in neither the crate manifest nor the workspace"))
 }
 
-fn first_quoted(text: &str) -> &str {
-    text.split('"').nth(1).expect("a quoted version")
+fn version_of(line: &str) -> &str {
+    let text = line.split_once(" = ").expect("a pin").1;
+    text.split("version = \"")
+        .nth(1)
+        .or_else(|| text.split('"').nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .expect("a version")
 }
 
 #[test]
@@ -64,12 +69,13 @@ fn every_pin_of_the_install_block_is_the_pin_the_crate_is_built_with() {
     assert!(pins.len() >= 8, "{pins:?}");
     for (name, value) in pins.iter().filter(|(name, _)| name != "br-runner-jobs") {
         let line = built_with(name);
-        if value.contains("git = ") {
+        if value.contains("git = ") && !line.contains("path = ") {
             assert_eq!(line, format!("{name} = {value}"), "{name}");
         } else {
-            let version = first_quoted(line.split_once(" = ").expect("a pin").1);
+            let version = version_of(line);
             assert!(
-                value.contains(&format!("\"{version}\"")),
+                value.contains(&format!("version = \"{version}\""))
+                    || value.contains(&format!("\"{version}\"")),
                 "{name}: {value} does not hold version {version}"
             );
         }

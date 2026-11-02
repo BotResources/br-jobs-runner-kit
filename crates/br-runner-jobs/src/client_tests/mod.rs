@@ -29,7 +29,10 @@ pub(super) fn trigger() -> Value {
 }
 
 pub(super) fn scripted() -> (Arc<ScriptedJobs>, JobsClient) {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        crate::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let client = jobs.client();
     (jobs, client)
 }

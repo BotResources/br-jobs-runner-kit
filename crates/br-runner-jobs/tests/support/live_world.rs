@@ -110,7 +110,7 @@ impl World {
 
     pub async fn create_platform(&self) {
         self.create_bucket(KV_PUBLISHED_LANGUAGE, None).await;
-        let arrived = contract_jobs::evt_run_item_arrived_v1_coords().expect("coords");
+        let arrived = contract_jobs::evt_run_item_arrived_v2_coords().expect("coords");
         let created = contract_jobs::cmd_job_create_v3_coords().expect("coords");
         self.create_stream(INTEGRATION_EVT, wildcard(&event_subject(&arrived)), false)
             .await;

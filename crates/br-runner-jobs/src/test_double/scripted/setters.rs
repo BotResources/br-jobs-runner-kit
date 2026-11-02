@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::Call;
 use super::ScriptedJobs;
 use crate::error::Error;
-use crate::model::ListedAgent;
+use crate::model::{ItemArrived, ListedAgent};
 
 impl ScriptedJobs {
     pub fn calls(&self) -> Vec<Call> {
@@ -20,6 +20,10 @@ impl ScriptedJobs {
 
     pub fn answer_facts(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
         self.script().facts = Some(Box::new(answer));
+    }
+
+    pub fn answer_started(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
+        self.script().started = Some(Box::new(answer));
     }
 
     pub fn answer_register(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
@@ -45,5 +49,25 @@ impl ScriptedJobs {
     pub fn resume(&self) {
         *self.hold.lock().unwrap_or_else(|p| p.into_inner()) = false;
         self.released.notify_waiters();
+    }
+
+    pub fn push_arrival(&self, arrival: Result<ItemArrived, Error>) {
+        let _ = self.arrival_sender.send(arrival);
+    }
+
+    pub(super) async fn gate(&self) {
+        loop {
+            let notified = self.released.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !*self.hold.lock().unwrap_or_else(|p| p.into_inner()) {
+                return;
+            }
+            notified.await;
+        }
+    }
+
+    pub(super) fn record(&self, call: Call) {
+        self.script().calls.push(call);
     }
 }

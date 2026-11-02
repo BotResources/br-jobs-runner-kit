@@ -13,7 +13,6 @@ mod surface;
 mod tests;
 mod triggers;
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -24,13 +23,15 @@ use contract_jobs::segment::SubjectSegment;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::arrival::ArrivalSettings;
 use crate::backend::*;
 use crate::error::{Error, Operation};
 use crate::from_connection;
 use crate::model::*;
+use crate::runner_type::RunnerType;
 
 pub(crate) struct Live {
-    runner_type: String,
+    runner_type: RunnerType,
     instance_key: String,
     reply_wait: Duration,
     segments: Segments,
@@ -38,7 +39,6 @@ pub(crate) struct Live {
     wire: Wire,
     presence: Store,
     cancel: Store,
-    arrivals: Arc<arrivals::Arrivals>,
 }
 
 #[derive(Clone)]
@@ -54,7 +54,7 @@ struct Wire {
 }
 
 impl Backend for Live {
-    fn runner_type(&self) -> &str {
+    fn runner_type(&self) -> &RunnerType {
         &self.runner_type
     }
 
@@ -88,6 +88,15 @@ impl Backend for Live {
         ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
         Box::pin(self.trigger_source(ack_wait))
+    }
+
+    fn start(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.started_request(run_id, start_id, wait))
     }
 
     fn publish_fact(
@@ -131,11 +140,9 @@ impl Backend for Live {
     fn arrival_feed(
         &self,
         run_id: Uuid,
+        settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
-        Box::pin(async move {
-            let feed = self.arrivals.open(run_id).await?;
-            Ok(Box::new(feed) as Box<dyn RawFeed<ItemArrived>>)
-        })
+        Box::pin(self.open_arrival_feed(run_id, settings))
     }
 
     fn register_agents(

@@ -66,7 +66,7 @@ pub fn create(job: u128, command: u128) -> Write {
     Write::Create(CreateChild {
         command_id: id(command),
         job_id: id(job),
-        runner_type: "child".to_owned(),
+        runner_type: crate::RunnerType::new("child").expect("a runner type"),
         mode: CallMode::Sync,
         config: None,
         payload: PayloadForm::Kept,

@@ -4,7 +4,7 @@ use super::*;
 use crate::book::{AgentKey, BookedAgent};
 use crate::error::Error;
 use crate::model::AgentDeclaration;
-use crate::test_double::{Call, Fact};
+use crate::test_double::Call;
 
 fn restored(n: u128, inbox: bool) -> RestoredAgent {
     RestoredAgent {
@@ -39,7 +39,7 @@ async fn given_restored_agents_when_the_book_is_made_then_each_registration_foll
     let calls = jobs.calls();
     assert!(matches!(
         calls[0],
-        Call::Fact(Fact::Started { run_id, start_id }) if run_id == id(RUN) && start_id == id(START)
+        Call::Started { run_id, start_id } if run_id == id(RUN) && start_id == id(START)
     ));
     assert_eq!(
         registrations(&jobs),
