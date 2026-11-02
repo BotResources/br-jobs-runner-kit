@@ -85,26 +85,6 @@ impl ScriptedJobs {
     pub(super) fn script(&self) -> MutexGuard<'_, Script> {
         self.script.lock().unwrap_or_else(|p| p.into_inner())
     }
-
-    pub fn push_arrival(&self, arrival: Result<ItemArrived, Error>) {
-        let _ = self.arrival_sender.send(arrival);
-    }
-
-    async fn gate(&self) {
-        loop {
-            let notified = self.released.notified();
-            tokio::pin!(notified);
-            notified.as_mut().enable();
-            if !*self.hold.lock().unwrap_or_else(|p| p.into_inner()) {
-                return;
-            }
-            notified.await;
-        }
-    }
-
-    fn record(&self, call: Call) {
-        self.script().calls.push(call);
-    }
 }
 
 impl Backend for ScriptedJobs {
@@ -239,9 +219,10 @@ impl Backend for ScriptedJobs {
     fn arrival_feed(
         &self,
         _run_id: Uuid,
-        _settings: ArrivalSettings,
+        settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
         Box::pin(async move {
+            self.record(Call::ArrivalFeed(settings));
             let receiver = self
                 .arrivals
                 .lock()

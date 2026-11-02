@@ -1,6 +1,7 @@
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::arrival::ArrivalSettings;
 use crate::backend::{ChildCommand, Fact, LogRecord};
 use crate::model::AgentDeclaration;
 
@@ -33,4 +34,5 @@ pub enum Call {
         item_ids: Vec<Uuid>,
     },
     Command(ChildCommand),
+    ArrivalFeed(ArrivalSettings),
 }
