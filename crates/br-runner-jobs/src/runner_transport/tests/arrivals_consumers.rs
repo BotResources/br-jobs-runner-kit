@@ -4,7 +4,8 @@ use uuid::Uuid;
 
 use super::arrivals::arrive;
 use super::live_world::World;
-use super::{live, next, silent};
+use super::{arrival_settings, live, next, silent};
+use crate::arrival::ArrivalSettings;
 use crate::backend::Backend;
 use crate::error::Error;
 
@@ -27,12 +28,12 @@ async fn given_feeds_opened_and_read_then_every_consumer_of_the_event_stream_is_
     let run_id = Uuid::now_v7();
     arrive(&world, run_id, Uuid::now_v7(), WireKind::Mail, None).await;
     let mut first = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
     let mut second = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -53,7 +54,11 @@ async fn given_feeds_opened_and_read_then_every_consumer_of_the_event_stream_is_
             consumer.config.ack_policy,
             async_nats::jetstream::consumer::AckPolicy::Explicit
         );
-        assert_eq!(consumer.config.ack_wait, std::time::Duration::from_secs(10));
+        assert_eq!(consumer.config.ack_wait, arrival_settings().ack_wait);
+        assert_eq!(
+            consumer.config.inactive_threshold,
+            arrival_settings().inactivity_limit
+        );
     }
 }
 
@@ -64,7 +69,7 @@ async fn given_a_feed_that_read_events_then_the_server_counts_each_one_as_acknow
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -92,7 +97,7 @@ async fn given_a_feed_that_is_not_polled_when_items_arrive_then_all_of_them_come
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -113,7 +118,7 @@ async fn given_an_open_feed_when_its_consumer_is_deleted_then_the_feed_ends_with
     let world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;
     let mut feed = live
-        .arrival_feed(Uuid::now_v7())
+        .arrival_feed(Uuid::now_v7(), arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -149,7 +154,7 @@ async fn given_triggers_feeds_and_commands_in_use_then_the_only_durable_consumer
         .expect("source");
     let run_id = Uuid::now_v7();
     let _feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -204,4 +209,30 @@ async fn given_triggers_feeds_and_commands_in_use_then_the_only_durable_consumer
     }
     assert_eq!(durables.len(), 1, "{durables:?}");
     assert_eq!(durables[0].0, TRIGGER_STREAM);
+}
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_the_importer_values_when_a_feed_is_opened_then_the_consumer_carries_them() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    let settings = ArrivalSettings {
+        ack_wait: std::time::Duration::from_secs(7),
+        inactivity_limit: std::time::Duration::from_secs(90),
+    };
+    let _feed = live
+        .arrival_feed(Uuid::now_v7(), settings)
+        .await
+        .map_err(|e| e.to_string())
+        .expect("feed");
+    let consumers = consumers_of(&world, INTEGRATION_EVT).await;
+    assert_eq!(consumers.len(), 1);
+    assert_eq!(
+        consumers[0].config.ack_wait,
+        std::time::Duration::from_secs(7)
+    );
+    assert_eq!(
+        consumers[0].config.inactive_threshold,
+        std::time::Duration::from_secs(90)
+    );
 }

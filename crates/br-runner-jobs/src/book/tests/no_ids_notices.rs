@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use super::no_ids::{Recorder, TEXT, assert_clean, run_notice};
 use super::*;
-use crate::arrival::Arrival;
+use crate::arrival::{Arrival, settings_of_tests};
 use crate::book::AgentKey;
 use crate::error::{Error, Operation};
 use crate::model::SyncEnd;
@@ -73,7 +73,10 @@ async fn given_a_refused_started_fact_and_every_notice_and_a_cancelled_sync_end_
         run_notice("JOB_CANCELLED", json!({ "message": TEXT })),
         run_notice("REFUSED", json!({ "message": TEXT })),
     ])));
-    let mut feed = work.arrival_feed().await.expect("a feed");
+    let mut feed = work
+        .arrival_feed(settings_of_tests())
+        .await
+        .expect("a feed");
     let mut cancelled = false;
     for _ in 0..4 {
         let arrival = feed.next().await.expect("an arrival");

@@ -23,7 +23,7 @@ pub use adapter::{
     AgentPortAdapter, BookLookup, GateFuture, InboxPortAdapter, MarkGate, NodeEntry, book_lookup,
     mark_gate, mark_gate_stored,
 };
-pub use arrival::{Arrival, ArrivalFeed};
+pub use arrival::{Arrival, ArrivalFeed, ArrivalSettings};
 pub use book::{AgentBook, AgentKey, BookedAgent, RestoredAgent};
 pub use caller::{CallerHandle, CreateChildInput};
 pub use client::{JobsClient, TriggerFeed};

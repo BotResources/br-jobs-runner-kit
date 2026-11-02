@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::pull::{Config, MessagesError, MessagesErrorKind, Stream};
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
@@ -9,12 +7,10 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use super::{Live, fail};
+use crate::arrival::ArrivalSettings;
 use crate::backend::{BoxFuture, RawFeed};
 use crate::error::Error;
 use crate::model::{ItemArrived, ItemKind};
-
-const INACTIVE_THRESHOLD: Duration = Duration::from_secs(120);
-const ACK_WAIT: Duration = Duration::from_secs(10);
 
 fn kind_of(kind: WireKind) -> ItemKind {
     match kind {
@@ -152,6 +148,7 @@ impl Live {
     pub(super) async fn open_arrival_feed(
         &self,
         run_id: Uuid,
+        settings: ArrivalSettings,
     ) -> Result<Box<dyn RawFeed<ItemArrived>>, Error> {
         let coords = contract_jobs::evt_run_item_arrived_v2_coords()
             .map_err(|e| Error::invalid(e.to_string()))?;
@@ -167,8 +164,8 @@ impl Live {
                 filter_subject: event_subject(&coords),
                 deliver_policy: DeliverPolicy::New,
                 ack_policy: AckPolicy::Explicit,
-                ack_wait: ACK_WAIT,
-                inactive_threshold: INACTIVE_THRESHOLD,
+                ack_wait: settings.ack_wait,
+                inactive_threshold: settings.inactivity_limit,
                 ..Config::default()
             })
             .await

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 
 use super::*;
-use crate::arrival::Arrival;
+use crate::arrival::{Arrival, settings_of_tests};
 use crate::book::AgentKey;
 use crate::caller::CreateChildInput;
 use crate::error::Error;
@@ -192,7 +192,10 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
             run_notice("RUN_COMPLETED", json!({ "resultId": id(311) })),
         ] }),
     )));
-    let mut feed = work.arrival_feed().await.expect("a feed");
+    let mut feed = work
+        .arrival_feed(settings_of_tests())
+        .await
+        .expect("a feed");
     corpus.push(format!("{feed:?}"));
     for _ in 0..3 {
         let arrival = feed.next().await.expect("an arrival");

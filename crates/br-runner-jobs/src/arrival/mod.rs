@@ -1,4 +1,5 @@
 mod resolve;
+mod settings;
 #[cfg(test)]
 mod tests;
 
@@ -13,6 +14,10 @@ use crate::error::Error;
 use crate::graphql::{self, Read};
 use crate::model::{ItemArrived, SyncEnd};
 use crate::work::WorkCore;
+
+pub use settings::ArrivalSettings;
+#[cfg(test)]
+pub(crate) use settings::settings_of_tests;
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -37,8 +42,12 @@ pub struct ArrivalFeed {
 }
 
 impl ArrivalFeed {
-    pub(crate) async fn open(core: Arc<WorkCore>) -> Result<Self, Error> {
-        let raw = core.backend.arrival_feed(core.run_id).await?;
+    pub(crate) async fn open(
+        core: Arc<WorkCore>,
+        settings: ArrivalSettings,
+    ) -> Result<Self, Error> {
+        settings.check()?;
+        let raw = core.backend.arrival_feed(core.run_id, settings).await?;
         Self::from_raw(core, raw).await
     }
 

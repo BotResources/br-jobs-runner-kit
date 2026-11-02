@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::arrival::ArrivalSettings;
 use crate::error::Error;
 use crate::model::{
     AgentDeclaration, CallMode, CancelEvent, Failed, ItemArrived, ListedAgent, LogLevel, ModeEvent,
@@ -173,6 +174,7 @@ pub(crate) trait Backend: Send + Sync {
     fn arrival_feed(
         &self,
         run_id: Uuid,
+        settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>>;
 
     fn register_agents(

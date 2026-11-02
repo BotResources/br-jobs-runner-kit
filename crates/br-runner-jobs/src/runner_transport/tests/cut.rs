@@ -9,10 +9,10 @@ use super::Live;
 use super::arrivals::arrive;
 use super::cut_proxy::Proxy;
 use super::cut_state::{delivered_up_to, last_sequence, pull_waiting};
-use super::live;
 use super::live_standin::{publish_trigger, trigger, try_publish_event};
 use super::live_world::{WAIT, World, connection_on, eventually};
 use super::next;
+use super::{arrival_settings, live};
 use crate::backend::Backend;
 use crate::error::Error;
 use crate::model::CancelEvent;
@@ -106,7 +106,7 @@ async fn given_an_arrival_feed_that_has_read_an_event_when_the_bus_is_cut_for_a_
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -141,7 +141,7 @@ struct Cycle {
 async fn cycle(world: &mut World, live: &crate::runner_transport::Live) -> Cycle {
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -240,7 +240,7 @@ async fn given_an_event_written_to_a_connection_that_is_then_cut_when_the_connec
     .expect("the live transport connects");
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");

@@ -7,6 +7,7 @@ use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
 use super::scripted_inputs::{Inputs, PresenceRecord};
+use crate::arrival::ArrivalSettings;
 use crate::backend::{
     Backend, BoxFuture, ChildCommand, ChildSession, Fact, LogRecord, RawFeed, TriggerSource,
 };
@@ -238,6 +239,7 @@ impl Backend for ScriptedJobs {
     fn arrival_feed(
         &self,
         _run_id: Uuid,
+        _settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
         Box::pin(async move {
             let receiver = self

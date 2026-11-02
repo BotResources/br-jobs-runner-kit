@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::live_standin::publish_event;
 use super::live_world::World;
-use super::{live, next, silent};
+use super::{arrival_settings, live, next, silent};
 use crate::backend::Backend;
 use crate::error::Error;
 use crate::model::{ItemArrived, ItemKind};
@@ -38,7 +38,7 @@ async fn given_an_open_feed_when_items_arrive_then_only_those_of_its_run_come_wi
     let live = live(&world, "analyst", "pod-1").await;
     let (mine, other) = (Uuid::now_v7(), Uuid::now_v7());
     let mut feed = live
-        .arrival_feed(mine)
+        .arrival_feed(mine, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -97,12 +97,12 @@ async fn given_two_feeds_on_two_runs_when_items_arrive_then_each_gets_its_own_an
     let live = live(&world, "analyst", "pod-1").await;
     let (run_a, run_b) = (Uuid::now_v7(), Uuid::now_v7());
     let mut feed_a = live
-        .arrival_feed(run_a)
+        .arrival_feed(run_a, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
     let mut feed_b = live
-        .arrival_feed(run_b)
+        .arrival_feed(run_b, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -121,7 +121,7 @@ async fn given_an_event_that_cannot_be_read_then_unreadable_comes_and_the_feed_g
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -146,7 +146,7 @@ async fn given_a_doorbell_of_my_run_with_an_item_kind_that_is_not_known_then_unr
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -175,7 +175,7 @@ async fn given_a_dropped_next_when_an_item_arrives_then_the_next_call_gets_it() 
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -192,13 +192,13 @@ async fn given_a_feed_dropped_when_another_opens_on_the_same_run_then_it_gets_th
     let live = live(&world, "analyst", "pod-1").await;
     let run_id = Uuid::now_v7();
     drop(
-        live.arrival_feed(run_id)
+        live.arrival_feed(run_id, arrival_settings())
             .await
             .map_err(|e| e.to_string())
             .expect("feed"),
     );
     let mut feed = live
-        .arrival_feed(run_id)
+        .arrival_feed(run_id, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -214,7 +214,7 @@ async fn given_a_missing_event_stream_when_opening_then_infra_missing() {
     let live = live(&world, "analyst", "pod-1").await;
     world.delete_stream(INTEGRATION_EVT).await;
     let error = live
-        .arrival_feed(Uuid::now_v7())
+        .arrival_feed(Uuid::now_v7(), arrival_settings())
         .await
         .err()
         .expect("refused");
@@ -228,7 +228,7 @@ async fn given_an_open_feed_when_the_event_stream_is_deleted_then_the_feed_ends_
     let world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;
     let mut feed = live
-        .arrival_feed(Uuid::now_v7())
+        .arrival_feed(Uuid::now_v7(), arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
@@ -247,14 +247,17 @@ async fn given_a_feed_waiting_with_no_arrival_when_a_second_feed_opens_then_it_o
     let live = std::sync::Arc::new(live(&world, "analyst", "pod-1").await);
     let (run_a, run_b) = (Uuid::now_v7(), Uuid::now_v7());
     let mut feed_a = live
-        .arrival_feed(run_a)
+        .arrival_feed(run_a, arrival_settings())
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
     let waiting = tokio::spawn(async move { feed_a.next().await });
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    let opened =
-        tokio::time::timeout(std::time::Duration::from_secs(5), live.arrival_feed(run_b)).await;
+    let opened = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        live.arrival_feed(run_b, arrival_settings()),
+    )
+    .await;
     waiting.abort();
     let mut feed_b = opened
         .expect("the second feed opened while the first one waits")

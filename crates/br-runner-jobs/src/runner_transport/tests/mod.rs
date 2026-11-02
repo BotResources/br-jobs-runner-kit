@@ -31,6 +31,7 @@ mod live_world;
 use std::time::Duration;
 
 use super::Live;
+pub(super) use crate::arrival::settings_of_tests as arrival_settings;
 use crate::backend::RawFeed;
 use crate::error::Error;
 use live_world::{WAIT, World, connection_on};

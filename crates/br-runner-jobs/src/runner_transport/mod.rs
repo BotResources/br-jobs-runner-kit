@@ -23,6 +23,7 @@ use contract_jobs::segment::SubjectSegment;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::arrival::ArrivalSettings;
 use crate::backend::*;
 use crate::error::{Error, Operation};
 use crate::from_connection;
@@ -139,8 +140,9 @@ impl Backend for Live {
     fn arrival_feed(
         &self,
         run_id: Uuid,
+        settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
-        Box::pin(self.open_arrival_feed(run_id))
+        Box::pin(self.open_arrival_feed(run_id, settings))
     }
 
     fn register_agents(
