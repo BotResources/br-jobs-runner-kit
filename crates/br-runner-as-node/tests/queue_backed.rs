@@ -8,7 +8,7 @@ use br_graph_contract::Event;
 use br_runner_jobs::test_double::{
     Call, ChildCommand, ScriptedJobs, trigger_json, work_from_trigger,
 };
-use br_runner_jobs::{Arrival, IgnoreReports, QueueSettings, SyncEnd};
+use br_runner_jobs::{Arrival, IgnoreReports, QueueSettings, RunnerType, SyncEnd};
 use serde_json::{Value, json};
 use support::*;
 use uuid::Uuid;
@@ -32,7 +32,10 @@ struct Stack {
 }
 
 async fn stack(upload: Value) -> Stack {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     jobs.graphql_default(upload);
     let passport = Passport::human(
         id(5),
@@ -121,7 +124,7 @@ async fn given_a_refused_upload_when_the_real_queue_drops_the_create_then_the_ou
 async fn given_a_create_that_jobs_refuses_when_the_real_queue_sends_it_then_the_outcome_is_the_refusal_and_no_cancel_follows()
  {
     let stack = stack(succeeds("jobsUploadPayload")).await;
-    let refusal = a_jobs_refusal("unknown_runner_type").await;
+    let refusal = a_jobs_refusal("unknown_runner_type");
     stack.jobs.answer_commands(move || Err(refusal.clone()));
     let node = standard(source_of(&stack.book.caller_handle()));
     let token = br_graph_contract::CancelToken::new();

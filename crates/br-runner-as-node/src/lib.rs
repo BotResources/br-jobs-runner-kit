@@ -8,8 +8,8 @@ mod signals;
 mod spec;
 mod sync_call;
 
+pub use br_runner_jobs::RunnerType;
 pub use caller_source::{CallerFuture, CallerSource};
-pub use contract_jobs::segment::SubjectSegment;
 pub use error::Error;
 pub use node::RunnerAsNode;
 pub use outcome::{Outcome, Refusal};

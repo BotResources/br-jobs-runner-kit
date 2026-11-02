@@ -1,5 +1,5 @@
 use br_graph_contract::{Fields, Reason};
-use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, SubjectSegment};
+use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
 use br_runner_jobs::Content;
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,7 @@ impl Fields for Review {
 pub fn call_a_runner_as_node(
     caller_source: impl CallerSource,
 ) -> Result<RunnerAsNode<Review>, Box<dyn std::error::Error>> {
-    let runner_type = SubjectSegment::runner_type("analyst")?;
+    let runner_type = RunnerType::new("analyst")?;
     Ok(RunnerAsNode::<Review>::new(
         "ask_the_analyst",
         runner_type,

@@ -141,9 +141,10 @@ async fn given_the_cancel_view_fired_before_the_instance_starts_when_a_state_com
 async fn given_a_create_that_ended_refused_when_the_cancel_view_fires_before_the_end_is_heard_then_the_event_cancelled_is_sent_with_no_cancel_handed_over()
  {
     let rig = rig();
-    rig.script.create(Answer::Now(Err(Removal::Refused(
-        a_jobs_refusal("unknown_runner_type").await,
-    ))));
+    rig.script
+        .create(Answer::Now(Err(Removal::Refused(a_jobs_refusal(
+            "unknown_runner_type",
+        )))));
     let trigger = rig.token.handle().clone();
     let handle = rig.handle.clone();
     let node = standard(move |_id: br_graph_contract::InstanceId| {

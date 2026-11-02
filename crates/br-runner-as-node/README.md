@@ -1,6 +1,6 @@
 # br-runner-as-node
 
-**Known gap.** In a map-reduce, an instance of `RunnerAsNode` waits on its caller source until the host triggers the cancel view. The host makes the caller source from the run context that its instance lookup gives for an instance id, and the ids of the instances that a map-reduce creates itself are not yet known to that lookup. Outside a map-reduce the node runs as described below.
+**Known gap.** An instance of `RunnerAsNode` inside a map-reduce never creates its child Job: its caller source gives no answer until the host triggers the cancel view. The host makes the caller source from the run context that the instance lookup of `br-runner-toolkit` gives for an instance id, and the ids of the instances that a map-reduce of `br-flow-nodes` creates itself are not known to that lookup. So no runner can be activated once for each item of a map today. This library cannot close the gap: `Node::create` gives a node only the instance id, and one graph serves many Runs. The fix belongs to the toolkit and to `br-flow-nodes` (the ids that a map-reduce makes must be known to the lookup, tied to the Run of the map-reduce instance). Outside a map-reduce the node runs as described below.
 
 `RunnerAsNode` is a node of `br-graph-contract` that makes another runner do one step of a graph. Use it when runner C must do one step of the graph of runner A. Make the node once, with a name, the runner type of C, a request function, a response function and a caller source. For an agent of a ReAct node, use `br-runner-as-tool`.
 
@@ -9,23 +9,23 @@ The node is of kind `programmatic` and of subkind `runner_call`. It is generic o
 ## Install
 
 ```toml
-br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.1.0", version = "0.1.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.1.0", version = "0.1.0" }
+br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.2.0", version = "0.2.0" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs`, and the types of `br-graph-contract`. `SubjectSegment`, the validated runner type, is re-exported.
+A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs`, and the types of `br-graph-contract`. `RunnerType`, the runner type of `br-runner-jobs`, is re-exported. Of the libraries of the platform, this crate imports `br-graph-contract` and `br-runner-jobs` only.
 
 ## Quickstart
 
-This is `examples/call_a_runner_as_node.rs`. It makes a node that sends the question of the state to the runner type `analyst` as a payload kept by jobs, waits for the end of the child Job, and puts the inline answer in the state. A failed or refused call, and a cancelled end where the jobs service gives one (see Limits), fails the instance with the message of jobs. The example takes the caller source as a parameter; to run it needs a caller source made by the host. The tests run it against an in-memory caller handle.
+This is `examples/call_a_runner_as_node.rs`. It makes a node that sends the question of the state to the runner type `analyst` as a payload kept by jobs, waits for the end of the child Job, and puts the inline answer in the state. A failed or refused call, and a cancelled end, fails the instance with the message of jobs. The example takes the caller source as a parameter; to run it needs a caller source made by the host. The tests run it against an in-memory caller handle.
 
 ```rust,no_run
 use br_graph_contract::{Fields, Reason};
-use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, SubjectSegment};
+use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
 use br_runner_jobs::Content;
 use serde::{Deserialize, Serialize};
 
@@ -62,7 +62,7 @@ impl Fields for Review {
 pub fn call_a_runner_as_node(
     caller_source: impl CallerSource,
 ) -> Result<RunnerAsNode<Review>, Box<dyn std::error::Error>> {
-    let runner_type = SubjectSegment::runner_type("analyst")?;
+    let runner_type = RunnerType::new("analyst")?;
     Ok(RunnerAsNode::<Review>::new(
         "ask_the_analyst",
         runner_type,
@@ -144,7 +144,7 @@ The request function takes the state (`Arc<State<F>>`) and gives a `JobSpec` or 
 | `Kept(content)` | the upload of the content, and then the create with the same Job id |
 | `Reference { service, document_id }` | one create that names a document of another service |
 
-The runner type is a `SubjectSegment`, made with `SubjectSegment::runner_type("analyst")`; a value that the wire does not accept cannot be made. `with_max_attempts(n)` passes the count of Runs that jobs may make to the create as given; it is not a retry of the node. A runner type that jobs refuses gives `Outcome::Refusal`.
+The runner type is a `RunnerType`, made with `RunnerType::new("analyst")`; a value that the wire does not accept cannot be made. `with_max_attempts(n)` passes the count of Runs that jobs may make to the create as given; it is not a retry of the node. A runner type that jobs refuses gives `Outcome::Refusal`.
 
 ## Outcome and response function
 
@@ -154,7 +154,7 @@ The response function takes the state and the `Outcome`, may be async, and gives
 |---|---|
 | `Completed { inline, result_ref }` | the child Job completed, with the Result inline or a Result reference |
 | `Failed { report, message }` | the child Job failed |
-| `Cancelled { message }` | the end of the child Job says it was cancelled. The jobs service gives no such end today for a child Job cancelled by another party (see Limits) |
+| `Cancelled { message }` | a party other than this node cancelled the child Job, and this node stays alive: jobs gives the end from the cancel notice. It is not the cancel of this node, whose cancel view gives the event `Cancelled` and no Outcome. If a cancel ends this node too and the end reaches the node first, your response function gets `Cancelled`, and the cancel view then ends its wait. You decide what it means, as for `Failed`; the node hands over no finish and no cancel for it |
 | `Refusal(Refusal)` | the create ended `Refused`: the `reason` and the `message` of jobs. It is not the event `Refused` |
 
 The library never decodes or fetches a Result, and never decides what a failure or a refusal means. A Result reference passes on as it came, and an inline Result is given in the form of `br-runner-jobs`; either may go in the state, and a later node may read a Result reference with the caller handle. The node hands over the finish before it calls your response function; whether a Result reference can still be read after the finish is decided by the jobs service, not by this library. You may turn a failed end into an update (an item of a map-reduce marked failed) or into an error. An update goes in the event `Result`, whatever the Outcome was; an error goes in the event `Failed`, unchanged.
@@ -192,7 +192,6 @@ The node hands over a cancel of the child Job, once, as Requester, only when the
 
 | Limit | What happens today |
 |---|---|
-| A child Job cancelled by another party | The jobs service sends no end for it. `Outcome::Cancelled` for such a child Job does not arrive on a live wire; it arrives only from an end that a test script gives. The instance keeps waiting until the cancel view fires (event `Cancelled`, one cancel handed over) or the end wait gives an error (fault `EndWait`, one cancel handed over). |
 | A Result reference after the finish | The node hands over the finish before the response function runs. The jobs service decides whether the reference stays readable. |
 
 ## Ids and identity

@@ -101,7 +101,7 @@ fn hand_over<F: Fields>(
     let mut input = CreateChildInput::new(
         child,
         Uuid::now_v7(),
-        parts.runner_type.as_str(),
+        parts.runner_type.clone(),
         CallMode::Sync,
         payload,
     );
