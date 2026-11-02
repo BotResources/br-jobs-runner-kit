@@ -3,7 +3,7 @@ use std::time::Duration;
 use async_nats::jetstream::message::PublishMessage;
 use contract_jobs::runner::{
     FailureKind as WireKind, FailureReport, LogLine, PlanDeclared, RunCompleted, RunFailed,
-    RunStarted, StepStarted, WIRE_VERSION,
+    StepStarted, WIRE_VERSION,
 };
 use contract_jobs::runner_transport::{RunnerStatusFact, log_subject, status_subject};
 use serde::Serialize;
@@ -29,14 +29,6 @@ impl Live {
     fn encode_fact(&self, fact: &Fact) -> Result<(String, Vec<u8>), Error> {
         let runner_type = &self.segments.runner_type;
         let (kind, bytes) = match fact {
-            Fact::Started { run_id, .. } => (
-                RunnerStatusFact::Started,
-                body(&RunStarted {
-                    version: WIRE_VERSION,
-                    run_id: *run_id,
-                    instance_key: self.instance_key.clone(),
-                })?,
-            ),
             Fact::Plan {
                 run_id,
                 steps,

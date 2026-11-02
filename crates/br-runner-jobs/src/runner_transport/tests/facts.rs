@@ -1,7 +1,7 @@
 use chrono::Utc;
 use contract_jobs::runner::{
     FailureKind as WireKind, LOG_STREAM, LogLine, PlanDeclared, RunCompleted, RunFailed,
-    RunStarted, STATUS_STREAM, StepStarted,
+    STATUS_STREAM, StepStarted,
 };
 use contract_jobs::runner_transport::{RunnerStatusFact, log_subject, status_subject};
 use contract_jobs::segment::SubjectSegment;
@@ -30,33 +30,6 @@ async fn published(world: &World, fact: RunnerStatusFact) -> Vec<Vec<u8>> {
         .filter(|(subject, _)| *subject == wanted)
         .map(|(_, payload)| payload)
         .collect()
-}
-
-#[tokio::test]
-#[ignore = "needs nats-server -js on the path"]
-async fn given_a_started_fact_when_published_then_the_status_stream_holds_the_wire_value_without_a_start_id()
- {
-    let world = World::ready().await;
-    let live = live(&world, "analyst", "pod-1").await;
-    let run_id = Uuid::now_v7();
-    live.publish_fact(
-        Fact::Started {
-            run_id,
-            start_id: Uuid::now_v7(),
-        },
-        Uuid::now_v7().to_string(),
-        WAIT,
-    )
-    .await
-    .map_err(|e| e.to_string())
-    .expect("published");
-    let held = published(&world, RunnerStatusFact::Started).await;
-    assert_eq!(held.len(), 1);
-    let started: RunStarted = serde_json::from_slice(&held[0]).expect("a RunStarted");
-    assert_eq!(started.run_id, run_id);
-    assert_eq!(started.instance_key, "pod-1");
-    let raw: serde_json::Value = serde_json::from_slice(&held[0]).expect("json");
-    assert!(raw.get("start_id").is_none());
 }
 
 #[tokio::test]

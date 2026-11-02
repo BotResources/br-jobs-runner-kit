@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::backend::{BoxFuture, ChildCommand, ChildSession, Fact};
+use crate::backend::{BoxFuture, ChildCommand, ChildSession};
 use crate::error::Error;
 use crate::graphql;
 use crate::queue::{Direct, Write, WriteSender, WriteSession};
@@ -71,16 +71,7 @@ impl WriteSender for WorkSender {
             let wait = self.outcome_wait;
             match write {
                 Write::Started { run_id, start_id } => {
-                    backend
-                        .publish_fact(
-                            Fact::Started {
-                                run_id: *run_id,
-                                start_id: *start_id,
-                            },
-                            format!("started-{run_id}-{start_id}"),
-                            wait,
-                        )
-                        .await
+                    backend.start(*run_id, *start_id, wait).await
                 }
                 Write::Registration { run_id, agent } => {
                     backend

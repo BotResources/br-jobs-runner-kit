@@ -4,8 +4,8 @@ use contract_jobs::reason::Reason;
 use contract_jobs::runner::{ClaimV2, WIRE_VERSION_V2};
 use contract_jobs::runner_surface::{
     AgentDeclaration as WireAgent, AgentState, ListAgents, ListAgentsReply, MarkRead,
-    RegisterAgents, SURFACE_WIRE_VERSION, SurfaceReason, SurfaceReply, list_agents_subject,
-    mark_read_subject, register_agents_subject,
+    RegisterAgents, SURFACE_WIRE_VERSION, StartedRequest, SurfaceReason, SurfaceReply,
+    list_agents_subject, mark_read_subject, register_agents_subject, started_subject,
 };
 use contract_jobs::runner_transport::claim_v2_subject;
 use serde::Serialize;
@@ -70,6 +70,25 @@ impl Live {
             Operation::Claim,
         )
         .await
+    }
+
+    pub(super) async fn started_request(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        wait: Duration,
+    ) -> Result<(), Error> {
+        let body = encode(&StartedRequest {
+            version: SURFACE_WIRE_VERSION,
+            run_id,
+            instance_key: self.instance_key.clone(),
+            start_id,
+        })?;
+        let subject = started_subject(&self.segments.runner_type);
+        let reply = self
+            .request(subject, body, wait, Operation::StartedFact)
+            .await?;
+        accepted(&reply, Operation::StartedFact)
     }
 
     pub(super) async fn register(

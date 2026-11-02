@@ -13,6 +13,10 @@ pub enum Call {
     Claim {
         claim_id: Uuid,
     },
+    Started {
+        run_id: Uuid,
+        start_id: Uuid,
+    },
     Fact(Fact),
     Log(LogRecord),
     PresencePut,

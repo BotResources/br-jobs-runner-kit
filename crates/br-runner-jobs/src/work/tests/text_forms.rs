@@ -72,7 +72,7 @@ async fn given_a_work_with_known_ids_and_passport_when_every_object_is_shown_the
     let (sender, mut reports) = mpsc::unbounded_channel();
     let failing = Arc::new(AtomicBool::new(true));
     let switch = Arc::clone(&failing);
-    jobs.answer_facts(move || {
+    jobs.answer_started(move || {
         if switch.load(Ordering::SeqCst) {
             Err(Error::unavailable("no listener"))
         } else {

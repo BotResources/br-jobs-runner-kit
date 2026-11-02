@@ -31,6 +31,7 @@ pub(super) struct Script {
     calls: Vec<Call>,
     graphql: VecDeque<Result<Value, Error>>,
     graphql_default: Option<Value>,
+    started: Option<Answer<()>>,
     facts: Option<Answer<()>>,
     register: Option<Answer<()>>,
     mark_read: Option<Answer<()>>,
@@ -58,6 +59,7 @@ impl ScriptedJobs {
                 calls: Vec::new(),
                 graphql: VecDeque::new(),
                 graphql_default: None,
+                started: None,
                 facts: None,
                 register: None,
                 mark_read: None,
@@ -161,6 +163,20 @@ impl Backend for ScriptedJobs {
         _ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
         Box::pin(async { Ok(self.inputs.trigger_source()) })
+    }
+
+    fn start(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(async move {
+            self.gate().await;
+            let mut script = self.script();
+            script.calls.push(Call::Started { run_id, start_id });
+            answer(&mut script.started, ())
+        })
     }
 
     fn publish_fact(

@@ -36,10 +36,6 @@ pub(crate) trait RawFeed<T>: Send {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fact {
-    Started {
-        run_id: Uuid,
-        start_id: Uuid,
-    },
     Plan {
         run_id: Uuid,
         steps: Vec<String>,
@@ -142,6 +138,13 @@ pub(crate) trait Backend: Send + Sync {
         &self,
         ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>>;
+
+    fn start(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>>;
 
     fn publish_fact(
         &self,

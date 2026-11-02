@@ -91,6 +91,15 @@ impl Backend for Live {
         Box::pin(self.trigger_source(ack_wait))
     }
 
+    fn start(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(self.started_request(run_id, start_id, wait))
+    }
+
     fn publish_fact(
         &self,
         fact: Fact,

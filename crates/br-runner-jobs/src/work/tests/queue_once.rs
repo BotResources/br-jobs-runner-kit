@@ -25,7 +25,7 @@ async fn given_a_queue_made_when_it_starts_then_its_first_write_is_the_started_f
     drop(queue);
     assert!(matches!(
         jobs.calls().first(),
-        Some(crate::test_double::Call::Fact(crate::backend::Fact::Started { run_id, start_id }))
+        Some(crate::test_double::Call::Started { run_id, start_id })
             if *run_id == id(RUN) && *start_id == id(START)
     ));
 }

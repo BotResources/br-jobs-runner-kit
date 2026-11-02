@@ -22,6 +22,10 @@ impl ScriptedJobs {
         self.script().facts = Some(Box::new(answer));
     }
 
+    pub fn answer_started(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
+        self.script().started = Some(Box::new(answer));
+    }
+
     pub fn answer_register(&self, answer: impl FnMut() -> Result<(), Error> + Send + 'static) {
         self.script().register = Some(Box::new(answer));
     }

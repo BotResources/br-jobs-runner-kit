@@ -10,6 +10,7 @@ mod facts;
 mod listing;
 mod mode;
 mod presence;
+mod started;
 mod surface;
 mod triggers;
 
