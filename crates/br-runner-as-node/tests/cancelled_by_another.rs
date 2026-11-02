@@ -95,7 +95,7 @@ async fn given_the_notice_of_a_child_job_cancelled_by_another_party_when_the_arr
     });
 
     let update = update_of(run.event().await);
-    queue.drained().await;
+    within(queue.drained()).await;
     pump.abort();
 
     assert_eq!(update.note.as_deref(), Some("cancelled:Job was cancelled."));

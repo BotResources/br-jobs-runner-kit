@@ -6,12 +6,11 @@ use br_graph_contract::{
     CancelView, Cause, CreateFuture, Fields, Instance, InstanceId, Node, PROGRAMMATIC, State,
 };
 
-use br_runner_jobs::RunnerType;
-
 use crate::caller_source::CallerSource;
 use crate::instance;
 use crate::outcome::Outcome;
 use crate::spec::JobSpec;
+use br_runner_jobs::RunnerType;
 
 pub(crate) type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 

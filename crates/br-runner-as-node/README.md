@@ -17,7 +17,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs`, and the types of `br-graph-contract`. `RunnerType`, the runner type of `br-runner-jobs`, is re-exported. Of the libraries of the platform, this crate imports `br-graph-contract` and `br-runner-jobs` only.
+A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs`, and the types of `br-graph-contract`. `RunnerType`, the runner type of `br-runner-jobs`, is re-exported. Of the libraries of the platform, this crate imports at run time `br-graph-contract` and `br-runner-jobs` only.
 
 ## Quickstart
 
