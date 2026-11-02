@@ -3,8 +3,9 @@ use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrivedV2};
 use serde_json::json;
 use uuid::Uuid;
 
+use super::cut_state::pull_waiting;
 use super::live_standin::publish_event;
-use super::live_world::World;
+use super::live_world::{World, eventually};
 use super::{arrival_settings, live, next, silent};
 use crate::backend::Backend;
 use crate::error::Error;
@@ -252,7 +253,7 @@ async fn given_a_feed_waiting_with_no_arrival_when_a_second_feed_opens_then_it_o
         .map_err(|e| e.to_string())
         .expect("feed");
     let waiting = tokio::spawn(async move { feed_a.next().await });
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    eventually("the first feed waits for events", || pull_waiting(&world)).await;
     let opened = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         live.arrival_feed(run_b, arrival_settings()),
