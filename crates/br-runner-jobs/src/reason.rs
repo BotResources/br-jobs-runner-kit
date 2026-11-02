@@ -38,6 +38,9 @@ macro_rules! reasons {
         }
 
         impl RefusalReason {
+            #[cfg(test)]
+            const WORDS: &'static [&'static str] = &[$($word,)*];
+
             pub fn as_str(&self) -> &str {
                 match self {
                     $(Self::$variant => $word,)*
@@ -147,6 +150,8 @@ impl From<String> for RefusalReason {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use contract_jobs::runner::ClaimRefusal;
     use contract_jobs::runner_surface::SurfaceReason;
 
@@ -156,8 +161,8 @@ mod tests {
         !matches!(RefusalReason::from_word(word), RefusalReason::Unknown(_))
     }
 
-    #[test]
-    fn given_every_word_the_wire_library_names_then_it_is_a_typed_reason() {
+    fn wire_words() -> BTreeSet<String> {
+        let mut words = BTreeSet::new();
         let surface = [
             SurfaceReason::RunUnknown,
             SurfaceReason::RunNotStarted,
@@ -190,10 +195,10 @@ mod tests {
                 | SurfaceReason::RunNotPending => {}
             }
             let word = serde_json::to_value(reason).expect("json");
-            assert!(is_typed(word.as_str().expect("word")), "{word}");
+            words.insert(word.as_str().expect("word").to_owned());
         }
         for reason in ClaimRefusal::ALL {
-            assert!(is_typed(reason.as_str()), "{}", reason.as_str());
+            words.insert(reason.as_str().to_owned());
         }
         let rejections = [
             contract_jobs::event::REASON_ID_REUSE,
@@ -221,9 +226,26 @@ mod tests {
             contract_jobs::event_v2::REASON_CALLER_ADDRESS_NOT_OF_RUN,
             contract_jobs::event_v2::REASON_MAX_ATTEMPTS_ABOVE_CEILING,
         ];
-        for word in rejections {
-            assert!(is_typed(word), "{word}");
+        words.extend(rejections.iter().map(|word| (*word).to_owned()));
+        words
+    }
+
+    #[test]
+    fn given_every_word_the_wire_library_names_then_it_is_a_typed_reason() {
+        for word in wire_words() {
+            assert!(is_typed(&word), "{word}");
         }
+    }
+
+    #[test]
+    fn given_the_typed_reasons_then_each_is_a_word_of_the_wire_library_or_the_mail_word() {
+        let mut expected = wire_words();
+        expected.insert("mail_not_yours".to_owned());
+        let typed: BTreeSet<String> = RefusalReason::WORDS
+            .iter()
+            .map(|word| (*word).to_owned())
+            .collect();
+        assert_eq!(typed, expected);
     }
 
     #[test]
