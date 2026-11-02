@@ -88,7 +88,7 @@ async fn given_a_cursor_that_is_not_an_item_id_when_the_page_is_asked_then_the_e
 async fn given_a_new_agent_whose_registration_is_queued_when_it_is_listed_then_the_inbox_is_empty_and_jobs_gets_no_call()
  {
     let jobs = scripted();
-    jobs.answer_facts(|| Err(Error::lost("the started fact is not delivered")));
+    jobs.answer_started(|| Err(Error::lost("the started fact is not delivered")));
     let world = World::build(jobs, Vec::new(), mark_gate_stored()).await;
     let agent = world.agent().await;
     let items = vec![cc_item(agent.as_uuid(), 1)];
@@ -97,7 +97,7 @@ async fn given_a_new_agent_whose_registration_is_queued_when_it_is_listed_then_t
     assert!(batch.items.is_empty() && batch.next.is_none());
     assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
     assert_eq!(count(&world.jobs, MAIL_ROOT), 0);
-    world.jobs.answer_facts(|| Ok(()));
+    world.jobs.answer_started(|| Ok(()));
     drained(&world.queue).await;
     let batch = page(&world, None, 5).await;
     assert_eq!(batch.items.len(), 1);
@@ -108,7 +108,7 @@ async fn given_a_new_agent_whose_registration_is_queued_when_it_is_listed_then_t
 async fn given_a_restored_agent_whose_registration_is_queued_when_it_is_listed_then_jobs_is_read_at_once()
  {
     let jobs = scripted();
-    jobs.answer_facts(|| Err(Error::lost("the started fact is not delivered")));
+    jobs.answer_started(|| Err(Error::lost("the started fact is not delivered")));
     let restored = super::world::restored_writer();
     let world = World::build(jobs, vec![restored], mark_gate_stored()).await;
     world

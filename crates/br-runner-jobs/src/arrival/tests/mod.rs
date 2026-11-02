@@ -1,5 +1,7 @@
 mod bad_items;
+mod cancel;
 mod live;
+mod settings;
 
 use std::sync::Arc;
 use std::time::Duration;

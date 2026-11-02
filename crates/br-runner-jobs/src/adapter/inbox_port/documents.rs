@@ -6,12 +6,11 @@ use crate::adapter::node_entry::Shared;
 use crate::book::Recipients;
 use crate::error::Error;
 use crate::graphql;
-
-const MAIL_NOT_YOURS: &str = "mail_not_yours";
+use crate::reason::RefusalReason;
 
 fn from_jobs(error: Error) -> PortError {
     match &error {
-        Error::Refused(refusal) if refusal.reason == MAIL_NOT_YOURS => {
+        Error::Refused(refusal) if refusal.reason == RefusalReason::MailNotYours => {
             PortError::refused(refusal.message.clone())
         }
         _ => PortError::fault(error),

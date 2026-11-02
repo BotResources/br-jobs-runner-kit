@@ -208,7 +208,7 @@ async fn given_a_tree_when_the_agents_are_listed_then_the_agents_of_the_run_come
     jobs.set_agents(vec![ListedAgent {
         agent_id: id(70),
         run_id: id(RUN),
-        runner_type: "analyst".to_owned(),
+        runner_type: crate::RunnerType::new("analyst").expect("a runner type"),
         running: true,
         has_inbox: true,
         mail_address: Some(id(70)),

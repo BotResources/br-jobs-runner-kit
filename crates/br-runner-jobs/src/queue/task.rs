@@ -10,6 +10,7 @@ use crate::error::{CredentialKind, Error};
 use crate::queue::deps::blocked;
 use crate::queue::shared::{Entry, Gate, Pending, Shared};
 use crate::queue::write::{Removal, Write, WriteEnd, WriteResult};
+use crate::reason::RefusalReason;
 
 type Attempt = Pin<Box<dyn Future<Output = WriteResult> + Send>>;
 type GateEnd = Pin<Box<dyn Future<Output = (u64, Gate)> + Send>>;
@@ -19,7 +20,8 @@ pub(crate) fn resendable(write: &Write, error: &Error) -> bool {
         Error::Unavailable(_) | Error::Lost(_) | Error::Unreadable(_) => true,
         Error::Credential(failure) => failure.kind == CredentialKind::FetchFailed,
         Error::Refused(refusal) => {
-            matches!(write, Write::Started { .. }) && refusal.reason == "instance_unknown"
+            matches!(write, Write::Started { .. })
+                && refusal.reason == RefusalReason::InstanceUnknown
         }
         _ => false,
     }

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 
 use super::*;
-use crate::arrival::Arrival;
+use crate::arrival::{Arrival, settings_of_tests};
 use crate::book::AgentKey;
 use crate::caller::CreateChildInput;
 use crate::error::Error;
@@ -13,10 +13,10 @@ use crate::model::{
 use crate::queue::{QueueObserver, QueueReport, QueueSettings};
 use crate::test_double::ScriptedJobs;
 
-const TEXT: &str = "The plain text of jobs, for an agent.";
+pub(super) const TEXT: &str = "The plain text of jobs, for an agent.";
 
 #[derive(Default)]
-struct Recorder(Mutex<Vec<String>>);
+pub(super) struct Recorder(pub(super) Mutex<Vec<String>>);
 
 impl QueueObserver for Recorder {
     fn report(&self, report: &QueueReport) {
@@ -47,7 +47,7 @@ fn mail_item() -> Value {
     })
 }
 
-fn run_notice(kind: &str, extra: Value) -> Value {
+pub(super) fn run_notice(kind: &str, extra: Value) -> Value {
     let mut item = json!({
         "itemId": id(410), "seq": 2, "itemKind": "NOTICE", "address": null, "runId": id(RUN),
         "noticeType": kind, "jobId": id(300),
@@ -65,7 +65,7 @@ fn forbidden() -> Vec<String> {
         .collect()
 }
 
-fn assert_clean(corpus: &[String]) {
+pub(super) fn assert_clean(corpus: &[String]) {
     let all = corpus.join("\n");
     assert!(all.len() > 500, "the corpus is too small to prove anything");
     assert!(
@@ -122,8 +122,13 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
     ];
 
     let child = id(300);
-    let mut input =
-        CreateChildInput::new(child, id(301), "analyst", CallMode::Sync, PayloadForm::Kept);
+    let mut input = CreateChildInput::new(
+        child,
+        id(301),
+        crate::RunnerType::new("analyst").expect("a runner type"),
+        CallMode::Sync,
+        PayloadForm::Kept,
+    );
     input.config = Some(json!({ "k": "v" }));
     let ends = [
         caller.upload_payload(child, content("p")).expect("upload"),
@@ -171,7 +176,7 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
     jobs.set_agents(vec![ListedAgent {
         agent_id: id(70),
         run_id: id(RUN),
-        runner_type: "analyst".to_owned(),
+        runner_type: crate::RunnerType::new("analyst").expect("a runner type"),
         running: true,
         has_inbox: true,
         mail_address: Some(id(70)),
@@ -187,7 +192,10 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
             run_notice("RUN_COMPLETED", json!({ "resultId": id(311) })),
         ] }),
     )));
-    let mut feed = work.arrival_feed().await.expect("a feed");
+    let mut feed = work
+        .arrival_feed(settings_of_tests())
+        .await
+        .expect("a feed");
     corpus.push(format!("{feed:?}"));
     for _ in 0..3 {
         let arrival = feed.next().await.expect("an arrival");

@@ -148,7 +148,7 @@ async fn given_a_mail_without_a_recipient_in_to_or_with_a_recipient_twice_then_t
 async fn given_a_mail_whose_agent_registration_is_still_queued_then_the_send_returns_at_once_and_the_mail_waits_in_the_queue()
  {
     let jobs = scripted();
-    jobs.answer_facts(|| Err(Error::lost("the started fact is not delivered")));
+    jobs.answer_started(|| Err(Error::lost("the started fact is not delivered")));
     let world = World::build(jobs, Vec::new(), mark_gate_stored()).await;
     let agent = world.agent().await;
     let context = world.context(agent);

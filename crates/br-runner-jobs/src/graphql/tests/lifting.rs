@@ -126,7 +126,10 @@ refused!(
 #[tokio::test]
 async fn given_a_refusal_of_the_connection_when_a_call_is_made_then_the_operation_of_the_call_is_named()
  {
-    let scripted = crate::test_double::ScriptedJobs::new("runner", "instance-a");
+    let scripted = crate::test_double::ScriptedJobs::new(
+        crate::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     scripted.push_graphql(Err(Error::refused(Operation::Claim, "FORBIDDEN", TEXT)));
     let error = graphql::payload(&*scripted, &ids()).await.unwrap_err();
     assert_eq!(error, Error::refused(Operation::Payload, "FORBIDDEN", TEXT));
@@ -139,7 +142,10 @@ async fn given_other_errors_of_the_connection_when_a_call_is_made_then_they_pass
         Error::lost("cut"),
         Error::unavailable("down"),
     ] {
-        let scripted = crate::test_double::ScriptedJobs::new("runner", "instance-a");
+        let scripted = crate::test_double::ScriptedJobs::new(
+            crate::RunnerType::new("runner").expect("a runner type"),
+            "instance-a",
+        );
         scripted.push_graphql(Err(failure.clone()));
         let error = graphql::saved_state(&*scripted, &ids()).await.unwrap_err();
         assert_eq!(error, failure);

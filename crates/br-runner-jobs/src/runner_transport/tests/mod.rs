@@ -1,4 +1,6 @@
 mod arrivals;
+mod arrivals_branches;
+mod arrivals_consumers;
 mod bind;
 mod cancel;
 mod claim;
@@ -6,10 +8,13 @@ mod commands;
 mod commands_outcomes;
 mod commands_session;
 mod cut;
+mod cut_proxy;
+mod cut_state;
 mod facts;
 mod listing;
 mod mode;
 mod presence;
+mod started;
 mod surface;
 mod triggers;
 
@@ -26,15 +31,21 @@ mod live_world;
 use std::time::Duration;
 
 use super::Live;
+pub(super) use crate::arrival::settings_of_tests as arrival_settings;
 use crate::backend::RawFeed;
 use crate::error::Error;
 use live_world::{WAIT, World, connection_on};
 
 pub(super) async fn live(world: &World, runner_type: &str, instance_key: &str) -> Live {
-    Live::connect(runner_type, instance_key, WAIT, world.connection())
-        .await
-        .map_err(|error| error.to_string())
-        .expect("the live transport connects")
+    Live::connect(
+        crate::RunnerType::new(runner_type).expect("a runner type"),
+        instance_key,
+        WAIT,
+        world.connection(),
+    )
+    .await
+    .map_err(|error| error.to_string())
+    .expect("the live transport connects")
 }
 
 pub(super) async fn live_with_wait(
@@ -44,7 +55,7 @@ pub(super) async fn live_with_wait(
     wait: Duration,
 ) -> Live {
     Live::connect(
-        runner_type,
+        crate::RunnerType::new(runner_type).expect("a runner type"),
         instance_key,
         wait,
         connection_on(&world.client, wait),
@@ -61,7 +72,7 @@ pub(super) async fn refused_connect(
     wait: Duration,
 ) -> Error {
     match Live::connect(
-        runner_type,
+        crate::RunnerType::new(runner_type).expect("a runner type"),
         instance_key,
         wait,
         connection_on(&world.client, WAIT),

@@ -150,8 +150,8 @@ impl Live {
         };
         let payload = CreateJobV3 {
             job_id: create.job_id,
-            runner_type: create.runner_type,
-            producer: self.runner_type.clone(),
+            runner_type: create.runner_type.as_str().to_owned(),
+            producer: self.runner_type.as_str().to_owned(),
             config: create.config,
             payload: Some(payload_of(create.payload)),
             passport: Some(create.passport),

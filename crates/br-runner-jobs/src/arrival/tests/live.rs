@@ -1,4 +1,5 @@
 use super::*;
+use crate::arrival::settings_of_tests;
 
 #[tokio::test]
 async fn given_a_live_run_level_notice_when_it_arrives_then_one_read_gives_the_item_then_its_sync_end()
@@ -222,7 +223,10 @@ async fn given_a_work_when_the_arrival_feed_is_opened_then_the_raw_feed_of_the_r
     let jobs = scripted();
     jobs.push_graphql(Ok(unread(vec![mail(1)])));
     let work = work(&jobs);
-    let mut feed = work.arrival_feed().await.expect("a feed");
+    let mut feed = work
+        .arrival_feed(settings_of_tests())
+        .await
+        .expect("a feed");
     jobs.push_arrival(Ok(arrived(Some(id(70)), 2, ItemKind::CcNotice)));
     assert!(matches!(next(&mut feed).await, Ok(Arrival::Item(item)) if item.item_id == id(501)));
     assert!(matches!(next(&mut feed).await, Ok(Arrival::Item(item)) if item.item_id == id(502)));
@@ -237,7 +241,11 @@ async fn given_the_importer_feeds_the_book_when_a_sync_end_comes_then_the_end_wa
         "RUN_COMPLETED",
         json!({ "resultId": id(800) }),
     )])));
-    let mut feed = fixture.work.arrival_feed().await.expect("a feed");
+    let mut feed = fixture
+        .work
+        .arrival_feed(settings_of_tests())
+        .await
+        .expect("a feed");
     let wait = tokio::spawn(fixture.book.caller_handle().end_wait(id(701)));
     for _ in 0..2 {
         let arrival = next(&mut feed).await.expect("an arrival");

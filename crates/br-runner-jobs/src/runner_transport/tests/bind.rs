@@ -75,14 +75,9 @@ async fn given_a_presence_bucket_without_time_to_live_when_connecting_then_infra
 
 #[tokio::test]
 #[ignore = "needs nats-server -js on the path"]
-async fn given_a_bad_segment_when_connecting_then_invalid_input() {
+async fn given_a_bad_instance_key_when_connecting_then_invalid_input() {
     let world = World::ready().await;
     for (runner_type, instance_key) in [
-        ("", "pod-1"),
-        ("ana.lyst", "pod-1"),
-        ("ana lyst", "pod-1"),
-        ("*", "pod-1"),
-        (">", "pod-1"),
         ("analyst", ""),
         ("analyst", "pod.1"),
         ("analyst", "pod 1"),
@@ -113,11 +108,17 @@ async fn given_a_bus_that_is_not_connected_when_connecting_then_unavailable() {
         .connect("nats://127.0.0.1:1")
         .await
         .expect("a client that retries");
-    let error =
-        match super::Live::connect("analyst", "pod-1", WAIT, connection_on(&client, WAIT)).await {
-            Err(error) => error,
-            Ok(_) => panic!("connected"),
-        };
+    let error = match super::Live::connect(
+        crate::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+        WAIT,
+        connection_on(&client, WAIT),
+    )
+    .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("connected"),
+    };
     assert!(matches!(error, Error::Unavailable(_)), "{error:?}");
 }
 
@@ -156,11 +157,17 @@ async fn given_a_bus_that_does_not_answer_a_check_when_connecting_then_unavailab
         .expect("connects");
     let wait = Duration::from_millis(300);
     let started = std::time::Instant::now();
-    let error =
-        match super::Live::connect("analyst", "pod-1", wait, connection_on(&client, wait)).await {
-            Err(error) => error,
-            Ok(_) => panic!("connected"),
-        };
+    let error = match super::Live::connect(
+        crate::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+        wait,
+        connection_on(&client, wait),
+    )
+    .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("connected"),
+    };
     match error {
         Error::Unavailable(failure) => assert_eq!(failure.cause, Cause::WaitFired),
         other => panic!("expected Unavailable, got {other:?}"),

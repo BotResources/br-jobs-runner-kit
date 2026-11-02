@@ -21,7 +21,7 @@ impl Live {
         let capacity = Capacity::try_from(capacity).map_err(Error::invalid)?;
         let presence = Presence {
             version: WIRE_VERSION,
-            runner_type: self.runner_type.clone(),
+            runner_type: self.runner_type.as_str().to_owned(),
             instance_key: self.instance_key.clone(),
             runner_version,
             status: match status {

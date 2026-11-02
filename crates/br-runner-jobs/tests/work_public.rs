@@ -38,7 +38,10 @@ fn settings() -> QueueSettings {
 #[tokio::test]
 async fn given_a_trigger_on_the_feed_when_it_is_read_then_the_work_gives_the_wire_as_received_and_ack_settles_its_delivery()
  {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let mut feed = jobs
         .client()
         .triggers(Duration::from_secs(30))
@@ -76,7 +79,10 @@ async fn given_a_trigger_on_the_feed_when_it_is_read_then_the_work_gives_the_wir
 #[tokio::test]
 async fn given_a_trigger_without_a_passport_on_the_feed_when_read_then_it_is_terminated_and_never_a_work()
  {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let mut feed = jobs
         .client()
         .triggers(Duration::from_secs(30))
@@ -97,7 +103,10 @@ async fn given_a_trigger_without_a_passport_on_the_feed_when_read_then_it_is_ter
 #[tokio::test]
 async fn given_a_work_when_the_queue_is_made_twice_then_the_second_is_invalid_input_and_giving_back_leaves_the_first_working()
  {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let mut feed = jobs
         .client()
         .triggers(Duration::from_secs(30))
@@ -118,7 +127,10 @@ async fn given_a_work_when_the_queue_is_made_twice_then_the_second_is_invalid_in
 
 #[tokio::test]
 async fn given_a_work_made_directly_from_a_trigger_value_then_it_has_no_delivery_to_settle() {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let work = work_from_trigger(&jobs, trigger()).expect("a Work");
     assert!(matches!(work.ack().await, Err(Error::InvalidInput(_))));
     assert!(matches!(

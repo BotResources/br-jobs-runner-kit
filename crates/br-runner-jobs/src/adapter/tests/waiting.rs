@@ -108,7 +108,7 @@ async fn given_an_event_for_another_address_or_for_an_item_the_agent_marked_then
 async fn given_a_new_agent_whose_registration_is_queued_when_it_ends_then_the_wait_reads_without_an_event_and_returns()
  {
     let jobs = scripted();
-    jobs.answer_facts(|| Err(Error::lost("the started fact is not delivered")));
+    jobs.answer_started(|| Err(Error::lost("the started fact is not delivered")));
     let world = World::build(jobs, Vec::new(), mark_gate_stored()).await;
     let agent = world.agent().await;
     world
@@ -120,7 +120,7 @@ async fn given_a_new_agent_whose_registration_is_queued_when_it_ends_then_the_wa
     assert!(wait.as_mut().now_or_never().is_none());
     yields().await;
     assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
-    world.jobs.answer_facts(|| Ok(()));
+    world.jobs.answer_started(|| Ok(()));
     finished(wait)
         .await
         .expect("woken by the end of the registration");

@@ -1,6 +1,7 @@
 mod inbox;
 mod making;
 mod no_ids;
+mod no_ids_notices;
 mod observer;
 mod outcomes;
 mod waits;
@@ -69,7 +70,10 @@ pub(crate) fn everything_succeeds() -> Value {
 }
 
 pub(crate) fn scripted() -> Arc<ScriptedJobs> {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        crate::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     jobs.graphql_default(everything_succeeds());
     jobs
 }

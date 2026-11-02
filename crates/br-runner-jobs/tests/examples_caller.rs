@@ -1,5 +1,6 @@
 #[path = "../examples/call_a_runner.rs"]
 #[allow(dead_code)]
+// the example has its own main and helpers, unused when it is included as a module
 mod call_a_runner;
 
 use br_runner_jobs::test_double::{Answer, MemoryCall, memory_caller, result_ref};
@@ -28,7 +29,7 @@ async fn a_call_uploads_creates_waits_and_finishes_and_gives_the_inline_answer()
         }),
     );
 
-    let answer = call_a_runner::call_a_runner(&caller, id(7), "analyst", "count the tickets")
+    let answer = call_a_runner::call_a_runner(&caller, id(7), analyst(), "count the tickets")
         .await
         .expect("an answer");
 
@@ -38,7 +39,7 @@ async fn a_call_uploads_creates_waits_and_finishes_and_gives_the_inline_answer()
         matches!(&calls[0], MemoryCall::Upload { job_id, content: c } if *job_id == id(7) && c.message == "count the tickets")
     );
     assert!(
-        matches!(&calls[1], MemoryCall::Create(input) if input.job_id == id(7) && input.runner_type == "analyst")
+        matches!(&calls[1], MemoryCall::Create(input) if input.job_id == id(7) && input.runner_type == analyst())
     );
     assert!(matches!(calls.last(), Some(MemoryCall::Finish { job_id, .. }) if *job_id == id(7)));
 }
@@ -55,7 +56,7 @@ async fn a_call_whose_end_holds_a_result_reference_reads_the_result() {
     );
     script.read_result(Answer::Now(content("from the result")));
 
-    let answer = call_a_runner::call_a_runner(&caller, id(7), "analyst", "go")
+    let answer = call_a_runner::call_a_runner(&caller, id(7), analyst(), "go")
         .await
         .expect("an answer");
 
@@ -76,7 +77,7 @@ async fn a_failed_or_cancelled_call_is_an_error_and_is_not_finished() {
         let (caller, script) = memory_caller();
         script.end(id(7), Answer::Now(end));
 
-        let error = call_a_runner::call_a_runner(&caller, id(7), "analyst", "go")
+        let error = call_a_runner::call_a_runner(&caller, id(7), analyst(), "go")
             .await
             .expect_err("an error");
 
@@ -88,4 +89,8 @@ async fn a_failed_or_cancelled_call_is_an_error_and_is_not_finished() {
                 .any(|call| matches!(call, MemoryCall::Finish { .. }))
         );
     }
+}
+
+fn analyst() -> br_runner_jobs::RunnerType {
+    br_runner_jobs::RunnerType::new("analyst").expect("a runner type")
 }

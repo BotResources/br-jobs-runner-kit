@@ -24,10 +24,15 @@ use live_world::{PRESENCE_TTL, WAIT, World, eventually};
 use uuid::Uuid;
 
 async fn client(world: &World) -> JobsClient {
-    JobsClient::new("analyst", "pod-1", WAIT, world.connection())
-        .await
-        .map_err(|error| error.to_string())
-        .expect("the client connects")
+    JobsClient::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+        WAIT,
+        world.connection(),
+    )
+    .await
+    .map_err(|error| error.to_string())
+    .expect("the client connects")
 }
 
 #[tokio::test]
@@ -270,8 +275,13 @@ async fn given_a_dispatch_mode_when_it_changes_then_the_feed_follows() {
 #[ignore = "needs nats-server -js on the path"]
 async fn given_a_missing_stream_when_the_client_is_made_then_infra_missing() {
     let world = World::bare().await;
-    let error = JobsClient::new("analyst", "pod-1", WAIT, world.connection())
-        .await
-        .expect_err("refused");
+    let error = JobsClient::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+        WAIT,
+        world.connection(),
+    )
+    .await
+    .expect_err("refused");
     assert!(matches!(error, Error::InfraMissing(_)), "{error:?}");
 }

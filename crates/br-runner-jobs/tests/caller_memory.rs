@@ -19,7 +19,7 @@ fn input(child: u128) -> CreateChildInput {
     CreateChildInput::new(
         id(child),
         id(child + 1000),
-        "analyst",
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
         CallMode::Sync,
         PayloadForm::Kept,
     )

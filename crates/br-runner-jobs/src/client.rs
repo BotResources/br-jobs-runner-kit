@@ -2,13 +2,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_runner_connection::Connection;
-use contract_jobs::runner::{ClaimRefusal, ClaimReplyV2};
+use contract_jobs::reason::Reason;
+use contract_jobs::runner::ClaimReplyV2;
 use uuid::Uuid;
 
 use crate::backend::{Backend, TriggerSource};
 use crate::error::{Error, Operation, Refusal};
 use crate::feed::Feed;
 use crate::model::{CancelEvent, Capacity, ModeEvent, PresenceStatus};
+use crate::reason::RefusalReason;
+use crate::runner_type::RunnerType;
 use crate::work::{Unreadable, Work};
 
 #[derive(Clone)]
@@ -85,7 +88,7 @@ impl JobsClient {
     }
 
     pub async fn new(
-        runner_type: &str,
+        runner_type: RunnerType,
         instance_key: &str,
         reply_wait: Duration,
         connection: Connection,
@@ -100,7 +103,7 @@ impl JobsClient {
         Ok(Self::from_backend(Arc::new(live)))
     }
 
-    pub fn runner_type(&self) -> &str {
+    pub fn runner_type(&self) -> &RunnerType {
         self.backend.runner_type()
     }
 
@@ -157,14 +160,11 @@ impl JobsClient {
         };
         if let Some(reason) = reply.reason {
             let word = match &reason {
-                contract_jobs::reason::Reason::Known(known) => known.as_str().to_owned(),
-                contract_jobs::reason::Reason::Unknown(text) => text.clone(),
+                Reason::Known(known) => known.as_str(),
+                Reason::Unknown(text) => text,
             };
             let mut refusal = Refusal::new(Operation::Claim, word, String::new());
-            if matches!(
-                reason,
-                contract_jobs::reason::Reason::Known(ClaimRefusal::Busy)
-            ) {
+            if refusal.reason == RefusalReason::Busy {
                 refusal.retry_after_ms = reply.retry_after_ms;
             }
             return Err(Error::Refused(refusal));

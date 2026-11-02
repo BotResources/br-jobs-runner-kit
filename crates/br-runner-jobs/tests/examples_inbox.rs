@@ -1,5 +1,6 @@
 #[path = "../examples/agent_and_inbox.rs"]
 #[allow(dead_code)]
+// the example has its own main and helpers, unused when it is included as a module
 mod agent_and_inbox;
 
 use std::sync::Arc;
@@ -31,7 +32,10 @@ struct World {
 }
 
 async fn world() -> World {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let passport = Passport::human(
         id(5),
         false,

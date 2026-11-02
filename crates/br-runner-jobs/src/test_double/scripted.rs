@@ -7,6 +7,7 @@ use tokio::sync::{Notify, mpsc};
 use uuid::Uuid;
 
 use super::scripted_inputs::{Inputs, PresenceRecord};
+use crate::arrival::ArrivalSettings;
 use crate::backend::{
     Backend, BoxFuture, ChildCommand, ChildSession, Fact, LogRecord, RawFeed, TriggerSource,
 };
@@ -15,6 +16,7 @@ use crate::error::{Error, Operation};
 use crate::model::{
     AgentDeclaration, CancelEvent, ItemArrived, ListedAgent, ModeEvent, PresenceStatus,
 };
+use crate::runner_type::RunnerType;
 
 mod call;
 mod session;
@@ -30,6 +32,7 @@ pub(super) struct Script {
     calls: Vec<Call>,
     graphql: VecDeque<Result<Value, Error>>,
     graphql_default: Option<Value>,
+    started: Option<Answer<()>>,
     facts: Option<Answer<()>>,
     register: Option<Answer<()>>,
     mark_read: Option<Answer<()>>,
@@ -39,7 +42,7 @@ pub(super) struct Script {
 
 pub struct ScriptedJobs {
     script: Mutex<Script>,
-    runner_type: String,
+    runner_type: RunnerType,
     instance_key: String,
     reply_wait: Duration,
     hold: Mutex<bool>,
@@ -50,20 +53,21 @@ pub struct ScriptedJobs {
 }
 
 impl ScriptedJobs {
-    pub fn new(runner_type: &str, instance_key: &str) -> Arc<Self> {
+    pub fn new(runner_type: RunnerType, instance_key: &str) -> Arc<Self> {
         let (arrival_sender, receiver) = mpsc::unbounded_channel();
         Arc::new(Self {
             script: Mutex::new(Script {
                 calls: Vec::new(),
                 graphql: VecDeque::new(),
                 graphql_default: None,
+                started: None,
                 facts: None,
                 register: None,
                 mark_read: None,
                 command: None,
                 agents: Vec::new(),
             }),
-            runner_type: runner_type.to_owned(),
+            runner_type,
             instance_key: instance_key.to_owned(),
             reply_wait: Duration::from_secs(5),
             hold: Mutex::new(false),
@@ -81,30 +85,10 @@ impl ScriptedJobs {
     pub(super) fn script(&self) -> MutexGuard<'_, Script> {
         self.script.lock().unwrap_or_else(|p| p.into_inner())
     }
-
-    pub fn push_arrival(&self, arrival: Result<ItemArrived, Error>) {
-        let _ = self.arrival_sender.send(arrival);
-    }
-
-    async fn gate(&self) {
-        loop {
-            let notified = self.released.notified();
-            tokio::pin!(notified);
-            notified.as_mut().enable();
-            if !*self.hold.lock().unwrap_or_else(|p| p.into_inner()) {
-                return;
-            }
-            notified.await;
-        }
-    }
-
-    fn record(&self, call: Call) {
-        self.script().calls.push(call);
-    }
 }
 
 impl Backend for ScriptedJobs {
-    fn runner_type(&self) -> &str {
+    fn runner_type(&self) -> &RunnerType {
         &self.runner_type
     }
 
@@ -160,6 +144,20 @@ impl Backend for ScriptedJobs {
         _ack_wait: Duration,
     ) -> BoxFuture<'_, Result<Box<dyn TriggerSource>, Error>> {
         Box::pin(async { Ok(self.inputs.trigger_source()) })
+    }
+
+    fn start(
+        &self,
+        run_id: Uuid,
+        start_id: Uuid,
+        _wait: Duration,
+    ) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(async move {
+            self.gate().await;
+            let mut script = self.script();
+            script.calls.push(Call::Started { run_id, start_id });
+            answer(&mut script.started, ())
+        })
     }
 
     fn publish_fact(
@@ -221,8 +219,10 @@ impl Backend for ScriptedJobs {
     fn arrival_feed(
         &self,
         _run_id: Uuid,
+        settings: ArrivalSettings,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
         Box::pin(async move {
+            self.record(Call::ArrivalFeed(settings));
             let receiver = self
                 .arrivals
                 .lock()

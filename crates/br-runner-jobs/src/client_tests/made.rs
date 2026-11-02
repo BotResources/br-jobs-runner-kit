@@ -25,7 +25,13 @@ async fn offline_connection() -> Connection {
 }
 
 async fn made(runner_type: &str, instance_key: &str, wait: Duration) -> Result<JobsClient, Error> {
-    JobsClient::new(runner_type, instance_key, wait, offline_connection().await).await
+    JobsClient::new(
+        crate::RunnerType::new(runner_type)?,
+        instance_key,
+        wait,
+        offline_connection().await,
+    )
+    .await
 }
 
 #[tokio::test]

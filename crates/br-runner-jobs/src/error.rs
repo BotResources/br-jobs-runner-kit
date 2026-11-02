@@ -1,3 +1,5 @@
+use crate::reason::RefusalReason;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Cause {
@@ -14,7 +16,7 @@ pub struct Failure {
 }
 
 impl Failure {
-    pub(crate) fn new(cause: Cause, text: impl Into<String>) -> Self {
+    pub fn new(cause: Cause, text: impl Into<String>) -> Self {
         Self {
             cause,
             text: text.into(),
@@ -57,6 +59,15 @@ pub enum CredentialKind {
 pub struct CredentialFailure {
     pub kind: CredentialKind,
     pub text: String,
+}
+
+impl CredentialFailure {
+    pub fn new(kind: CredentialKind, text: impl Into<String>) -> Self {
+        Self {
+            kind,
+            text: text.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -107,15 +118,15 @@ impl Operation {
 #[non_exhaustive]
 pub struct Refusal {
     pub operation: Operation,
-    pub reason: String,
+    pub reason: RefusalReason,
     pub message: String,
     pub retry_after_ms: Option<u64>,
 }
 
 impl Refusal {
-    pub(crate) fn new(
+    pub fn new(
         operation: Operation,
-        reason: impl Into<String>,
+        reason: impl Into<RefusalReason>,
         message: impl Into<String>,
     ) -> Self {
         Self {
@@ -124,6 +135,11 @@ impl Refusal {
             message: message.into(),
             retry_after_ms: None,
         }
+    }
+
+    pub fn with_retry_after_ms(mut self, delay: u64) -> Self {
+        self.retry_after_ms = Some(delay);
+        self
     }
 }
 
@@ -185,9 +201,9 @@ impl Error {
         Self::Lost(Failure::wait(text))
     }
 
-    pub(crate) fn refused(
+    pub fn refused(
         operation: Operation,
-        reason: impl Into<String>,
+        reason: impl Into<RefusalReason>,
         message: impl Into<String>,
     ) -> Self {
         Self::Refused(Refusal::new(operation, reason, message))
