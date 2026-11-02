@@ -18,7 +18,6 @@ Moves the crate to the wire library `contract-jobs` 0.8.0: the started fact beco
 - The started fact is a request on `jobs.runner.started.{runner_type}` with one reply. It is still the first write of the delivery queue. The queue sends it again, with the same start id, after `Lost`, `Unavailable`, `Unreadable` and the refusal `instance_unknown`; every other refusal is final. The crate no longer publishes a started fact on the status stream.
 - The arrival feed reads `integration.evt.jobs.run.item_arrived.v2`. Each feed creates its own ephemeral consumer that starts at new messages, before the replay read. The feed ends with `Lost` when its consumer is gone from the server, and with `InfraMissing` when the stream is gone. A cut of the bus session shorter than 120 seconds loses no event.
 - The arrival consumer is no longer durable and the Fabric creates no consumer for the arrival feed: the one durable consumer that the crate creates is the one of the triggers. An event that cannot be read is given to the feed that read it, not to every feed of the client.
-- The README and the limits tell that jobs fails as permanent the Run of a terminated trigger that has not started.
 
 ### Breaking
 
@@ -26,6 +25,7 @@ Moves the crate to the wire library `contract-jobs` 0.8.0: the started fact beco
 - `Refusal::reason` is a `RefusalReason` where it was a `String`.
 - `Fact::Started` is removed; the started request is `Backend::start` (`Call::Started` in the test double).
 - The crate depends on `contract-jobs` 0.8.0, and needs the version 2 doorbell on the event stream.
+- An unread item of the kind `MAIL_NOTICE` without a `message`, and a call notice of the type `JOB_CANCELLED` without a `jobId`, make `MailHandle::unread` and the inbox listing `Unreadable`; in 0.1.0 these kinds were kept as `Unknown`.
 - A server that ran 0.1.0 keeps the durable arrival consumers that 0.1.0 created; 0.2.0 neither uses nor deletes them.
 
 ## 0.1.0

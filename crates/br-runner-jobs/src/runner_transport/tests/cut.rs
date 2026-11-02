@@ -97,7 +97,7 @@ async fn given_a_cancel_feed_when_the_bus_is_cut_then_it_goes_on_without_loss_or
 
 #[tokio::test]
 #[ignore = "needs nats-server -js on the path"]
-async fn given_an_arrival_feed_when_the_bus_is_cut_then_no_item_is_skipped_or_the_feed_ends_with_lost()
+async fn given_an_arrival_feed_when_the_bus_is_cut_for_a_short_time_then_the_events_before_and_after_come_in_order()
  {
     let mut world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;
@@ -111,27 +111,12 @@ async fn given_an_arrival_feed_when_the_bus_is_cut_then_no_item_is_skipped_or_th
     arrive(&world, run_id, before, WireKind::Mail, None).await;
     cut(&mut world).await;
     arrive(&world, run_id, after, WireKind::Mail, None).await;
-    let mut seen = Vec::new();
-    loop {
-        match tokio::time::timeout(Duration::from_secs(30), feed.next())
-            .await
-            .expect("the feed answers after a cut")
-        {
-            Ok(item) => {
-                seen.push(item.item_id);
-                if item.item_id == after {
-                    break;
-                }
-            }
-            Err(error) => {
-                assert!(matches!(error, Error::Lost(_)), "{error:?}");
-                break;
-            }
-        }
-    }
-    if seen.contains(&after) {
-        assert_eq!(seen, vec![before, after]);
-    } else {
-        assert!(seen.is_empty() || seen == vec![before], "{seen:?}");
-    }
+    let first = tokio::time::timeout(Duration::from_secs(30), feed.next())
+        .await
+        .expect("the feed answers after a cut");
+    assert_eq!(first.map(|item| item.item_id), Ok(before));
+    let second = tokio::time::timeout(Duration::from_secs(30), feed.next())
+        .await
+        .expect("the feed answers after a cut");
+    assert_eq!(second.map(|item| item.item_id), Ok(after));
 }
