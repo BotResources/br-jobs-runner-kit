@@ -102,6 +102,19 @@ async fn given_the_started_fact_when_jobs_refuses_it_for_another_reason_then_it_
 }
 
 #[tokio::test]
+async fn given_the_started_fact_when_the_failure_is_unauthenticated_or_a_credential_that_is_not_usable_then_it_is_final_and_removed_as_failed()
+ {
+    for error in [Error::Unauthenticated, no_usable()] {
+        let sender = ScriptedSender::new();
+        sender.script(WriteKind::Started, vec![fail(error.clone())]);
+        let rig = Rig::with(sender);
+        assert_eq!(rig.started.await, Err(Removal::Failed(error.clone())));
+        assert_eq!(rig.sender.attempts_of(WriteKind::Started).len(), 1);
+        assert!(rig.observer.retrying().is_empty());
+    }
+}
+
+#[tokio::test]
 async fn given_a_refusal_instance_unknown_on_another_write_when_sent_then_it_is_final() {
     for write in independent_writes() {
         let error = refusal(Operation::Mail, "instance_unknown");
