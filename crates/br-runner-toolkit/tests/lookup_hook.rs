@@ -16,7 +16,7 @@ fn unknown_instance() -> InstanceId {
 
 #[tokio::test(start_paused = true)]
 async fn given_a_lookup_when_called_before_the_runner_started_then_it_is_an_error_of_the_lookup() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let builder = RunnerBuilder::new(jobs.client(), settings(1));
     let lookup = builder.instance_lookup();
     let error = lookup.book(unknown_instance()).await.expect_err("an error");
@@ -30,7 +30,7 @@ async fn given_a_lookup_when_called_before_the_runner_started_then_it_is_an_erro
 
 #[tokio::test(start_paused = true)]
 async fn given_an_instance_the_library_does_not_hold_when_looked_up_then_the_lookup_waits() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let builder = RunnerBuilder::new(jobs.client(), settings(1));
     let lookup = builder.instance_lookup();
@@ -49,7 +49,7 @@ async fn given_an_instance_the_library_does_not_hold_when_looked_up_then_the_loo
 #[tokio::test(start_paused = true)]
 async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_book_and_the_run_context_of_its_run()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let builder = RunnerBuilder::new(jobs.client(), settings(1));
@@ -78,7 +78,7 @@ async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_b
 #[tokio::test(start_paused = true)]
 async fn given_an_instance_whose_executor_returned_when_it_is_looked_up_then_the_error_is_instance_ended_and_after_the_run_is_dropped_the_lookup_waits()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let release = Arc::new(Notify::new());
@@ -123,7 +123,7 @@ async fn given_an_instance_whose_executor_returned_when_it_is_looked_up_then_the
 #[tokio::test(start_paused = true)]
 async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_once_with_the_node_and_its_agents()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
@@ -159,7 +159,7 @@ async fn given_a_lifecycle_hook_when_an_instance_ends_then_the_hook_is_called_on
 #[tokio::test(start_paused = true)]
 async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_the_run_is_not_settled_until_the_hook_returns()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));
@@ -194,7 +194,7 @@ async fn given_a_hook_that_has_not_returned_when_the_executor_has_returned_then_
 #[tokio::test(start_paused = true)]
 async fn given_a_hook_that_panics_when_an_instance_ends_then_the_panic_is_caught_and_the_run_settles()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let hook = lifecycle_hook(|_ended| async {

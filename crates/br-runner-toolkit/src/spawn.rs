@@ -82,7 +82,7 @@ mod tests {
     use super::{LoopBodies, LoopTasks, spawn_loop};
     use crate::instances::Instances;
     use crate::shared::Shared;
-    use crate::unit_support::shared;
+    use crate::unit_support::{runner_type, shared};
 
     struct Probe {
         starts: Arc<AtomicUsize>,
@@ -123,7 +123,7 @@ mod tests {
     type BodyFuture = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
 
     fn world() -> Arc<Shared> {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         shared(&jobs, None, &Arc::new(Instances::default()))
     }
 

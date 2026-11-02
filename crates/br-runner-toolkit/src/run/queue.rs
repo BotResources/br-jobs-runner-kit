@@ -91,13 +91,13 @@ mod tests {
     use super::{Source, open_queue};
     use crate::instances::Instances;
     use crate::unit_support::logs::Logs;
-    use crate::unit_support::{queue_of, record, shared, work};
+    use crate::unit_support::{queue_of, record, runner_type, shared, work};
 
     #[tokio::test]
     async fn given_a_work_whose_queue_was_made_already_when_the_queue_is_opened_then_the_error_log_names_the_cause()
      {
         let (logs, _guard) = Logs::capture();
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let instances = Arc::new(Instances::default());
         let shared = shared(&jobs, None, &instances);
         let work = work(&jobs, 1);

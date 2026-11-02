@@ -11,7 +11,7 @@ use tokio::sync::Notify;
 async fn given_a_duplicate_trigger_when_the_started_fact_has_not_ended_then_it_is_dropped_with_no_acknowledgement_and_starts_no_second_run()
  {
     let gate = Arc::new(Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.pause();
     jobs.push_trigger(trigger(1));
@@ -38,7 +38,7 @@ async fn given_a_duplicate_trigger_when_the_started_fact_has_not_ended_then_it_i
 async fn given_a_duplicate_trigger_when_the_started_fact_has_ended_and_the_run_is_in_flight_then_it_is_acknowledged_and_dropped()
  {
     let gate = Arc::new(Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(

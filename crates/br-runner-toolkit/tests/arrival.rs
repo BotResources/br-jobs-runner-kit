@@ -19,7 +19,7 @@ async fn given_an_arrival_that_cannot_be_decoded_when_a_run_is_in_flight_then_on
  {
     let (logs, _guard) = Logs::capture();
     let gate = Arc::new(Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(nothing_unread());
     jobs.push_arrival(Err(Error::Unreadable("a bad item".to_owned())));
@@ -43,7 +43,7 @@ async fn given_an_arrival_feed_that_ends_with_an_error_when_no_beat_comes_then_t
  {
     let (logs, _guard) = Logs::capture();
     let gate = Arc::new(Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(nothing_unread());
     jobs.push_arrival(Err(Error::InvalidInput("the feed was cut".to_owned())));
@@ -70,7 +70,7 @@ async fn given_an_arrival_feed_that_ends_with_an_error_when_no_beat_comes_then_t
 async fn given_a_second_run_whose_arrival_feed_cannot_be_opened_then_the_error_is_logged_and_the_run_completes()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(nothing_unread());
     jobs.push_trigger(trigger(1));

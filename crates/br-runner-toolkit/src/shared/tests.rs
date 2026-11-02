@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use super::Mode;
 use crate::instances::Instances;
-use crate::unit_support::{id, shared};
+use crate::unit_support::{id, runner_type, shared};
 
 fn fresh() -> Arc<super::Shared> {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     shared(&jobs, None, &Arc::new(Instances::default()))
 }
 

@@ -11,7 +11,7 @@ use tokio::sync::Notify;
 #[tokio::test(start_paused = true)]
 async fn given_a_drain_with_no_run_in_flight_when_the_shutdown_comes_then_the_report_is_empty_and_the_presence_is_deleted()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -22,7 +22,7 @@ async fn given_a_drain_with_no_run_in_flight_when_the_shutdown_comes_then_the_re
 
 #[tokio::test(start_paused = true)]
 async fn given_a_drain_when_the_shutdown_comes_then_the_presence_goes_to_draining() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let gate = Arc::new(Notify::new());
     jobs.push_trigger(trigger(1));
@@ -46,7 +46,7 @@ async fn given_a_drain_when_the_shutdown_comes_then_the_presence_goes_to_drainin
 
 #[tokio::test(start_paused = true)]
 async fn given_a_run_in_flight_when_the_shutdown_comes_then_the_drain_waits_for_the_run_to_end() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let gate = Arc::new(Notify::new());
     jobs.push_trigger(trigger(1));
@@ -70,7 +70,7 @@ async fn given_a_run_in_flight_when_the_shutdown_comes_then_the_drain_waits_for_
 #[tokio::test(start_paused = true)]
 async fn given_a_run_in_flight_when_the_drain_time_ends_then_the_run_is_aborted_and_the_report_names_it()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(
@@ -94,7 +94,7 @@ async fn given_a_run_in_flight_when_the_drain_time_ends_then_the_run_is_aborted_
 
 #[tokio::test(start_paused = true)]
 async fn given_a_drain_when_a_trigger_is_made_after_it_began_then_the_trigger_is_not_taken() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -110,7 +110,7 @@ async fn given_a_drain_when_a_trigger_is_made_after_it_began_then_the_trigger_is
 #[tokio::test(start_paused = true)]
 async fn given_a_run_in_flight_when_the_drain_time_ends_then_the_cancel_token_of_the_run_is_triggered_for_the_work_the_node_started_by_itself()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let noted = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -133,7 +133,7 @@ async fn given_a_run_in_flight_when_the_drain_time_ends_then_the_cancel_token_of
 #[tokio::test(start_paused = true)]
 async fn given_a_run_whose_executor_returned_when_the_drain_time_ends_then_the_report_says_the_executor_is_not_running()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let gate = Arc::new(Notify::new());

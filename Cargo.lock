@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "br-runner-toolkit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-nats",
  "br-agentic-contract",
@@ -448,11 +448,11 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs 0.1.0",
+ "br-runner-jobs 0.2.0",
  "br-runner-toolkit",
  "br-util-nats-fabric",
  "chrono",
- "contract-jobs 0.7.0",
+ "contract-jobs 0.8.0",
  "futures",
  "serde",
  "serde_json",

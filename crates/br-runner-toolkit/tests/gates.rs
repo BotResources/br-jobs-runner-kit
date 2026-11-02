@@ -16,7 +16,7 @@ fn claims(jobs: &ScriptedJobs) -> usize {
 
 #[tokio::test(start_paused = true)]
 async fn given_no_dispatch_mode_when_a_trigger_is_made_then_the_runner_takes_nothing() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     jobs.push_cancel(Ok(CancelEvent::ReplayComplete));
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
@@ -28,7 +28,7 @@ async fn given_no_dispatch_mode_when_a_trigger_is_made_then_the_runner_takes_not
 
 #[tokio::test(start_paused = true)]
 async fn given_a_no_entry_event_when_a_trigger_is_made_then_the_runner_takes_nothing() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     jobs.push_mode(Ok(ModeEvent::NoEntry));
     jobs.push_cancel(Ok(CancelEvent::ReplayComplete));
     jobs.push_trigger(trigger(1));
@@ -41,7 +41,7 @@ async fn given_a_no_entry_event_when_a_trigger_is_made_then_the_runner_takes_not
 #[tokio::test(start_paused = true)]
 async fn given_a_cancel_replay_that_is_not_complete_when_a_trigger_is_made_then_the_runner_takes_nothing_until_it_is_complete()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     jobs.push_mode(Ok(ModeEvent::Mode(DispatchMode::Push)));
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
@@ -54,7 +54,7 @@ async fn given_a_cancel_replay_that_is_not_complete_when_a_trigger_is_made_then_
 
 #[tokio::test(start_paused = true)]
 async fn given_claim_mode_and_a_cancel_replay_that_is_not_complete_then_no_claim_is_sent() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     jobs.push_mode(Ok(ModeEvent::Mode(DispatchMode::Claim)));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(60)).await;
@@ -65,7 +65,7 @@ async fn given_claim_mode_and_a_cancel_replay_that_is_not_complete_then_no_claim
 #[tokio::test(start_paused = true)]
 async fn given_a_mode_that_goes_from_push_to_no_entry_and_back_when_a_trigger_waits_then_it_is_taken_after_the_return()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_mode(Ok(ModeEvent::NoEntry));
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -81,13 +81,13 @@ async fn given_a_mode_that_goes_from_push_to_no_entry_and_back_when_a_trigger_wa
 
 #[tokio::test(start_paused = true)]
 async fn given_a_mode_that_goes_from_push_to_claim_when_the_runner_is_idle_then_it_sends_claims() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
     tokio::time::sleep(Duration::from_secs(5)).await;
     assert_eq!(claims(&jobs), 0);
     jobs.push_claim_reply(Ok(serde_json::to_vec(
-        &json!({ "version": 2, "reason": "not_in_claim_mode" }),
+        &json!({ "version": 2, "reason": "not_claim_mode" }),
     )
     .expect("bytes")));
     jobs.push_mode(Ok(ModeEvent::Mode(DispatchMode::Claim)));
@@ -98,7 +98,7 @@ async fn given_a_mode_that_goes_from_push_to_claim_when_the_runner_is_idle_then_
 #[tokio::test(start_paused = true)]
 async fn given_two_slots_when_two_triggers_are_made_then_two_runs_are_in_flight_at_once() {
     let gate = std::sync::Arc::new(tokio::sync::Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));

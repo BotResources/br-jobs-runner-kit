@@ -15,7 +15,7 @@ use crate::hook::{InstanceEnded, lifecycle_hook};
 use crate::instances::Instances;
 use crate::record::RunRecord;
 use crate::unit_support::logs::Logs;
-use crate::unit_support::{book_with_agent, instance, queue_of, record, shared, work};
+use crate::unit_support::{book_with_agent, instance, queue_of, record, runner_type, shared, work};
 
 struct Fixture {
     jobs: Arc<ScriptedJobs>,
@@ -35,7 +35,7 @@ async fn ticks() {
 }
 
 async fn settling(expect_observations: bool) -> Fixture {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
     let gate = Arc::new(Notify::new());
     let seen = Arc::clone(&calls);
@@ -164,7 +164,7 @@ async fn given_observations_that_are_not_over_when_the_run_settles_then_one_warn
 #[tokio::test]
 async fn given_observations_that_are_already_over_when_the_run_settles_then_no_wait_is_logged() {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     let instances = Arc::new(Instances::default());
     let shared = shared(&jobs, None, &instances);
     let work = work(&jobs, 1);

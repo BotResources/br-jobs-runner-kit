@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_graph_contract::Fields;
-use br_runner_jobs::{Error, Work};
+use br_runner_jobs::{Error, RefusalReason, Work};
 use tokio::sync::watch;
 use uuid::Uuid;
 
@@ -127,28 +127,24 @@ async fn claim_step<F: Fields>(shared: &Arc<Shared>, plan: &Arc<Plan<F>>, held: 
             }
         }
         Ok(None) => {}
-        Err(Error::Refused(refusal)) => {
-            use contract_jobs::runner::ClaimRefusal as Reason;
-            match refusal.reason.as_str() {
-                reason if reason == Reason::Busy.as_str() => {
-                    tracing::warn!(%claim_id, "the claim is repeated after a busy refusal");
-                    *held = Some(claim_id);
-                    pause(shared, refusal.retry_after_ms.map(Duration::from_millis)).await;
-                }
-                reason if reason == Reason::InstanceUnknown.as_str() => {
-                    tracing::warn!(%claim_id, "the claim is repeated after an unknown-instance refusal");
-                    *held = Some(claim_id);
-                    pause(shared, None).await;
-                }
-                reason if reason == Reason::ClaimSpent.as_str() => {}
-                reason => {
-                    if reason == Reason::MalformedClaim.as_str() {
-                        tracing::error!(%claim_id, "jobs refused the claim as malformed");
-                    }
-                    shared.stop_claims(epoch);
-                }
+        Err(Error::Refused(refusal)) => match refusal.reason {
+            RefusalReason::Busy => {
+                tracing::warn!(%claim_id, "the claim is repeated after a busy refusal");
+                *held = Some(claim_id);
+                pause(shared, refusal.retry_after_ms.map(Duration::from_millis)).await;
             }
-        }
+            RefusalReason::InstanceUnknown => {
+                tracing::warn!(%claim_id, "the claim is repeated after an unknown-instance refusal");
+                *held = Some(claim_id);
+                pause(shared, None).await;
+            }
+            RefusalReason::ClaimSpent => {}
+            RefusalReason::MalformedClaim => {
+                tracing::error!(%claim_id, "jobs refused the claim as malformed");
+                shared.stop_claims(epoch);
+            }
+            _ => shared.stop_claims(epoch),
+        },
         Err(error @ Error::InvalidInput(_)) => {
             tracing::error!(%claim_id, %error, "the claim could not be made, there are no more claims");
             shared.stop_claims(epoch);

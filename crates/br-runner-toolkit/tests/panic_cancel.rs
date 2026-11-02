@@ -10,7 +10,7 @@ use support::*;
 #[tokio::test(start_paused = true)]
 async fn given_a_run_whose_start_function_panics_before_it_returns_its_future_when_the_run_fails_with_panic_then_the_cancel_token_of_the_run_is_triggered()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let seen: Arc<Mutex<Option<CancelView>>> = Arc::default();

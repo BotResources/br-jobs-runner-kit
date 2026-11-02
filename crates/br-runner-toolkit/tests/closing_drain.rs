@@ -12,7 +12,7 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 async fn run_with_a_held_terminal_fact() -> (Arc<ScriptedJobs>, Running, Arc<Notify>) {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let gate = Arc::new(Notify::new());
@@ -74,7 +74,7 @@ async fn given_a_closing_that_waits_when_the_shutdown_comes_then_the_drain_waits
 #[tokio::test(start_paused = true)]
 async fn given_a_run_in_flight_with_a_hook_when_the_drain_time_ends_then_the_hook_is_called_with_the_agents_before_the_book_is_dropped_and_the_report_lists_the_instance()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let calls: Arc<Mutex<Vec<InstanceEnded>>> = Arc::default();
@@ -116,7 +116,7 @@ async fn given_a_run_in_flight_with_a_hook_when_the_drain_time_ends_then_the_hoo
 async fn given_a_hook_that_was_called_and_never_returns_when_the_drain_time_ends_then_the_report_lists_its_instance()
  {
     let (logs, _guard) = Logs::capture();
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let called: Arc<Mutex<Vec<InstanceId>>> = Arc::default();
@@ -160,7 +160,7 @@ async fn given_a_hook_that_was_called_and_never_returns_when_the_drain_time_ends
 
 #[tokio::test(start_paused = true)]
 async fn given_no_hook_when_the_drain_time_ends_then_the_report_lists_no_instance() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(

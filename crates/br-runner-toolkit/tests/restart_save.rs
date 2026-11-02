@@ -19,7 +19,7 @@ fn inbox_agent(builder: &RunnerBuilder, inbox: bool) -> Agent {
 }
 
 async fn run_with_agent(can_restart: bool, inbox: bool) -> Arc<ScriptedJobs> {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -70,7 +70,7 @@ async fn given_agents_without_an_inbox_when_the_graph_ends_then_no_state_is_save
 #[tokio::test(start_paused = true)]
 async fn given_a_refused_state_save_when_the_run_completes_then_the_run_fails_with_saved_state_refused()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({
         "jobsSaveState": { "success": false, "reason": "too_big", "message": "too big" }
@@ -111,7 +111,7 @@ fn registrations(jobs: &ScriptedJobs) -> Vec<(Uuid, bool, bool)> {
 #[tokio::test(start_paused = true)]
 async fn given_a_restart_whose_saved_state_holds_an_agent_with_an_inbox_when_the_node_asks_for_its_agent_then_the_registration_carries_the_saved_agent_id_and_inbox_flag()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let state = json!({
         "fields": { "steps": ["old"] },

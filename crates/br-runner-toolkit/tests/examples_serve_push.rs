@@ -7,11 +7,11 @@ mod serve_push;
 use br_runner_jobs::test_double::ScriptedJobs;
 use tokio_util::sync::CancellationToken;
 
-use support::{has_terminal, kinds, push_mode, trigger, until};
+use support::{has_terminal, kinds, push_mode, runner_type, trigger, until};
 
 #[tokio::test(start_paused = true)]
 async fn the_serve_push_example_takes_a_run_and_reports_it() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let shutdown = CancellationToken::new();
