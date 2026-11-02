@@ -13,7 +13,6 @@ mod surface;
 mod tests;
 mod triggers;
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -39,7 +38,6 @@ pub(crate) struct Live {
     wire: Wire,
     presence: Store,
     cancel: Store,
-    arrivals: Arc<arrivals::Arrivals>,
 }
 
 #[derive(Clone)]
@@ -142,10 +140,7 @@ impl Backend for Live {
         &self,
         run_id: Uuid,
     ) -> BoxFuture<'_, Result<Box<dyn RawFeed<ItemArrived>>, Error>> {
-        Box::pin(async move {
-            let feed = self.arrivals.open(run_id).await?;
-            Ok(Box::new(feed) as Box<dyn RawFeed<ItemArrived>>)
-        })
+        Box::pin(self.open_arrival_feed(run_id))
     }
 
     fn register_agents(

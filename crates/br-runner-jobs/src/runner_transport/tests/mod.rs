@@ -1,4 +1,5 @@
 mod arrivals;
+mod arrivals_consumers;
 mod bind;
 mod cancel;
 mod claim;

@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::context::ContextBuilder;
@@ -13,7 +12,6 @@ use contract_jobs::runner::{
 use contract_jobs::segment::SubjectSegment;
 use serde_json::Value;
 
-use super::arrivals::Arrivals;
 use super::{Live, Segments, Wire, fail};
 use crate::error::{Error, Failure};
 use crate::runner_type::{RunnerType, segment_error};
@@ -78,7 +76,6 @@ impl Live {
             runner_type,
             instance_key: instance_key.to_owned(),
             reply_wait,
-            arrivals: Arc::new(Arrivals::new(&wire, &segments)?),
             segments,
             connection,
             wire,
@@ -112,7 +109,7 @@ async fn check_fabric(fabric: &Fabric, wait: Duration) -> Result<(), Error> {
             .map_err(|_| fail::missing(&object))
     })
     .await?;
-    let arrived = contract_jobs::evt_run_item_arrived_v1_coords()
+    let arrived = contract_jobs::evt_run_item_arrived_v2_coords()
         .map_err(|e| Error::invalid(e.to_string()))?;
     let events = format!("the stream {INTEGRATION_EVT}");
     within(wait, &events, async {

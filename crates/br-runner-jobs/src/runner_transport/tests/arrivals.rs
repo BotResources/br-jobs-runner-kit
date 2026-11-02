@@ -1,5 +1,5 @@
 use br_util_nats_fabric::INTEGRATION_EVT;
-use contract_jobs::event_v2::{ItemKindV1 as WireKind, RunItemArrived};
+use contract_jobs::event_v2::{ItemKind as WireKind, RunItemArrivedV2};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -10,12 +10,18 @@ use crate::backend::Backend;
 use crate::error::Error;
 use crate::model::{ItemArrived, ItemKind};
 
-async fn arrive(world: &World, run_id: Uuid, item_id: Uuid, kind: WireKind, address: Option<Uuid>) {
+pub(super) async fn arrive(
+    world: &World,
+    run_id: Uuid,
+    item_id: Uuid,
+    kind: WireKind,
+    address: Option<Uuid>,
+) {
     publish_event(
         &world.js,
-        &contract_jobs::evt_run_item_arrived_v1_coords().expect("coords"),
+        &contract_jobs::evt_run_item_arrived_v2_coords().expect("coords"),
         Uuid::now_v7(),
-        RunItemArrived {
+        RunItemArrivedV2 {
             run_id,
             address,
             item_id,
@@ -46,6 +52,8 @@ async fn given_an_open_feed_when_items_arrive_then_only_those_of_its_run_come_wi
     arrive(&world, mine, first, WireKind::Mail, Some(address)).await;
     arrive(&world, mine, second, WireKind::CcNotice, None).await;
     arrive(&world, mine, third, WireKind::Notice, None).await;
+    let fourth = Uuid::now_v7();
+    arrive(&world, mine, fourth, WireKind::MailNotice, Some(address)).await;
     assert_eq!(
         next(&mut feed).await,
         Ok(ItemArrived {
@@ -68,6 +76,14 @@ async fn given_an_open_feed_when_items_arrive_then_only_those_of_its_run_come_wi
             address: None,
             item_id: third,
             kind: ItemKind::CallNotice
+        })
+    );
+    assert_eq!(
+        next(&mut feed).await,
+        Ok(ItemArrived {
+            address: Some(address),
+            item_id: fourth,
+            kind: ItemKind::MailNotice
         })
     );
     silent(&mut feed).await;
@@ -111,7 +127,7 @@ async fn given_an_event_that_cannot_be_read_then_unreadable_comes_and_the_feed_g
         .expect("feed");
     publish_event(
         &world.js,
-        &contract_jobs::evt_run_item_arrived_v1_coords().expect("coords"),
+        &contract_jobs::evt_run_item_arrived_v2_coords().expect("coords"),
         Uuid::now_v7(),
         json!({ "run_id": "not a uuid" }),
     )

@@ -1,12 +1,13 @@
 use std::time::Duration;
 
-use contract_jobs::event_v2::{ItemKindV1 as WireKind, RunItemArrived};
+use contract_jobs::event_v2::ItemKind as WireKind;
 use contract_jobs::runner::{CANCEL_BUCKET, TRIGGER_STREAM};
 use contract_jobs::runner_transport::run_cancel_key;
 use uuid::Uuid;
 
+use super::arrivals::arrive;
 use super::live;
-use super::live_standin::{publish_event, publish_trigger, trigger};
+use super::live_standin::{publish_trigger, trigger};
 use super::live_world::{World, eventually};
 use super::next;
 use crate::backend::Backend;
@@ -96,7 +97,7 @@ async fn given_a_cancel_feed_when_the_bus_is_cut_then_it_goes_on_without_loss_or
 
 #[tokio::test]
 #[ignore = "needs nats-server -js on the path"]
-async fn given_an_arrival_feed_when_the_bus_is_cut_then_it_goes_on_without_loss_or_ends_with_a_typed_error()
+async fn given_an_arrival_feed_when_the_bus_is_cut_then_no_item_is_skipped_or_the_feed_ends_with_lost()
  {
     let mut world = World::ready().await;
     let live = live(&world, "analyst", "pod-1").await;
@@ -106,23 +107,31 @@ async fn given_an_arrival_feed_when_the_bus_is_cut_then_it_goes_on_without_loss_
         .await
         .map_err(|e| e.to_string())
         .expect("feed");
+    let (before, after) = (Uuid::now_v7(), Uuid::now_v7());
+    arrive(&world, run_id, before, WireKind::Mail, None).await;
     cut(&mut world).await;
-    let item_id = Uuid::now_v7();
-    publish_event(
-        &world.js,
-        &contract_jobs::evt_run_item_arrived_v1_coords().expect("coords"),
-        Uuid::now_v7(),
-        RunItemArrived {
-            run_id,
-            address: None,
-            item_id,
-            item_kind: WireKind::Mail,
-        },
-    )
-    .await;
-    let outcome = next(&mut feed).await;
-    survives_or_lost(&outcome);
-    if let Ok(item) = outcome {
-        assert_eq!(item.item_id, item_id);
+    arrive(&world, run_id, after, WireKind::Mail, None).await;
+    let mut seen = Vec::new();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(30), feed.next())
+            .await
+            .expect("the feed answers after a cut")
+        {
+            Ok(item) => {
+                seen.push(item.item_id);
+                if item.item_id == after {
+                    break;
+                }
+            }
+            Err(error) => {
+                assert!(matches!(error, Error::Lost(_)), "{error:?}");
+                break;
+            }
+        }
+    }
+    if seen.contains(&after) {
+        assert_eq!(seen, vec![before, after]);
+    } else {
+        assert!(seen.is_empty() || seen == vec![before], "{seen:?}");
     }
 }
