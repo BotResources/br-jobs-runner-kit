@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0
+
+Released 2026-11-02.
+
+The node builds on `br-runner-jobs` 0.2.0 and no longer carries a pin of `contract-jobs`.
+
+### Breaking
+
+- `RunnerType` of `br-runner-jobs` replaces the re-export of `SubjectSegment`: `RunnerAsNode::new` takes a `RunnerType`, made with `RunnerType::new("analyst")`. Of the libraries of the platform, the crate imports `br-graph-contract` and `br-runner-jobs` only, and no public type comes from the wire library of jobs.
+- The crate uses the types of `br-runner-jobs` 0.2.0, so a caller source gives the `CallerHandle` of that line (the one that `RunContext::caller_handle` of `br-runner-toolkit` 0.1.1 gives).
+
+### Behavior
+
+- `Outcome::Cancelled` now arrives on a live wire: a child Job cancelled by a party other than the node ends the wait with the cancelled end, from the cancel notice of jobs. Your response function decides what it means, as for a failed end; no finish and no cancel is handed over for it. A cancel that also ends the node is seen as the cancel view (event `Cancelled`); if the end reaches the node first, the response function gets it as cancelled and the cancel view then ends its wait. The limit "jobs sends no end for a child Job cancelled by another party" is removed.
+- `Outcome::Refusal` keeps the reason as a `String`: the text of the typed reason of `br-runner-jobs` 0.2.0. No change for the caller.
+- Known gap, unchanged: inside a map-reduce the instance never gets its caller handle, so it creates no child Job. The fix belongs to `br-runner-toolkit` and `br-flow-nodes`.
+
 ## 0.1.0
 
 Released 2026-10-31.

@@ -109,9 +109,10 @@ async fn given_a_cancelled_end_when_the_response_function_marks_it_then_the_even
 async fn given_a_refused_create_when_the_node_waits_then_the_response_function_gets_the_refusal_and_no_cancel_or_finish_is_handed_over()
  {
     let rig = rig();
-    rig.script.create(Answer::Now(Err(Removal::Refused(
-        a_jobs_refusal("unknown_runner_type").await,
-    ))));
+    rig.script
+        .create(Answer::Now(Err(Removal::Refused(a_jobs_refusal(
+            "unknown_runner_type",
+        )))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
 
@@ -126,9 +127,10 @@ async fn given_a_refused_create_when_the_node_waits_then_the_response_function_g
 async fn given_a_refused_upload_when_it_comes_in_the_end_of_the_create_then_the_outcome_is_the_refusal()
  {
     let rig = rig();
-    rig.script.create(Answer::Late(Err(Removal::Refused(
-        a_jobs_refusal("payload_too_big").await,
-    ))));
+    rig.script
+        .create(Answer::Late(Err(Removal::Refused(a_jobs_refusal(
+            "payload_too_big",
+        )))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");
@@ -176,9 +178,8 @@ async fn given_an_end_that_comes_before_the_late_delivery_of_the_create_then_the
 async fn given_the_node_never_sends_the_event_refused_when_every_outcome_is_tried_then_none_is_a_refused_event()
  {
     let rig = rig();
-    rig.script.create(Answer::Now(Err(Removal::Refused(
-        a_jobs_refusal("busy").await,
-    ))));
+    rig.script
+        .create(Answer::Now(Err(Removal::Refused(a_jobs_refusal("busy")))));
     let node = standard(source_of(&rig.handle));
     let mut run = start(&node, rig.token.view()).await;
     run.give("q");

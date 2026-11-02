@@ -10,7 +10,7 @@ use br_graph_contract::{
     CancelToken, CancelView, Cause, Event, EventEnd, Fields, Input, InputEnd, InstanceId, Node,
     Reason, State,
 };
-use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, SubjectSegment};
+use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
 use br_runner_jobs::test_double::{MemoryCall, MemoryScript, memory_caller};
 use br_runner_jobs::{CallerHandle, Content};
 use serde::{Deserialize, Serialize};
@@ -70,8 +70,8 @@ pub fn content(message: &str) -> Content {
     }
 }
 
-pub fn runner_type() -> SubjectSegment {
-    SubjectSegment::runner_type("analyst").expect("a runner type")
+pub fn runner_type() -> RunnerType {
+    RunnerType::new("analyst").expect("a runner type")
 }
 
 pub fn source_of(handle: &CallerHandle) -> impl CallerSource + use<> {
@@ -156,19 +156,8 @@ pub fn completed(message: &str) -> br_runner_jobs::SyncEnd {
     }
 }
 
-pub async fn a_jobs_refusal(reason: &str) -> br_runner_jobs::Error {
-    use br_runner_jobs::test_double::ScriptedJobs;
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
-    let body = format!(r#"{{"version":2,"reason":"{reason}","retry_after_ms":250}}"#);
-    jobs.push_claim_reply(Ok(body.into_bytes()));
-    match jobs
-        .client()
-        .claim(Uuid::now_v7(), Duration::from_secs(1))
-        .await
-    {
-        Err(error @ br_runner_jobs::Error::Refused(_)) => error,
-        other => panic!("expected a refusal, got {:?}", other.map(|_| ())),
-    }
+pub fn a_jobs_refusal(reason: &str) -> br_runner_jobs::Error {
+    br_runner_jobs::Error::refused(br_runner_jobs::Operation::Create, reason, "")
 }
 
 pub async fn started(started: &Notify) {

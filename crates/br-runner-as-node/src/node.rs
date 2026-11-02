@@ -5,12 +5,12 @@ use std::sync::Arc;
 use br_graph_contract::{
     CancelView, Cause, CreateFuture, Fields, Instance, InstanceId, Node, PROGRAMMATIC, State,
 };
-use contract_jobs::segment::SubjectSegment;
 
 use crate::caller_source::CallerSource;
 use crate::instance;
 use crate::outcome::Outcome;
 use crate::spec::JobSpec;
+use br_runner_jobs::RunnerType;
 
 pub(crate) type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
@@ -20,7 +20,7 @@ type ResponseFn<F> =
     dyn Fn(Arc<State<F>>, Outcome) -> BoxFuture<Result<<F as Fields>::Update, Cause>> + Send + Sync;
 
 pub(crate) struct Parts<F: Fields> {
-    pub(crate) runner_type: SubjectSegment,
+    pub(crate) runner_type: RunnerType,
     pub(crate) request: Box<RequestFn<F>>,
     pub(crate) response: Box<ResponseFn<F>>,
     pub(crate) caller_source: Box<dyn CallerSource>,
@@ -35,7 +35,7 @@ pub struct RunnerAsNode<F: Fields> {
 impl<F: Fields> RunnerAsNode<F> {
     pub fn new<Req, ReqFut, Res, ResFut>(
         name: impl Into<String>,
-        runner_type: SubjectSegment,
+        runner_type: RunnerType,
         request: Req,
         response: Res,
         caller_source: impl CallerSource,

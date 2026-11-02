@@ -46,6 +46,6 @@ impl Outcome {
     }
 
     pub(crate) fn from_refusal(refusal: JobsRefusal) -> Self {
-        Self::Refusal(Refusal::new(refusal.reason, refusal.message))
+        Self::Refusal(Refusal::new(refusal.reason.to_string(), refusal.message))
     }
 }
