@@ -236,3 +236,24 @@ async fn given_the_importer_values_when_a_feed_is_opened_then_the_consumer_carri
         std::time::Duration::from_secs(90)
     );
 }
+
+#[tokio::test]
+#[ignore = "needs nats-server -js on the path"]
+async fn given_a_zero_value_when_a_feed_is_opened_then_it_is_refused_and_no_consumer_is_made() {
+    let world = World::ready().await;
+    let live = live(&world, "analyst", "pod-1").await;
+    for settings in [
+        ArrivalSettings {
+            ack_wait: std::time::Duration::ZERO,
+            ..arrival_settings()
+        },
+        ArrivalSettings {
+            inactivity_limit: std::time::Duration::ZERO,
+            ..arrival_settings()
+        },
+    ] {
+        let refused = live.arrival_feed(Uuid::now_v7(), settings).await;
+        assert!(matches!(refused, Err(Error::InvalidInput(_))));
+    }
+    assert!(consumers_of(&world, INTEGRATION_EVT).await.is_empty());
+}

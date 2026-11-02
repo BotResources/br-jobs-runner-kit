@@ -150,6 +150,7 @@ impl Live {
         run_id: Uuid,
         settings: ArrivalSettings,
     ) -> Result<Box<dyn RawFeed<ItemArrived>>, Error> {
+        settings.check()?;
         let coords = contract_jobs::evt_run_item_arrived_v2_coords()
             .map_err(|e| Error::invalid(e.to_string()))?;
         let object = format!("the stream {INTEGRATION_EVT}");
