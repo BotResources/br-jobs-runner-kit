@@ -1,6 +1,6 @@
 [package]
 name = "br-runner-toolkit"
-version = "0.2.0"
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -32,7 +32,7 @@ br-llm-clients-core.workspace = true
 br-llm-messages.workspace = true
 br-runner-connection.workspace = true
 br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0", features = ["test-double"] }
-br-runner-toolkit = { path = ".", version = ">=0.2.0", features = ["test-host"] }
+br-runner-toolkit = { path = ".", version = ">=0.1.1", features = ["test-host"] }
 br-util-nats-fabric.workspace = true
 contract-jobs = { path = "../../../svc-jobs-wt-contract-0-8/crates/contract-jobs", version = "0.8.0", features = ["integration"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }

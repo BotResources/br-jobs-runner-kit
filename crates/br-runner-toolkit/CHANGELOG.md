@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.2.0
+## 0.1.1
 
-Moves the crate to `br-runner-jobs` 0.2.0.
+Uses `br-runner-jobs` 0.2.0.
 
 ### Changed
 
