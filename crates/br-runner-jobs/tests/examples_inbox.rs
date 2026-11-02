@@ -1,5 +1,6 @@
 #[path = "../examples/agent_and_inbox.rs"]
 #[allow(dead_code)]
+// the example has its own main and helpers, unused when it is included as a module
 mod agent_and_inbox;
 
 use std::sync::Arc;

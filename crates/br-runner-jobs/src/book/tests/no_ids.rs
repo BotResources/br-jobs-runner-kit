@@ -13,10 +13,10 @@ use crate::model::{
 use crate::queue::{QueueObserver, QueueReport, QueueSettings};
 use crate::test_double::ScriptedJobs;
 
-const TEXT: &str = "The plain text of jobs, for an agent.";
+pub(super) const TEXT: &str = "The plain text of jobs, for an agent.";
 
 #[derive(Default)]
-struct Recorder(Mutex<Vec<String>>);
+pub(super) struct Recorder(pub(super) Mutex<Vec<String>>);
 
 impl QueueObserver for Recorder {
     fn report(&self, report: &QueueReport) {
@@ -47,7 +47,7 @@ fn mail_item() -> Value {
     })
 }
 
-fn run_notice(kind: &str, extra: Value) -> Value {
+pub(super) fn run_notice(kind: &str, extra: Value) -> Value {
     let mut item = json!({
         "itemId": id(410), "seq": 2, "itemKind": "NOTICE", "address": null, "runId": id(RUN),
         "noticeType": kind, "jobId": id(300),
@@ -65,7 +65,7 @@ fn forbidden() -> Vec<String> {
         .collect()
 }
 
-fn assert_clean(corpus: &[String]) {
+pub(super) fn assert_clean(corpus: &[String]) {
     let all = corpus.join("\n");
     assert!(all.len() > 500, "the corpus is too small to prove anything");
     assert!(

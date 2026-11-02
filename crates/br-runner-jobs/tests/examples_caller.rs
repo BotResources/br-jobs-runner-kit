@@ -1,5 +1,6 @@
 #[path = "../examples/call_a_runner.rs"]
 #[allow(dead_code)]
+// the example has its own main and helpers, unused when it is included as a module
 mod call_a_runner;
 
 use br_runner_jobs::test_double::{Answer, MemoryCall, memory_caller, result_ref};
