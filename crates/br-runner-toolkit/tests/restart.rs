@@ -43,7 +43,7 @@ fn reads(jobs: &ScriptedJobs) -> usize {
 #[tokio::test(start_paused = true)]
 async fn given_a_restart_when_the_run_starts_then_the_saved_state_is_read_once_and_given_to_the_run_start_function()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let mut reply = saved_state_reply(saved(json!({ "steps": ["old"] })));
     reply
@@ -72,7 +72,7 @@ async fn given_a_restart_when_the_run_starts_then_the_saved_state_is_read_once_a
 
 #[tokio::test(start_paused = true)]
 async fn given_a_restart_when_the_graph_starts_then_it_starts_at_the_entry_nodes_of_the_graph() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let mut reply = saved_state_reply(saved(json!({ "steps": ["old"] })));
     reply
@@ -94,7 +94,7 @@ async fn given_a_restart_when_the_graph_starts_then_it_starts_at_the_entry_nodes
 
 #[tokio::test(start_paused = true)]
 async fn given_a_run_that_is_not_a_restart_when_it_starts_then_the_saved_state_is_not_read() {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -114,7 +114,7 @@ async fn given_a_run_that_is_not_a_restart_when_it_starts_then_the_saved_state_i
 #[tokio::test(start_paused = true)]
 async fn given_a_saved_state_that_jobs_refuses_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({
         "jobsSavedState": { "success": false, "reason": "no_state", "message": "nothing saved" }
@@ -131,7 +131,7 @@ async fn given_a_saved_state_that_jobs_refuses_when_a_restart_starts_then_the_ru
 #[tokio::test(start_paused = true)]
 async fn given_a_saved_state_that_does_not_fit_the_fields_when_a_restart_starts_then_the_run_fails_permanently_with_saved_state_invalid()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(saved_state_reply(json!("garbage")));
     jobs.push_trigger(restart_trigger(1));
@@ -147,7 +147,7 @@ async fn given_a_saved_state_that_does_not_fit_the_fields_when_a_restart_starts_
 #[tokio::test(start_paused = true)]
 async fn given_a_saved_state_that_cannot_be_reached_when_a_restart_starts_then_the_run_fails_as_transient_with_saved_state_unavailable()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(restart_trigger(1));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), true));

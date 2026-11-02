@@ -1,8 +1,9 @@
 use std::future::Future;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
+use std::time::Duration;
 
-use br_runner_jobs::{AgentBook, Arrival, ArrivalFeed, Error, Work};
+use br_runner_jobs::{AgentBook, Arrival, ArrivalFeed, ArrivalSettings, Error, Work};
 use futures::FutureExt;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -33,13 +34,18 @@ impl ArrivalSource for ArrivalFeed {
     }
 }
 
+const ARRIVAL_SETTINGS: ArrivalSettings = ArrivalSettings {
+    ack_wait: Duration::from_secs(10),
+    inactivity_limit: Duration::from_secs(120),
+};
+
 pub(crate) struct WorkOpener(pub Arc<Work>);
 
 impl ArrivalOpener for WorkOpener {
     type Source = ArrivalFeed;
 
     fn open(&self) -> impl Future<Output = Result<ArrivalFeed, Error>> + Send {
-        self.0.arrival_feed()
+        self.0.arrival_feed(ARRIVAL_SETTINGS)
     }
 }
 

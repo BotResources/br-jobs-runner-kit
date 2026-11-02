@@ -24,9 +24,9 @@ fn marking(executed: &Arc<AtomicBool>) -> StartArgs<Flow> {
 #[tokio::test(start_paused = true)]
 async fn given_a_started_fact_that_jobs_refuses_when_the_trigger_comes_then_it_is_acknowledged_and_dropped_the_run_is_not_executed_and_the_slot_serves_the_next_trigger()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
-    refuse_the_first_started_fact(&jobs, refusal_error("claim_spent").await);
+    refuse_the_first_started_fact(&jobs, refusal_error("claim_spent"));
     let executed = Arc::new(AtomicBool::new(false));
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, marking(&executed));
@@ -45,10 +45,10 @@ async fn given_a_started_fact_that_jobs_refuses_when_the_trigger_comes_then_it_i
 #[tokio::test(start_paused = true)]
 async fn given_a_started_fact_that_fails_for_another_final_error_when_the_trigger_comes_then_it_is_not_acknowledged_and_the_run_is_not_executed()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     let mut failed = false;
-    jobs.answer_facts(move || {
+    jobs.answer_started(move || {
         if failed {
             Ok(())
         } else {
@@ -72,11 +72,11 @@ async fn given_a_started_fact_that_fails_for_another_final_error_when_the_trigge
 #[tokio::test(start_paused = true)]
 async fn given_a_started_fact_that_jobs_refuses_in_claim_mode_when_the_run_is_served_then_it_is_not_executed_and_the_slot_claims_again_with_a_new_claim_id()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     claim_mode(&jobs);
-    refuse_the_first_started_fact(&jobs, refusal_error("claim_spent").await);
+    refuse_the_first_started_fact(&jobs, refusal_error("claim_spent"));
     jobs.push_claim_reply(Ok(served(1)));
-    jobs.push_claim_reply(Ok(refusal("not_in_claim_mode")));
+    jobs.push_claim_reply(Ok(refusal("not_claim_mode")));
     let executed = Arc::new(AtomicBool::new(false));
     let running = run(&jobs, |b| b, 1, marking(&executed));
     until(|| claim_ids(&jobs).len() == 2).await;
@@ -91,9 +91,9 @@ async fn given_a_started_fact_that_jobs_refuses_in_claim_mode_when_the_run_is_se
 #[tokio::test(start_paused = true)]
 async fn given_a_started_fact_that_jobs_does_not_answer_when_the_drain_time_ends_then_the_trigger_is_neither_acknowledged_nor_given_back_and_the_report_names_the_aborted_run()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
-    jobs.answer_facts(|| Err(Error::Unreadable("the bus is down".to_owned())));
+    jobs.answer_started(|| Err(Error::Unreadable("the bus is down".to_owned())));
     let executed = Arc::new(AtomicBool::new(false));
     jobs.push_trigger(trigger(1));
     let running = run(&jobs, |b| b, 1, marking(&executed));

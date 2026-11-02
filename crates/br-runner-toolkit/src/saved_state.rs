@@ -75,7 +75,7 @@ mod tests {
     use br_runner_jobs::{AgentKey, RestoredAgent};
 
     use super::{decode, encode};
-    use crate::unit_support::{Steps, book_with_agents, id, queue_of, work};
+    use crate::unit_support::{Steps, book_with_agents, id, queue_of, runner_type, work};
 
     fn restored(node: &str, label: &str, n: u128, has_inbox: bool) -> RestoredAgent {
         RestoredAgent {
@@ -88,7 +88,7 @@ mod tests {
     #[tokio::test]
     async fn given_a_state_and_two_agents_with_distinct_fields_when_it_is_saved_and_restored_then_every_field_of_every_agent_and_the_fields_of_the_state_come_back()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let work = work(&jobs, 1);
         let queue = queue_of(&work).await;
         let book = book_with_agents(

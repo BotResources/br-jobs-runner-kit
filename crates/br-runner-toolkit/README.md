@@ -5,8 +5,8 @@ The main loop of a runner with the jobs service. The importer gives a ready `Job
 ## Install
 
 ```toml
-br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.1.0", version = "0.1.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.1.0", version = "0.1.0" }
+br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.1.1", version = "0.1.1" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::JobsClient;
+use br_runner_jobs::{JobsClient, RunnerType};
 use br_runner_toolkit::{DrainReport, RunnerBuilder, Settings, StartArgs};
 use tokio_util::sync::CancellationToken;
 
@@ -87,7 +87,7 @@ pub async fn main_named(name: &str) -> Result<(), Box<dyn std::error::Error + Se
         Duration::from_secs(30),
     )?;
     let client = JobsClient::new(
-        runner_type,
+        RunnerType::new(runner_type)?,
         instance_key,
         Duration::from_secs(10),
         connection,
@@ -149,7 +149,7 @@ A slot asks for work only when the dispatch mode is known and is not "no entry",
 
 For each Run the runner, in this order: registers the Run (a cancel order already known cancels it before the graph starts), makes the delivery queue (its first write is the started fact), acknowledges the trigger (push mode only, after the started fact), reads the saved state (a restart only), starts the graph, settles the Run (the executor has reported all its instances, every lifecycle hook has returned, and the queue holds no write handed over before the executor returned), hands over the answer, the saved state and the completed or failed fact, and forgets the Run once the queue is drained.
 
-- If the started fact is refused by jobs, the Run is not executed; in push mode the trigger is acknowledged and dropped. If it fails for another reason, the Run is not executed and the trigger is not acknowledged.
+- The started fact is a request to jobs with one reply. If jobs refuses it, the Run is not executed; in push mode the trigger is acknowledged and dropped. If it fails for another reason, the Run is not executed and the trigger is not acknowledged.
 - A Run that was cancelled ends with no completed and no failed fact. `HostCancel` and a cancel order of jobs both cancel; `cancel_grace` is the time the executor gives the nodes to return.
 - The failed fact is permanent unless stated, with these reason codes: `node_failed`, `node_refused_an_input`, `node_could_not_start`, `node_vanished`, `update_refused`, `edge_failed`, `checkpoint_not_built`, `run_failed` (the executor failed with no failure, or with a cause or an outcome this library does not know), `sink_refused` (mapped from the executor, never sent by this library: it gives the executor no checkpoint sink), `start_refused`, `panic`, `saved_state_invalid`, `saved_state_not_made`, `answer_not_made`, `answer_refused` and `saved_state_refused`. `saved_state_unavailable` is transient. The diagnostic is the text of the failure. A `FailureMapping` may change the kind, the reason code, the parameters, the diagnostic and the retry delay; a panic in the mapping gives the reason code `panic`.
 - A sync call (mode `SYNC`) gets an answer: by default the state fields as JSON text with no attachments, or the content of the function given to `with_answer`. An error of that function gives `answer_not_made`; a panic gives `panic`.
@@ -203,6 +203,15 @@ With the feature `test-host`, `TestHost::new(client, settings_builder, start_arg
 
 The host uses the tokio clock of the runtime of the test, and the test controls that clock. A paused clock (`start_paused`, `tokio::time::advance`, with `test-util` in the `dev-dependencies` of the test) is for the in-process double of `br-runner-jobs` only. Against a real or a locally started bus, use the real clock: a paused clock advances by itself when the runtime is idle, so a reply wait, an ack wait, a claim wait or the time to live can end during real network I/O.
 
+## Not covered by tests
+
+- A stop decided before a newer dispatch mode value is ignored (the stale claim epoch): tested in the shared state, not at the slot.
+- The reopen of the feed of the cancel orders and the replay that follows: tested at the runner, not at the feed.
+- A lifecycle hook for an instance that the executor reports late after an executor panic: tested after a drain abort only.
+- The tests against a locally started bus run with no GraphQL stand-in. The arrival feed ending with `Lost`, and its reopen after the next beat, are not covered end to end: only the in-process double and hand-made fakes cover the reopen.
+- The order of the first presence before the first claim.
+- The settle wait for the last observations of the executor, tested with hand-made observations and not with the real executor.
+
 ## Why
 
 | Thing | Why it is the way it is |
@@ -217,5 +226,6 @@ The host uses the tokio clock of the runtime of the test, and the test controls 
 | `run_failed` is a reason code | The outcome and the failure of the executor are open enums: a fallback arm needs a code, and a panic there would hide the cause. |
 | `sink_refused` is mapped and never sent | The library gives the executor no checkpoint sink, so that failure cannot occur; the arm exists because the failure enum is open. |
 | The test host does not pause the clock | A paused clock advances during real network I/O; the test owns the runtime and picks its clock. |
+| Arrival consumer timings | The acknowledgement wait (10 s) and the inactivity limit (120 s) of the arrival consumer are constants of the crate and not settings, until a later minor makes them settings. |
 | The presence restarts at once after a panic, the other tasks after a beat | A dead presence lets the time to live end and jobs give the Runs to another instance. |
 

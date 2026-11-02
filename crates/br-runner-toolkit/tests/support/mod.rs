@@ -11,7 +11,7 @@ use std::time::Duration;
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_graph_contract::Graph;
 use br_runner_jobs::test_double::{Call, Fact, ScriptedJobs, trigger_json};
-use br_runner_jobs::{CancelEvent, DispatchMode, ModeEvent};
+use br_runner_jobs::{CancelEvent, DispatchMode, ModeEvent, RunnerType};
 use br_runner_toolkit::{
     DrainReport, Error, RunRefusal, RunnerBuilder, Settings, StartArgs, StartedRun, run_start,
 };
@@ -54,6 +54,10 @@ pub fn settings(slots: u32) -> Settings {
 
 pub fn id(n: u128) -> Uuid {
     Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0000 + n)
+}
+
+pub fn runner_type(text: &str) -> RunnerType {
+    RunnerType::new(text).expect("a runner type")
 }
 
 pub fn passport() -> Passport {
@@ -140,14 +144,15 @@ pub fn has_terminal(jobs: &ScriptedJobs) -> bool {
 }
 
 pub fn kinds(jobs: &ScriptedJobs) -> Vec<&'static str> {
-    facts(jobs)
-        .iter()
-        .map(|fact| match fact {
-            Fact::Started { .. } => "started",
-            Fact::Plan { .. } => "plan",
-            Fact::Step { .. } => "step",
-            Fact::Completed { .. } => "completed",
-            Fact::Failed { .. } => "failed",
+    jobs.calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::Started { .. } => Some("started"),
+            Call::Fact(Fact::Plan { .. }) => Some("plan"),
+            Call::Fact(Fact::Step { .. }) => Some("step"),
+            Call::Fact(Fact::Completed { .. }) => Some("completed"),
+            Call::Fact(Fact::Failed { .. }) => Some("failed"),
+            _ => None,
         })
         .collect()
 }
@@ -203,18 +208,13 @@ pub fn refusal(reason: &str) -> Vec<u8> {
     serde_json::to_vec(&json!({ "version": 2, "reason": reason })).expect("bytes")
 }
 
-pub async fn refusal_error(reason: &str) -> br_runner_jobs::Error {
-    let jobs = ScriptedJobs::new("analyst", "refusals");
-    jobs.push_claim_reply(Ok(refusal(reason)));
-    jobs.client()
-        .claim(Uuid::now_v7(), Duration::from_secs(1))
-        .await
-        .expect_err("a refusal")
+pub fn refusal_error(reason: &str) -> br_runner_jobs::Error {
+    br_runner_jobs::Error::refused(br_runner_jobs::Operation::StartedFact, reason, "")
 }
 
 pub fn refuse_the_first_started_fact(jobs: &ScriptedJobs, error: br_runner_jobs::Error) {
     let mut refused = false;
-    jobs.answer_facts(move || {
+    jobs.answer_started(move || {
         if refused {
             Ok(())
         } else {

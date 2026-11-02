@@ -8,9 +8,10 @@ use br_runner_jobs::{JobsClient, PresenceStatus, WriteKind};
 use br_runner_toolkit::{HostEvent, HostRun, Settings, SettingsBuilder, TestHost};
 use contract_jobs::dispatch_mode::{DispatchMode, RunnerTypeDispatchMode, dispatch_mode_key};
 use contract_jobs::runner::{
-    ClaimReplyV2, ClaimV2, Presence, RunCompleted, RunStarted, RunnerStatus, STATUS_STREAM,
-    TRIGGER_STREAM, WIRE_VERSION,
+    ClaimReplyV2, ClaimV2, Presence, RunCompleted, RunnerStatus, STATUS_STREAM, TRIGGER_STREAM,
+    WIRE_VERSION,
 };
+use contract_jobs::runner_surface::{StartedRequest, SurfaceReply, started_subject};
 use contract_jobs::runner_transport::{RunnerStatusFact, claim_v2_subject, status_subject};
 use contract_jobs::segment::SubjectSegment;
 use futures::StreamExt;
@@ -49,10 +50,15 @@ async fn set_mode(world: &World, mode: DispatchMode) {
 }
 
 async fn host(world: &World) -> TestHost<support::Flow> {
-    let client = JobsClient::new(RUNNER_TYPE, "pod-1", WAIT, world.connection())
-        .await
-        .map_err(|error| error.to_string())
-        .expect("the client connects");
+    let client = JobsClient::new(
+        support::runner_type(RUNNER_TYPE),
+        "pod-1",
+        WAIT,
+        world.connection(),
+    )
+    .await
+    .map_err(|error| error.to_string())
+    .expect("the client connects");
     TestHost::new(
         client,
         settings(),
@@ -105,17 +111,13 @@ fn delivered(kind: WriteKind) -> impl Fn(&HostEvent) -> bool {
 
 async fn status_facts(world: &World, run_id: Uuid) -> Vec<RunnerStatusFact> {
     let segment = SubjectSegment::runner_type(RUNNER_TYPE).expect("a segment");
-    let started = status_subject(&segment, RunnerStatusFact::Started);
     let completed = status_subject(&segment, RunnerStatusFact::Completed);
     world
         .stored(STATUS_STREAM)
         .await
         .into_iter()
         .filter_map(|(subject, payload)| {
-            if subject == started {
-                let fact: RunStarted = serde_json::from_slice(&payload).expect("started");
-                (fact.run_id == run_id).then_some(RunnerStatusFact::Started)
-            } else if subject == completed {
+            if subject == completed {
                 let fact: RunCompleted = serde_json::from_slice(&payload).expect("completed");
                 (fact.run_id == run_id).then_some(RunnerStatusFact::Completed)
             } else {
@@ -123,6 +125,19 @@ async fn status_facts(world: &World, run_id: Uuid) -> Vec<RunnerStatusFact> {
             }
         })
         .collect()
+}
+
+async fn started_stand_in(world: &World) -> Responder {
+    let segment = SubjectSegment::runner_type(RUNNER_TYPE).expect("a segment");
+    let reply = serde_json::to_vec(&SurfaceReply::accepted()).expect("json");
+    Responder::start(&world.client, started_subject(&segment), Some(reply)).await
+}
+
+async fn assert_started_request(responder: &mut Responder, run_id: Uuid) {
+    let request: StartedRequest =
+        serde_json::from_slice(&responder.request().await).expect("a started request");
+    assert_eq!(request.run_id, run_id);
+    assert_eq!(request.instance_key, "pod-1");
 }
 
 async fn assert_one_run_in_order(world: &World, run_id: Uuid, run: &HostRun, watch_seen: &[Seen]) {
@@ -136,7 +151,7 @@ async fn assert_one_run_in_order(world: &World, run_id: Uuid, run: &HostRun, wat
     assert_eq!(watch_seen.last(), Some(&Seen::Deleted));
     assert_eq!(
         status_facts(world, run_id).await,
-        vec![RunnerStatusFact::Started, RunnerStatusFact::Completed]
+        vec![RunnerStatusFact::Completed]
     );
     let events = &run.events;
     let put = position(events, |event| {
@@ -163,6 +178,7 @@ async fn given_a_trigger_on_a_real_bus_when_the_test_host_runs_it_with_the_real_
     set_mode(&world, DispatchMode::Push).await;
     let (run_id, job_id) = (Uuid::now_v7(), Uuid::now_v7());
     publish_trigger(&world.js, RUNNER_TYPE, &trigger(run_id, job_id)).await;
+    let mut started = started_stand_in(&world).await;
     let mut watch = world
         .presence_bucket()
         .await
@@ -177,6 +193,7 @@ async fn given_a_trigger_on_a_real_bus_when_the_test_host_runs_it_with_the_real_
         .expect("a run");
     let seen = presence_seen(&mut watch).await;
     assert_one_run_in_order(&world, run_id, &run, &seen).await;
+    assert_started_request(&mut started, run_id).await;
     let acknowledged = position(&run.events, |event| {
         matches!(event, HostEvent::TriggerAcknowledged)
     });
@@ -198,6 +215,7 @@ async fn given_a_served_claim_on_a_real_bus_when_the_test_host_runs_it_with_the_
     let reply = serde_json::to_vec(&ClaimReplyV2::served(trigger(run_id, job_id))).expect("json");
     let subject = claim_v2_subject(&SubjectSegment::runner_type(RUNNER_TYPE).expect("segment"));
     let mut responder = Responder::start(&world.client, subject, Some(reply)).await;
+    let mut started = started_stand_in(&world).await;
     let mut watch = world
         .presence_bucket()
         .await
@@ -212,6 +230,7 @@ async fn given_a_served_claim_on_a_real_bus_when_the_test_host_runs_it_with_the_
         .expect("a run");
     let seen = presence_seen(&mut watch).await;
     assert_one_run_in_order(&world, run_id, &run, &seen).await;
+    assert_started_request(&mut started, run_id).await;
     let request: ClaimV2 = serde_json::from_slice(&responder.request().await).expect("a claim");
     assert_eq!(request.instance_key, "pod-1");
     let claim = position(

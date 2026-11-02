@@ -7,7 +7,7 @@ use support::*;
 #[tokio::test(start_paused = true)]
 async fn given_a_trigger_in_push_mode_when_the_graph_ends_then_started_acknowledged_completed_in_order()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(
@@ -49,7 +49,7 @@ async fn given_a_trigger_in_push_mode_when_the_graph_ends_then_started_acknowled
 #[tokio::test(start_paused = true)]
 async fn given_more_triggers_than_slots_when_runs_are_in_flight_then_only_slot_count_runs_start() {
     let gate = std::sync::Arc::new(tokio::sync::Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     for n in 1..=3 {
         jobs.push_trigger(trigger(n));
@@ -77,7 +77,7 @@ async fn given_more_triggers_than_slots_when_runs_are_in_flight_then_only_slot_c
 async fn given_a_trigger_of_a_run_in_flight_when_it_arrives_again_then_it_is_acknowledged_and_dropped()
  {
     let gate = std::sync::Arc::new(tokio::sync::Notify::new());
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
     let running = run(

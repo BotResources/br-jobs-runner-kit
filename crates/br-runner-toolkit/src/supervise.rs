@@ -59,12 +59,12 @@ mod tests {
 
     use super::{Restart, supervised};
     use crate::instances::Instances;
-    use crate::unit_support::shared;
+    use crate::unit_support::{runner_type, shared};
 
     #[tokio::test(start_paused = true)]
     async fn given_a_task_that_panics_once_when_it_is_supervised_at_once_then_it_is_started_again_and_ends_normally()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let shared = shared(&jobs, None, &Arc::new(Instances::default()));
         let starts = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&starts);
@@ -83,7 +83,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn given_a_task_that_panics_when_it_is_supervised_after_a_beat_then_it_waits_for_the_beat()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let shared = shared(&jobs, None, &Arc::new(Instances::default()));
         let starts = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&starts);

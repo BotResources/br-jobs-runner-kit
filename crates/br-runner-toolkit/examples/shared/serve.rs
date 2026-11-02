@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::JobsClient;
+use br_runner_jobs::{JobsClient, RunnerType};
 use br_runner_toolkit::{DrainReport, RunnerBuilder, Settings, StartArgs};
 use tokio_util::sync::CancellationToken;
 
@@ -59,7 +59,7 @@ pub async fn main_named(name: &str) -> Result<(), Box<dyn std::error::Error + Se
         Duration::from_secs(30),
     )?;
     let client = JobsClient::new(
-        runner_type,
+        RunnerType::new(runner_type)?,
         instance_key,
         Duration::from_secs(10),
         connection,

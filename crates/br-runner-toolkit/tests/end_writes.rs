@@ -18,7 +18,7 @@ fn sync_trigger(n: u128) -> Vec<u8> {
 #[tokio::test(start_paused = true)]
 async fn given_a_restartable_runner_and_an_agent_with_an_inbox_when_the_fields_cannot_be_written_then_the_run_fails_permanently_with_saved_state_not_made_and_no_completed_fact_is_sent()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(trigger(1));
@@ -55,7 +55,7 @@ async fn given_a_restartable_runner_and_an_agent_with_an_inbox_when_the_fields_c
 #[tokio::test(start_paused = true)]
 async fn given_a_failure_mapping_that_panics_when_the_closing_reports_a_refused_answer_then_the_failed_fact_is_panic_and_the_mapping_was_called_once_with_answer_refused()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(json!({
         "jobsUploadResult": { "success": false, "reason": "too_big", "message": "the answer is too big" }

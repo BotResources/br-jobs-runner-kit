@@ -146,7 +146,7 @@ mod tests {
     use super::{InstanceLookup, Instances};
     use crate::error::ErrorCode;
     use crate::record::Phase;
-    use crate::unit_support::{instance, record, work};
+    use crate::unit_support::{instance, record, runner_type, work};
 
     #[tokio::test(start_paused = true)]
     async fn given_a_lookup_that_is_dropped_while_it_waits_when_the_future_is_gone_then_no_waiter_is_left()
@@ -172,7 +172,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn given_a_waiting_lookup_when_the_instance_is_inserted_then_the_lookup_returns_the_record()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let instances = Arc::new(Instances::default());
         instances.mark_started();
         let work = work(&jobs, 1);
@@ -189,7 +189,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn given_a_run_whose_executor_returned_when_its_instance_is_looked_up_then_the_error_is_instance_ended()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let instances = Arc::new(Instances::default());
         instances.mark_started();
         let work = work(&jobs, 1);
@@ -203,7 +203,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn given_a_dropped_run_when_an_instance_is_inserted_then_it_is_refused_and_the_lookup_waits()
      {
-        let jobs = ScriptedJobs::new("analyst", "i1");
+        let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
         let instances = Arc::new(Instances::default());
         instances.mark_started();
         let work = work(&jobs, 1);

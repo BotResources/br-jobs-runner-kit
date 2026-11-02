@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test(start_paused = true)]
 async fn given_a_sync_run_whose_fields_panic_when_serialized_then_the_failed_fact_is_panic_and_the_slot_serves_the_next_run()
  {
-    let jobs = ScriptedJobs::new("analyst", "i1");
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.graphql_default(writes_ok());
     jobs.push_trigger(call_with(trigger(1), &[("mode", json!("SYNC"))]));
