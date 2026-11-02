@@ -14,7 +14,7 @@ The node builds on `br-runner-jobs` 0.2.0 and no longer carries a pin of `contra
 ### Behavior
 
 - `Outcome::Cancelled` now arrives on a live wire: a child Job cancelled by a party other than the node ends the wait with the cancelled end, from the cancel notice of jobs. Your response function decides what it means, as for a failed end; no finish and no cancel is handed over for it. A cancel that also ends the node is seen as the cancel view (event `Cancelled`); if the end reaches the node first, the response function gets it as cancelled and the cancel view then ends its wait. The limit "jobs sends no end for a child Job cancelled by another party" is removed.
-- `Outcome::Refusal` keeps the reason as text.
+- `Outcome::Refusal` keeps the reason as a `String`: the text of the typed reason of `br-runner-jobs` 0.2.0. No change for the caller.
 - Known gap, unchanged: inside a map-reduce the instance never gets its caller handle, so it creates no child Job. The fix belongs to `br-runner-toolkit` and `br-flow-nodes`.
 
 ## 0.1.0
