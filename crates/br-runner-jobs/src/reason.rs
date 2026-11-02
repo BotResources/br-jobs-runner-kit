@@ -1,27 +1,54 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnknownWord(String);
+
+impl UnknownWord {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PartialEq<str> for UnknownWord {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl PartialEq<&str> for UnknownWord {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl fmt::Display for UnknownWord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 macro_rules! reasons {
     ($($variant:ident => $word:literal),* $(,)?) => {
         #[derive(Debug, Clone)]
         #[non_exhaustive]
         pub enum RefusalReason {
             $($variant,)*
-            Unknown(String),
+            Unknown(UnknownWord),
         }
 
         impl RefusalReason {
             pub fn as_str(&self) -> &str {
                 match self {
                     $(Self::$variant => $word,)*
-                    Self::Unknown(text) => text,
+                    Self::Unknown(word) => word.as_str(),
                 }
             }
 
             pub fn from_word(word: &str) -> Self {
                 match word {
                     $($word => Self::$variant,)*
-                    other => Self::Unknown(other.to_owned()),
+                    other => Self::Unknown(UnknownWord(other.to_owned())),
                 }
             }
         }
@@ -147,6 +174,21 @@ mod tests {
             SurfaceReason::RunNotPending,
         ];
         for reason in surface {
+            match reason {
+                SurfaceReason::RunUnknown
+                | SurfaceReason::RunNotStarted
+                | SurfaceReason::RunEnded
+                | SurfaceReason::RunRemoved
+                | SurfaceReason::InstanceMismatch
+                | SurfaceReason::AgentIdInOtherTree
+                | SurfaceReason::AgentIdNotFinished
+                | SurfaceReason::ItemNotYours
+                | SurfaceReason::Malformed
+                | SurfaceReason::InstanceUnknown
+                | SurfaceReason::RunHeld
+                | SurfaceReason::RunReservedElsewhere
+                | SurfaceReason::RunNotPending => {}
+            }
             let word = serde_json::to_value(reason).expect("json");
             assert!(is_typed(word.as_str().expect("word")), "{word}");
         }
@@ -200,11 +242,18 @@ mod tests {
     }
 
     #[test]
-    fn given_the_unknown_case_holding_a_known_word_then_it_equals_the_typed_reason() {
-        assert_eq!(
-            RefusalReason::Unknown("busy".to_owned()),
-            RefusalReason::Busy
-        );
+    fn given_a_known_word_in_any_form_when_made_then_no_unknown_case_holds_it() {
+        for word in ["busy", "run_held", "mail_not_yours"] {
+            assert!(!matches!(
+                RefusalReason::from(word),
+                RefusalReason::Unknown(_)
+            ));
+            assert!(!matches!(
+                RefusalReason::from(word.to_owned()),
+                RefusalReason::Unknown(_)
+            ));
+        }
+        assert!(matches!(RefusalReason::from("busy"), RefusalReason::Busy));
     }
 
     #[test]

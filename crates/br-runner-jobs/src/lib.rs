@@ -33,6 +33,6 @@ pub use feed::Feed;
 pub use mail::MailHandle;
 pub use model::*;
 pub use queue::*;
-pub use reason::RefusalReason;
+pub use reason::{RefusalReason, UnknownWord};
 pub use runner_type::RunnerType;
 pub use work::{Unreadable, Work};
