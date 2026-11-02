@@ -9,6 +9,7 @@ Uses `br-runner-jobs` 0.2.0.
 - A claim refusal is matched by its typed reason.
 - A Run whose started fact jobs refuses is not executed: the trigger of a `PUSH` Run is acknowledged and dropped, and a `CLAIM` slot claims again with a new claim id.
 - The arrival feed needs the `br-runner-jobs` 0.2.0 doorbell (version 2 of the item-arrived events).
+- The arrival feed of a Run is opened with an acknowledgement wait of 10 s and an inactivity limit of 120 s.
 
 ### Breaking
 

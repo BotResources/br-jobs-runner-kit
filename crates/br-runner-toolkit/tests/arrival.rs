@@ -3,8 +3,8 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::Error;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs::test_double::{Call, ScriptedJobs};
+use br_runner_jobs::{ArrivalSettings, Error};
 use serde_json::json;
 use support::*;
 use tokio::sync::Notify;
@@ -79,5 +79,32 @@ async fn given_a_second_run_whose_arrival_feed_cannot_be_opened_then_the_error_i
     jobs.push_trigger(trigger(2));
     until(|| kinds(&jobs) == vec!["started", "completed", "started", "completed"]).await;
     assert_eq!(logs.containing(Level::ERROR, "cannot be opened"), 1);
+    running.stop().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn given_a_run_when_its_arrival_feed_is_opened_then_the_consumer_gets_the_wait_and_the_limit_of_the_crate()
+ {
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
+    push_mode(&jobs);
+    jobs.graphql_default(nothing_unread());
+    jobs.push_trigger(trigger(1));
+    let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
+    until(|| has_terminal(&jobs)).await;
+    let opened: Vec<ArrivalSettings> = jobs
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::ArrivalFeed(settings) => Some(settings),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        opened,
+        vec![ArrivalSettings {
+            ack_wait: Duration::from_secs(10),
+            inactivity_limit: Duration::from_secs(120),
+        }]
+    );
     running.stop().await;
 }

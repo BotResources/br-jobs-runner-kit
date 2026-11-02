@@ -20,6 +20,7 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-jobs` 0.2.0: the started fact is a request with one typed reply, the arrival feed reads the version 2 doorbell through an ephemeral consumer whose acknowledgement wait and inactivity limit the importer gives, and the unread read gives mail, cancel and refusal notices. A typed runner type, a typed refusal reason and public makers of failures are added. See `crates/br-runner-jobs/CHANGELOG.md`.
 - `br-runner-as-tool` 0.1.0 (new library): a runner type as a tool, the `Tool` of the agentic contract that makes another runner do a piece of work in sync or background mode. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-toolkit` 0.1.0 (new library): the main loop of a runner with the jobs service, with the registration through the presence, parallel run slots, the delivery of the facts of each run, the cancel orders, the drain and a test host. See `crates/br-runner-toolkit/CHANGELOG.md`.
+- `br-runner-toolkit` 0.1.1: uses `br-runner-jobs` 0.2.0, matches a claim refusal by its typed reason, does not execute a Run whose started fact jobs refuses, and opens the arrival feed with an acknowledgement wait of 10 s and an inactivity limit of 120 s. See `crates/br-runner-toolkit/CHANGELOG.md`.
 - `br-runner-as-node` 0.1.0 (new library): `RunnerAsNode`, a node of a graph that makes another runner do one step by a sync child Job of the jobs service. See `crates/br-runner-as-node/CHANGELOG.md`.
 
 ### Fixed

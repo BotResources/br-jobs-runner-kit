@@ -34,7 +34,7 @@ br-runner-connection.workspace = true
 br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0", features = ["test-double"] }
 br-runner-toolkit = { path = ".", version = ">=0.1.1", features = ["test-host"] }
 br-util-nats-fabric.workspace = true
-contract-jobs = { path = "../../../svc-jobs-wt-contract-0-8/crates/contract-jobs", version = "0.8.0", features = ["integration"] }
+contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.8.0", version = "0.8.0", features = ["integration"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
 
 [[example]]

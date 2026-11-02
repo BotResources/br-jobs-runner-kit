@@ -226,5 +226,6 @@ The host uses the tokio clock of the runtime of the test, and the test controls 
 | `run_failed` is a reason code | The outcome and the failure of the executor are open enums: a fallback arm needs a code, and a panic there would hide the cause. |
 | `sink_refused` is mapped and never sent | The library gives the executor no checkpoint sink, so that failure cannot occur; the arm exists because the failure enum is open. |
 | The test host does not pause the clock | A paused clock advances during real network I/O; the test owns the runtime and picks its clock. |
+| Arrival consumer timings | The acknowledgement wait (10 s) and the inactivity limit (120 s) of the arrival consumer are constants of the crate and not settings, until a later minor makes them settings. |
 | The presence restarts at once after a panic, the other tasks after a beat | A dead presence lets the time to live end and jobs give the Runs to another instance. |
 
