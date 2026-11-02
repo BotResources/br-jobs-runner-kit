@@ -9,6 +9,7 @@ mod commands_outcomes;
 mod commands_session;
 mod cut;
 mod cut_proxy;
+mod cut_state;
 mod facts;
 mod listing;
 mod mode;

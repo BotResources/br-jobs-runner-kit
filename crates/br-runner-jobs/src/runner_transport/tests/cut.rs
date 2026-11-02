@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::Live;
 use super::arrivals::arrive;
 use super::cut_proxy::Proxy;
+use super::cut_state::{delivered_up_to, last_sequence, pull_waiting};
 use super::live;
 use super::live_standin::{publish_trigger, trigger, try_publish_event};
 use super::live_world::{WAIT, World, connection_on, eventually};
@@ -15,7 +16,6 @@ use super::next;
 use crate::backend::Backend;
 use crate::error::Error;
 use crate::model::CancelEvent;
-use br_util_nats_fabric::INTEGRATION_EVT;
 
 async fn cut(world: &mut World) {
     world.server.restart();
@@ -222,30 +222,6 @@ async fn given_events_stored_while_the_bus_is_cut_then_each_one_comes_or_the_fee
     }
 }
 
-async fn delivered_up_to(world: &World, sequence: u64) -> bool {
-    use futures::TryStreamExt;
-    let stream = world.js.get_stream(INTEGRATION_EVT).await.expect("stream");
-    let consumers: Vec<_> = stream
-        .consumers()
-        .try_collect()
-        .await
-        .expect("the consumers are listed");
-    consumers
-        .iter()
-        .any(|consumer| consumer.delivered.stream_sequence >= sequence)
-}
-
-async fn pull_waiting(world: &World) -> bool {
-    use futures::TryStreamExt;
-    let stream = world.js.get_stream(INTEGRATION_EVT).await.expect("stream");
-    let consumers: Vec<_> = stream
-        .consumers()
-        .try_collect()
-        .await
-        .expect("the consumers are listed");
-    consumers.iter().any(|consumer| consumer.num_waiting > 0)
-}
-
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs nats-server -js on the path"]
 async fn given_an_event_written_to_a_connection_that_is_then_cut_when_the_connection_returns_then_the_event_comes()
@@ -280,8 +256,10 @@ async fn given_an_event_written_to_a_connection_that_is_then_cut_when_the_connec
     proxy.discard_what_the_server_sends(true);
     let in_flight = Uuid::now_v7();
     arrive(&world, run_id, in_flight, WireKind::Mail, None).await;
+    let stored = last_sequence(&world).await;
+    assert!(stored > 0, "the event is not in the stream");
     eventually("the bus wrote the event to the connection", || {
-        delivered_up_to(&world, 1)
+        delivered_up_to(&world, stored)
     })
     .await;
     proxy.cut();
