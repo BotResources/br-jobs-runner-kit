@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.0
+
+Moves the crate to the wire library `contract-jobs` 0.8.0: the started fact becomes a request with a typed reply, the arrival feed reads the version 2 doorbell through an ephemeral consumer, and the unread read gives the mail notice, the cancel notice and the refusal notice.
+
+### Added
+
+- `RunnerType`: the runner type as a value that the wire accepts (`RunnerType::new`, `InvalidInput` for a bad text).
+- `RefusalReason`: the typed reason of a `Refusal`, one case for each word of the wire that `contract-jobs` names and `MailNotYours`, with `Unknown(text)` for any other word. It compares with a `str`.
+- Public makers for the failures: `Error::refused`, `Refusal::new`, `Failure::new` and `CredentialFailure::new`, so that code that stands in for the client can build `Refused`, `Lost` and `Unavailable`.
+- `UnreadItem::MailNotice` is produced from an unread item of the kind `MAIL_NOTICE`; `CallNoticeKind::JobCancelled` and `CallNoticeKind::Refused` are produced from the notice types `JOB_CANCELLED` and `REFUSED`; `SyncEnd::Cancelled` is produced from a cancel notice of a sync call.
+- `ItemKind::MailNotice` is produced by the arrival feed.
+- Test double: `Call::Started` and `ScriptedJobs::answer_started`.
+
+### Changed
+
+- The started fact is a request on `jobs.runner.started.{runner_type}` with one reply. It is still the first write of the delivery queue. The queue sends it again, with the same start id, after `Lost`, `Unavailable`, `Unreadable` and the refusal `instance_unknown`; every other refusal is final. The crate no longer publishes a started fact on the status stream.
+- The arrival feed reads `integration.evt.jobs.run.item_arrived.v2`. Each feed creates its own ephemeral consumer that starts at new messages, before the replay read. The feed ends with `Lost` when its consumer is gone from the server, and with `InfraMissing` when the stream is gone. A cut of the bus session shorter than 120 seconds loses no event.
+- The arrival consumer is no longer durable and the Fabric creates no consumer for the arrival feed: the one durable consumer that the crate creates is the one of the triggers. An event that cannot be read is given to the feed that read it, not to every feed of the client.
+- The README and the limits tell that jobs fails as permanent the Run of a terminated trigger that has not started.
+
+### Breaking
+
+- `JobsClient::new`, `CreateChildInput::new` and `ScriptedJobs::new` take a `RunnerType` where they took a `&str`; `CreateChild::runner_type`, `ListedAgent::runner_type` and `JobsClient::runner_type()` are a `RunnerType`.
+- `Refusal::reason` is a `RefusalReason` where it was a `String`.
+- `Fact::Started` is removed; the started request is `Backend::start` (`Call::Started` in the test double).
+- The crate depends on `contract-jobs` 0.8.0, and needs the version 2 doorbell on the event stream.
+- A server that ran 0.1.0 keeps the durable arrival consumers that 0.1.0 created; 0.2.0 neither uses nor deletes them.
+
 ## 0.1.0
 
 First release. The jobs side of a runner: a typed client of the jobs service, a delivery queue for each Run, and the adapters of the agent port and of the inbox port of `br-agentic-contract`.
