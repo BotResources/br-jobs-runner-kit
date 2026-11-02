@@ -2,14 +2,14 @@ use br_agentic_contract::{Tool, ToolBlock};
 use br_llm_clients_core::Parameters;
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{AuthorFailure, Payload, RunnerTool, ToolMode};
-use br_runner_jobs::{CallerHandle, Content};
+use br_runner_jobs::{CallerHandle, Content, RunnerType};
 
 pub fn summary_tool(
     caller: CallerHandle,
     snapshot: String,
 ) -> Result<Tool, Box<dyn std::error::Error>> {
     let tool = RunnerTool::new(
-        "summarizer",
+        RunnerType::new("summarizer")?,
         ToolName::new("summarize")?,
         "Summarizes the work of the agent so far.",
         Parameters::new(Vec::new())?,

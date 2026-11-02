@@ -2,7 +2,7 @@ use br_agentic_contract::Tool;
 use br_llm_clients_core::{Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{RunnerTool, ToolMode};
-use br_runner_jobs::CallerHandle;
+use br_runner_jobs::{CallerHandle, RunnerType};
 
 pub fn analyst_tool(caller: CallerHandle) -> Result<Tool, Box<dyn std::error::Error>> {
     let question = Parameter::new(
@@ -12,7 +12,7 @@ pub fn analyst_tool(caller: CallerHandle) -> Result<Tool, Box<dyn std::error::Er
         ParameterKind::String,
     )?;
     let tool = RunnerTool::new(
-        "analyst",
+        RunnerType::new("analyst")?,
         ToolName::new("ask_analyst")?,
         "Asks the analyst runner a question and waits for its answer.",
         Parameters::new(vec![question])?,

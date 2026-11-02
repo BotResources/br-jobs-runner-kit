@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+### Changed
+
+- The runner type is a `br_runner_jobs::RunnerType` that the caller gives to `RunnerTool::new`. The library checks nothing about it, and `build()` fails only with `RunnerToolError::Spec`.
+- The acknowledgement of a background call says that the notice "refused" tells the agent that jobs refused the create, and that the answer comes later by mail. It still names the runner type and the child Job id, and says that the create is not confirmed until the notice "accepted" reaches the agent.
+
+### Breaking
+
+- `RunnerTool::new` takes a `RunnerType` in place of a text, and the variant `RunnerToolError::RunnerType` is removed.
+
 ## 0.1.1
 
 Uses `br-runner-jobs` 0.2.0.

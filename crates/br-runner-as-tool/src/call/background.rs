@@ -18,7 +18,9 @@ impl RunnerToolCode {
         let text = format!(
             "The runner {runner} was asked to do the work as the child Job {child}. \
              The create was handed over to jobs and is not confirmed until the notice \
-             \"accepted\" reaches you. The notices of this work name the child Job {child}.",
+             \"accepted\" reaches you. The notice \"refused\" tells you that jobs refused \
+             the create. The answer comes later by mail. \
+             The notices of this work name the child Job {child}.",
             runner = self.runner_type
         );
         let block = ToolBlock::text(text).map_err(Stop::fault)?;

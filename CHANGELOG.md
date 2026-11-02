@@ -24,6 +24,7 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-as-tool` 0.1.1: uses `br-runner-jobs` 0.2.0, makes the runner type as its `RunnerType`, and a sync call whose child Job is cancelled by someone else ends with an error flag. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-as-node` 0.1.0 (new library): `RunnerAsNode`, a node of a graph that makes another runner do one step by a sync child Job of the jobs service. See `crates/br-runner-as-node/CHANGELOG.md`.
 - `br-runner-as-node` 0.2.0: builds on `br-runner-jobs` 0.2.0 (breaking: `RunnerType` replaces the re-export of `SubjectSegment`), and a child Job cancelled by another party now arrives as `Outcome::Cancelled`. See `crates/br-runner-as-node/CHANGELOG.md`.
+- `br-runner-as-tool` 0.2.0: the runner type is the `RunnerType` of `br-runner-jobs` that the caller gives, the build fails only with the `ToolSpec` error, and the acknowledgement of a background call tells the agent about the notice "refused" and the answer by mail. Breaking: `RunnerTool::new` takes a `RunnerType`, and `RunnerToolError::RunnerType` is removed. See `crates/br-runner-as-tool/CHANGELOG.md`.
 
 ### Fixed
 

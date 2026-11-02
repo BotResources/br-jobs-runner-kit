@@ -11,7 +11,9 @@ use br_llm_clients_core::Parameters;
 use br_llm_messages::{OpaqueJson, ToolName};
 use br_runner_as_tool::{RunnerTool, ToolMode};
 use br_runner_jobs::test_double::{MemoryCall, MemoryScript};
-use br_runner_jobs::{CallerHandle, Content, CreateChildInput, Error, Operation, SyncEnd};
+use br_runner_jobs::{
+    CallerHandle, Content, CreateChildInput, Error, Operation, RunnerType, SyncEnd,
+};
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -38,7 +40,7 @@ pub fn completed(message: &str) -> SyncEnd {
 
 pub fn builder(runner_type: &str, mode: ToolMode, caller: CallerHandle) -> RunnerTool {
     RunnerTool::new(
-        runner_type,
+        RunnerType::new(runner_type).expect("a runner type"),
         ToolName::new("ask_analyst").expect("a tool name"),
         "Asks the analyst runner to do a piece of work.",
         Parameters::new(Vec::new()).expect("parameters"),

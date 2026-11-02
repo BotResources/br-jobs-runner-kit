@@ -35,6 +35,29 @@ async fn given_a_background_tool_when_called_then_the_create_carries_the_address
 }
 
 #[tokio::test]
+async fn given_a_background_tool_when_called_then_the_acknowledgement_names_the_runner_the_child_job_and_the_notices_and_the_mail()
+ {
+    let (caller, script) = memory_caller();
+    let tool = background_tool(caller, id(77));
+
+    let outcome = spawn_call(&tool, json!({}))
+        .finished()
+        .await
+        .expect("an acknowledgement");
+
+    let create = create_of(&script).await;
+    let text = texts(&outcome).remove(0);
+    assert!(text.contains("The runner analyst"));
+    assert!(text.contains(&format!("child Job {}", create.job_id)));
+    assert!(text.contains("notice \"accepted\""));
+    assert!(text.contains("notice \"refused\""));
+    assert!(text.contains("jobs refused the create"));
+    assert!(text.contains("by mail"));
+    assert_eq!(text.matches(&create.job_id.to_string()).count(), 2);
+    assert!(!text.contains(&id(77).to_string()));
+}
+
+#[tokio::test]
 async fn given_a_background_tool_when_called_then_no_wait_no_finish_no_cancel_and_no_read() {
     let (caller, script) = memory_caller();
     let tool = background_tool(caller, id(77));
