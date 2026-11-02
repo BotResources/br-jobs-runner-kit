@@ -4,8 +4,7 @@ use std::sync::Arc;
 use br_agentic_contract::{Tool, ToolBlock};
 use br_llm_clients_core::{Parameters, ToolSpec};
 use br_llm_messages::{OpaqueJson, ToolName};
-use br_runner_jobs::{CallerHandle, Content, Error};
-use contract_jobs::segment::{SegmentError, SubjectSegment};
+use br_runner_jobs::{CallerHandle, Content, RunnerType};
 use serde_json::Value;
 
 use crate::author::{self, AuthorFailure, Payload, PayloadBuilder, ResultProcessor};
@@ -93,12 +92,12 @@ impl RunnerTool {
     }
 
     pub fn build(self) -> Result<Tool, RunnerToolError> {
-        SubjectSegment::runner_type(&self.runner_type)
-            .map_err(|error| RunnerToolError::RunnerType(segment_error(&error)))?;
+        let runner_type =
+            RunnerType::new(&self.runner_type).map_err(RunnerToolError::RunnerType)?;
         let spec = ToolSpec::new(self.name, self.description, self.parameters)
             .map_err(RunnerToolError::Spec)?;
         let code = RunnerToolCode {
-            runner_type: self.runner_type,
+            runner_type,
             mode: self.mode,
             caller: self.caller,
             config: self.config,
@@ -110,16 +109,4 @@ impl RunnerTool {
         };
         Ok(Tool::new(spec, Arc::new(code)))
     }
-}
-
-fn segment_error(error: &SegmentError) -> Error {
-    let field = match error {
-        SegmentError::Blank { field }
-        | SegmentError::TooLong { field, .. }
-        | SegmentError::Invalid { field, .. } => field,
-    };
-    Error::InvalidInput(format!(
-        "the {field} is not a valid segment: {}",
-        error.code()
-    ))
 }

@@ -73,12 +73,12 @@ impl RunnerToolCode {
                 self.completed(child, inline, result_ref, cancel).await
             }
             SyncEnd::Failed { message, .. } => Err(Stop::Flag(ended_text(
-                &self.runner_type,
+                self.runner_type.as_str(),
                 "failed",
                 &message,
             ))),
             SyncEnd::Cancelled { message } => Err(Stop::Flag(ended_text(
-                &self.runner_type,
+                self.runner_type.as_str(),
                 "cancelled",
                 &message,
             ))),
@@ -125,7 +125,7 @@ impl RunnerToolCode {
 
     async fn process(&self, result: Content, cancel: &CancelView) -> Result<ToolContent, Stop> {
         let Some(processor) = &self.processor else {
-            return default_content(&self.runner_type, &result);
+            return default_content(self.runner_type.as_str(), &result);
         };
         let processed = unless_cancelled(cancel, processor(result))
             .await

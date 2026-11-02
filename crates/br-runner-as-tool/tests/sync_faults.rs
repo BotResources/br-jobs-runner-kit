@@ -19,7 +19,7 @@ fn cause_error(outcome: &Outcome) -> &Error {
 async fn given_a_refused_create_when_waiting_then_an_error_flag_holds_the_text_of_jobs_and_no_cancel_goes()
  {
     let (caller, script) = memory_caller();
-    let refusal = refused_saying("job_terminal", "the parent Job is over").await;
+    let refusal = refused_saying("job_terminal", "the parent Job is over");
     script.create(Answer::Now(Err(Removal::Refused(refusal))));
     let tool = sync_tool(caller);
 
@@ -36,7 +36,7 @@ async fn given_a_refused_create_when_waiting_then_an_error_flag_holds_the_text_o
 #[tokio::test]
 async fn given_a_refusal_with_no_message_when_waiting_then_the_reason_is_the_text() {
     let (caller, script) = memory_caller();
-    script.create(Answer::Now(Err(Removal::Refused(refused("busy").await))));
+    script.create(Answer::Now(Err(Removal::Refused(refused("busy")))));
     let tool = sync_tool(caller);
 
     let outcome = spawn_call(&tool, json!({}))
@@ -49,9 +49,27 @@ async fn given_a_refusal_with_no_message_when_waiting_then_the_reason_is_the_tex
 }
 
 #[tokio::test]
+async fn given_a_refusal_with_an_unknown_reason_word_and_no_message_when_waiting_then_the_word_is_the_text()
+ {
+    let (caller, script) = memory_caller();
+    script.create(Answer::Now(Err(Removal::Refused(refused(
+        "brand_new_word",
+    )))));
+    let tool = sync_tool(caller);
+
+    let outcome = spawn_call(&tool, json!({}))
+        .finished()
+        .await
+        .expect("an expected error");
+
+    assert!(outcome.is_error());
+    assert_eq!(texts(&outcome), vec!["brand_new_word".to_owned()]);
+}
+
+#[tokio::test]
 async fn given_a_refused_upload_when_the_create_ends_refused_then_an_error_flag_and_no_cancel() {
     let (caller, script) = memory_caller();
-    let refusal = refused_saying("payload_too_big", "the payload is too big").await;
+    let refusal = refused_saying("payload_too_big", "the payload is too big");
     script.create(Answer::Late(Err(Removal::Refused(refusal))));
     let tool = builder("analyst", ToolMode::Sync, caller)
         .payload_kind(PayloadKind::Kept)

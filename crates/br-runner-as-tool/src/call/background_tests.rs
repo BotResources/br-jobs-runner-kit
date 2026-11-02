@@ -1,6 +1,6 @@
 use br_graph_contract::CancelToken;
 use br_runner_jobs::test_double::{Answer, MemoryCall, MemoryScript, memory_caller};
-use br_runner_jobs::{PayloadForm, Removal, WriteResult};
+use br_runner_jobs::{PayloadForm, Removal, RunnerType, WriteResult};
 use uuid::Uuid;
 
 use super::{RunnerToolCode, Stop};
@@ -10,7 +10,7 @@ fn code(script_answer: Answer<WriteResult>) -> (RunnerToolCode, MemoryScript) {
     let (caller, script) = memory_caller();
     script.create(script_answer);
     let code = RunnerToolCode {
-        runner_type: "analyst".to_owned(),
+        runner_type: RunnerType::new("analyst").expect("a runner type"),
         mode: ToolMode::Background {
             caller_address: Uuid::from_u128(1),
         },
