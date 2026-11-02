@@ -246,6 +246,32 @@ async fn given_a_failed_child_job_when_settled_then_the_message_follows_the_firs
 }
 
 #[tokio::test]
+async fn given_a_child_job_cancelled_by_another_party_when_settled_then_an_error_flag_names_the_runner_and_the_outcome_holds_the_message_unchanged_and_no_finish_goes()
+ {
+    let (caller, script) = memory_caller();
+    let tool = sync_tool(caller);
+    let call = spawn_call(&tool, json!({}));
+    let create = create_of(&script).await;
+    script.end(
+        create.job_id,
+        Answer::Now(SyncEnd::Cancelled {
+            message: "stopped by its owner\nsecond line".to_owned(),
+        }),
+    );
+
+    let outcome = call.finished().await.expect("an expected error");
+
+    assert!(outcome.is_error());
+    assert_eq!(
+        texts(&outcome),
+        vec!["The runner analyst cancelled.\nstopped by its owner\nsecond line".to_owned()]
+    );
+    assert_eq!(count(&script, is_finish), 0);
+    assert_eq!(count(&script, is_cancel), 0);
+    assert_eq!(kinds(&script), vec!["wait", "create"]);
+}
+
+#[tokio::test]
 async fn given_a_call_when_it_runs_then_no_fragment_goes_to_the_result_stream() {
     let (caller, script) = memory_caller();
     let tool = sync_tool(caller);

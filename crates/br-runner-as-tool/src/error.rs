@@ -6,8 +6,6 @@ use br_runner_jobs::Removal;
 pub enum RunnerToolError {
     #[error(transparent)]
     Spec(BuildError),
-    #[error(transparent)]
-    RunnerType(br_runner_jobs::Error),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

@@ -14,7 +14,7 @@ use crate::mode::{PayloadKind, ToolMode};
 
 #[must_use = "a RunnerTool gives nothing until it is built"]
 pub struct RunnerTool {
-    runner_type: String,
+    runner_type: RunnerType,
     name: ToolName,
     description: String,
     parameters: Parameters,
@@ -30,7 +30,7 @@ pub struct RunnerTool {
 
 impl RunnerTool {
     pub fn new(
-        runner_type: impl Into<String>,
+        runner_type: RunnerType,
         name: ToolName,
         description: impl Into<String>,
         parameters: Parameters,
@@ -38,7 +38,7 @@ impl RunnerTool {
         caller: CallerHandle,
     ) -> Self {
         Self {
-            runner_type: runner_type.into(),
+            runner_type,
             name,
             description: description.into(),
             parameters,
@@ -92,12 +92,10 @@ impl RunnerTool {
     }
 
     pub fn build(self) -> Result<Tool, RunnerToolError> {
-        let runner_type =
-            RunnerType::new(&self.runner_type).map_err(RunnerToolError::RunnerType)?;
         let spec = ToolSpec::new(self.name, self.description, self.parameters)
             .map_err(RunnerToolError::Spec)?;
         let code = RunnerToolCode {
-            runner_type,
+            runner_type: self.runner_type,
             mode: self.mode,
             caller: self.caller,
             config: self.config,

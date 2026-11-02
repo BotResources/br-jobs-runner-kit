@@ -3,7 +3,7 @@ mod support;
 use br_llm_clients_core::{BuildError, MAX_NESTING_DEPTH, Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{RunnerTool, RunnerToolError, ToolMode};
-use br_runner_jobs::Error;
+use br_runner_jobs::RunnerType;
 use br_runner_jobs::test_double::{Answer, memory_caller};
 use serde_json::json;
 use support::*;
@@ -28,7 +28,7 @@ fn given_a_name_a_description_and_a_schema_when_built_then_the_tool_spec_holds_t
     ])
     .expect("parameters");
     let tool = RunnerTool::new(
-        "analyst",
+        RunnerType::new("analyst").expect("a runner type"),
         ToolName::new("ask_analyst").expect("name"),
         "Asks the analyst.",
         parameters.clone(),
@@ -48,7 +48,7 @@ fn given_a_schema_the_tool_spec_refuses_when_built_then_the_error_of_the_spec_co
  {
     let (caller, _script) = memory_caller();
     let result = RunnerTool::new(
-        "analyst",
+        RunnerType::new("analyst").expect("a runner type"),
         ToolName::new("ask_analyst").expect("name"),
         "Asks the analyst.",
         deep_parameters(),
@@ -61,32 +61,6 @@ fn given_a_schema_the_tool_spec_refuses_when_built_then_the_error_of_the_spec_co
         Err(RunnerToolError::Spec(BuildError::NestingTooDeep { .. })) => {}
         other => panic!("{:?}", other.map(|tool| tool.name().as_str().to_owned())),
     }
-}
-
-#[test]
-fn given_a_runner_type_the_wire_does_not_accept_when_built_then_invalid_input_and_no_tool_exists() {
-    for bad in ["", "ana lyst", "ana.lyst", "*", ">", &"x".repeat(65)] {
-        let (caller, _script) = memory_caller();
-        let result = builder(bad, ToolMode::Sync, caller).build();
-        assert!(
-            matches!(
-                result,
-                Err(RunnerToolError::RunnerType(Error::InvalidInput(_)))
-            ),
-            "{bad:?}"
-        );
-    }
-}
-
-#[test]
-fn given_a_blank_runner_type_when_built_then_the_error_text_is_the_one_of_the_wire_segment() {
-    let (caller, _script) = memory_caller();
-    let expected = Error::InvalidInput(match br_runner_jobs::RunnerType::new("") {
-        Err(Error::InvalidInput(text)) => text,
-        other => panic!("{other:?}"),
-    });
-    let result = builder("", ToolMode::Sync, caller).build();
-    assert!(matches!(result, Err(RunnerToolError::RunnerType(error)) if error == expected));
 }
 
 #[tokio::test]

@@ -1,13 +1,13 @@
 # br-runner-as-tool
 
-A runner type as a tool. It gives `RunnerTool`: you build it with the runner type, the tool name, the tool description, the argument schema, the tool mode and the caller handle of `br-runner-jobs`, and it gives a `Tool` of `br-agentic-contract`. An agentic node that calls this tool makes the other runner do a piece of work and gets its answer. The crate is on the calling side only: the called runner needs nothing from it, and the crate imports no runner and reads no registry.
+A runner type as a tool. It gives `RunnerTool`: you build it with the runner type (the `RunnerType` value of `br-runner-jobs`), the tool name, the tool description, the argument schema, the tool mode and the caller handle of `br-runner-jobs`, and it gives a `Tool` of `br-agentic-contract`. An agentic node that calls this tool makes the other runner do a piece of work and gets its answer. The crate is on the calling side only: the called runner needs nothing from it, and the crate imports no runner and reads no registry.
 
 The calling runner is the runner whose agentic node calls the tool. The called runner is the runner type that the tool makes work. "Tool" always means what the model calls; "runner" always means an image and a pod.
 
 ## Install
 
 ```toml
-br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.1.1", version = "0.1.1" }
+br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.2.0", version = "0.2.0" }
 br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
@@ -26,7 +26,7 @@ use br_agentic_contract::Tool;
 use br_llm_clients_core::{Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{RunnerTool, ToolMode};
-use br_runner_jobs::CallerHandle;
+use br_runner_jobs::{CallerHandle, RunnerType};
 
 pub fn analyst_tool(caller: CallerHandle) -> Result<Tool, Box<dyn std::error::Error>> {
     let question = Parameter::new(
@@ -36,7 +36,7 @@ pub fn analyst_tool(caller: CallerHandle) -> Result<Tool, Box<dyn std::error::Er
         ParameterKind::String,
     )?;
     let tool = RunnerTool::new(
-        "analyst",
+        RunnerType::new("analyst")?,
         ToolName::new("ask_analyst")?,
         "Asks the analyst runner a question and waits for its answer.",
         Parameters::new(vec![question])?,
@@ -58,7 +58,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 | Item | Role |
 |---|---|
-| `RunnerTool::new(runner_type, name, description, parameters, mode, caller)` | The required inputs. `name` is a `ToolName`, `parameters` are the `Parameters` of `br-llm-clients-core`, `caller` is the `CallerHandle` of the run. |
+| `RunnerTool::new(runner_type, name, description, parameters, mode, caller)` | The required inputs. `runner_type` is the `RunnerType` of `br-runner-jobs`, `name` is a `ToolName`, `parameters` are the `Parameters` of `br-llm-clients-core`, `caller` is the `CallerHandle` of the run. |
 | `.config(value)`, `.max_attempts(count)` | The configuration of the child Job and the count of Runs that jobs may make for it. Both go to the create as given. |
 | `.payload_kind(kind)`, `.keep_result(flag)` | `PayloadKind::Inline` (default) or `PayloadKind::Kept`; the keep flag of the Result read (default off). |
 | `.payload_builder(function)`, `.result_processor(function)` | The two async functions of the author. |
@@ -71,7 +71,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 **Building**
 
-- The build makes the `RunnerType` of `br-runner-jobs` from the runner type text (not empty, at most 64 characters, ASCII letters, digits, `_` and `-`, starting with a letter or a digit); a runner type that fails is `RunnerToolError::RunnerType` with the `Error::InvalidInput` that `RunnerType::new` gives. The `ToolSpec` is made from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
+- The build makes the `ToolSpec` from the name, the description and the schema; its error is `RunnerToolError::Spec`, given unchanged as `br-llm-clients-core` gives it, and it is the only error of the build. The crate never checks the runner type: a `RunnerType` value that exists is one that the wire accepts. The crate has no other rule on the name, the description or the schema. When the build fails no `Tool` exists.
 - A `Tool` is tied to the caller handle and to the tool mode it was built with, so to one run. Build it for each instance and do not keep it from one run to another. It keeps nothing from one call to the next and changes no state of the run. Several calls of one `Tool` run at the same time; each one has its own child Job.
 - The crate sets no priority (a child Job takes the priority of its parent), no timeout, no depth limit and no retry. It hands each write over once. The delivery queue behind the caller handle sends a write again until jobs answers; that is not a retry of this crate.
 
@@ -106,7 +106,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 **Background call**
 
 - Run the payload builder if set, mint the child Job id, hand over the upload if the payload is kept, hand over the create in background mode, give the acknowledgement. After the builder the call waits for nothing and reads nothing from jobs.
-- The acknowledgement has no error flag. Its text names the runner type and the child Job id, says that the create was handed over to jobs and is not confirmed until the notice "accepted" reaches the agent, and says that the notices name the child Job.
+- The acknowledgement has no error flag. Its text names the runner type and the child Job id, and says: the create was handed over to jobs and is not confirmed until the notice "accepted" reaches the agent; the notice "refused" tells the agent that jobs refused the create; the answer comes later by mail; the notices of this work name the child Job.
 - The crate does not finish the child Job of a background call and does not cancel it after the call returned.
 - The result processor and the keep flag have no effect in this mode.
 
