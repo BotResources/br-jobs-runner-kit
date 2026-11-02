@@ -65,7 +65,10 @@ pub(super) fn trigger_without(key: &str) -> Value {
 }
 
 pub(super) fn jobs() -> Arc<ScriptedJobs> {
-    ScriptedJobs::new("runner", "instance-a")
+    ScriptedJobs::new(
+        crate::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    )
 }
 
 pub(super) fn work_of(jobs: &Arc<ScriptedJobs>, value: Value) -> Work {

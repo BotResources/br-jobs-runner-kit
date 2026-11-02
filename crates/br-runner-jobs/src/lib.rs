@@ -12,7 +12,9 @@ mod graphql;
 mod mail;
 mod model;
 mod queue;
+mod reason;
 mod runner_transport;
+mod runner_type;
 #[cfg(any(test, feature = "test-double"))]
 pub mod test_double;
 mod work;
@@ -31,4 +33,6 @@ pub use feed::Feed;
 pub use mail::MailHandle;
 pub use model::*;
 pub use queue::*;
+pub use reason::RefusalReason;
+pub use runner_type::RunnerType;
 pub use work::{Unreadable, Work};

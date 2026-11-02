@@ -46,7 +46,10 @@ struct Run {
 }
 
 async fn run() -> Run {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     let passport = Passport::human(
         id(5),
         false,

@@ -15,6 +15,7 @@ use crate::error::{Error, Operation};
 use crate::model::{
     AgentDeclaration, CancelEvent, ItemArrived, ListedAgent, ModeEvent, PresenceStatus,
 };
+use crate::runner_type::RunnerType;
 
 mod call;
 mod session;
@@ -39,7 +40,7 @@ pub(super) struct Script {
 
 pub struct ScriptedJobs {
     script: Mutex<Script>,
-    runner_type: String,
+    runner_type: RunnerType,
     instance_key: String,
     reply_wait: Duration,
     hold: Mutex<bool>,
@@ -50,7 +51,7 @@ pub struct ScriptedJobs {
 }
 
 impl ScriptedJobs {
-    pub fn new(runner_type: &str, instance_key: &str) -> Arc<Self> {
+    pub fn new(runner_type: RunnerType, instance_key: &str) -> Arc<Self> {
         let (arrival_sender, receiver) = mpsc::unbounded_channel();
         Arc::new(Self {
             script: Mutex::new(Script {
@@ -63,7 +64,7 @@ impl ScriptedJobs {
                 command: None,
                 agents: Vec::new(),
             }),
-            runner_type: runner_type.to_owned(),
+            runner_type,
             instance_key: instance_key.to_owned(),
             reply_wait: Duration::from_secs(5),
             hold: Mutex::new(false),
@@ -104,7 +105,7 @@ impl ScriptedJobs {
 }
 
 impl Backend for ScriptedJobs {
-    fn runner_type(&self) -> &str {
+    fn runner_type(&self) -> &RunnerType {
         &self.runner_type
     }
 

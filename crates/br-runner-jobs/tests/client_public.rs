@@ -27,7 +27,10 @@ fn trigger() -> serde_json::Value {
 #[tokio::test]
 async fn given_a_claim_reply_with_a_run_when_claimed_then_a_work_without_trigger_and_a_busy_reply_names_its_delay()
  {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let client = jobs.client();
     let mut run = trigger();
     run["added_later"] = json!(true);
@@ -47,7 +50,7 @@ async fn given_a_claim_reply_with_a_run_when_claimed_then_a_work_without_trigger
     match client.claim(id(11), Duration::from_secs(1)).await {
         Err(Error::Refused(refusal)) => {
             assert_eq!(refusal.operation, Operation::Claim);
-            assert_eq!(refusal.reason, "busy");
+            assert_eq!(refusal.reason, br_runner_jobs::RefusalReason::Busy);
             assert_eq!(refusal.retry_after_ms, Some(250));
         }
         other => panic!("{:?}", other.map(|_| ())),
@@ -62,7 +65,10 @@ async fn given_a_claim_reply_with_a_run_when_claimed_then_a_work_without_trigger
 #[tokio::test]
 async fn given_scripted_feeds_when_read_then_an_unreadable_event_goes_on_and_a_loss_ends_the_feed()
 {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let client = jobs.client();
     let mut modes = client.dispatch_modes().await.expect("modes");
     let mut cancels = client.cancel_orders().await.expect("cancels");
@@ -81,7 +87,10 @@ async fn given_scripted_feeds_when_read_then_an_unreadable_event_goes_on_and_a_l
 
 #[tokio::test]
 async fn given_a_presence_when_published_then_the_capacity_below_one_cannot_be_made() {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let client = jobs.client();
     assert!(matches!(Capacity::new(0), Err(Error::InvalidInput(_))));
     client

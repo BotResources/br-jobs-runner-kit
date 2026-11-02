@@ -31,7 +31,10 @@ struct World {
 }
 
 async fn world() -> World {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let passport = Passport::human(
         id(5),
         false,

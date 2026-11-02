@@ -122,8 +122,13 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
     ];
 
     let child = id(300);
-    let mut input =
-        CreateChildInput::new(child, id(301), "analyst", CallMode::Sync, PayloadForm::Kept);
+    let mut input = CreateChildInput::new(
+        child,
+        id(301),
+        crate::RunnerType::new("analyst").expect("a runner type"),
+        CallMode::Sync,
+        PayloadForm::Kept,
+    );
     input.config = Some(json!({ "k": "v" }));
     let ends = [
         caller.upload_payload(child, content("p")).expect("upload"),
@@ -171,7 +176,7 @@ async fn given_a_work_with_known_ids_and_passport_when_both_handles_and_the_book
     jobs.set_agents(vec![ListedAgent {
         agent_id: id(70),
         run_id: id(RUN),
-        runner_type: "analyst".to_owned(),
+        runner_type: crate::RunnerType::new("analyst").expect("a runner type"),
         running: true,
         has_inbox: true,
         mail_address: Some(id(70)),

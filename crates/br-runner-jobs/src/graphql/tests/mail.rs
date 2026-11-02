@@ -65,7 +65,10 @@ async fn given_a_refused_attachment_when_the_mail_is_sent_then_the_mail_is_not_s
 #[tokio::test]
 async fn given_a_lost_upload_when_the_mail_is_sent_then_the_error_passes_and_nothing_else_is_sent()
 {
-    let scripted = crate::test_double::ScriptedJobs::new("runner", "instance-a");
+    let scripted = crate::test_double::ScriptedJobs::new(
+        crate::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     scripted.push_graphql(Err(Error::lost("cut")));
     let mail = new_mail(vec![new_attachment(1, "one.txt")]);
     let error = graphql::send_mail(&*scripted, &ids(), &mail)

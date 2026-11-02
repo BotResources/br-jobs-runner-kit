@@ -16,7 +16,7 @@ fn input(child: u128, command: u128) -> CreateChildInput {
     CreateChildInput::new(
         id(child),
         id(command),
-        "analyst",
+        crate::RunnerType::new("analyst").expect("a runner type"),
         CallMode::Sync,
         PayloadForm::Kept,
     )

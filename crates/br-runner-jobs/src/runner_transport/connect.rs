@@ -10,26 +10,15 @@ use br_util_nats_fabric::{
 use contract_jobs::runner::{
     CANCEL_BUCKET, LOG_STREAM, PRESENCE_BUCKET, STATUS_STREAM, TRIGGER_STREAM,
 };
-use contract_jobs::segment::{SegmentError, SubjectSegment};
+use contract_jobs::segment::SubjectSegment;
 use serde_json::Value;
 
 use super::arrivals::Arrivals;
 use super::{Live, Segments, Wire, fail};
 use crate::error::{Error, Failure};
+use crate::runner_type::{RunnerType, segment_error};
 
 const UNBOUNDED_ACK_WAIT: Duration = Duration::from_secs(60 * 60 * 24 * 365);
-
-fn segment_error(error: SegmentError) -> Error {
-    let field = match &error {
-        SegmentError::Blank { field }
-        | SegmentError::TooLong { field, .. }
-        | SegmentError::Invalid { field, .. } => field,
-    };
-    Error::invalid(format!(
-        "the {field} is not a valid segment: {}",
-        error.code()
-    ))
-}
 
 async fn within<T>(
     wait: Duration,
@@ -43,13 +32,13 @@ async fn within<T>(
 
 impl Live {
     pub(crate) async fn connect(
-        runner_type: &str,
+        runner_type: RunnerType,
         instance_key: &str,
         reply_wait: Duration,
         connection: Connection,
     ) -> Result<Self, Error> {
-        let runner_segment = SubjectSegment::runner_type(runner_type).map_err(segment_error)?;
-        let instance_segment = SubjectSegment::instance_key(instance_key).map_err(segment_error)?;
+        let instance_segment =
+            SubjectSegment::instance_key(instance_key).map_err(|error| segment_error(&error))?;
         if reply_wait.is_zero() {
             return Err(Error::invalid("the reply wait is zero"));
         }
@@ -82,11 +71,11 @@ impl Live {
         }
         check_fabric(&wire.fabric, reply_wait).await?;
         let segments = Segments {
-            runner_type: runner_segment,
+            runner_type: runner_type.segment().clone(),
             instance_key: instance_segment,
         };
         Ok(Self {
-            runner_type: runner_type.to_owned(),
+            runner_type,
             instance_key: instance_key.to_owned(),
             reply_wait,
             arrivals: Arc::new(Arrivals::new(&wire, &segments)?),

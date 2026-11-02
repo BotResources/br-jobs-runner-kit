@@ -29,7 +29,10 @@ fn passport() -> Passport {
 
 #[tokio::test]
 async fn the_work_of_run_one_work_ends_with_the_answer_the_saved_state_and_the_completed_fact() {
-    let jobs = ScriptedJobs::new("analyst", "pod-1");
+    let jobs = ScriptedJobs::new(
+        br_runner_jobs::RunnerType::new("analyst").expect("a runner type"),
+        "pod-1",
+    );
     let mut payload = success();
     payload["content"] = json!({ "message": "the tickets", "attachments": [] });
     jobs.push_graphql(Ok(json!({ PAYLOAD_ROOT: payload })));

@@ -11,6 +11,7 @@ use crate::model::{
     AgentDeclaration, CallMode, CancelEvent, Failed, ItemArrived, ListedAgent, LogLevel, ModeEvent,
     PayloadForm, PresenceStatus,
 };
+use crate::runner_type::RunnerType;
 
 pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -73,7 +74,7 @@ pub struct LogRecord {
 pub struct CreateChild {
     pub command_id: Uuid,
     pub job_id: Uuid,
-    pub runner_type: String,
+    pub runner_type: RunnerType,
     pub mode: CallMode,
     pub config: Option<Value>,
     pub payload: PayloadForm,
@@ -123,7 +124,7 @@ pub(crate) trait ChildSession: Send {
 }
 
 pub(crate) trait Backend: Send + Sync {
-    fn runner_type(&self) -> &str;
+    fn runner_type(&self) -> &RunnerType;
 
     fn instance_key(&self) -> &str;
 

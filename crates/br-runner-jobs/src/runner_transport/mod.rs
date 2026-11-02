@@ -28,9 +28,10 @@ use crate::backend::*;
 use crate::error::{Error, Operation};
 use crate::from_connection;
 use crate::model::*;
+use crate::runner_type::RunnerType;
 
 pub(crate) struct Live {
-    runner_type: String,
+    runner_type: RunnerType,
     instance_key: String,
     reply_wait: Duration,
     segments: Segments,
@@ -54,7 +55,7 @@ struct Wire {
 }
 
 impl Backend for Live {
-    fn runner_type(&self) -> &str {
+    fn runner_type(&self) -> &RunnerType {
         &self.runner_type
     }
 

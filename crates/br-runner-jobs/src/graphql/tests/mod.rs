@@ -37,7 +37,10 @@ pub(super) fn work_json() -> Value {
 }
 
 pub(super) fn jobs(answer: Value) -> Arc<ScriptedJobs> {
-    let jobs = ScriptedJobs::new("runner", "instance-a");
+    let jobs = ScriptedJobs::new(
+        crate::RunnerType::new("runner").expect("a runner type"),
+        "instance-a",
+    );
     jobs.push_graphql(Ok(answer));
     jobs
 }

@@ -33,7 +33,7 @@ use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
 use br_runner_jobs::{
     AgentBook, Content, DeliveryQueue, Error, IgnoreReports, JobsClient, NodeEntry, QueueSettings,
-    Removal, Work, book_lookup,
+    Removal, RunnerType, Work, book_lookup,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -54,7 +54,7 @@ pub fn build_connection(
 }
 
 pub async fn build_client(
-    runner_type: &str,
+    runner_type: RunnerType,
     instance_key: &str,
     connection: Connection,
 ) -> Result<JobsClient, Error> {
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let bus = async_nats::connect(nats_url).await?;
     let connection = build_connection(endpoint, token, bus, ServiceAccountId(account.parse()?))?;
-    let client = build_client(runner_type, instance_key, connection).await?;
+    let client = build_client(RunnerType::new(runner_type)?, instance_key, connection).await?;
     let mut triggers = client.triggers(Duration::from_secs(30)).await?;
     let work = triggers
         .next()

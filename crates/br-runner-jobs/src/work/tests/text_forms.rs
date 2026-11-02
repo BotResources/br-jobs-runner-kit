@@ -99,7 +99,7 @@ async fn given_a_work_with_known_ids_and_passport_when_every_object_is_shown_the
     let create = CreateChildInput::new(
         id(300),
         id(301),
-        "analyst",
+        crate::RunnerType::new("analyst").expect("a runner type"),
         CallMode::Sync,
         PayloadForm::Kept,
     );

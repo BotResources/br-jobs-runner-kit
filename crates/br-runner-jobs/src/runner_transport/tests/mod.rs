@@ -31,10 +31,15 @@ use crate::error::Error;
 use live_world::{WAIT, World, connection_on};
 
 pub(super) async fn live(world: &World, runner_type: &str, instance_key: &str) -> Live {
-    Live::connect(runner_type, instance_key, WAIT, world.connection())
-        .await
-        .map_err(|error| error.to_string())
-        .expect("the live transport connects")
+    Live::connect(
+        crate::RunnerType::new(runner_type).expect("a runner type"),
+        instance_key,
+        WAIT,
+        world.connection(),
+    )
+    .await
+    .map_err(|error| error.to_string())
+    .expect("the live transport connects")
 }
 
 pub(super) async fn live_with_wait(
@@ -44,7 +49,7 @@ pub(super) async fn live_with_wait(
     wait: Duration,
 ) -> Live {
     Live::connect(
-        runner_type,
+        crate::RunnerType::new(runner_type).expect("a runner type"),
         instance_key,
         wait,
         connection_on(&world.client, wait),
@@ -61,7 +66,7 @@ pub(super) async fn refused_connect(
     wait: Duration,
 ) -> Error {
     match Live::connect(
-        runner_type,
+        crate::RunnerType::new(runner_type).expect("a runner type"),
         instance_key,
         wait,
         connection_on(&world.client, WAIT),

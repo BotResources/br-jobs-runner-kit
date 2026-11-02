@@ -221,7 +221,7 @@ async fn given_a_work_given_back_when_the_queue_the_handles_and_the_book_made_be
     let input = crate::caller::CreateChildInput::new(
         id(300),
         id(301),
-        "analyst",
+        crate::RunnerType::new("analyst").expect("a runner type"),
         crate::model::CallMode::Sync,
         crate::model::PayloadForm::Kept,
     );

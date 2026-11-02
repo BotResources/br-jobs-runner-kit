@@ -1,6 +1,8 @@
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::runner_type::RunnerType;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct NewMailInput {
@@ -28,7 +30,7 @@ pub struct NewMailAttachment {
 pub struct ListedAgent {
     pub agent_id: Uuid,
     pub run_id: Uuid,
-    pub runner_type: String,
+    pub runner_type: RunnerType,
     pub running: bool,
     pub has_inbox: bool,
     pub mail_address: Option<Uuid>,
