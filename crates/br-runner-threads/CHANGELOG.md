@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+Follows contract-threads 0.7.0: Threads no longer orders a title Job, so a runner sets the title of a thread with no Job id. This is a breaking release.
+
+### Changed
+
+- `SetTitle` has no `title_job_id` any more: `ThreadClient::set_title` sends `threadsSetTitle(threadId, title)`.
+- `contract-threads` 0.7.0 (was 0.6.0).
+
+### Removed
+
+- `ThreadClient::fail_title_job` and `FailTitleJob`: the mutation `threadsFailTitleJob` is gone from Threads 0.7.
+
 ## 0.2.0
 
 Rebuilds the crate on the `Connection` of `br-runner-connection` and adds the adapters of the Threads ports of `br-agentic-contract`. This is a breaking release: the 0.1 surface (`ThreadsClient::new(actor, bus, graphql)`, `transport::*`, the sink factory) is replaced.

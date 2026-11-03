@@ -1,9 +1,7 @@
 mod support;
 
 use br_llm_messages::{Conversation, ConversationId, Turn};
-use br_runner_threads::{
-    ContextContent, ContextQuery, Error, FailTitleJob, SetTitle, UploadRequest,
-};
+use br_runner_threads::{ContextContent, ContextQuery, Error, SetTitle, UploadRequest};
 use serde_json::{Value, json};
 use support::nats_fixtures::BEARER;
 use support::nats_gateway::gateway_rig;
@@ -131,7 +129,6 @@ async fn a_title_is_set_through_a_mutation_that_must_be_acknowledged() {
     let rig = gateway_rig(|_| data(json!({ "threadsSetTitle": { "success": true } }))).await;
     let title = SetTitle {
         thread_id: v7(),
-        title_job_id: v7(),
         text: "A title".to_owned(),
     };
 
@@ -145,7 +142,7 @@ async fn a_title_is_set_through_a_mutation_that_must_be_acknowledged() {
             .contains("threadsSetTitle")
     );
     assert_eq!(body["variables"]["threadId"], json!(title.thread_id));
-    assert_eq!(body["variables"]["jobId"], json!(title.title_job_id));
+    assert!(body["variables"].get("jobId").is_none());
     assert_eq!(body["variables"]["title"], "A title");
 }
 
@@ -155,35 +152,12 @@ async fn a_title_mutation_that_is_not_acknowledged_is_unreadable() {
     let rig = gateway_rig(|_| data(json!({ "threadsSetTitle": { "success": false } }))).await;
     let title = SetTitle {
         thread_id: v7(),
-        title_job_id: v7(),
         text: "A title".to_owned(),
     };
 
     let result = rig.client.set_title(&title).await;
 
     assert!(matches!(result, Err(Error::Unreadable(_))), "{result:?}");
-}
-
-#[tokio::test]
-#[ignore = "needs a nats-server binary"]
-async fn a_failed_title_job_is_reported_with_its_code_and_message() {
-    let rig = gateway_rig(|_| data(json!({ "threadsFailTitleJob": { "success": true } }))).await;
-    let fail = FailTitleJob {
-        thread_id: v7(),
-        title_job_id: v7(),
-        code: "MODEL_DOWN".to_owned(),
-        message: Some("the model is down".to_owned()),
-    };
-
-    rig.client
-        .fail_title_job(&fail)
-        .await
-        .expect("acknowledged");
-
-    let variables = rig.gateway.requests()[0].json()["variables"].clone();
-    assert_eq!(variables["reasonCode"], "MODEL_DOWN");
-    assert_eq!(variables["message"], "the model is down");
-    assert_eq!(variables["jobId"], json!(fail.title_job_id));
 }
 
 fn upload_request() -> UploadRequest {

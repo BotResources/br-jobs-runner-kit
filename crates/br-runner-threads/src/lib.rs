@@ -32,7 +32,7 @@ pub use closing::{Closing, ClosureKind};
 pub use context::{ContextContent, ContextQuery, Member, Resource, ThreadContext};
 pub use error::{Cause, CredentialFailure, CredentialKind, Error, Failure, Refusal};
 pub use message::{Confirmed, MessageStatus, OpenStream, PlacedAnnotation, WholeMessage};
-pub use operations::{FailTitleJob, SetTitle, UploadAccess, UploadRequest};
+pub use operations::{SetTitle, UploadAccess, UploadRequest};
 pub use queue::{
     FailedAttempt, IgnoreReports, ItemKind, MemoryQueueStore, OldestItem, QueueObserver,
     QueueReport, QueueState, QueueStore, ReportKind, StoredItem, ThreadQueueState,

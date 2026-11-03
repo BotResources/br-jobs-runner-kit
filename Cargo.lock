@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "br-runner-threads"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-nats",
  "br-agentic-contract",
@@ -549,8 +549,8 @@ dependencies = [
 
 [[package]]
 name = "contract-threads"
-version = "0.6.0"
-source = "git+https://github.com/BotResources/svc-threads?tag=contract-threads%2Fv0.6.0#86b9a8e7a883a02b98d94ceeea668027e02b9056"
+version = "0.7.0"
+source = "git+https://github.com/BotResources/svc-threads?tag=contract-threads%2Fv0.7.0#5fc61864507282bc9c72f544e93b9f1d688626fa"
 dependencies = [
  "br-core-integration",
  "br-llm-messages",
