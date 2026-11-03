@@ -19,7 +19,6 @@ fn query() -> ContextQuery {
 fn title() -> SetTitle {
     SetTitle {
         thread_id: v7(),
-        title_job_id: v7(),
         text: "A title".to_owned(),
     }
 }

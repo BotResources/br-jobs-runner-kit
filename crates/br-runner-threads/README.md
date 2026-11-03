@@ -5,7 +5,7 @@ The Threads side of a runner. It gives the adapters of the Threads ports of `br-
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.2.0", version = "0.2.0" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.3.0", version = "0.3.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
@@ -152,11 +152,11 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 | Item | Role |
 |---|---|
 | `ThreadClient::new(connection, check_wait)` | Builds the client on a `Connection`. Checks the three streams that Threads uses; sends nothing else. |
-| `ThreadClient::create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `fail_title_job`, `request_upload` | The operations. Each sends once and keeps nothing once it ends, except the stream handle. |
+| `ThreadClient::create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `request_upload` | The operations. Each sends once and keeps nothing once it ends, except the stream handle. |
 | `StreamHandle`, `StreamWriter` | The open message of a stream and the clones of its write side. Both have `entry`, `annotation`, `keepalive` and `response(entry)`; only `StreamHandle` has `delta` and `message_id`. |
 | `ResponseSink`, `ResponseControl` | The stream sink of one model response over a handle, and the object that completes or discards it. |
 | `Closing`, `ClosureKind` | A closing request: Completed, BudgetExhausted, Failed, Interrupted or Cancelled. |
-| `NewThread`, `ThreadOrigin`, `WholeMessage`, `OpenStream`, `PlacedAnnotation`, `Annotation`, `AnnotationBody`, `ContextQuery`, `ThreadContext`, `ContextContent`, `Member`, `Resource`, `SetTitle`, `FailTitleJob`, `UploadRequest`, `UploadAccess`, `Confirmed`, `MessageStatus` | The request and value types of the client operations. |
+| `NewThread`, `ThreadOrigin`, `WholeMessage`, `OpenStream`, `PlacedAnnotation`, `Annotation`, `AnnotationBody`, `ContextQuery`, `ThreadContext`, `ContextContent`, `Member`, `Resource`, `SetTitle`, `UploadRequest`, `UploadAccess`, `Confirmed`, `MessageStatus` | The request and value types of the client operations. |
 | `ThreadAccessAdapter::new(client, ThreadAccessSettings)` | The adapter of the thread access port, with the thread queue. Also `queue_state()`, `entry_stored(thread, entry)` and `instance_ended(agent)`, which are not methods of the port. |
 | `ThreadPortAdapter::new(find)` | The adapter of the thread port: `find` gives the thread id of a snapshot. |
 | `WriteContext`, `WriteContextFn` | The seam that gives agent, author, job, acting user and impersonator for the writes of a thread. |

@@ -8,16 +8,7 @@ use crate::ids::require_v7;
 #[derive(Debug, Clone)]
 pub struct SetTitle {
     pub thread_id: Uuid,
-    pub title_job_id: Uuid,
     pub text: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct FailTitleJob {
-    pub thread_id: Uuid,
-    pub title_job_id: Uuid,
-    pub code: String,
-    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,8 +28,7 @@ pub struct UploadAccess {
 }
 
 pub(crate) const CONTEXT: &str = "query($threadId: UUID!, $agentId: String) { threadsContext(threadId: $threadId, agentId: $agentId) { threadId conversation projectedThread members { userId displayName inRoster } resources { key ids } } }";
-const SET_TITLE: &str = "mutation($threadId: UUID!, $jobId: UUID!, $title: String!) { threadsSetTitle(threadId: $threadId, jobId: $jobId, title: $title) { success } }";
-const FAIL_TITLE: &str = "mutation($threadId: UUID!, $jobId: UUID!, $reasonCode: String!, $message: String) { threadsFailTitleJob(threadId: $threadId, jobId: $jobId, reasonCode: $reasonCode, message: $message) { success } }";
+const SET_TITLE: &str = "mutation($threadId: UUID!, $title: String!) { threadsSetTitle(threadId: $threadId, title: $title) { success } }";
 const UPLOAD: &str = "mutation($threadId: UUID!, $artifactId: UUID!, $name: String!, $mediaType: String!, $size: Int!, $sha256: String!) { threadsRequestArtifactUpload(threadId: $threadId, artifactId: $artifactId, name: $name, mediaType: $mediaType, size: $size, sha256: $sha256) { url fields } }";
 
 pub(crate) fn set_title(title: &SetTitle) -> (&'static str, Value) {
@@ -46,20 +36,7 @@ pub(crate) fn set_title(title: &SetTitle) -> (&'static str, Value) {
         SET_TITLE,
         json!({
             "threadId": title.thread_id,
-            "jobId": title.title_job_id,
             "title": title.text,
-        }),
-    )
-}
-
-pub(crate) fn fail_title(fail: &FailTitleJob) -> (&'static str, Value) {
-    (
-        FAIL_TITLE,
-        json!({
-            "threadId": fail.thread_id,
-            "jobId": fail.title_job_id,
-            "reasonCode": fail.code,
-            "message": fail.message,
         }),
     )
 }

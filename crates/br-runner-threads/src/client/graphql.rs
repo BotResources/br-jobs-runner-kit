@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use super::ThreadClient;
 use crate::context::{self, ContextQuery, ThreadContext};
 use crate::error::Error;
-use crate::operations::{self, FailTitleJob, SetTitle, UploadAccess, UploadRequest};
+use crate::operations::{self, SetTitle, UploadAccess, UploadRequest};
 
 impl ThreadClient {
     pub async fn read_context(&self, query: &ContextQuery) -> Result<Option<ThreadContext>, Error> {
@@ -23,12 +23,6 @@ impl ThreadClient {
         let (document, variables) = operations::set_title(title);
         let data = self.run(document, variables).await?;
         operations::acknowledged(&data, "threadsSetTitle")
-    }
-
-    pub async fn fail_title_job(&self, fail: &FailTitleJob) -> Result<(), Error> {
-        let (document, variables) = operations::fail_title(fail);
-        let data = self.run(document, variables).await?;
-        operations::acknowledged(&data, "threadsFailTitleJob")
     }
 
     pub async fn request_upload(&self, request: &UploadRequest) -> Result<UploadAccess, Error> {
