@@ -75,6 +75,9 @@ pub(crate) struct OpenResponse {
 pub(crate) struct Mem {
     pub(crate) turns: HashMap<Uuid, TurnState>,
     pub(crate) responses: HashMap<EntryId, OpenResponse>,
+    /// The tip of the thread: the last turn of the last read, then each
+    /// message queued since. The parent of the next message queued.
+    pub(crate) tip: Option<Uuid>,
 }
 
 pub(crate) struct Slot {
