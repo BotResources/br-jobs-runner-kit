@@ -49,6 +49,9 @@ impl Drop for KeepaliveTask {
 pub(crate) struct TurnState {
     pub(crate) agent: AgentId,
     pub(crate) chunks: Vec<Chunk>,
+    /// The entries this adapter queued into the turn: those an annotation
+    /// may follow.
+    pub(crate) entries: HashSet<Uuid>,
     pub(crate) closed: bool,
     pub(crate) last_item_at: Instant,
     pub(crate) keepalive: Option<KeepaliveTask>,
@@ -59,6 +62,7 @@ impl TurnState {
         Self {
             agent,
             chunks: Vec::new(),
+            entries: HashSet::new(),
             closed: true,
             last_item_at: Instant::now(),
             keepalive: None,

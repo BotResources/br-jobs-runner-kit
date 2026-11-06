@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+Annotations through the adapter: a runner whose reply goes through the thread-access adapter can name an artifact it uploaded. The public API only grows.
+
+### Added
+
+- `ThreadAccessAdapter::add_annotation(thread, turn_id, after, annotation)`, beyond the port: queues an annotation chunk of an open AI turn, named by its id only, after an entry that the adapter queued into that turn (an entry, a tool result, or a model response through its deltas), numbered and sealed with the turn's other chunks. It is `InvalidInput` when the adapter holds no state of the turn, when the closing of the turn was accepted, when the entry is not one it queued into that turn, or when the annotation id is not a UUIDv7. An `AnnotationBody::Artifact` names an artifact so that Threads attaches it at the closing of the message.
+
 ## 0.4.0
 
 Decides the parent of a message: the adapter chains each message it writes to the thread, so Threads reads the whole conversation, not the latest message alone. The public API does not change.
