@@ -23,31 +23,34 @@ impl Inner {
         let entries: Vec<Uuid> = turn.entries().iter().map(|e| e.id().as_uuid()).collect();
         let body = LibraryJson::of(&Turn::InputTurn(turn))
             .map_err(|e| fault(Error::invalid(e.to_string())))?;
-        let command = wire::store(
-            Uuid::now_v7(),
-            StoreParts {
-                thread_id: thread.as_uuid(),
-                message_id: message,
-                parent_message_id: None,
-                job_id: ctx.job_id,
-                acting_user_id: ctx.acting_user_id,
-                impersonator_id: ctx.impersonator_id,
-            },
-            AiTurn {
-                agent_id: ctx.agent.as_uuid(),
-                author_name: ctx.author.as_str().to_owned(),
-                delivery: AiDelivery::Completed {
-                    turn: body,
-                    annotations: Vec::new(),
-                },
-            },
-        );
+        let thread_id = thread.as_uuid();
         let slot = self.slot(*thread);
         let agent = ctx.agent.as_uuid();
         self.ordered(&slot, move |inner, slot| async move {
-            let _ordered = slot.mem.lock().await;
+            let mut mem = slot.mem.lock().await;
+            let command = wire::store(
+                Uuid::now_v7(),
+                StoreParts {
+                    thread_id,
+                    message_id: message,
+                    parent_message_id: mem.tip,
+                    job_id: ctx.job_id,
+                    acting_user_id: ctx.acting_user_id,
+                    impersonator_id: ctx.impersonator_id,
+                },
+                AiTurn {
+                    agent_id: agent,
+                    author_name: ctx.author.as_str().to_owned(),
+                    delivery: AiDelivery::Completed {
+                        turn: body,
+                        annotations: Vec::new(),
+                    },
+                },
+            );
             let item = Inner::whole_item(&slot, command, agent, message, entries);
-            inner.accept(&slot, item).await
+            inner.accept(&slot, item).await?;
+            mem.tip = Some(message);
+            Ok(())
         })
         .await
         .map_err(fault)

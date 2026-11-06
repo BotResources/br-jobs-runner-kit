@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+Decides the parent of a message: the adapter chains each message it writes to the thread, so Threads reads the whole conversation, not the latest message alone. The public API does not change.
+
+### Changed
+
+- Each message that the thread-access adapter queues on a thread (the whole message of an input turn, the opening of an AI turn) takes the tip of that thread as its `parent_message_id`, then becomes the tip. The tip is the last turn of the last `read` of the thread, then each message queued since; with no tip the message starts a tree. The parent is fixed when the item is accepted and travels in the item. Before, every message was sent with no parent: Threads stored each one as a root, and a thread read back (by a runner at its start, or by people) held only its latest message.
+
 ## 0.3.0
 
 Follows contract-threads 0.7.0: Threads no longer orders a title Job, so a runner sets the title of a thread with no Job id. This is a breaking release.
