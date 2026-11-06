@@ -16,10 +16,11 @@ use br_agentic_contract::{
 };
 use br_llm_messages::{
     AgentId, Conversation, EntryId, InputTurn, ModelResponse, RuntimeToolResults, TurnClosure,
-    TurnEntry,
+    TurnEntry, TurnId,
 };
 use tokio::sync::mpsc;
 
+use crate::annotation::Annotation;
 use crate::client::ThreadClient;
 use crate::error::Error;
 use crate::ids::require_wait;
@@ -95,6 +96,20 @@ impl ThreadAccessAdapter {
 
     pub async fn instance_ended(&self, agent: AgentId) {
         self.inner.instance_ended(agent).await
+    }
+
+    /// Queues an annotation chunk of an open AI turn, after an entry this
+    /// adapter queued into it: numbered and sealed with the turn's chunks.
+    pub async fn add_annotation(
+        &self,
+        thread: &ThreadRef,
+        turn: TurnId,
+        after: EntryId,
+        annotation: Annotation,
+    ) -> Result<(), br_agentic_contract::PortError> {
+        self.inner
+            .add_annotation(thread, turn, after, annotation)
+            .await
     }
 }
 

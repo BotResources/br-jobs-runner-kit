@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use br_agentic_contract::{AiTurnRef, PortError, ThreadRef};
@@ -90,6 +91,7 @@ impl Inner {
             TurnState {
                 agent: turn.agent,
                 chunks: Vec::new(),
+                entries: HashSet::new(),
                 closed: false,
                 last_item_at: Instant::now(),
                 keepalive: self.start_keepalives(slot, message),
@@ -118,7 +120,7 @@ impl Inner {
             thread: slot.thread.as_uuid(),
             agent: state.agent.as_uuid(),
             message,
-            entries,
+            entries: entries.clone(),
             kind: ItemKind::Chunk,
             payload: Payload::Chunk {
                 seq,
@@ -127,6 +129,7 @@ impl Inner {
         };
         self.accept(slot, item).await?;
         state.chunks.push(chunk);
+        state.entries.extend(entries);
         state.last_item_at = Instant::now();
         Ok(())
     }
