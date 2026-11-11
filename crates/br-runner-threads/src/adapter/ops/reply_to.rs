@@ -5,17 +5,28 @@ use br_llm_messages::TurnId;
 
 use super::turn::fault;
 use crate::adapter::inner::Inner;
+use crate::error::Error;
 
 impl Inner {
     pub(crate) async fn reply_to(
         self: &Arc<Self>,
         thread: &ThreadRef,
-        message: TurnId,
+        reply: TurnId,
+        parent: TurnId,
     ) -> Result<(), PortError> {
-        let message = message.as_uuid();
+        let (reply, parent) = (reply.as_uuid(), parent.as_uuid());
+        if reply == parent {
+            return Err(fault(Error::invalid("a message is not its own parent")));
+        }
         let slot = self.slot(*thread);
         self.ordered(&slot, move |_inner, slot| async move {
-            slot.mem.lock().await.reply_to = Some(message);
+            let mut mem = slot.mem.lock().await;
+            if mem.turns.contains_key(&reply) {
+                return Err(Error::invalid(
+                    "the adapter already queued the opening of this turn",
+                ));
+            }
+            mem.reply_to.insert(reply, parent);
             Ok(())
         })
         .await

@@ -112,15 +112,16 @@ impl ThreadAccessAdapter {
             .await
     }
 
-    /// Names the message that the next message queued on this thread
-    /// answers: that message, not the tip, is its parent. It holds for one
-    /// message, and a `read` in between keeps it.
+    /// Names the parent of one message not queued yet: when the adapter
+    /// queues the message whose id is `reply` on this thread, `parent`, not
+    /// the tip, is its parent. No other message takes it.
     pub async fn reply_to(
         &self,
         thread: &ThreadRef,
-        message: TurnId,
+        reply: TurnId,
+        parent: TurnId,
     ) -> Result<(), br_agentic_contract::PortError> {
-        self.inner.reply_to(thread, message).await
+        self.inner.reply_to(thread, reply, parent).await
     }
 }
 

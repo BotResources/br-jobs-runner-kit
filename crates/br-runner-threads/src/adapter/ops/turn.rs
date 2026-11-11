@@ -65,7 +65,7 @@ impl Inner {
             StoreParts {
                 thread_id: slot.thread.as_uuid(),
                 message_id: message,
-                parent_message_id: mem.next_parent(),
+                parent_message_id: mem.parent_of(message),
                 job_id: ctx.job_id,
                 acting_user_id: ctx.acting_user_id,
                 impersonator_id: ctx.impersonator_id,
