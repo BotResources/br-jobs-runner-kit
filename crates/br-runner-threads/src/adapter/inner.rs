@@ -82,6 +82,20 @@ pub(crate) struct Mem {
     /// The tip of the thread: the last turn of the last read, then each
     /// message queued since. The parent of the next message queued.
     pub(crate) tip: Option<Uuid>,
+    /// The message that the next message queued answers, when the runner
+    /// named one: it goes before the tip, once.
+    pub(crate) reply_to: Option<Uuid>,
+}
+
+impl Mem {
+    pub(crate) fn next_parent(&self) -> Option<Uuid> {
+        self.reply_to.or(self.tip)
+    }
+
+    pub(crate) fn chained(&mut self, message: Uuid) {
+        self.reply_to = None;
+        self.tip = Some(message);
+    }
 }
 
 pub(crate) struct Slot {

@@ -111,6 +111,17 @@ impl ThreadAccessAdapter {
             .add_annotation(thread, turn, after, annotation)
             .await
     }
+
+    /// Names the message that the next message queued on this thread
+    /// answers: that message, not the tip, is its parent. It holds for one
+    /// message, and a `read` in between keeps it.
+    pub async fn reply_to(
+        &self,
+        thread: &ThreadRef,
+        message: TurnId,
+    ) -> Result<(), br_agentic_contract::PortError> {
+        self.inner.reply_to(thread, message).await
+    }
 }
 
 impl Drop for ThreadAccessAdapter {

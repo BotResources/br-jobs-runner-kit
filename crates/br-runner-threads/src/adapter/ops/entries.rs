@@ -33,7 +33,7 @@ impl Inner {
                 StoreParts {
                     thread_id,
                     message_id: message,
-                    parent_message_id: mem.tip,
+                    parent_message_id: mem.next_parent(),
                     job_id: ctx.job_id,
                     acting_user_id: ctx.acting_user_id,
                     impersonator_id: ctx.impersonator_id,
@@ -49,7 +49,7 @@ impl Inner {
             );
             let item = Inner::whole_item(&slot, command, agent, message, entries);
             inner.accept(&slot, item).await?;
-            mem.tip = Some(message);
+            mem.chained(message);
             Ok(())
         })
         .await

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+A runner can say which message its reply answers. The public API only grows, and nothing changes for a runner that does not call the new operation.
+
+### Added
+
+- `ThreadAccessAdapter::reply_to(thread, message)`, beyond the port: names the message that the next message queued on that thread answers. That message (an input turn or the opening of an AI turn) takes it as its `parent_message_id` in place of the tip, then becomes the tip. It holds for one message, a second call before that message replaces the first, and a `read` of the thread in between keeps it. It queues nothing and calls no write-context function. Before, the parent was always the tip, so a runner that wrote a reply again could only chain it after the old reply; now it can chain it to the message that the reply answers, as a sibling of the old one.
+
 ## 0.5.0
 
 Annotations through the adapter: a runner whose reply goes through the thread-access adapter can name an artifact it uploaded. The public API only grows.
