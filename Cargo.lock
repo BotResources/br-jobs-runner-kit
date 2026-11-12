@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "br-runner-threads"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-nats",
  "br-agentic-contract",

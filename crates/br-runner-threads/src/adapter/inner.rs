@@ -82,6 +82,21 @@ pub(crate) struct Mem {
     /// The tip of the thread: the last turn of the last read, then each
     /// message queued since. The parent of the next message queued.
     pub(crate) tip: Option<Uuid>,
+    /// The parents that the runner named, each for one message not queued
+    /// yet: the id of that message, then the parent it takes in place of
+    /// the tip. Memory only, like the tip.
+    pub(crate) reply_to: HashMap<Uuid, Uuid>,
+}
+
+impl Mem {
+    pub(crate) fn parent_of(&self, message: Uuid) -> Option<Uuid> {
+        self.reply_to.get(&message).copied().or(self.tip)
+    }
+
+    pub(crate) fn chained(&mut self, message: Uuid) {
+        self.reply_to.remove(&message);
+        self.tip = Some(message);
+    }
 }
 
 pub(crate) struct Slot {

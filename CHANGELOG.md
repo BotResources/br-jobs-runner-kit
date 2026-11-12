@@ -27,6 +27,7 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-as-node` 0.2.0: builds on `br-runner-jobs` 0.2.0 (breaking: `RunnerType` replaces the re-export of `SubjectSegment`), and a child Job cancelled by another party now arrives as `Outcome::Cancelled`. See `crates/br-runner-as-node/CHANGELOG.md`.
 - `br-runner-threads` 0.4.0: the thread-access adapter chains each message it writes to the tip of its thread, so Threads reads the whole conversation. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-threads` 0.5.0: `ThreadAccessAdapter::add_annotation(thread, turn_id, after, annotation)` queues an annotation chunk of an open AI turn, numbered and sealed with the turn's chunks, so a runner can name an artifact it uploaded in its reply. See `crates/br-runner-threads/CHANGELOG.md`.
+- `br-runner-threads` 0.5.1: `ThreadAccessAdapter::reply_to(thread, reply, parent)` names the parent of one message not queued yet, by the id of that message, so a runner that writes a reply again chains it to the message it answers and not to the tip. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-as-tool` 0.2.0: the runner type is the `RunnerType` of `br-runner-jobs` that the caller gives, the build fails only with the `ToolSpec` error, and the acknowledgement of a background call tells the agent about the notice "refused" and the answer by mail. Breaking: `RunnerTool::new` takes a `RunnerType`, and `RunnerToolError::RunnerType` is removed. See `crates/br-runner-as-tool/CHANGELOG.md`.
 
 ### Fixed
