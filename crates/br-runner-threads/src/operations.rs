@@ -28,6 +28,7 @@ pub struct UploadAccess {
 }
 
 pub(crate) const CONTEXT: &str = "query($threadId: UUID!, $agentId: String) { threadsContext(threadId: $threadId, agentId: $agentId) { threadId conversation projectedThread members { userId displayName inRoster } resources { key ids } } }";
+pub(crate) const CONTEXT_OF_BRANCH: &str = "query($threadId: UUID!, $agentId: String, $branchTip: UUID) { threadsContext(threadId: $threadId, agentId: $agentId, branchTip: $branchTip) { threadId conversation projectedThread members { userId displayName inRoster } resources { key ids } } }";
 const SET_TITLE: &str = "mutation($threadId: UUID!, $title: String!) { threadsSetTitle(threadId: $threadId, title: $title) { success } }";
 const UPLOAD: &str = "mutation($threadId: UUID!, $artifactId: UUID!, $name: String!, $mediaType: String!, $size: Int!, $sha256: String!) { threadsRequestArtifactUpload(threadId: $threadId, artifactId: $artifactId, name: $name, mediaType: $mediaType, size: $size, sha256: $sha256) { url fields } }";
 

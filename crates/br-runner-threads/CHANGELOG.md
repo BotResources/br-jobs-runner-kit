@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2
+
+A runner can read the context of a branch that is not the active one. The public API only grows, and nothing changes for a runner that does not call the new operation.
+
+### Added
+
+- `ThreadClient::read_context_of_branch(query, branch_tip)`: reads `threadsContext(threadId, agentId, branchTip)`. The conversation, or the projected thread when the query names an agent, is the branch that ends at the message `branch_tip`: that message and its ancestors. The answer is read like the answer of `read_context` (the same `ThreadContext`, an absent thread is `None`, the same errors). `read_context` is unchanged: it sends the same document and the same variables as before, with no `branchTip`, and reads the active branch. Before, a runner could read the active branch only, so a runner asked to answer a message of another branch (an earlier version of an edited message) did not find that message in the conversation. The new read needs a Threads that knows the argument `branchTip`; the id is not checked by this crate.
+- The test double answers the new read through `answer_graphql` like any GraphQL operation: the script receives the document and the variables, with `branchTip` among them, and `operations()` records them.
+
 ## 0.5.1
 
 A runner can say which message its reply answers. The public API only grows, and nothing changes for a runner that does not call the new operation.
