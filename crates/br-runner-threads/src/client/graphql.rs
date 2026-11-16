@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 use super::ThreadClient;
 use crate::context::{self, ContextQuery, ThreadContext};
@@ -9,9 +10,32 @@ impl ThreadClient {
     pub async fn read_context(&self, query: &ContextQuery) -> Result<Option<ThreadContext>, Error> {
         let variables = json!({
             "threadId": query.thread_id,
-            "agentId": query.agent.map(|agent| agent.as_uuid().to_string()),
+            "agentId": agent_text(query),
         });
-        let data = self.backend.graphql(operations::CONTEXT, variables).await?;
+        self.context(operations::CONTEXT, variables, query).await
+    }
+
+    pub async fn read_context_of_branch(
+        &self,
+        query: &ContextQuery,
+        branch_tip: Uuid,
+    ) -> Result<Option<ThreadContext>, Error> {
+        let variables = json!({
+            "threadId": query.thread_id,
+            "agentId": agent_text(query),
+            "branchTip": branch_tip,
+        });
+        self.context(operations::CONTEXT_OF_BRANCH, variables, query)
+            .await
+    }
+
+    async fn context(
+        &self,
+        document: &str,
+        variables: Value,
+        query: &ContextQuery,
+    ) -> Result<Option<ThreadContext>, Error> {
+        let data = self.backend.graphql(document, variables).await?;
         let found = data
             .get("threadsContext")
             .cloned()
@@ -34,4 +58,8 @@ impl ThreadClient {
     async fn run(&self, document: &str, variables: Value) -> Result<Value, Error> {
         self.backend.graphql(document, variables).await
     }
+}
+
+fn agent_text(query: &ContextQuery) -> Option<String> {
+    query.agent.map(|agent| agent.as_uuid().to_string())
 }

@@ -5,7 +5,7 @@ The Threads side of a runner. It gives the adapters of the Threads ports of `br-
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.5.1", version = "0.5.1" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.5.2", version = "0.5.2" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
@@ -153,6 +153,7 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 |---|---|
 | `ThreadClient::new(connection, check_wait)` | Builds the client on a `Connection`. Checks the three streams that Threads uses; sends nothing else. |
 | `ThreadClient::create_thread`, `write_message`, `open_stream`, `close_message`, `read_context`, `set_title`, `request_upload` | The operations. Each sends once and keeps nothing once it ends, except the stream handle. |
+| `ThreadClient::read_context_of_branch(query, branch_tip)` | Reads the context of one branch of a thread: the conversation is the branch that ends at the message `branch_tip`, that message and its ancestors. `read_context` reads the active branch. |
 | `StreamHandle`, `StreamWriter` | The open message of a stream and the clones of its write side. Both have `entry`, `annotation`, `keepalive` and `response(entry)`; only `StreamHandle` has `delta` and `message_id`. |
 | `ResponseSink`, `ResponseControl` | The stream sink of one model response over a handle, and the object that completes or discards it. |
 | `Closing`, `ClosureKind` | A closing request: Completed, BudgetExhausted, Failed, Interrupted or Cancelled. |
@@ -198,6 +199,7 @@ The commands and their outcomes go through `br-util-nats-fabric` on the bus conn
 | Keepalive on a stuck thread | While an item of a thread waits, the adapter queues no keepalive for it. A thread queue that does not drain longer than the silence time of Threads gets its open messages failed by Threads, and the items sent later are refused; this is learned only when a closing that carries a seal is refused. |
 | Parent of a message | A message takes the tip of its thread as parent, or the parent that `reply_to` named for its id. That parent is not checked against Threads and is kept in memory only: an adapter built again from a durable store does not have it. A message queued on a thread that the adapter has neither read nor written starts a tree. Two adapters, or two instances, that chain to the same tip make sibling messages; Threads reads the latest one's branch. A message whose parent Threads refused is refused in turn. |
 | What `read` omits | `read` gives the context as Threads gives it for the whole active branch. It leaves out annotations, cancelled messages, interrupted responses, messages that failed before their first entry and deleted messages. |
+| Context of a branch | `read_context_of_branch` sends the argument `branchTip` of `threadsContext`, which a Threads that does not know this argument refuses; `read_context` never sends it. The id is not checked here: what Threads answers for a message that the thread does not hold reaches the caller as it is. `read` of the adapter reads the active branch only. |
 | Discard | `discard_response` of a response whose sink queued a delta keeps the partial response in its message, ended as interrupted; `read` leaves it out, so a response dropped by `discard` never comes back in `read`. A response whose sink queued no delta leaves nothing. |
 | Entry id of an interrupted response | A response opened again or completed with the entry id of a response that was interrupted is sent as given. If Threads refuses it, this is known only when a closing that carries a seal is refused. |
 | Writer of an input turn | The message of an input turn is written under the agent and the author name of the `WriteContext` of its thread, not under the author of the input. |
