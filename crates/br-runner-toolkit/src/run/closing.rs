@@ -19,7 +19,6 @@ fn cause_text(removal: &Removal) -> Option<String> {
 
 async fn body(queue: &DeliveryQueue, terminal: Terminal, mapping: Option<&dyn FailureMapping>) {
     match terminal {
-        Terminal::None => {}
         Terminal::Failed(end) => {
             let _ = end.await;
         }

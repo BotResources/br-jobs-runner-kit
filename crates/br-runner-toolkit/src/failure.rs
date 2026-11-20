@@ -115,6 +115,10 @@ impl Found {
             ..Self::permanent(reason_code, text)
         }
     }
+
+    pub(crate) fn cancelled() -> Self {
+        Self::permanent("run_cancelled", "")
+    }
 }
 
 pub(crate) fn failed_of(found: Found, mapping: Option<&dyn FailureMapping>) -> Failed {
