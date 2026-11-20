@@ -20,7 +20,6 @@ pub(crate) enum Terminal {
         completed: WriteEnd,
     },
     Failed(WriteEnd),
-    None,
 }
 
 fn answer_of<F: Fields>(ctx: &Ctx<F>, state: &State<F>) -> Result<Content, Found> {
@@ -70,7 +69,7 @@ pub(super) fn hand_over<F: Fields>(
         Terminal::Failed(queue.failed(failed_of(found, ctx.plan.mapping.as_deref())))
     };
     match ending {
-        Ending::Cancelled => Terminal::None,
+        Ending::Cancelled => fail(Found::cancelled()),
         Ending::Failed(failed) => Terminal::Failed(queue.failed(failed)),
         Ending::Ended(state) => match made_writes(ctx, &state, agents) {
             Err(found) => fail(found),

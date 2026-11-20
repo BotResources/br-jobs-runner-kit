@@ -194,3 +194,31 @@ async fn given_a_write_handed_over_while_the_settle_waits_for_the_observations_w
         .expect("the settle does not wait for a write handed over after the executor returned")
         .expect("joined");
 }
+
+#[tokio::test]
+async fn given_an_outcome_told_to_the_observer_task_just_before_the_executor_returned_when_the_run_settles_then_no_wait_is_logged()
+ {
+    let (logs, _guard) = Logs::capture();
+    let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
+    let instances = Arc::new(Instances::default());
+    let shared = shared(&jobs, None, &instances);
+    let work = work(&jobs, 1);
+    let queue = queue_of(&work).await;
+    let record = record(&work);
+    record.expect_observations_end();
+    let observer = ExecObserver {
+        shared: Arc::clone(&shared),
+        record: Arc::clone(&record),
+    };
+    let (tell, mut told) = tokio::sync::mpsc::unbounded_channel::<Observation>();
+    tokio::spawn(async move {
+        while let Some(observation) = told.recv().await {
+            observer.observe(observation);
+        }
+    });
+    ticks().await;
+    tell.send(Observation::Outcome(OutcomeKind::RunEnded))
+        .expect("the observer task listens");
+    settle(&shared, &record, &queue).await;
+    assert_eq!(logs.containing(Level::WARN, "its last observations"), 0);
+}

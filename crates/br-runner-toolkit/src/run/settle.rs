@@ -18,19 +18,27 @@ pub(super) async fn settle_and_hand_over<F: Fields>(ctx: &Ctx<F>, ending: Ending
     hand_over(ctx, &ctx.queue, &agents, ending)
 }
 
+async fn last_observations(record: &RunRecord) {
+    let mut ended = std::pin::pin!(record.observations_ended());
+    if futures::poll!(ended.as_mut()).is_ready() {
+        return;
+    }
+    tokio::task::yield_now().await;
+    if futures::poll!(ended.as_mut()).is_pending() {
+        tracing::warn!(
+            run_id = %record.run_id,
+            job_id = %record.job_id,
+            "the run waits for the executor to report its last observations"
+        );
+        ended.await;
+    }
+}
+
 async fn settle(shared: &Arc<Shared>, record: &Arc<RunRecord>, queue: &DeliveryQueue) {
     let mut drained = std::pin::pin!(queue.drained());
     let drained_early = futures::poll!(drained.as_mut());
     if record.observations_expected() {
-        let mut ended = std::pin::pin!(record.observations_ended());
-        if futures::poll!(ended.as_mut()).is_pending() {
-            tracing::warn!(
-                run_id = %record.run_id,
-                job_id = %record.job_id,
-                "the run waits for the executor to report its last observations"
-            );
-            ended.await;
-        }
+        last_observations(record).await;
     }
     record.set_phase(Phase::ExecutorReturned);
     crate::hooks::call_all(shared, record);

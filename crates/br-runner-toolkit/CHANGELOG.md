@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0
+
+Opens the line 0.2.
+
+### Changed
+
+- A Run that a cancel order ended hands over the failed fact `run_cancelled` in place of no terminal fact: when the executor returns `RunCancelled`, and when the order is seen before the executor starts, in push and in claim mode. The fact is permanent, goes through the `FailureMapping` like any failure, with an empty text and so an empty diagnostic unless the mapping gives one, and is never the completed fact. jobs keeps a run it asked to stop among its current runs, against the capacity of the runner type, until the runner hands over a terminal fact: with no terminal fact the slot stayed taken until the pod died.
+- When the executor has returned, the settle gives its observer one turn of the scheduler before it logs "the run waits for the executor to report its last observations". The executor tells its outcome through a channel and returns before the observer has read it, so nearly every Run logged that warning; it is now logged only when the observations are really late.
+
+### Breaking
+
+- No public signature changes, but a `FailureMapping` is now called for a cancelled Run, with the reason code `run_cancelled`, and `HostCancel` ends the Run of a `TestHost` with that failed fact. A test or a mapping that expected no terminal fact after a cancel must change.
+
 ## 0.1.1
 
 Uses `br-runner-jobs` 0.2.0.

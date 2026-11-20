@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.2
+
+A runner can read the context of a branch that is not the active one. The public API only grows, and nothing changes for a runner that does not call the new operation.
+
+### Added
+
+- `ThreadClient::read_context_of_branch(query, branch_tip)`: reads `threadsContext(threadId, agentId, branchTip)`. The conversation, or the projected thread when the query names an agent, is the branch that ends at the message `branch_tip`: that message and its ancestors. The answer is read like the answer of `read_context` (the same `ThreadContext`, an absent thread is `None`, the same errors). `read_context` is unchanged: it sends the same document and the same variables as before, with no `branchTip`, and reads the active branch. Before, a runner could read the active branch only, so a runner asked to answer a message of another branch (an earlier version of an edited message) did not find that message in the conversation. The new read needs a Threads that knows the argument `branchTip`; the id is not checked by this crate.
+- The test double answers the new read through `answer_graphql` like any GraphQL operation: the script receives the document and the variables, with `branchTip` among them, and `operations()` records them.
+
+## 0.5.1
+
+A runner can say which message its reply answers. The public API only grows, and nothing changes for a runner that does not call the new operation.
+
+### Added
+
+- `ThreadAccessAdapter::reply_to(thread, reply, parent)`, beyond the port: names the parent of one message that the adapter has not queued yet. When the adapter queues the message whose id is `reply` on that thread (the opening of that AI turn or that input turn), it takes `parent` as its `parent_message_id` in place of the tip, then becomes the tip. No other message takes it: any other message follows the tip and leaves the pair in place. A second call with the same `reply` replaces the parent, and a `read` of the thread keeps the pair. It is `InvalidInput` when the adapter already queued the opening of the turn `reply`, or when `reply` and `parent` are the same id. The adapter does not check `parent` against Threads: Threads refuses a message whose parent it does not hold, and the messages chained after it, until the next `read`. The pair is memory only, like the tip; a pair whose `reply` is never queued changes no message. Before, the parent was always the tip, so a runner that wrote a reply again could only chain it after the old reply; now it can chain it to the message that the reply answers, as a sibling of the old one.
+
+## 0.5.0
+
+Annotations through the adapter: a runner whose reply goes through the thread-access adapter can name an artifact it uploaded. The public API only grows.
+
+### Added
+
+- `ThreadAccessAdapter::add_annotation(thread, turn_id, after, annotation)`, beyond the port: queues an annotation chunk of an open AI turn, named by its id only, after an entry that the adapter queued into that turn (an entry, a tool result, or a model response through its deltas), numbered and sealed with the turn's other chunks. It is `InvalidInput` when the adapter holds no state of the turn, when the closing of the turn was accepted, when the entry is not one it queued into that turn, or when the annotation id is not a UUIDv7. An `AnnotationBody::Artifact` names an artifact so that Threads attaches it at the closing of the message.
+
 ## 0.4.0
 
 Decides the parent of a message: the adapter chains each message it writes to the thread, so Threads reads the whole conversation, not the latest message alone. The public API does not change.
