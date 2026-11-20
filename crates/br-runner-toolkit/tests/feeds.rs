@@ -2,7 +2,7 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs::test_double::{Fact, ScriptedJobs};
 use br_runner_jobs::{CancelEvent, DispatchMode, Error, ModeEvent};
 use support::*;
 
@@ -92,8 +92,18 @@ async fn given_cancel_orders_made_and_deleted_before_the_replay_is_complete_when
     jobs.push_trigger(trigger(1));
     jobs.push_trigger(trigger(2));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
-    until(|| has_terminal(&jobs)).await;
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    assert_eq!(kinds(&jobs), vec!["started", "completed", "started"]);
+    until(|| kinds(&jobs).len() == 4).await;
+    assert_eq!(
+        kinds(&jobs),
+        vec!["started", "completed", "started", "failed"]
+    );
+    let cancelled: Vec<_> = facts(&jobs)
+        .into_iter()
+        .filter_map(|fact| match fact {
+            Fact::Failed { run_id, failed } => Some((run_id, failed.reason_code)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cancelled, vec![(id(102), "run_cancelled".to_owned())]);
     running.stop().await;
 }

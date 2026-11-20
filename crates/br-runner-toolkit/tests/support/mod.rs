@@ -186,6 +186,16 @@ pub fn failed_fact(jobs: &ScriptedJobs) -> Option<br_runner_jobs::Failed> {
     })
 }
 
+pub fn assert_run_cancelled(jobs: &ScriptedJobs) {
+    assert_eq!(kinds(jobs), vec!["started", "failed"]);
+    let failed = failed_fact(jobs).expect("a failed fact");
+    assert_eq!(failed.reason_code, "run_cancelled");
+    assert_eq!(failed.kind, br_runner_jobs::FailureKind::Permanent);
+    assert_eq!(failed.params, json!({}));
+    assert_eq!(failed.diagnostic, json!(""));
+    assert_eq!(failed.retry_after_seconds, None);
+}
+
 pub fn claim_ids(jobs: &ScriptedJobs) -> Vec<Uuid> {
     jobs.calls()
         .into_iter()

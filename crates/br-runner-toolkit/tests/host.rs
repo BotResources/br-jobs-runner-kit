@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use br_runner_jobs::test_double::ScriptedJobs;
-use br_runner_jobs::{CancelEvent, PresenceStatus};
+use br_runner_jobs::{CancelEvent, PresenceStatus, QueueReport, WriteKind};
 use br_runner_toolkit::{HostEvent, InstanceEnded, Settings, TestHost, lifecycle_hook};
 use support::*;
 
@@ -70,7 +70,7 @@ async fn given_a_test_host_when_it_runs_then_it_takes_one_run_even_if_more_trigg
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_then_the_run_ends_without_a_terminal_fact()
+async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_then_the_run_ends_with_the_failed_fact_run_cancelled()
  {
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
@@ -86,12 +86,17 @@ async fn given_a_test_host_and_a_run_that_waits_when_the_cancel_handle_is_used_t
     until(|| kinds(&jobs) == vec!["started"]).await;
     cancel.cancel();
     let outcome = handle.await.expect("joined").expect("a run");
-    assert!(!has_terminal(&jobs));
+    assert_run_cancelled(&jobs);
+    assert!(outcome.events.iter().any(|event| matches!(
+        event,
+        HostEvent::Queue(QueueReport::Delivered { write }) if write.kind == WriteKind::Failed
+    )));
     assert!(outcome.drain.runs.is_empty());
 }
 
 #[tokio::test(start_paused = true)]
-async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_without_a_terminal_fact() {
+async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_with_the_failed_fact_run_cancelled()
+ {
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
@@ -105,7 +110,7 @@ async fn given_a_test_host_when_a_cancel_order_is_made_then_the_run_ends_without
     until(|| kinds(&jobs) == vec!["started"]).await;
     jobs.push_cancel(Ok(CancelEvent::OrderMade { run_id: id(101) }));
     handle.await.expect("joined").expect("a run");
-    assert!(!has_terminal(&jobs));
+    assert_run_cancelled(&jobs);
 }
 
 #[tokio::test(start_paused = true)]
