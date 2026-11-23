@@ -404,7 +404,7 @@ name = "br-runner-jobs-client"
 version = "0.1.0"
 dependencies = [
  "async-nats",
- "br-agentic-contract",
+ "br-agentic-contract 0.3.0",
  "br-core-auth",
  "br-core-kernel",
  "br-runner-connection",
