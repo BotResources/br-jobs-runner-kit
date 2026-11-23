@@ -1,7 +1,7 @@
 use br_llm_messages::ClosureReason;
 use contract_threads::{
     AiDelivery, AiTurn, Chunk, CompleteMessageV2, CreateThread, FailMessageV2, LibraryJson,
-    MessageTurn, PlacedAnnotation as WirePlaced, StoreMessageV2, StreamSeal,
+    MessageTurn, PlacedAnnotation as WirePlaced, StoreMessageV3, StreamSeal,
 };
 use uuid::Uuid;
 
@@ -48,7 +48,6 @@ pub(crate) fn whole_message(message: &WholeMessage) -> Result<Command, Error> {
         StoreParts {
             thread_id: message.thread_id,
             message_id: message.turn.id().as_uuid(),
-            parent_message_id: message.parent_message_id,
             job_id: message.job_id,
             acting_user_id: message.acting_user_id,
             impersonator_id: message.impersonator_id,
@@ -68,7 +67,6 @@ pub(crate) fn open_message(open: &OpenStream) -> Result<Command, Error> {
         StoreParts {
             thread_id: open.thread_id,
             message_id: open.message_id.as_uuid(),
-            parent_message_id: open.parent_message_id,
             job_id: open.job_id,
             acting_user_id: open.acting_user_id,
             impersonator_id: open.impersonator_id,
@@ -84,7 +82,6 @@ pub(crate) fn open_message(open: &OpenStream) -> Result<Command, Error> {
 pub(crate) struct StoreParts {
     pub(crate) thread_id: Uuid,
     pub(crate) message_id: Uuid,
-    pub(crate) parent_message_id: Option<Uuid>,
     pub(crate) job_id: Option<Uuid>,
     pub(crate) acting_user_id: Option<Uuid>,
     pub(crate) impersonator_id: Option<Uuid>,
@@ -93,10 +90,9 @@ pub(crate) struct StoreParts {
 pub(crate) fn store(command_id: Uuid, parts: StoreParts, turn: AiTurn) -> Command {
     Command {
         id: command_id,
-        body: CommandBody::Store(StoreMessageV2 {
+        body: CommandBody::Store(StoreMessageV3 {
             message_id: parts.message_id,
             thread_id: parts.thread_id,
-            parent_message_id: parts.parent_message_id,
             job_id: parts.job_id,
             acting_user_id: parts.acting_user_id,
             impersonator_id: parts.impersonator_id,

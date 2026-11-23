@@ -71,7 +71,6 @@ pub fn whole_message(thread_id: Uuid) -> WholeMessage {
     WholeMessage {
         command_id: v7(),
         thread_id,
-        parent_message_id: None,
         agent_id: agent_id(),
         author_name: "Analyst".to_owned(),
         job_id: None,
@@ -88,7 +87,6 @@ pub fn open_stream(thread_id: Uuid) -> OpenStream {
         command_id: v7(),
         thread_id,
         message_id: turn_id(),
-        parent_message_id: None,
         agent_id: agent_id(),
         author_name: "Analyst".to_owned(),
         job_id: None,

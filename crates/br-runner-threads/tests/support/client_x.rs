@@ -10,7 +10,7 @@ use br_runner_threads::test_double::{Command, CommandBody, MemoryThreads};
 use br_runner_threads::{
     Closing, ClosureKind, Error, NewThread, OpenStream, StreamHandle, ThreadClient, WholeMessage,
 };
-use contract_threads::{AiTurn, Chunk, MessageTurn, StoreMessageV2};
+use contract_threads::{AiTurn, Chunk, MessageTurn, StoreMessageV3};
 use uuid::Uuid;
 
 use super::ids::{agent_id, author, turn_id, v7};
@@ -36,7 +36,6 @@ pub fn ai_message(thread_id: Uuid) -> WholeMessage {
     WholeMessage {
         command_id: v7(),
         thread_id,
-        parent_message_id: None,
         agent_id: agent,
         author_name: "Analyst".to_owned(),
         job_id: None,
@@ -53,7 +52,6 @@ pub fn open_request(thread_id: Uuid) -> OpenStream {
         command_id: v7(),
         thread_id,
         message_id: turn_id(),
-        parent_message_id: None,
         agent_id: agent_id(),
         author_name: "Analyst".to_owned(),
         job_id: None,
@@ -161,14 +159,14 @@ pub fn folded(turn: TurnId, entry: EntryId, deltas: &[ResponseDelta]) -> Option<
     draft.into_response()
 }
 
-pub fn store_of(body: &CommandBody) -> &StoreMessageV2 {
+pub fn store_of(body: &CommandBody) -> &StoreMessageV3 {
     match body {
         CommandBody::Store(store) => store,
         other => panic!("not a store command: {other:?}"),
     }
 }
 
-pub fn ai_of(store: &StoreMessageV2) -> &AiTurn {
+pub fn ai_of(store: &StoreMessageV3) -> &AiTurn {
     match &store.message {
         MessageTurn::Ai(turn) => turn,
         other => panic!("not an AI message: {other:?}"),

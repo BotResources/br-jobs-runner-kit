@@ -5,7 +5,7 @@ use br_core_integration::IntegrationCommand;
 use br_core_kernel::Actor;
 use br_util_nats_fabric::{CommandCoords, ConsumeErrorKind, FabricError, PublishErrorKind};
 use contract_threads::{
-    CompleteMessageV2, CreateThread, FailMessageV2, StoreMessageV2, ThreadsCommand,
+    CompleteMessageV2, CreateThread, FailMessageV2, StoreMessageV3, ThreadsCommand,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -34,7 +34,7 @@ fn wire<C: ThreadsCommand + Serialize>(payload: &C) -> Result<Wire, Error> {
 fn wire_of(body: &CommandBody) -> Result<Wire, Error> {
     match body {
         CommandBody::CreateThread(payload) => wire::<CreateThread>(payload),
-        CommandBody::Store(payload) => wire::<StoreMessageV2>(payload),
+        CommandBody::Store(payload) => wire::<StoreMessageV3>(payload),
         CommandBody::Complete(payload) => wire::<CompleteMessageV2>(payload),
         CommandBody::Fail(payload) => wire::<FailMessageV2>(payload),
     }

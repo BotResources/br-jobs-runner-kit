@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.0
+
+Follows Threads 0.12 (contract-threads 0.10.0): the messages of a thread form one list, in the order Threads stored them, and a message names no other message. This is a breaking release.
+
+### Changed
+
+- Every message is sent as `message.store` (version 3, `StoreMessageV3`), which holds no parent message id: the whole message of `ThreadClient::write_message`, the opening of `ThreadClient::open_stream`, and the whole message of an input turn and the opening of an AI turn that the thread-access adapter queues. Threads places a message at the end of the list of its thread when it stores it. Threads 0.12 answers the version 2 that 0.5 sent with the refusal `COMMAND_VERSION_RETIRED`, so a runner on 0.5 writes no message on a Threads 0.12.
+- The thread-access adapter keeps no tip of a thread: `read` gives the conversation and remembers nothing, and a message queued takes no parent. `read` reads the whole thread.
+- `test_double::CommandBody::Store` holds a `StoreMessageV3` (was `StoreMessageV2`).
+- An item that 0.5 kept in a durable store with a parent message id is read and sent as `message.store` (version 3) with no parent: the parent it names is not read. The other items of 0.5 (chunks, closings) are read as before.
+- `contract-threads` 0.10.0 (was 0.7.0).
+
+### Added
+
+- `ThreadClient::read_context_up_to(query, up_to)`: reads `threadsContext(threadId, agentId, upTo)`. The conversation, or the projected thread when the query names an agent, stops at the message `up_to`, included. A message that the thread does not hold gives an empty conversation. The answer is read like the answer of `read_context` (the same `ThreadContext`, an absent thread is `None`, the same errors). `read_context` sends no `upTo` and reads the whole thread. The test double answers it through `answer_graphql`, with `upTo` among the variables.
+
+### Removed
+
+- `WholeMessage::parent_message_id` and `OpenStream::parent_message_id`: delete the field where these values are built.
+- `ThreadAccessAdapter::reply_to(thread, reply, parent)`: delete the call. A reply written again is a new message at the end of the thread.
+- `ThreadClient::read_context_of_branch(query, branch_tip)`: Threads has no branch and no argument `branchTip`. A runner that read the conversation up to one message calls `read_context_up_to(query, message)`; the conversation it gets holds every message stored before that one, not its ancestors alone.
+
 ## 0.5.2
 
 A runner can read the context of a branch that is not the active one. The public API only grows, and nothing changes for a runner that does not call the new operation.

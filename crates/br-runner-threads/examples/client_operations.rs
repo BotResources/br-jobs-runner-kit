@@ -38,7 +38,6 @@ pub async fn stream_a_message(client: &ThreadClient, thread_id: Uuid) -> Result<
         command_id: Uuid::now_v7(),
         thread_id,
         message_id,
-        parent_message_id: None,
         agent_id,
         author_name: "Analyst".to_owned(),
         job_id: None,

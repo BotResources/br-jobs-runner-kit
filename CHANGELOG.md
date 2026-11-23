@@ -31,6 +31,7 @@ headings and is released under the tag `{library}/v{version}`.
 - `br-runner-threads` 0.5.2: `ThreadClient::read_context_of_branch(query, branch_tip)` reads the context of the branch that ends at one message, so a runner can answer a message that is not on the active branch. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-as-tool` 0.2.0: the runner type is the `RunnerType` of `br-runner-jobs` that the caller gives, the build fails only with the `ToolSpec` error, and the acknowledgement of a background call tells the agent about the notice "refused" and the answer by mail. Breaking: `RunnerTool::new` takes a `RunnerType`, and `RunnerToolError::RunnerType` is removed. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-toolkit` 0.2.0: a Run that a cancel order ended, before or after its graph started, hands over the failed fact `run_cancelled` through the failure mapping, never the completed fact, so jobs frees the capacity of a run it asked to stop; the settle logs the wait for the last observations of the executor only when they are really late. See `crates/br-runner-toolkit/CHANGELOG.md`.
+- `br-runner-threads` 0.6.0: follows Threads 0.12 (contract-threads 0.10.0), where a message names no other message. Breaking: no parent message id on `WholeMessage` and `OpenStream`, `ThreadAccessAdapter::reply_to` is removed, and `ThreadClient::read_context_up_to(query, up_to)` replaces `read_context_of_branch`. See `crates/br-runner-threads/CHANGELOG.md`.
 
 ### Fixed
 
