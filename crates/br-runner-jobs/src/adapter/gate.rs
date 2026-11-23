@@ -5,7 +5,7 @@ use std::sync::Arc;
 use br_agentic_contract::ThreadRef;
 use br_llm_messages::EntryId;
 
-use crate::queue::Gate;
+use br_runner_jobs_client::Gate;
 
 pub type GateFuture = Pin<Box<dyn Future<Output = Gate> + Send + 'static>>;
 

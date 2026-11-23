@@ -3,12 +3,11 @@ use std::sync::Arc;
 
 use br_agentic_contract::{AgentLabel, PortError};
 use br_llm_messages::AgentId;
+use br_runner_jobs_client::{AgentBook, AgentKey, BookLookup};
 
 use super::agent_port::AgentPortAdapter;
 use super::gate::MarkGate;
-use super::inbox_port::InboxPortAdapter;
-use super::lookup::BookLookup;
-use crate::book::{AgentBook, AgentKey};
+use super::incoming_port::IncomingPortAdapter;
 
 pub(super) struct InboxSetup {
     pub label: AgentLabel,
@@ -81,11 +80,11 @@ impl NodeEntry {
         AgentPortAdapter::new(Arc::clone(&self.shared))
     }
 
-    pub fn inbox_port(&self) -> Option<InboxPortAdapter> {
+    pub fn incoming_port(&self) -> Option<IncomingPortAdapter> {
         self.shared
             .inbox
             .as_ref()
-            .map(|_| InboxPortAdapter::new(Arc::clone(&self.shared)))
+            .map(|_| IncomingPortAdapter::new(Arc::clone(&self.shared)))
     }
 
     pub fn agent_id(&self, book: &AgentBook, label: &AgentLabel) -> Result<AgentId, PortError> {

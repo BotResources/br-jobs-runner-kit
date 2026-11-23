@@ -389,6 +389,7 @@ dependencies = [
 [[package]]
 name = "br-runner-jobs"
 version = "0.2.0"
+source = "git+https://github.com/BotResources/br-jobs-runner-kit?tag=br-runner-jobs%2Fv0.2.0#ed85478f25c8d254da2ffb6b64f67c25cf58fe50"
 dependencies = [
  "async-nats",
  "br-agentic-contract 0.2.0",
@@ -396,7 +397,6 @@ dependencies = [
  "br-core-kernel",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
  "br-util-nats-fabric",
  "chrono",
  "contract-jobs 0.8.0",
@@ -406,6 +406,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-jobs"
+version = "0.3.0"
+dependencies = [
+ "br-agentic-contract 0.3.0",
+ "br-core-auth",
+ "br-llm-messages",
+ "br-runner-jobs-client",
+ "chrono",
+ "contract-jobs 0.8.0",
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
  "uuid",
 ]
 
@@ -468,7 +485,7 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
+ "br-runner-jobs 0.2.0",
  "br-runner-toolkit",
  "br-util-nats-fabric",
  "chrono",

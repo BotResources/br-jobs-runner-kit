@@ -13,13 +13,14 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Changed
 
-- `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. `br-runner-as-tool`, `br-runner-jobs` and `br-runner-toolkit` stay on tag `br-agentic-contract/v0.2.0`; `br-runner-threads` is on `br-agentic-contract/v0.3.0` since its 0.6.1.
+- `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. `br-runner-as-tool` and `br-runner-toolkit` stay on tag `br-agentic-contract/v0.2.0`; `br-runner-threads` is on `br-agentic-contract/v0.3.0` since its 0.6.1, and `br-runner-jobs` since its 0.3.0.
 
 ### Added
 
 - `br-runner-as-tool` 0.3.0 (breaking): depends on `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0 in place of `br-runner-jobs`. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-as-node` 0.3.0 (breaking): imports `br-runner-jobs-client` 0.1.0 in place of `br-runner-jobs`; the re-export of RunnerType comes from the jobs client. See `crates/br-runner-as-node/CHANGELOG.md`.
 - `br-runner-threads` 0.7.0: `ThreadAccessAdapter` implements the history port `HarnessHistory` of `br-agentic-harness-contract` 0.1.0 (additive, no break); `stored` gives `Stored` only when Threads confirmed the entry, and `Error::UnknownEntry` is added. Depends on `br-agentic-harness-contract` 0.1.0. See `crates/br-runner-threads/CHANGELOG.md`.
+- `br-runner-jobs` 0.3.0 (breaking): the adapters of the incoming port (`IncomingPortAdapter`), on `br-agentic-contract` 0.3.0 and `br-runner-jobs-client` 0.1.0. See `crates/br-runner-jobs/CHANGELOG.md`.
 - `br-runner-threads` 0.6.1: re-pinned on `br-agentic-contract` 0.3.0; no change of the public surface. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-jobs-client` 0.1.0 (new library): the typed client of the jobs service for a runner and the machinery around it, copied from the client part of `br-runner-jobs` 0.2.0. See `crates/br-runner-jobs-client/CHANGELOG.md`.
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
