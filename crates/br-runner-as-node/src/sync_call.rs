@@ -1,5 +1,7 @@
 use br_graph_contract::{Event, Fields};
-use br_runner_jobs::{CallerHandle, EndWait, Error as JobsError, Removal, WriteEnd, WriteResult};
+use br_runner_jobs_client::{
+    CallerHandle, EndWait, Error as JobsError, Removal, WriteEnd, WriteResult,
+};
 use futures::FutureExt;
 use uuid::Uuid;
 
@@ -8,7 +10,7 @@ use crate::outcome::Outcome;
 use crate::signals::{Signals, Stop};
 
 enum Heard {
-    End(Result<br_runner_jobs::SyncEnd, br_runner_jobs::Error>),
+    End(Result<br_runner_jobs_client::SyncEnd, br_runner_jobs_client::Error>),
     Create(WriteResult),
 }
 

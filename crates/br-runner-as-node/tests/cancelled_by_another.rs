@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
-use br_runner_jobs::test_double::{
+use br_runner_jobs_client::test_double::{
     Call, ChildCommand, ScriptedJobs, trigger_json, work_from_trigger,
 };
-use br_runner_jobs::{ArrivalSettings, IgnoreReports, QueueSettings, RunnerType};
+use br_runner_jobs_client::{ArrivalSettings, IgnoreReports, QueueSettings, RunnerType};
 use serde_json::{Value, json};
 use support::*;
 use uuid::Uuid;

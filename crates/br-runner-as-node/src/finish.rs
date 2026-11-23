@@ -1,5 +1,5 @@
 use br_graph_contract::{CancelView, Event, Fields};
-use br_runner_jobs::CallerHandle;
+use br_runner_jobs_client::CallerHandle;
 use uuid::Uuid;
 
 use crate::outcome::Outcome;
@@ -23,7 +23,7 @@ pub(crate) fn hand_over_unless_cancelled<F: Fields>(
 #[cfg(test)]
 mod tests {
     use br_graph_contract::{CancelToken, Event};
-    use br_runner_jobs::test_double::{MemoryCall, memory_caller};
+    use br_runner_jobs_client::test_double::{MemoryCall, memory_caller};
     use uuid::Uuid;
 
     use super::hand_over_unless_cancelled;

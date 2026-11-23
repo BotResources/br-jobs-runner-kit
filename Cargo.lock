@@ -324,11 +324,11 @@ dependencies = [
 
 [[package]]
 name = "br-runner-as-node"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "br-core-auth",
  "br-graph-contract",
- "br-runner-jobs",
+ "br-runner-jobs-client",
  "futures",
  "serde",
  "serde_json",

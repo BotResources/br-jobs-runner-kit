@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use br_graph_contract::{Cause, Input, Node, PROGRAMMATIC, State};
 use br_runner_as_node::{JobSpec, Payload, RunnerAsNode};
-use br_runner_jobs::test_double::{Answer, MemoryCall};
-use br_runner_jobs::{CallMode, PayloadForm, SyncEnd};
+use br_runner_jobs_client::test_double::{Answer, MemoryCall};
+use br_runner_jobs_client::{CallMode, PayloadForm, SyncEnd};
 use serde_json::json;
 use support::*;
 

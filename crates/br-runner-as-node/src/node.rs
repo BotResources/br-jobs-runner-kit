@@ -10,7 +10,7 @@ use crate::caller_source::CallerSource;
 use crate::instance;
 use crate::outcome::Outcome;
 use crate::spec::JobSpec;
-use br_runner_jobs::RunnerType;
+use br_runner_jobs_client::RunnerType;
 
 pub(crate) type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
