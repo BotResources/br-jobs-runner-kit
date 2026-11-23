@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+Re-pin on `br-agentic-contract` 0.3.0 (was 0.2.0). No change of the public surface.
+
 ## 0.6.0
 
 Follows Threads 0.12 (contract-threads 0.10.0): the messages of a thread form one list, in the order Threads stored them, and a message names no other message. This is a breaking release.
