@@ -52,6 +52,12 @@ pub(super) fn opt_string(value: &Value, key: &str) -> Result<Option<String>, Err
         .transpose()
 }
 
+pub(super) fn integer(value: &Value, key: &str) -> Result<i64, Error> {
+    present(value, key)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| unreadable(key))
+}
+
 pub(super) fn opt_integer(value: &Value, key: &str) -> Result<Option<i64>, Error> {
     present(value, key)
         .map(|found| found.as_i64().ok_or_else(|| unreadable(key)))

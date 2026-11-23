@@ -38,7 +38,8 @@ pub use model::{
     AgentDeclaration, CallMode, CallNotice, CallNoticeKind, CancelEvent, Capacity, Content,
     ContentAttachment, DispatchMode, Failed, FailureKind, FailureReportView, ItemArrived, ItemKind,
     ListedAgent, LogLevel, Mail, MailAttachment, ModeEvent, NewMailAttachment, NewMailInput,
-    PayloadForm, PresenceStatus, Restart, ResultRef, SavedState, SyncEnd, UnreadItem,
+    PayloadForm, PresenceStatus, Restart, ResultRef, SavedState, SequencedItem, SyncEnd,
+    UnreadItem,
 };
 pub use queue::{
     DeliveryQueue, Gate, IgnoreReports, LastFailure, QueueObserver, QueueReport, QueueSettings,

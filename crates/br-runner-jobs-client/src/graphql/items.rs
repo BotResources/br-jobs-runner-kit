@@ -5,7 +5,8 @@ use super::decode;
 use super::lift::unreadable;
 use crate::error::Error;
 use crate::model::{
-    CallNotice, CallNoticeKind, FailureKind, FailureReportView, Mail, ResultRef, UnreadItem,
+    CallNotice, CallNoticeKind, FailureKind, FailureReportView, Mail, ResultRef, SequencedItem,
+    UnreadItem,
 };
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,13 @@ pub(super) fn read(entry: &Value) -> Read {
             error,
         }),
     }
+}
+
+pub(super) fn sequenced(entry: &Value) -> Result<SequencedItem, Error> {
+    Ok(SequencedItem {
+        seq: decode::integer(entry, "seq")?,
+        item: item(entry)?,
+    })
 }
 
 fn item(entry: &Value) -> Result<UnreadItem, Error> {

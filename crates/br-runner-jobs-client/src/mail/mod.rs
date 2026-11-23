@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::error::Error;
 use crate::graphql;
-use crate::model::{ContentAttachment, ListedAgent, Mail, NewMailInput, UnreadItem};
+use crate::model::{ContentAttachment, ListedAgent, Mail, NewMailInput, SequencedItem, UnreadItem};
 use crate::work::WorkCore;
 
 #[derive(Clone)]
@@ -27,6 +27,10 @@ impl MailHandle {
 
     pub async fn unread(&self, address: Uuid) -> Result<Vec<UnreadItem>, Error> {
         graphql::unread(self.core.backend.as_ref(), &self.core.ids(), Some(address)).await
+    }
+
+    pub async fn unread_sequenced(&self, address: Uuid) -> Result<Vec<SequencedItem>, Error> {
+        graphql::unread_sequenced(self.core.backend.as_ref(), &self.core.ids(), Some(address)).await
     }
 
     pub async fn read_mail(&self, mail_id: Uuid, address: Uuid) -> Result<Mail, Error> {

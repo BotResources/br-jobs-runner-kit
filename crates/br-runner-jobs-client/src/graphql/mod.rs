@@ -16,7 +16,7 @@ pub(crate) use content::{attachment, payload, read_result, upload_payload, uploa
 pub(crate) use items::{BadItem, Read};
 pub(crate) use send::send_mail;
 pub(crate) use state::{save_state, saved_state};
-pub(crate) use unread::{read_mail, unread, unread_each};
+pub(crate) use unread::{read_mail, unread, unread_each, unread_sequenced};
 
 #[derive(Debug, Clone)]
 pub struct WorkIds {

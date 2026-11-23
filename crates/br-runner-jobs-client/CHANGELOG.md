@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+### Added
+
+- `NewMailInput::new(mail_id, from_address, author, source_conversation, subject, body)`: `NewMailInput` is `#[non_exhaustive]` and had no way to be made outside this crate, so an adapter library could not send a mail. The recipients and attachments start empty and the public fields set them.
+- The jobs seq of an unread item: `MailHandle::unread_sequenced(address) -> Result<Vec<SequencedItem>, Error>`, and `SequencedItem { seq: i64, item: UnreadItem }` (`#[non_exhaustive]`, public fields). `seq` is the `seq` that the wire of the unread items carries for every item (its identity in insert order; jobs orders the unread items by it), in the order of the wire. It is decoded with the other fields: an item whose `seq` is missing, null or not an integer that fits an `i64` makes the read `Unreadable`. `UnreadItem` and `MailHandle::unread` are unchanged (adding a field to the variants of `UnreadItem` would break its exhaustive variants), so `unread` still reads an item whose `seq` is absent.
+
 ## 0.1.0
 
 New library: the typed client of the jobs service for a runner, and the machinery that a runner needs around it. It is the client part of `br-runner-jobs` 0.2.0, copied as it is, with its unit tests, its test double and its examples `run_one_work` and `call_a_runner`. `br-runner-jobs` is unchanged by this release.
