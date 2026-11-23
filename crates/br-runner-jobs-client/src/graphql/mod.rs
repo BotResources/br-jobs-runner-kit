@@ -26,7 +26,7 @@ pub struct WorkIds {
 }
 
 impl WorkIds {
-    pub fn json(&self) -> Value {
+    pub(crate) fn json(&self) -> Value {
         json!({
             "jobId": self.job_id,
             "runId": self.run_id,

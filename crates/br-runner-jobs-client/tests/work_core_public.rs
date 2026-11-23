@@ -75,7 +75,15 @@ async fn given_the_core_of_a_work_when_its_mail_handle_reads_then_the_calls_go_t
             _ => None,
         })
         .expect("a graphql call");
-    assert_eq!(graphql["work"], core.ids().json());
+    let ids = core.ids();
+    assert_eq!(
+        graphql["work"],
+        serde_json::json!({
+            "jobId": ids.job_id,
+            "runId": ids.run_id,
+            "instanceKey": ids.instance_key,
+        })
+    );
     assert_eq!(graphql["address"], serde_json::json!(id(70)));
     assert!(calls.iter().any(|call| matches!(
         call,

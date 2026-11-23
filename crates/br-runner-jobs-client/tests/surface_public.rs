@@ -165,6 +165,5 @@ async fn given_a_work_when_its_core_is_read_then_the_ids_of_a_graphql_call_are_t
     assert_eq!(ids.job_id, id(1));
     assert_eq!(ids.run_id, id(2));
     assert_eq!(ids.instance_key, "instance-a");
-    assert_eq!(ids.json()["instanceKey"], "instance-a");
     assert_eq!(core.run_id(), id(2));
 }
