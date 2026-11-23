@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0
+
+Adds the adapter of the harness mail port of `br-agentic-harness-contract` 0.1.0 and the fixes of the audit of 0.3.0.
+
+### Added
+
+- `MailPortAdapter`, the adapter of the `MailPort` (`items`, `mark_read`, `send`, `documents`), given by `NodeEntry::mail_port`. Listing and marking are those of the incoming adapter, on the same agent book map. Marking hands over the finish of a "Run completed" call notice and then the marker, with no gate. Sending hands the mail into the delivery queue and returns at once. Documents makes one read of the mail and one fetch for each attachment.
+- `NodeEntry::with_mail(node, lookup, label)`, the entry of a node that has an inbox for a runner that uses the harness, with no mark gate. An entry made with a gate gives no mail adapter, and an entry made without one gives no incoming adapter.
+- The example `agent_and_mail`.
+- The dependency on `br-agentic-harness-contract` 0.1.0 (per-crate pin).
+- CI step: `check-bus-access.sh br-runner-jobs --none` fails if the crate depends on the bus client or a bus crate, or names a subject.
+- Tests for the sentences that had none: a marker held by a gate, delivered, or removed after `Dropped` leaves the item out of the listing and a later Run lists it again; the node entry makes no call to jobs; the constructors of the adapters are not public; the text forms show no Passport, token, credential or Job id of the Work.
+
+### Changed
+
+- The listing reads jobs once for the unread items and once for each new direct mail, all inside the wait (the intent now says so; one test proves the bound).
+- When the item of a cursor is no longer unread and the adapter holds no earlier read, the listing goes on from the start of a fresh read in the order of jobs. It no longer compares item ids (a bug of 0.3.0: jobs orders by sequence number, not by item id).
+- The `IncomingPortAdapter` holds its mark gate itself.
+
+
 ## 0.3.0
 
 Splits the crate and adapts the incoming port of `br-agentic-contract` 0.3.0. The client part moved to `br-runner-jobs-client` 0.1.0; this crate keeps only the adapters.

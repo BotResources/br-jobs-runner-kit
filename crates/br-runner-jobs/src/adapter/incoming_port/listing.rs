@@ -40,14 +40,6 @@ fn after_item(items: &[UnreadItem], after: Uuid) -> Option<Vec<UnreadItem>> {
         .map(|position| items[position + 1..].to_vec())
 }
 
-fn later_than(items: &[UnreadItem], after: Uuid) -> Vec<UnreadItem> {
-    items
-        .iter()
-        .filter(|item| item.item_id() > after)
-        .cloned()
-        .collect()
-}
-
 async fn rest_of_listing(
     book: &AgentBook,
     agent: Uuid,
@@ -63,12 +55,12 @@ async fn rest_of_listing(
     let read = read_unread(book, agent).await?;
     let rest = match after {
         None => read.clone(),
-        Some(after) => after_item(&read, after).unwrap_or_else(|| later_than(&read, after)),
+        Some(after) => after_item(&read, after).unwrap_or_else(|| read.clone()),
     };
     Ok((rest, Some(read)))
 }
 
-pub(super) async fn items(
+pub(in crate::adapter) async fn items(
     shared: &Shared,
     context: &IncomingContext,
     after: Option<&Cursor>,
