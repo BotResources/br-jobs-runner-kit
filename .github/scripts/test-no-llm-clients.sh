@@ -144,6 +144,11 @@ expect 0 "reaches only the allowed br-llm-clients* libraries: br-llm-clients-cor
 expect 1 "br-llm-clients-core" "the real br-runner-jobs fails without the allow list" \
     bash -c 'cd "$1" && bash "$2" br-runner-jobs' _ "$ROOT" "$GATE"
 
+expect 0 "reaches only the allowed br-llm-clients* libraries: br-llm-clients-core" "the real br-runner-jobs-client reaches only br-llm-clients-core" \
+    bash -c 'cd "$1" && bash "$2" br-runner-jobs-client --allow br-llm-clients-core' _ "$ROOT" "$GATE"
+expect 1 "br-llm-clients-core" "the real br-runner-jobs-client fails without the allow list" \
+    bash -c 'cd "$1" && bash "$2" br-runner-jobs-client' _ "$ROOT" "$GATE"
+
 echo
 if [[ "$failures" -gt 0 ]]; then
     echo "${failures}/${cases} case(s) failed" >&2

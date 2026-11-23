@@ -1,0 +1,32 @@
+[package]
+name = "br-runner-jobs-client"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The typed client of the jobs service for a runner, and the machinery around it: the Work, the delivery queue of a Run, the agent book, the caller handle and the mail handle"
+
+[features]
+test-double = []
+
+[dependencies]
+async-nats.workspace = true
+br-agentic-contract.workspace = true
+br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
+br-core-kernel.workspace = true
+br-llm-messages.workspace = true
+br-runner-connection.workspace = true
+br-util-nats-fabric.workspace = true
+chrono.workspace = true
+contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.8.0", version = "0.8.0", features = ["integration"] }
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+tokio-util.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+br-runner-jobs-client = { path = ".", version = ">=0.1.0", features = ["test-double"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
