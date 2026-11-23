@@ -10,6 +10,6 @@ fn given_the_manifest_when_the_dependencies_are_read_then_only_the_jobs_client_o
 #[test]
 fn given_the_runner_type_of_the_node_when_it_is_made_then_it_is_the_one_of_the_jobs_client() {
     let from_node: br_runner_as_node::RunnerType =
-        br_runner_jobs_client::RunnerType::new("analyst");
+        br_runner_jobs_client::RunnerType::new("analyst").expect("a valid runner type");
     let _: br_runner_jobs_client::RunnerType = from_node;
 }
