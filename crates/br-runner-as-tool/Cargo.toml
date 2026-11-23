@@ -1,6 +1,6 @@
 [package]
 name = "br-runner-as-tool"
-version = "0.3.0"
+version = "0.3.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,7 +10,7 @@ description = "A runner type as a tool: the Tool of the agentic contract that ma
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-llm-clients-core.workspace = true
 br-llm-messages.workspace = true
-br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
 futures.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -18,5 +18,5 @@ uuid.workspace = true
 
 [dev-dependencies]
 br-graph-contract.workspace = true
-br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0", features = ["test-double"] }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1", features = ["test-double"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
