@@ -42,9 +42,9 @@ fn install_block() -> Vec<(String, String)> {
 }
 
 fn workspace_line(name: &str) -> &'static str {
-    MANIFEST
+    WORKSPACE
         .lines()
-        .chain(WORKSPACE.lines())
+        .chain(MANIFEST.lines())
         .find(|line| line.starts_with(&format!("{name} = ")))
         .unwrap_or_else(|| panic!("{name} is not in the crate or workspace manifest"))
 }
