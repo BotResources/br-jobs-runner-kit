@@ -407,7 +407,6 @@ dependencies = [
  "br-agentic-contract",
  "br-core-auth",
  "br-core-kernel",
- "br-llm-messages",
  "br-runner-connection",
  "br-runner-jobs-client",
  "br-util-nats-fabric",
