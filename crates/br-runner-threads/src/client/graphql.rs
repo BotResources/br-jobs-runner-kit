@@ -15,9 +15,6 @@ impl ThreadClient {
         self.context(operations::CONTEXT, variables, query).await
     }
 
-    /// Reads the context of a thread up to one of its messages: the
-    /// conversation stops at the message `up_to`, included. A message that
-    /// the thread does not hold gives an empty conversation.
     pub async fn read_context_up_to(
         &self,
         query: &ContextQuery,

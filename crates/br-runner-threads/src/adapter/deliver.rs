@@ -64,7 +64,14 @@ impl Inner {
         }
     }
 
-    async fn end_item(&self, slot: &Slot, head: &Queued, how: Ended) {
+    async fn end_item(
+        &self,
+        slot: &Slot,
+        head: &Queued,
+        how: Ended,
+        status: Option<MessageStatus>,
+    ) {
+        let confirmed = how == Ended::Delivered && status != Some(MessageStatus::Failed);
         if head.item.kind == ItemKind::Chunk && how != Ended::Delivered {
             locked(&self.broken).insert(head.item.message);
         }
@@ -75,6 +82,7 @@ impl Inner {
             if how != Ended::Delivered {
                 queue.dropped.extend(head.item.entries.iter());
             }
+            queue.note_ended(&head.item, confirmed);
         }
         slot.bump();
         if let Err(error) = self.store.remove(&slot.thread, head.item.id).await {
@@ -110,7 +118,7 @@ pub(crate) async fn run(inner: Arc<Inner>, slot: Arc<Slot>) {
         };
         if head.item.kind != ItemKind::Opening && inner.message_refused(head.item.message) {
             inner.report(report(ReportKind::ItemDroppedUnsent, &slot, &head, None));
-            inner.end_item(&slot, &head, Ended::Unsent).await;
+            inner.end_item(&slot, &head, Ended::Unsent, None).await;
             continue;
         }
         match inner.attempt(&head).await {
@@ -118,7 +126,7 @@ pub(crate) async fn run(inner: Arc<Inner>, slot: Arc<Slot>) {
                 if status == Some(MessageStatus::Failed) {
                     inner.report(report(ReportKind::ClosingFailed, &slot, &head, None));
                 }
-                inner.end_item(&slot, &head, Ended::Delivered).await;
+                inner.end_item(&slot, &head, Ended::Delivered, status).await;
             }
             Err(error) if retryable(head.item.kind, &error) => {
                 locked(&slot.queue).last_failure = Some(FailedAttempt {
@@ -138,7 +146,7 @@ pub(crate) async fn run(inner: Arc<Inner>, slot: Arc<Slot>) {
                 if head.item.kind == ItemKind::Opening {
                     locked(&inner.refused).insert(head.item.message);
                 }
-                inner.end_item(&slot, &head, Ended::Refused).await;
+                inner.end_item(&slot, &head, Ended::Refused, None).await;
             }
         }
     }

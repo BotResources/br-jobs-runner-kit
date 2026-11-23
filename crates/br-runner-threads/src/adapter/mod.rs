@@ -1,5 +1,6 @@
 mod accept;
 mod deliver;
+mod fate;
 mod inner;
 mod lane;
 mod ops;
@@ -12,8 +13,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use br_agentic_contract::{
-    AiTurnRef, PortFuture, ResponseStream, ResultStream, ResultStreamBox, ThreadAccess, ThreadRef,
+    AiTurnRef, PortError, PortFuture, ResponseStream, ResultStream, ResultStreamBox, ThreadAccess,
+    ThreadRef,
 };
+use br_agentic_harness_contract::{HarnessHistory, StoredAnswer};
 use br_llm_messages::{
     AgentId, Conversation, EntryId, InputTurn, ModelResponse, RuntimeToolResults, TurnClosure,
     TurnEntry, TurnId,
@@ -97,9 +100,6 @@ impl ThreadAccessAdapter {
     pub async fn instance_ended(&self, agent: AgentId) {
         self.inner.instance_ended(agent).await
     }
-
-    /// Queues an annotation chunk of an open AI turn, after an entry this
-    /// adapter queued into it: numbered and sealed with the turn's chunks.
     pub async fn add_annotation(
         &self,
         thread: &ThreadRef,
@@ -223,5 +223,20 @@ impl ThreadAccess for ThreadAccessAdapter {
         _entry: EntryId,
     ) -> PortFuture<'a, Result<(), br_agentic_contract::PortError>> {
         Box::pin(async { Ok(()) })
+    }
+}
+
+impl HarnessHistory for ThreadAccessAdapter {
+    fn stored<'a>(
+        &'a self,
+        thread: &'a ThreadRef,
+        entry: EntryId,
+    ) -> PortFuture<'a, Result<StoredAnswer, PortError>> {
+        Box::pin(async move {
+            self.inner
+                .stored_answer(thread, entry)
+                .await
+                .map_err(PortError::fault)
+        })
     }
 }

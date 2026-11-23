@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
 use uuid::Uuid;
 
+use super::fate::Fate;
 use super::settings::WriteContextFn;
 use crate::client::ThreadClient;
 use crate::queue::item::Item;
@@ -34,6 +35,7 @@ pub(crate) struct QueueInner {
     pub(crate) items: VecDeque<Queued>,
     pub(crate) last_failure: Option<FailedAttempt>,
     pub(crate) dropped: HashSet<Uuid>,
+    pub(crate) fates: HashMap<Uuid, Fate>,
     pub(crate) worker_running: bool,
     pub(crate) last_no: u64,
 }
@@ -49,8 +51,6 @@ impl Drop for KeepaliveTask {
 pub(crate) struct TurnState {
     pub(crate) agent: AgentId,
     pub(crate) chunks: Vec<Chunk>,
-    /// The entries this adapter queued into the turn: those an annotation
-    /// may follow.
     pub(crate) entries: HashSet<Uuid>,
     pub(crate) closed: bool,
     pub(crate) last_item_at: Instant,
