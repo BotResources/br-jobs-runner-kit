@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "br-runner-as-tool"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "br-agentic-contract",
  "br-graph-contract",

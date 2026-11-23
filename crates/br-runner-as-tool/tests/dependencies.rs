@@ -19,5 +19,5 @@ fn the_crate_depends_on_the_jobs_client_and_not_on_the_jobs_adapters() {
 #[test]
 fn the_crate_pins_the_agentic_contract_by_its_tag() {
     assert!(MANIFEST.contains("tag = \"br-agentic-contract/v0.3.0\""));
-    assert!(MANIFEST.contains("tag = \"br-runner-jobs-client/v0.1.0\""));
+    assert!(MANIFEST.contains("tag = \"br-runner-jobs-client/v0.1.1\""));
 }

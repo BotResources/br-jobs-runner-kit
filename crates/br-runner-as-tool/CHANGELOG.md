@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+Released 2026-11-24.
+
+Re-pin on `br-runner-jobs-client` 0.1.1 (was 0.1.0). No change of the public surface or of the behavior.
+
 ## 0.3.0
 
 Uses `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0. The crate no longer depends on `br-runner-jobs`. The behavior of a call is the one of 0.2.0.
