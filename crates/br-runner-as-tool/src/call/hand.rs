@@ -1,7 +1,7 @@
 use br_agentic_contract::CancelView;
 use std::future::Future;
 
-use br_runner_jobs::{CreateChildInput, PayloadForm, WriteEnd, WriteResult};
+use br_runner_jobs_client::{CreateChildInput, PayloadForm, WriteEnd, WriteResult};
 use futures::FutureExt;
 use uuid::Uuid;
 

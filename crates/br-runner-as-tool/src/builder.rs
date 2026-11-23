@@ -4,7 +4,7 @@ use std::sync::Arc;
 use br_agentic_contract::{Tool, ToolBlock};
 use br_llm_clients_core::{Parameters, ToolSpec};
 use br_llm_messages::{OpaqueJson, ToolName};
-use br_runner_jobs::{CallerHandle, Content, RunnerType};
+use br_runner_jobs_client::{CallerHandle, Content, RunnerType};
 use serde_json::Value;
 
 use crate::author::{self, AuthorFailure, Payload, PayloadBuilder, ResultProcessor};

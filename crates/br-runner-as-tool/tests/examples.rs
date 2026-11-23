@@ -10,8 +10,8 @@ mod builder_and_processor;
 #[allow(dead_code)] // the example main is not called here
 mod sync_tool;
 
-use br_runner_jobs::test_double::{Answer, memory_caller};
-use br_runner_jobs::{CallMode, PayloadForm};
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::{CallMode, PayloadForm};
 use serde_json::json;
 use support::*;
 

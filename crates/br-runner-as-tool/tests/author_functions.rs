@@ -2,8 +2,8 @@ mod support;
 
 use br_agentic_contract::ToolBlock;
 use br_runner_as_tool::{AuthorFailure, Payload, PayloadKind, ToolMode};
-use br_runner_jobs::test_double::{Answer, MemoryCall, memory_caller};
-use br_runner_jobs::{Content, PayloadForm};
+use br_runner_jobs_client::test_double::{Answer, MemoryCall, memory_caller};
+use br_runner_jobs_client::{Content, PayloadForm};
 use serde_json::json;
 use support::*;
 
@@ -216,7 +216,7 @@ async fn given_a_result_processor_and_a_failed_child_job_when_settled_then_the_p
     let create = create_of(&script).await;
     script.end(
         create.job_id,
-        Answer::Now(br_runner_jobs::SyncEnd::Failed {
+        Answer::Now(br_runner_jobs_client::SyncEnd::Failed {
             report: None,
             message: "boom".to_owned(),
         }),

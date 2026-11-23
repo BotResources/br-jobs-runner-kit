@@ -2,7 +2,7 @@ mod support;
 
 use br_graph_contract::CancelToken;
 use br_runner_as_tool::{PayloadKind, ToolMode};
-use br_runner_jobs::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
 use serde_json::json;
 use support::*;
 

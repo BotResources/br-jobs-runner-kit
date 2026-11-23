@@ -3,8 +3,8 @@ mod support;
 use br_llm_clients_core::{BuildError, MAX_NESTING_DEPTH, Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{RunnerTool, RunnerToolError, ToolMode};
-use br_runner_jobs::RunnerType;
-use br_runner_jobs::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::RunnerType;
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
 use serde_json::json;
 use support::*;
 

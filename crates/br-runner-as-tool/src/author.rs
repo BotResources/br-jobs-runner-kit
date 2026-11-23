@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use br_agentic_contract::{Cause, PortFuture, ToolBlock};
 use br_llm_messages::OpaqueJson;
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

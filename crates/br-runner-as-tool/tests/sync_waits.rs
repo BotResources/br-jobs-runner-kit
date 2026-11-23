@@ -1,8 +1,8 @@
 mod support;
 
 use br_runner_as_tool::ToolMode;
-use br_runner_jobs::test_double::{Answer, memory_caller};
-use br_runner_jobs::{Error, Removal, SyncEnd};
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::{Error, Removal, SyncEnd};
 use serde_json::json;
 use support::*;
 
@@ -12,7 +12,7 @@ fn cause_error(outcome: &Outcome) -> &Error {
         .expect_err("a fault")
         .cause()
         .downcast_ref::<Error>()
-        .expect("an error of br-runner-jobs")
+        .expect("an error of br-runner-jobs-client")
 }
 
 #[tokio::test]
@@ -40,7 +40,7 @@ async fn given_a_wait_that_fails_when_the_create_is_delivered_or_not_yet_ended_t
             .calls()
             .into_iter()
             .find_map(|call| match call {
-                br_runner_jobs::test_double::MemoryCall::Cancel { job_id, command_id } => {
+                br_runner_jobs_client::test_double::MemoryCall::Cancel { job_id, command_id } => {
                     Some((job_id, command_id))
                 }
                 _ => None,
@@ -93,7 +93,7 @@ async fn given_a_result_read_that_is_refused_when_settled_then_an_error_flag_nam
         create.job_id,
         Answer::Now(SyncEnd::Completed {
             inline: None,
-            result_ref: Some(br_runner_jobs::test_double::result_ref(id(3))),
+            result_ref: Some(br_runner_jobs_client::test_double::result_ref(id(3))),
         }),
     );
 
@@ -121,7 +121,7 @@ async fn given_a_result_read_that_fails_otherwise_when_settled_then_a_fault_and_
         create.job_id,
         Answer::Now(SyncEnd::Completed {
             inline: None,
-            result_ref: Some(br_runner_jobs::test_double::result_ref(id(3))),
+            result_ref: Some(br_runner_jobs_client::test_double::result_ref(id(3))),
         }),
     );
 
@@ -185,7 +185,7 @@ async fn given_parallel_calls_of_one_tool_when_one_child_is_slow_then_the_other_
         .calls()
         .into_iter()
         .filter_map(|call| match call {
-            br_runner_jobs::test_double::MemoryCall::Create(input) => Some(input),
+            br_runner_jobs_client::test_double::MemoryCall::Create(input) => Some(input),
             _ => None,
         })
         .collect();
@@ -194,7 +194,7 @@ async fn given_parallel_calls_of_one_tool_when_one_child_is_slow_then_the_other_
     assert_ne!(creates[0].command_id, creates[1].command_id);
     let fast_job = creates
         .iter()
-        .find(|input| matches!(&input.payload, br_runner_jobs::PayloadForm::Inline(c) if c.message.contains("2")))
+        .find(|input| matches!(&input.payload, br_runner_jobs_client::PayloadForm::Inline(c) if c.message.contains("2")))
         .expect("the second call");
     script.end(fast_job.job_id, Answer::Now(completed("fast")));
 

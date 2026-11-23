@@ -1,7 +1,7 @@
 mod support;
 
-use br_runner_jobs::test_double::{Answer, MemoryCall, memory_caller, result_ref};
-use br_runner_jobs::{CallMode, Content, ContentAttachment, PayloadForm, SyncEnd};
+use br_runner_jobs_client::test_double::{Answer, MemoryCall, memory_caller, result_ref};
+use br_runner_jobs_client::{CallMode, Content, ContentAttachment, PayloadForm, SyncEnd};
 use serde_json::json;
 use support::*;
 

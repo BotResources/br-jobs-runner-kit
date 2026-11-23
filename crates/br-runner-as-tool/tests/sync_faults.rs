@@ -1,8 +1,8 @@
 mod support;
 
 use br_runner_as_tool::{CreateRemoved, PayloadKind, ToolMode};
-use br_runner_jobs::test_double::{Answer, memory_caller};
-use br_runner_jobs::{Error, Removal};
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::{Error, Removal};
 use serde_json::json;
 use support::*;
 
@@ -12,7 +12,7 @@ fn cause_error(outcome: &Outcome) -> &Error {
         .expect_err("a fault")
         .cause()
         .downcast_ref::<Error>()
-        .expect("an error of br-runner-jobs")
+        .expect("an error of br-runner-jobs-client")
 }
 
 #[tokio::test]

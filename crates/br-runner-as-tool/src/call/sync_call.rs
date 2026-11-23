@@ -1,5 +1,5 @@
 use br_agentic_contract::{CancelView, ToolContent};
-use br_runner_jobs::{Content, EndWait, Error, ResultRef, SyncEnd, WriteEnd};
+use br_runner_jobs_client::{Content, EndWait, Error, ResultRef, SyncEnd, WriteEnd};
 use futures::{FutureExt, select_biased};
 use uuid::Uuid;
 
@@ -10,7 +10,7 @@ use super::stop::refusal_text;
 use super::{RunnerToolCode, Stop};
 use crate::author::AuthorFailure;
 use crate::error::{CreateRemoved, UnknownEnd};
-use br_runner_jobs::Removal;
+use br_runner_jobs_client::Removal;
 
 type Created = futures::future::Fuse<WriteEnd>;
 

@@ -1,6 +1,6 @@
 use br_graph_contract::CancelToken;
-use br_runner_jobs::test_double::{Answer, MemoryCall, MemoryScript, memory_caller};
-use br_runner_jobs::{PayloadForm, Removal, RunnerType, WriteResult};
+use br_runner_jobs_client::test_double::{Answer, MemoryCall, MemoryScript, memory_caller};
+use br_runner_jobs_client::{PayloadForm, Removal, RunnerType, WriteResult};
 use uuid::Uuid;
 
 use super::{RunnerToolCode, Stop};

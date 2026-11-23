@@ -3,8 +3,8 @@ mod support;
 use br_agentic_contract::ToolBlock;
 use br_graph_contract::CancelToken;
 use br_runner_as_tool::{AuthorFailure, Payload, PayloadKind, ToolMode};
-use br_runner_jobs::SyncEnd;
-use br_runner_jobs::test_double::{Answer, MemoryCall, memory_caller, result_ref};
+use br_runner_jobs_client::SyncEnd;
+use br_runner_jobs_client::test_double::{Answer, MemoryCall, memory_caller, result_ref};
 use serde_json::json;
 use support::*;
 
@@ -88,7 +88,7 @@ async fn given_a_create_handed_over_when_the_view_triggers_then_one_cancel_goes_
 async fn given_a_cancel_that_cannot_be_handed_over_when_the_view_triggers_then_the_call_still_ends_cancelled()
  {
     let (caller, script) = memory_caller();
-    script.cancel(Answer::Fail(br_runner_jobs::Error::Unauthenticated));
+    script.cancel(Answer::Fail(br_runner_jobs_client::Error::Unauthenticated));
     let tool = sync_tool(caller);
     let call = spawn_call(&tool, json!({}));
     create_of(&script).await;
@@ -101,7 +101,9 @@ async fn given_a_cancel_that_cannot_be_handed_over_when_the_view_triggers_then_t
 async fn given_a_create_that_ended_refused_when_the_view_triggers_then_no_cancel_goes() {
     let (caller, script) = memory_caller();
     let refusal = refused_saying("job_terminal", "over");
-    script.create(Answer::Late(Err(br_runner_jobs::Removal::Refused(refusal))));
+    script.create(Answer::Late(Err(br_runner_jobs_client::Removal::Refused(
+        refusal,
+    ))));
     let tool = sync_tool(caller);
     let call = spawn_call(&tool, json!({}));
     create_of(&script).await;

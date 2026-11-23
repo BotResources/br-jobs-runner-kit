@@ -1,6 +1,6 @@
 use br_agentic_contract::CancelView;
 use br_llm_messages::OpaqueJson;
-use br_runner_jobs::{Content, PayloadForm};
+use br_runner_jobs_client::{Content, PayloadForm};
 
 use super::race::unless_cancelled;
 use super::{RunnerToolCode, Stop};
