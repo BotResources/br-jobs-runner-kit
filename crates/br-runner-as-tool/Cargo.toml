@@ -7,7 +7,7 @@ repository.workspace = true
 description = "A runner type as a tool: the Tool of the agentic contract that makes another runner do a piece of work, in sync or background mode, through the caller handle of br-runner-jobs"
 
 [dependencies]
-br-agentic-contract.workspace = true
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-clients-core.workspace = true
 br-llm-messages.workspace = true
 br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
