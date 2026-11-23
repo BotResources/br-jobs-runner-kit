@@ -13,33 +13,22 @@ fn given_the_work_core_when_its_public_calls_are_named_then_they_are_exactly_ids
 }
 
 #[test]
-fn given_the_work_core_when_it_is_listed_then_the_three_read_calls_are_its_whole_public_api() {
-    let listing = std::process::Command::new("cargo")
-        .args(["public-api", "--version"])
-        .output();
-    if !matches!(listing, Ok(ref out) if out.status.success()) {
-        return;
+fn given_the_work_core_source_when_its_public_items_are_listed_then_the_three_read_calls_are_its_whole_public_api()
+ {
+    let source = include_str!("../src/work/core.rs");
+    let mut fns: Vec<&str> = Vec::new();
+    let mut fields: Vec<&str> = Vec::new();
+    for line in source.lines().map(str::trim_start) {
+        if let Some(rest) = line.strip_prefix("pub fn ") {
+            fns.push(rest.split(['(', '<']).next().unwrap_or(rest));
+        } else if let Some(rest) = line
+            .strip_prefix("pub ")
+            .filter(|rest| !rest.starts_with("struct "))
+        {
+            fields.push(rest);
+        }
     }
-    let manifest = env!("CARGO_MANIFEST_DIR");
-    let out = std::process::Command::new("cargo")
-        .args([
-            "public-api",
-            "--manifest-path",
-            &format!("{manifest}/Cargo.toml"),
-            "--simplified",
-        ])
-        .output()
-        .expect("cargo public-api runs");
-    if !out.status.success() {
-        return;
-    }
-    let text = String::from_utf8(out.stdout).expect("utf8");
-    let mut names: Vec<&str> = text
-        .lines()
-        .filter(|line| line.starts_with("pub ") && line.contains("::WorkCore::"))
-        .filter_map(|line| line.split("::WorkCore::").nth(1))
-        .map(|tail| tail.split(['(', ':']).next().unwrap_or(tail))
-        .collect();
-    names.sort_unstable();
-    assert_eq!(names, ["ids", "mail_handle", "run_id"], "{text}");
+    fns.sort_unstable();
+    assert_eq!(fns, ["ids", "mail_handle", "run_id"]);
+    assert!(fields.is_empty(), "{fields:?}");
 }
