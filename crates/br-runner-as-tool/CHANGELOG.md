@@ -2,6 +2,8 @@
 
 ## 0.3.1
 
+Released 2026-11-24.
+
 Re-pin on `br-runner-jobs-client` 0.1.1 (was 0.1.0). No change of the public surface or of the behavior.
 
 ## 0.3.0
