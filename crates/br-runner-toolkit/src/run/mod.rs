@@ -10,7 +10,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use br_graph_contract::Fields;
-use br_runner_jobs::{DeliveryQueue, Work};
+use br_runner_jobs_client::{DeliveryQueue, Work};
 use futures::FutureExt;
 use tokio::sync::oneshot;
 

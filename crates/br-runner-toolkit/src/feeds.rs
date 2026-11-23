@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use br_runner_jobs::{CancelEvent, DispatchMode, Error, ModeEvent};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, Error, ModeEvent};
 use uuid::Uuid;
 
 use crate::shared::{LoopState, Mode, Shared};

@@ -2,7 +2,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use br_graph_contract::InstanceId;
-use br_runner_jobs::{PresenceStatus, WriteName};
+use br_runner_jobs_client::{PresenceStatus, WriteName};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 

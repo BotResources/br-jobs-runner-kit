@@ -4,7 +4,7 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_toolkit::RunnerBuilder;
 use support::*;
 

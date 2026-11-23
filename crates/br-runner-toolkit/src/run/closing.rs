@@ -1,7 +1,7 @@
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
-use br_runner_jobs::{DeliveryQueue, Removal, WriteEnd};
+use br_runner_jobs_client::{DeliveryQueue, Removal, WriteEnd};
 use futures::FutureExt;
 use tokio::sync::oneshot;
 

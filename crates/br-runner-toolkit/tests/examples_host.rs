@@ -4,7 +4,7 @@ mod support;
 #[allow(dead_code)] // the example holds code that only its own main uses
 mod test_host;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_toolkit::HostEvent;
 
 use support::{push_mode, runner_type, trigger};

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_agentic_contract::{PortError, PortFuture};
 use br_graph_contract::InstanceId;
-use br_runner_jobs::{AgentBook, BookLookup};
+use br_runner_jobs_client::{AgentBook, BookLookup};
 use tokio::sync::watch;
 
 use crate::context::RunContext;
@@ -141,7 +141,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use br_runner_jobs::test_double::ScriptedJobs;
+    use br_runner_jobs_client::test_double::ScriptedJobs;
 
     use super::{InstanceLookup, Instances};
     use crate::error::ErrorCode;

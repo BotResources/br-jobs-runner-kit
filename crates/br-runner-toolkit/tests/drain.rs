@@ -3,8 +3,8 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::PresenceStatus;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::PresenceStatus;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use support::*;
 use tokio::sync::Notify;
 

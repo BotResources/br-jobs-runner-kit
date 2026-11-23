@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
 
 use tracing::Level;
 

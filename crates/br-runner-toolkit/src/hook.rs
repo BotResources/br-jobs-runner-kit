@@ -2,7 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use br_graph_contract::InstanceId;
-use br_runner_jobs::BookedAgent;
+use br_runner_jobs_client::BookedAgent;
 use futures::future::BoxFuture;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

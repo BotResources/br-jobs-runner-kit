@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
-use br_runner_jobs::{LogLevel, PresenceStatus, QueueReport};
+use br_runner_jobs_client::{LogLevel, PresenceStatus, QueueReport};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]

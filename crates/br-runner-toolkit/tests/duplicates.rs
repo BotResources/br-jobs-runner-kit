@@ -3,7 +3,7 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
 use support::*;
 use tokio::sync::Notify;
 

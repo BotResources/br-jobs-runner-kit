@@ -4,7 +4,7 @@ mod support;
 #[allow(dead_code)] // the example holds code that only its own main uses
 mod restartable_agent;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
@@ -37,7 +37,7 @@ async fn the_restartable_agent_example_answers_saves_the_state_and_calls_the_hoo
     let uploads = jobs
         .calls()
         .into_iter()
-        .filter(|call| matches!(call, br_runner_jobs::test_double::Call::Graphql { document, .. } if document.contains("jobsUploadResult") || document.contains("jobsSaveState")))
+        .filter(|call| matches!(call, br_runner_jobs_client::test_double::Call::Graphql { document, .. } if document.contains("jobsUploadResult") || document.contains("jobsSaveState")))
         .count();
     assert_eq!(uploads, 2);
 }
@@ -48,7 +48,10 @@ async fn the_stored_gate_of_the_example_goes_through_the_stand_in_entry_stored()
     let gate = restartable_agent::stored_gate(restartable_agent::write_context(&observed));
     let entry = br_llm_messages::EntryId::from_uuid(support::id(7)).expect("an entry id");
     let thread = br_agentic_contract::ThreadRef::from_uuid(support::id(8)).expect("a thread ref");
-    assert_eq!(gate(thread, entry).await, br_runner_jobs::Gate::Stored);
+    assert_eq!(
+        gate(thread, entry).await,
+        br_runner_jobs_client::Gate::Stored
+    );
     assert_eq!(
         observed.entries.lock().expect("lock").clone(),
         vec![support::id(7)]

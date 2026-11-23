@@ -2,8 +2,8 @@ mod support;
 
 use std::num::NonZeroUsize;
 
-use br_runner_jobs::FailureKind;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::FailureKind;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use serde_json::json;
 use support::*;
 

@@ -4,7 +4,7 @@ mod support;
 #[allow(dead_code)] // the main of the example is not run by the test
 mod serve_claim;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use tokio_util::sync::CancellationToken;
 
 use support::{has_terminal, kinds, runner_type, trigger, until};

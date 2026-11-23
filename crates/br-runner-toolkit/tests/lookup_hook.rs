@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use br_graph_contract::InstanceId;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_toolkit::{ErrorCode, InstanceEnded, RunnerBuilder, lifecycle_hook};
 use support::*;
 use tokio::sync::Notify;
@@ -71,7 +71,7 @@ async fn given_a_node_that_asks_the_lookup_when_it_runs_then_it_gets_the_agent_b
     let registered = jobs
         .calls()
         .into_iter()
-        .any(|call| matches!(call, br_runner_jobs::test_double::Call::Register { run_id, .. } if run_id == id(101)));
+        .any(|call| matches!(call, br_runner_jobs_client::test_double::Call::Register { run_id, .. } if run_id == id(101)));
     assert!(registered);
 }
 

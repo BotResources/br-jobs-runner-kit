@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use br_graph_executor::{Observation, Observer, OutcomeKind};
-use br_runner_jobs::DeliveryQueue;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::DeliveryQueue;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 

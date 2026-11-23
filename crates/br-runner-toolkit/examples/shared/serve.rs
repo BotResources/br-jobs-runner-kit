@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::{JobsClient, RunnerType};
+use br_runner_jobs_client::{JobsClient, RunnerType};
 use br_runner_toolkit::{DrainReport, RunnerBuilder, Settings, StartArgs};
 use tokio_util::sync::CancellationToken;
 

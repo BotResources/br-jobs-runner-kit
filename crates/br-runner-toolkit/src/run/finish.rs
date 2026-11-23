@@ -1,7 +1,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use br_graph_contract::{Fields, State};
-use br_runner_jobs::{BookedAgent, CallMode, Content, DeliveryQueue, Failed, WriteEnd};
+use br_runner_jobs_client::{BookedAgent, CallMode, Content, DeliveryQueue, Failed, WriteEnd};
 
 use super::Ctx;
 use crate::failure::{Found, failed_of};

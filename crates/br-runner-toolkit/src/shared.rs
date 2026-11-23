@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_graph_contract::CancelToken;
-use br_runner_jobs::{PresenceStatus, QueueObserver, TriggerFeed};
+use br_runner_jobs_client::{PresenceStatus, QueueObserver, TriggerFeed};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;

@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use br_graph_contract::{Fields, Graph, State};
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 
 use crate::failure::FailureMapping;
 use crate::run_start::RunStart;

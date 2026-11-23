@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use br_runner_jobs::test_double::ScriptedJobs;
-use br_runner_jobs::{Arrival, Error};
+use br_runner_jobs_client::test_double::ScriptedJobs;
+use br_runner_jobs_client::{Arrival, Error};
 
 use super::{ArrivalOpener, ArrivalSink, ArrivalSource, keep};
 use crate::instances::Instances;

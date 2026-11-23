@@ -1,7 +1,7 @@
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
-use br_runner_jobs::{DeliveryQueue, QueueSettings, Removal, Work};
+use br_runner_jobs_client::{DeliveryQueue, QueueSettings, Removal, Work};
 use futures::FutureExt;
 use uuid::Uuid;
 
@@ -85,7 +85,7 @@ pub(super) async fn open_queue(
 mod tests {
     use std::sync::Arc;
 
-    use br_runner_jobs::test_double::ScriptedJobs;
+    use br_runner_jobs_client::test_double::ScriptedJobs;
     use tracing::Level;
 
     use super::{Source, open_queue};

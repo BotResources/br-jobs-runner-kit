@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use br_graph_contract::{Fields, State};
-use br_runner_jobs::{AgentKey, BookedAgent, RestoredAgent};
+use br_runner_jobs_client::{AgentKey, BookedAgent, RestoredAgent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -71,8 +71,8 @@ pub(crate) fn decode<F: Fields>(
 #[cfg(test)]
 mod tests {
     use br_graph_contract::State;
-    use br_runner_jobs::test_double::ScriptedJobs;
-    use br_runner_jobs::{AgentKey, RestoredAgent};
+    use br_runner_jobs_client::test_double::ScriptedJobs;
+    use br_runner_jobs_client::{AgentKey, RestoredAgent};
 
     use super::{decode, encode};
     use crate::unit_support::{Steps, book_with_agents, id, queue_of, runner_type, work};

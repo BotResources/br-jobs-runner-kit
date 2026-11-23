@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_graph_contract::Graph;
-use br_runner_jobs::test_double::{Call, Fact, ScriptedJobs, trigger_json};
-use br_runner_jobs::{CancelEvent, DispatchMode, ModeEvent, RunnerType};
+use br_runner_jobs_client::test_double::{Call, Fact, ScriptedJobs, trigger_json};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, ModeEvent, RunnerType};
 use br_runner_toolkit::{
     DrainReport, Error, RunRefusal, RunnerBuilder, Settings, StartArgs, StartedRun, run_start,
 };
@@ -179,7 +179,7 @@ pub fn writes_ok() -> serde_json::Value {
     })
 }
 
-pub fn failed_fact(jobs: &ScriptedJobs) -> Option<br_runner_jobs::Failed> {
+pub fn failed_fact(jobs: &ScriptedJobs) -> Option<br_runner_jobs_client::Failed> {
     facts(jobs).into_iter().find_map(|fact| match fact {
         Fact::Failed { failed, .. } => Some(failed),
         _ => None,
@@ -190,7 +190,7 @@ pub fn assert_run_cancelled(jobs: &ScriptedJobs) {
     assert_eq!(kinds(jobs), vec!["started", "failed"]);
     let failed = failed_fact(jobs).expect("a failed fact");
     assert_eq!(failed.reason_code, "run_cancelled");
-    assert_eq!(failed.kind, br_runner_jobs::FailureKind::Permanent);
+    assert_eq!(failed.kind, br_runner_jobs_client::FailureKind::Permanent);
     assert_eq!(failed.params, json!({}));
     assert_eq!(failed.diagnostic, json!(""));
     assert_eq!(failed.retry_after_seconds, None);
@@ -218,11 +218,11 @@ pub fn refusal(reason: &str) -> Vec<u8> {
     serde_json::to_vec(&json!({ "version": 2, "reason": reason })).expect("bytes")
 }
 
-pub fn refusal_error(reason: &str) -> br_runner_jobs::Error {
-    br_runner_jobs::Error::refused(br_runner_jobs::Operation::StartedFact, reason, "")
+pub fn refusal_error(reason: &str) -> br_runner_jobs_client::Error {
+    br_runner_jobs_client::Error::refused(br_runner_jobs_client::Operation::StartedFact, reason, "")
 }
 
-pub fn refuse_the_first_started_fact(jobs: &ScriptedJobs, error: br_runner_jobs::Error) {
+pub fn refuse_the_first_started_fact(jobs: &ScriptedJobs, error: br_runner_jobs_client::Error) {
     let mut refused = false;
     jobs.answer_started(move || {
         if refused {

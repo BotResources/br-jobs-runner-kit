@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::{Capacity, Error, JobsClient, LogLevel, PresenceStatus, TriggerFeed, Work};
+use br_runner_jobs_client::{
+    Capacity, Error, JobsClient, LogLevel, PresenceStatus, TriggerFeed, Work,
+};
 use uuid::Uuid;
 
 use crate::tap::{HostEvent, Tap, tell};

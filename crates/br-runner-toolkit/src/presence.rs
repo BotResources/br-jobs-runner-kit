@@ -2,7 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::{Capacity, Error, PresenceStatus};
+use br_runner_jobs_client::{Capacity, Error, PresenceStatus};
 use tokio::sync::watch;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 
@@ -74,7 +74,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    use br_runner_jobs::PresenceStatus;
+    use br_runner_jobs_client::PresenceStatus;
     use tokio::sync::watch;
 
     use super::beats;

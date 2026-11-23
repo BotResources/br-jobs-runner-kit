@@ -2,7 +2,7 @@ use std::error::Error as StdError;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
-use br_runner_jobs::{Failed, FailureKind};
+use br_runner_jobs_client::{Failed, FailureKind};
 use serde_json::{Value, json};
 
 #[non_exhaustive]

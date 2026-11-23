@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0
+
+Opens the line 0.3. The toolkit takes the jobs side from `br-runner-jobs-client` 0.1.0 and the contract `br-agentic-contract` 0.3.0.
+
+### Changed
+
+- The crate depends on `br-runner-jobs-client` 0.1.0 and on `br-agentic-contract` 0.3.0 (per-crate pins). It has no adapter library in its normal dependencies: `br-runner-jobs` 0.3.0 is a `dev-dependency`, used only by the tests and by the example `restartable_agent` (node entries and the mark gate).
+- The tests and the examples make their jobs client with the test double of `br-runner-jobs-client`, or with `br-runner-connection` against a locally started bus.
+- The README tells the new dependencies and the pins of the install block.
+
+### Breaking
+
+- The public builders and types name the types of `br-runner-jobs-client` and no longer those of `br-runner-jobs`: `RunnerBuilder::new` and `TestHost::new` take its `JobsClient`; `with_queue_observer` takes its `QueueObserver`; `RunStartInput` holds its `Work`; `InstanceEnded` lists its `BookedAgent`; `RunContext` gives its `AgentBook`, caller handle and mail handle; `InstanceLookup::book_lookup` gives its `BookLookup`; `AnswerFn` and the failure types use its `Content` and `FailureKind`. A runner author that named these types imports them from `br-runner-jobs-client`. The behaviour of the loop, the runs, the cancel, the drain and the saved state is that of 0.2.
+- `br-agentic-contract` 0.3.0 replaces 0.2.0 in the public API (`PortError`, `PortFuture`): a consumer moves to the same tag.
+- The tests that checked the install block against `br-runner-jobs` check it against `br-runner-jobs-client`; no test was deleted.
+
 ## 0.2.0
 
 Opens the line 0.2.

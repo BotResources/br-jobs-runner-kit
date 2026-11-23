@@ -3,8 +3,8 @@ mod support;
 use std::sync::Arc;
 
 use br_graph_contract::Graph;
-use br_runner_jobs::CancelEvent;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::CancelEvent;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use support::*;
 use tracing::Level;
 

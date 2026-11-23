@@ -3,8 +3,8 @@ mod support;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use br_runner_jobs::test_double::ScriptedJobs;
-use br_runner_jobs::{CancelEvent, PresenceStatus, QueueReport, WriteKind};
+use br_runner_jobs_client::test_double::ScriptedJobs;
+use br_runner_jobs_client::{CancelEvent, PresenceStatus, QueueReport, WriteKind};
 use br_runner_toolkit::{HostEvent, InstanceEnded, Settings, TestHost, lifecycle_hook};
 use support::*;
 
@@ -159,7 +159,9 @@ async fn given_a_presence_ttl_that_cannot_be_read_when_the_host_runs_then_it_ret
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));
-    jobs.set_presence_ttl(Err(br_runner_jobs::Error::Unreadable("ttl".to_owned())));
+    jobs.set_presence_ttl(Err(br_runner_jobs_client::Error::Unreadable(
+        "ttl".to_owned(),
+    )));
     let host = TestHost::new(
         jobs.client(),
         host_settings(),

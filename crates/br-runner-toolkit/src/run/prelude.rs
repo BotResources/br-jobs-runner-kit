@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use br_graph_contract::{CancelView, Fields, State};
-use br_runner_jobs::{Error, Failed};
+use br_runner_jobs_client::{Error, Failed};
 use futures::FutureExt;
 use std::panic::AssertUnwindSafe;
 

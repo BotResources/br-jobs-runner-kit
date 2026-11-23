@@ -2,7 +2,7 @@ mod support;
 
 use std::sync::Arc;
 
-use br_runner_jobs::test_double::{Call, Fact, ScriptedJobs};
+use br_runner_jobs_client::test_double::{Call, Fact, ScriptedJobs};
 use br_runner_toolkit::RunnerBuilder;
 use serde_json::json;
 use support::*;

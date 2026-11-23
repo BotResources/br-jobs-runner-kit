@@ -1,4 +1,4 @@
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
 use serde_json::{Value, json};
 
 use super::{call_with, id, trigger};

@@ -2,8 +2,8 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
-use br_runner_jobs::{Error, PresenceStatus};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::{Error, PresenceStatus};
 use support::*;
 
 fn presence_calls(jobs: &ScriptedJobs) -> Vec<&'static str> {

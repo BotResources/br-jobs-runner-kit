@@ -2,8 +2,8 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::{Fact, ScriptedJobs};
-use br_runner_jobs::{CancelEvent, DispatchMode, Error, ModeEvent};
+use br_runner_jobs_client::test_double::{Fact, ScriptedJobs};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, Error, ModeEvent};
 use support::*;
 
 fn feed_error() -> Error {
