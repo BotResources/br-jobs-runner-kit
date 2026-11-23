@@ -16,7 +16,8 @@ Adds the adapter of the harness mail port of `br-agentic-harness-contract` 0.1.0
 ### Changed
 
 - The listing reads jobs once for the unread items and once for each new direct mail, all inside the wait (the intent now says so; one test proves the bound).
-- When the item of a cursor is no longer unread and the adapter holds no earlier read, the listing goes on from the start of a fresh read in the order of jobs. It no longer compares item ids (a bug of 0.3.0: jobs orders by sequence number, not by item id).
+- The listing reads the unread items with `unread_sequenced` of `br-runner-jobs-client` 0.1.1. The cursor holds the seq and the item id of the last item of the page (it was the item id alone; a cursor of 0.3.0 is no longer valid and is an error of the port). When the item of a cursor is no longer unread and the adapter holds no earlier read, the listing goes on from the position that the item held in the order of jobs (the items of a fresh read with a seq above the seq of the cursor). It no longer compares item ids (a bug of 0.3.0: jobs orders by sequence number, not by item id).
+- The dependency on `br-runner-jobs-client` is 0.1.1 (per-crate pin).
 - The `IncomingPortAdapter` holds its mark gate itself.
 
 

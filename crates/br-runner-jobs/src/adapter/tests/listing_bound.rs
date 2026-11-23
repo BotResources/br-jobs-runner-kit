@@ -45,7 +45,7 @@ async fn given_three_new_direct_mails_when_they_are_listed_then_jobs_is_read_onc
 }
 
 #[tokio::test]
-async fn given_a_cursor_whose_item_is_gone_and_items_whose_ids_are_not_in_the_order_of_jobs_when_the_next_page_is_asked_then_one_fresh_read_gives_them_in_the_order_of_jobs_and_no_id_is_compared()
+async fn given_a_cursor_whose_item_is_gone_and_items_whose_ids_are_not_in_the_order_of_jobs_when_the_next_page_is_asked_then_one_fresh_read_goes_on_from_the_seq_position_of_the_gone_item_and_no_id_is_compared()
  {
     let world = World::new(mark_gate_stored()).await;
     let agent = world.registered_agent().await;
@@ -60,10 +60,10 @@ async fn given_a_cursor_whose_item_is_gone_and_items_whose_ids_are_not_in_the_or
         })
         .collect();
     world.jobs.graphql_default(only_unread(items));
-    let cursor = Cursor::new(id(130).to_string());
+    let cursor = Cursor::new(format!("1:{}", id(130)));
     let batch = page(&world, Some(&cursor), 10).await;
     let found: Vec<_> = batch.items.iter().map(|i| i.id().as_uuid()).collect();
-    assert_eq!(found, vec![id(250), id(220), id(240)]);
+    assert_eq!(found, vec![id(220), id(240)]);
     assert_eq!(count(&world.jobs, UNREAD_ROOT), 1);
 }
 
@@ -77,8 +77,44 @@ async fn given_a_cursor_whose_item_is_still_unread_when_the_next_page_is_asked_t
         .map(|n| cc_item(agent.as_uuid(), *n))
         .collect();
     world.jobs.graphql_default(only_unread(items));
-    let cursor = Cursor::new(id(150).to_string());
+    let cursor = Cursor::new(format!("1:{}", id(150)));
     let batch = page(&world, Some(&cursor), 10).await;
     let found: Vec<_> = batch.items.iter().map(|i| i.id().as_uuid()).collect();
     assert_eq!(found, vec![id(220), id(240)]);
+}
+
+#[tokio::test]
+async fn given_a_cursor_whose_item_is_gone_and_a_seq_past_every_unread_item_when_the_next_page_is_asked_then_the_page_is_empty_and_nothing_restarts()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let items = (1..=3).map(|n| cc_item(agent.as_uuid(), n)).collect();
+    world.jobs.graphql_default(only_unread(items));
+    let cursor = Cursor::new(format!("9:{}", id(130)));
+    let batch = page(&world, Some(&cursor), 10).await;
+    assert!(batch.items.is_empty());
+    assert!(batch.next.is_none());
+}
+
+#[tokio::test]
+async fn given_a_listing_in_pages_when_the_cursor_is_asked_then_it_carries_the_seq_and_the_id_of_the_last_item_and_the_kept_read_gives_the_seq_of_the_next_one()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let items = [50_u128, 20, 40, 30]
+        .iter()
+        .enumerate()
+        .map(|(position, n)| {
+            let mut item = cc_item(agent.as_uuid(), *n);
+            item["seq"] = serde_json::json!(position + 7);
+            item
+        })
+        .collect();
+    world.jobs.graphql_default(only_unread(items));
+    let first = page(&world, None, 1).await;
+    assert_eq!(first.next, Some(Cursor::new(format!("7:{}", id(150)))));
+    let second = page(&world, first.next.as_ref(), 1).await;
+    assert_eq!(second.items[0].id().as_uuid(), id(220));
+    assert_eq!(second.next, Some(Cursor::new(format!("8:{}", id(120)))));
+    assert_eq!(count(&world.jobs, UNREAD_ROOT), 1);
 }

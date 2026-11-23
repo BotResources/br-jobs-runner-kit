@@ -8,6 +8,7 @@ use br_runner_jobs_client::{AgentBook, AgentKey, BookLookup};
 use super::agent_port::AgentPortAdapter;
 use super::gate::MarkGate;
 use super::incoming_port::IncomingPortAdapter;
+use super::incoming_port::seq_memory::SeqMemory;
 use super::mail_port::MailPortAdapter;
 
 pub(super) struct InboxSetup {
@@ -19,6 +20,7 @@ pub(super) struct Shared {
     pub node: String,
     pub lookup: Arc<dyn BookLookup>,
     pub inbox: Option<InboxSetup>,
+    pub seqs: SeqMemory,
 }
 
 impl Shared {
@@ -55,6 +57,7 @@ impl NodeEntry {
                 node: node_name.into(),
                 lookup,
                 inbox: None,
+                seqs: SeqMemory::default(),
             }),
         }
     }
@@ -73,6 +76,7 @@ impl NodeEntry {
                     label: inbox_label,
                     gate: Some(mark_gate),
                 }),
+                seqs: SeqMemory::default(),
             }),
         }
     }
@@ -90,6 +94,7 @@ impl NodeEntry {
                     label: inbox_label,
                     gate: None,
                 }),
+                seqs: SeqMemory::default(),
             }),
         }
     }

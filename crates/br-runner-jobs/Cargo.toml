@@ -10,13 +10,13 @@ description = "The adapters that bind the jobs service to the node ports of br-a
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.1.0", version = "0.1.0" }
 br-llm-messages.workspace = true
-br-runner-jobs-client.workspace = true
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
 futures.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
-br-runner-jobs-client = { workspace = true, features = ["test-double"] }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1", features = ["test-double"] }
 contract-jobs = { git = "https://github.com/BotResources/svc-jobs", package = "contract-jobs", tag = "contract-jobs/v0.8.0", version = "0.8.0", features = ["integration"] }
 chrono.workspace = true
 serde.workspace = true

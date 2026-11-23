@@ -61,7 +61,7 @@ async fn given_a_cursor_the_adapter_no_longer_holds_when_the_next_page_is_asked_
     let agent = world.registered_agent().await;
     let items = (1..=3).map(|n| cc_item(agent.as_uuid(), n)).collect();
     world.jobs.graphql_default(only_unread(items));
-    let cursor = Cursor::new(id(101).to_string());
+    let cursor = Cursor::new(format!("1:{}", id(101)));
     let batch = page(&world, Some(&cursor), 10).await;
     let found: Vec<_> = batch.items.iter().map(|i| i.id().as_uuid()).collect();
     assert_eq!(found, vec![id(202), id(203)]);
