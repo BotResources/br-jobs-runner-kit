@@ -5,9 +5,9 @@ The Threads side of a runner. It gives the adapters of the Threads ports of `br-
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.6.0", version = "0.6.0" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.6.1", version = "0.6.1" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
-br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
 br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
 uuid = { version = "1", features = ["v7"] }
@@ -16,6 +16,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with.
+
+This crate is on `br-agentic-contract` 0.3.0; `br-runner-jobs`, `br-runner-toolkit` and `br-runner-as-tool` stay on 0.2.0 until their own coming releases, so `ThreadRef` is a different type in them: move this crate together with the crates of the kit that share its types.
 
 ## Quickstart
 

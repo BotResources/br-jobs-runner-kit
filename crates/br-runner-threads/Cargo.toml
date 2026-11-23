@@ -1,6 +1,6 @@
 [package]
 name = "br-runner-threads"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -11,7 +11,7 @@ test-double = []
 
 [dependencies]
 async-nats.workspace = true
-br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-core-events.workspace = true
 br-core-integration.workspace = true
 br-core-kernel.workspace = true

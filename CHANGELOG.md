@@ -13,10 +13,11 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Changed
 
-- `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. Same tag `br-agentic-contract/v0.2.0`; no release.
+- `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. `br-runner-as-tool`, `br-runner-jobs` and `br-runner-toolkit` stay on tag `br-agentic-contract/v0.2.0`; `br-runner-threads` is on `br-agentic-contract/v0.3.0` since its 0.6.1.
 
 ### Added
 
+- `br-runner-threads` 0.6.1: re-pinned on `br-agentic-contract` 0.3.0; no change of the public surface. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
 - `br-runner-connection` 0.1.0 (new library): the one connection of a runner to the platform, a bearer-authenticated GraphQL call and one request-reply on the bus.
 - `br-runner-threads` 0.2.0: rebuilt on the Connection, with the thread-port and thread-access adapters and the thread queue. See `crates/br-runner-threads/CHANGELOG.md`.

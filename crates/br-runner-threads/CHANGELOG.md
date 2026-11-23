@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+Re-pin on `br-agentic-contract` 0.3.0 (was 0.2.0). No change of the public surface.
+
+This crate is built on `br-agentic-contract` 0.3.0, while `br-runner-jobs`, `br-runner-toolkit` and `br-runner-as-tool` stay on 0.2.0 in this kit version. `ThreadRef`, which the jobs `MarkGate` names, is therefore a different type in the two crates. A consumer moves `br-runner-threads` together with the crates of the kit that share its types; they move to contract 0.3.0 in their own coming releases (`br-runner-jobs` 0.3.0, `br-runner-toolkit` 0.3.0, `br-runner-as-tool` 0.3.0).
+
 ## 0.6.0
 
 Follows Threads 0.12 (contract-threads 0.10.0): the messages of a thread form one list, in the order Threads stored them, and a message names no other message. This is a breaking release.
