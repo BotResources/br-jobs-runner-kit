@@ -1,11 +1,9 @@
 mod agent_port;
-mod documents;
 mod gates;
 mod listing;
 mod marking;
 mod notices;
-mod sending;
-mod waiting;
+mod support;
 mod world;
 
 pub(super) use world::{ManualGate, Snap, World, instance, label, thread};
@@ -16,9 +14,9 @@ use contract_jobs::graphql_roots::*;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::book::tests::{everything_succeeds, id};
-use crate::queue::DeliveryQueue;
-use crate::test_double::{Call, ScriptedJobs};
+use self::support::{everything_succeeds, id};
+use br_runner_jobs_client::DeliveryQueue;
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
 
 pub(super) fn wire(items: Vec<Value>, mails: Value, attachments: Value) -> Value {
     let mut all = everything_succeeds();

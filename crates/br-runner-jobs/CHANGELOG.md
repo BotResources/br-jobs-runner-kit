@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0
+
+Splits the crate and adapts the incoming port of `br-agentic-contract` 0.3.0. The client part moved to `br-runner-jobs-client` 0.1.0; this crate keeps only the adapters.
+
+### Added
+
+- `IncomingPortAdapter`, the adapter of the incoming port (`items` and `mark_read`), given by `NodeEntry::incoming_port`. It lists the unread items of an agent as `IncomingItem` (a mail item, or a runtime notice for a call notice or a mail notice) and marks them read through the agent book, with the mark gate.
+
+### Changed
+
+- The unit tests of the client moved with it to `br-runner-jobs-client`; the adapter tests stay here.
+- The crate depends on `br-runner-jobs-client` 0.1.0 and on `br-agentic-contract` 0.3.0 (per-crate pin).
+- `NodeEntry::inbox_port` is `NodeEntry::incoming_port`. `BookLookup` and `book_lookup` are the seam of `br-runner-jobs-client`, taken by `NodeEntry::new` and `NodeEntry::with_inbox`.
+- The example `agent_and_inbox` is `agent_and_incoming`.
+- A call notice of a kind that this library does not know, and an unread item of a kind that the client does not know, are errors of the port.
+
+### Removed
+
+- Everything that moved to `br-runner-jobs-client` 0.1.0: `JobsClient`, `Work`, `DeliveryQueue` and its types, `AgentBook`, `CallerHandle`, `MailHandle`, the feeds, `Error` and its types, `RefusalReason`, `RunnerType`, the model types, the test double, and the examples `run_one_work` and `call_a_runner`. This crate no longer re-exports any of them; import them from `br-runner-jobs-client`.
+- `InboxPortAdapter` and `NodeEntry::inbox_port`: the inbox port of `br-agentic-contract` 0.2 is gone. Sending a mail, giving the documents of a mail and waiting for an item are not in the incoming port; the adapter of the harness mail port is the next minor.
+
+### Breaking
+
+- Every public name listed under Removed, `InboxPortAdapter`, `NodeEntry::inbox_port` and the types of the 0.2 contract.
+
 ## 0.2.0
 
 Moves the crate to the wire library `contract-jobs` 0.8.0: the started fact becomes a request with a typed reply, the arrival feed reads the version 2 doorbell through an ephemeral consumer, and the unread read gives the mail notice, the cancel notice and the refusal notice.

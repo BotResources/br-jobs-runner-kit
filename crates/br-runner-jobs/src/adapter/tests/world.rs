@@ -1,17 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use br_agentic_contract::{
-    AgentLabel, AgentPort, Fields, InboxContext, InstanceId, Reason, ThreadRef,
+    AgentLabel, AgentPort, Fields, IncomingContext, InstanceId, Reason, ThreadRef,
 };
 use br_llm_messages::{AgentId, EntryId};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-use crate::adapter::{InboxPortAdapter, MarkGate, NodeEntry, book_lookup, mark_gate};
-use crate::book::tests::{id, scripted, settings, work};
-use crate::book::{AgentBook, RestoredAgent};
-use crate::queue::{DeliveryQueue, Gate, QueueObserver, QueueReport, QueueSettings};
-use crate::test_double::ScriptedJobs;
+use super::support::{id, scripted, settings, work};
+use crate::adapter::{IncomingPortAdapter, MarkGate, NodeEntry, mark_gate};
+use br_runner_jobs_client::book_lookup;
+use br_runner_jobs_client::test_double::ScriptedJobs;
+use br_runner_jobs_client::{AgentBook, RestoredAgent};
+use br_runner_jobs_client::{DeliveryQueue, Gate, QueueObserver, QueueReport, QueueSettings};
 
 pub(in crate::adapter) const NODE: &str = "node";
 
@@ -111,7 +112,7 @@ pub(in crate::adapter) struct World {
 
 pub(in crate::adapter) fn restored_writer() -> RestoredAgent {
     RestoredAgent {
-        key: crate::book::AgentKey::new(NODE, "writer"),
+        key: br_runner_jobs_client::AgentKey::new(NODE, "writer"),
         agent_id: id(70),
         has_inbox: true,
     }
@@ -152,8 +153,8 @@ impl World {
         }
     }
 
-    pub(in crate::adapter) fn inbox(&self) -> InboxPortAdapter {
-        self.entry.inbox_port().expect("a node with an inbox")
+    pub(in crate::adapter) fn incoming(&self) -> IncomingPortAdapter {
+        self.entry.incoming_port().expect("a node with an inbox")
     }
 
     pub(in crate::adapter) async fn agent(&self) -> AgentId {
@@ -170,8 +171,8 @@ impl World {
         agent
     }
 
-    pub(in crate::adapter) fn context(&self, agent: AgentId) -> InboxContext {
-        InboxContext {
+    pub(in crate::adapter) fn context(&self, agent: AgentId) -> IncomingContext {
+        IncomingContext {
             instance: instance(),
             thread: thread(),
             agent,

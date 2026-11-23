@@ -1,39 +1,23 @@
 use std::num::NonZeroUsize;
 
-use br_agentic_contract::{InboxItem, InboxPort};
+use br_agentic_contract::{IncomingItem, IncomingPort};
 use br_llm_messages::IncomingEntry;
 use serde_json::json;
 
+use super::support::id;
 use super::{World, notice_item, only_unread};
-use crate::adapter::inbox_port::convert::convert;
 use crate::adapter::mark_gate_stored;
-use crate::book::EntryKind;
-use crate::book::tests::id;
-use crate::model::{CallNotice, CallNoticeKind, UnreadItem};
+use br_runner_jobs_client::CallNoticeKind;
+use br_runner_jobs_client::EntryKind;
 
-fn text_of(item: &InboxItem) -> String {
-    let InboxItem::Entry(entry) = item else {
+fn text_of(item: &IncomingItem) -> String {
+    let IncomingItem::Entry(entry) = item else {
         panic!("{item:?}");
     };
     let IncomingEntry::RuntimeNotice(notice) = entry.entry() else {
         panic!("{entry:?}");
     };
     notice.text().to_owned()
-}
-
-fn notice(kind: CallNoticeKind) -> CallNotice {
-    CallNotice {
-        notice_type: None,
-        item_id: id(150),
-        address: Some(id(70)),
-        kind,
-        child_job_id: Some(id(350)),
-        position: None,
-        message: None,
-        report: None,
-        inline: None,
-        result_ref: None,
-    }
 }
 
 #[tokio::test]
@@ -56,7 +40,7 @@ async fn given_call_notices_when_they_are_listed_then_each_is_a_runtime_notice_w
     world.jobs.graphql_default(only_unread(items));
     let context = world.context(agent);
     let batch = world
-        .inbox()
+        .incoming()
         .items(&context, None, NonZeroUsize::new(10).expect("limit"))
         .await
         .expect("a batch");
@@ -95,7 +79,7 @@ async fn given_a_completed_call_with_an_inline_result_when_it_is_listed_then_the
     world.jobs.graphql_default(only_unread(vec![item]));
     let context = world.context(agent);
     let batch = world
-        .inbox()
+        .incoming()
         .items(&context, None, NonZeroUsize::new(10).expect("limit"))
         .await
         .expect("a batch");
@@ -104,111 +88,123 @@ async fn given_a_completed_call_with_an_inline_result_when_it_is_listed_then_the
     assert!(text.contains("r.txt"));
 }
 
+async fn listed(
+    world: &World,
+    agent: br_llm_messages::AgentId,
+    items: Vec<serde_json::Value>,
+) -> Result<br_agentic_contract::IncomingBatch, br_agentic_contract::PortError> {
+    world.jobs.graphql_default(only_unread(items));
+    let context = world.context(agent);
+    world
+        .incoming()
+        .items(&context, None, NonZeroUsize::new(20).expect("limit"))
+        .await
+}
+
 #[tokio::test]
-async fn given_every_kind_of_notice_when_it_is_converted_then_a_non_blank_runtime_notice_with_the_item_id_comes_back()
+async fn given_every_kind_of_notice_when_it_is_listed_then_a_non_blank_runtime_notice_with_the_item_id_comes_back()
  {
     let world = World::new(mark_gate_stored()).await;
     let agent = world.registered_agent().await;
     let kinds = [
-        CallNoticeKind::Accepted,
-        CallNoticeKind::QueuePosition,
-        CallNoticeKind::RunStarted,
-        CallNoticeKind::RunCompleted,
-        CallNoticeKind::JobFailed,
-        CallNoticeKind::JobCancelled,
-        CallNoticeKind::Refused,
+        ("ACCEPTED", CallNoticeKind::Accepted),
+        ("QUEUE_POSITION", CallNoticeKind::QueuePosition),
+        ("STARTED", CallNoticeKind::RunStarted),
+        ("RUN_COMPLETED", CallNoticeKind::RunCompleted),
+        ("JOB_FAILED", CallNoticeKind::JobFailed),
+        ("JOB_CANCELLED", CallNoticeKind::JobCancelled),
+        ("REFUSED", CallNoticeKind::Refused),
     ];
-    for kind in kinds.into_iter().chain([CallNoticeKind::Unknown]) {
-        let mut call = notice(kind);
-        call.message = Some("a plain word from jobs".to_owned());
-        let done = convert(&world.book, agent.as_uuid(), UnreadItem::CallNotice(call))
-            .await
-            .expect("converted");
-        assert_eq!(done.item.id().as_uuid(), id(150));
-        assert!(text_of(&done.item).contains("a plain word from jobs"));
-        assert_eq!(done.entry.kind, EntryKind::CallNotice(kind));
+    let items = kinds
+        .iter()
+        .enumerate()
+        .map(|(n, (word, _))| {
+            let mut item = notice_item(agent.as_uuid(), n as u128 + 1, word);
+            item["message"] = json!("a plain word from jobs");
+            item
+        })
+        .collect();
+    let batch = listed(&world, agent, items).await.expect("a batch");
+    for (n, (_, kind)) in kinds.iter().enumerate() {
+        let n = n as u128 + 1;
+        assert_eq!(batch.items[n as usize - 1].id().as_uuid(), id(100 + n));
+        assert!(text_of(&batch.items[n as usize - 1]).contains("a plain word from jobs"));
+        let entry = world
+            .book
+            .listed(agent.as_uuid(), id(100 + n))
+            .expect("recorded");
+        assert_eq!(entry.kind, EntryKind::CallNotice(*kind));
     }
 }
 
 #[tokio::test]
-async fn given_a_mail_notice_when_it_is_converted_then_the_text_of_jobs_is_the_runtime_notice_with_the_item_id()
+async fn given_a_mail_notice_when_it_is_listed_then_the_text_of_jobs_is_the_runtime_notice_with_the_item_id()
  {
     let world = World::new(mark_gate_stored()).await;
     let agent = world.registered_agent().await;
-    let unread = UnreadItem::MailNotice {
-        item_id: id(160),
-        address: Some(agent.as_uuid()),
-        mail_id: Some(id(260)),
-        text: "Your mail was refused: the address is gone.".to_owned(),
-    };
-    let done = convert(&world.book, agent.as_uuid(), unread)
-        .await
-        .expect("converted");
-    assert_eq!(done.item.id().as_uuid(), id(160));
+    let item = json!({
+        "itemId": id(160), "seq": 1, "itemKind": "MAIL_NOTICE", "address": agent.as_uuid(),
+        "mailId": id(260), "message": "Your mail was refused: the address is gone.",
+    });
+    let batch = listed(&world, agent, vec![item]).await.expect("a batch");
+    assert_eq!(batch.items[0].id().as_uuid(), id(160));
     assert_eq!(
-        text_of(&done.item),
+        text_of(&batch.items[0]),
         "Your mail was refused: the address is gone."
     );
-    assert_eq!(done.entry.kind, EntryKind::MailNotice);
-    assert_eq!(done.entry.child_job_id, None);
+    let entry = world
+        .book
+        .listed(agent.as_uuid(), id(160))
+        .expect("recorded");
+    assert_eq!(entry.kind, EntryKind::MailNotice);
+    assert_eq!(entry.child_job_id, None);
 }
 
 #[tokio::test]
-async fn given_a_blank_mail_notice_or_an_item_id_that_is_not_a_uuid_v7_then_the_conversion_is_an_error_of_the_port()
+async fn given_a_blank_mail_notice_or_an_item_id_that_is_not_a_uuid_v7_then_the_listing_is_an_error_of_the_port()
  {
     let world = World::new(mark_gate_stored()).await;
     let agent = world.registered_agent().await;
-    let blank = UnreadItem::MailNotice {
-        item_id: id(160),
-        address: None,
-        mail_id: None,
-        text: "  ".to_owned(),
-    };
-    assert!(convert(&world.book, agent.as_uuid(), blank).await.is_err());
-    let mut call = notice(CallNoticeKind::Accepted);
-    call.item_id = uuid::Uuid::nil();
-    let error = convert(&world.book, agent.as_uuid(), UnreadItem::CallNotice(call)).await;
+    let blank = json!({
+        "itemId": id(160), "seq": 1, "itemKind": "MAIL_NOTICE", "address": agent.as_uuid(),
+        "mailId": null, "message": "  ",
+    });
+    assert!(listed(&world, agent, vec![blank]).await.is_err());
+    let mut nil = notice_item(agent.as_uuid(), 1, "ACCEPTED");
+    nil["itemId"] = json!(uuid::Uuid::nil());
+    let error = listed(&world, agent, vec![nil]).await;
     assert!(error.is_err_and(|error| !error.is_refusal()));
 }
 
 #[tokio::test]
-async fn given_a_notice_of_an_unknown_type_and_an_item_of_an_unknown_kind_when_listed_then_each_is_a_runtime_notice_with_its_word_from_jobs()
+async fn given_a_notice_of_an_unknown_type_when_listed_then_the_listing_is_an_error_of_the_port_with_no_default_text()
  {
     let world = World::new(mark_gate_stored()).await;
     let agent = world.registered_agent().await;
-    let mut unknown_item = notice_item(agent.as_uuid(), 2, "ACCEPTED");
+    let error = listed(
+        &world,
+        agent,
+        vec![notice_item(agent.as_uuid(), 1, "PAUSED")],
+    )
+    .await
+    .expect_err("an error of the port");
+    assert!(!error.is_refusal());
+    assert!(world.book.listed(agent.as_uuid(), id(101)).is_none());
+}
+
+#[tokio::test]
+async fn given_an_item_of_an_unknown_kind_when_listed_then_the_listing_is_an_error_of_the_port_with_no_default_text()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let mut unknown_item = notice_item(agent.as_uuid(), 1, "ACCEPTED");
     unknown_item["itemKind"] = json!("ELSE");
     unknown_item["message"] = json!("Something new.");
-    world.jobs.graphql_default(only_unread(vec![
-        notice_item(agent.as_uuid(), 1, "PAUSED"),
-        unknown_item,
-    ]));
-    let context = world.context(agent);
-    let batch = world
-        .inbox()
-        .items(&context, None, NonZeroUsize::new(10).expect("limit"))
+    let error = listed(&world, agent, vec![unknown_item])
         .await
-        .expect("a batch");
-    assert_eq!(batch.items.len(), 2);
-    assert!(text_of(&batch.items[0]).contains("PAUSED"));
-    let second = text_of(&batch.items[1]);
-    assert!(second.contains("ELSE") && second.contains("Something new."));
-    let kinds: Vec<_> = (1..=2)
-        .map(|n| {
-            world
-                .book
-                .listed(agent.as_uuid(), id(100 + n))
-                .expect("recorded")
-                .kind
-        })
-        .collect();
-    assert_eq!(
-        kinds,
-        vec![
-            EntryKind::CallNotice(CallNoticeKind::Unknown),
-            EntryKind::Unknown
-        ]
-    );
+        .expect_err("an error of the port");
+    assert!(!error.is_refusal());
+    assert!(world.book.listed(agent.as_uuid(), id(101)).is_none());
 }
 
 #[tokio::test]
@@ -221,7 +217,7 @@ async fn given_a_malformed_item_for_an_address_when_it_is_listed_then_the_listin
     world.jobs.graphql_default(only_unread(vec![bad]));
     let context = world.context(agent);
     let error = world
-        .inbox()
+        .incoming()
         .items(&context, None, NonZeroUsize::new(10).expect("limit"))
         .await
         .expect_err("a fault");

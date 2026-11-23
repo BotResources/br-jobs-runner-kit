@@ -1,13 +1,13 @@
 const README: &str = include_str!("../README.md");
-const QUICKSTART: &str = include_str!("../examples/run_one_work.rs");
+const QUICKSTART: &str = include_str!("../examples/agent_and_incoming.rs");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 const WORKSPACE: &str = include_str!("../../../Cargo.toml");
 
 #[test]
-fn the_quickstart_of_the_readme_is_the_run_one_work_example_word_for_word() {
+fn the_quickstart_of_the_readme_is_the_agent_and_incoming_example_word_for_word() {
     assert!(
         README.contains(QUICKSTART.trim_end()),
-        "README.md must hold examples/run_one_work.rs as it is"
+        "README.md must hold examples/agent_and_incoming.rs as it is"
     );
 }
 
@@ -66,7 +66,7 @@ fn version_of(line: &str) -> &str {
 #[test]
 fn every_pin_of_the_install_block_is_the_pin_the_crate_is_built_with() {
     let pins = install_block();
-    assert!(pins.len() >= 8, "{pins:?}");
+    assert!(pins.len() >= 4, "{pins:?}");
     for (name, value) in pins.iter().filter(|(name, _)| name != "br-runner-jobs") {
         let line = built_with(name);
         if value.contains("git = ") && !line.contains("path = ") {
@@ -105,7 +105,7 @@ fn the_install_block_holds_every_crate_the_quickstart_names() {
     named.retain(|ident| ident != "std");
     named.sort();
     named.dedup();
-    assert!(named.len() >= 6, "{named:?}");
+    assert!(named.len() >= 3, "{named:?}");
     for ident in named {
         assert!(
             pinned.contains(&ident),

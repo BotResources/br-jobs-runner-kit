@@ -1,10 +1,10 @@
-use br_agentic_contract::InboxPort;
+use br_agentic_contract::IncomingPort;
 use br_llm_messages::EntryId;
 
+use super::support::id;
 use super::{ManualGate, World, cc_item, drained, mark_reads, notice_item, only_unread, yields};
-use crate::book::tests::id;
-use crate::queue::{Gate, QueueReport, Removal, WriteKind};
-use crate::test_double::{Call, ChildCommand};
+use br_runner_jobs_client::test_double::{Call, ChildCommand};
+use br_runner_jobs_client::{Gate, QueueReport, Removal, WriteKind};
 
 fn finishes(world: &World) -> Vec<(uuid::Uuid, uuid::Uuid)> {
     world
@@ -23,7 +23,7 @@ fn finishes(world: &World) -> Vec<(uuid::Uuid, uuid::Uuid)> {
 async fn list_all(world: &World, agent: br_llm_messages::AgentId) {
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .items(
             &context,
             None,
@@ -47,7 +47,7 @@ async fn given_a_call_notice_run_completed_when_the_gate_ends_stored_then_the_fi
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, EntryId::from_uuid(id(101)).expect("entry"))
         .await
         .expect("marked");
@@ -81,7 +81,7 @@ async fn given_a_call_notice_run_completed_when_the_gate_ends_dropped_then_no_fi
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, EntryId::from_uuid(id(101)).expect("entry"))
         .await
         .expect("marked");
@@ -90,7 +90,7 @@ async fn given_a_call_notice_run_completed_when_the_gate_ends_dropped_then_no_fi
     assert!(finishes(&world).is_empty());
     assert!(mark_reads(&world.jobs).is_empty());
     let batch = world
-        .inbox()
+        .incoming()
         .items(
             &context,
             None,
@@ -118,7 +118,7 @@ async fn given_a_gate_that_ends_later_then_the_marker_waits_outside_the_queue_an
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, EntryId::from_uuid(id(201)).expect("entry"))
         .await
         .expect("marked");
@@ -155,7 +155,7 @@ async fn given_a_gate_that_never_ends_then_the_drained_call_stays_pending_and_th
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, EntryId::from_uuid(id(101)).expect("entry"))
         .await
         .expect("marked");
@@ -180,4 +180,13 @@ async fn given_a_gate_that_never_ends_then_the_drained_call_stays_pending_and_th
             .iter()
             .any(|c| matches!(c, Call::Command(ChildCommand::Finish { .. })))
     );
+}
+
+#[tokio::test]
+async fn given_the_ready_gate_when_it_is_asked_then_it_ends_stored_at_once() {
+    let gate = crate::adapter::mark_gate_stored();
+    let thread = super::thread();
+    let entry = EntryId::from_uuid(id(201)).expect("entry");
+    let ended = gate(thread, entry).await;
+    assert_eq!(ended, Gate::Stored);
 }

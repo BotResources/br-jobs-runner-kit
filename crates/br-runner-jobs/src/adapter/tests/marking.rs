@@ -1,15 +1,15 @@
 use std::num::NonZeroUsize;
 
-use br_agentic_contract::InboxPort;
+use br_agentic_contract::IncomingPort;
 use br_llm_messages::{AgentId, EntryId};
 
+use super::support::id;
 use super::{
     ManualGate, World, cc_item, drained, mark_reads, notice_item, only_unread, thread, yields,
 };
 use crate::adapter::{AgentPortAdapter, mark_gate_stored};
-use crate::book::tests::id;
-use crate::queue::Gate;
-use crate::test_double::{Call, ChildCommand};
+use br_runner_jobs_client::Gate;
+use br_runner_jobs_client::test_double::{Call, ChildCommand};
 
 fn entry(n: u128) -> EntryId {
     EntryId::from_uuid(id(n)).expect("entry")
@@ -18,7 +18,7 @@ fn entry(n: u128) -> EntryId {
 async fn list_all(world: &World, agent: AgentId) -> usize {
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .items(&context, None, NonZeroUsize::new(20).expect("limit"))
         .await
         .expect("a batch")
@@ -50,7 +50,7 @@ async fn given_a_listed_mail_when_it_is_marked_then_the_call_returns_at_once_whi
     let context = world.context(agent);
     tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        world.inbox().mark_read(&context, entry(201)),
+        world.incoming().mark_read(&context, entry(201)),
     )
     .await
     .expect("the mark returns at once")
@@ -71,7 +71,7 @@ async fn given_a_stored_gate_when_a_mail_is_marked_then_the_marker_of_the_item_o
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(201))
         .await
         .expect("marked");
@@ -92,12 +92,12 @@ async fn given_a_gate_when_an_item_is_marked_then_it_is_asked_once_with_the_thre
     list_all(&world, agent).await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(201))
         .await
         .expect("marked");
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(201))
         .await
         .expect("marked again");
@@ -124,7 +124,7 @@ async fn given_notices_that_are_not_run_completed_when_they_are_marked_then_no_f
     let context = world.context(agent);
     for n in 1..=4 {
         world
-            .inbox()
+            .incoming()
             .mark_read(&context, entry(100 + n))
             .await
             .expect("marked");
@@ -142,7 +142,7 @@ async fn given_a_pair_the_book_does_not_hold_when_it_is_marked_then_nothing_happ
     let agent = world.registered_agent().await;
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(999))
         .await
         .expect("no error");
@@ -163,13 +163,19 @@ async fn given_an_agent_that_holds_no_inbox_of_the_node_entry_when_it_marks_then
             .expect("agent");
     let context = world.context(agent);
     let error = world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(201))
         .await
         .expect_err("an error");
     assert!(!error.is_refusal());
     let unknown = world.context(AgentId::from_uuid(id(777)).expect("agent"));
-    assert!(world.inbox().mark_read(&unknown, entry(201)).await.is_err());
+    assert!(
+        world
+            .incoming()
+            .mark_read(&unknown, entry(201))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -184,19 +190,50 @@ async fn given_a_mail_with_two_recipient_agents_of_the_run_then_each_marks_its_o
     world.book.record_listed(
         id(72),
         id(201),
-        crate::book::MailEntry {
+        br_runner_jobs_client::MailEntry {
             item_id: id(190),
             child_job_id: None,
-            kind: crate::book::EntryKind::CcNotice,
+            kind: br_runner_jobs_client::EntryKind::CcNotice,
         },
     );
     let context = world.context(agent);
     world
-        .inbox()
+        .incoming()
         .mark_read(&context, entry(201))
         .await
         .expect("marked");
     drained(&world.queue).await;
     assert_eq!(mark_reads(&world.jobs), vec![vec![id(101)]]);
-    assert!(!world.book.is_marked(id(72), id(190)));
+    assert!(!world.book.marked_items(id(72)).contains(&id(190)));
+}
+
+#[tokio::test]
+async fn given_an_agent_that_holds_no_inbox_when_it_lists_then_the_call_is_an_error_of_the_port_and_jobs_is_not_read()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let helper = br_agentic_contract::AgentLabel::new("helper").expect("label");
+    let agent = br_agentic_contract::AgentPort::agent(
+        &world.entry.agent_port(),
+        &super::Snap,
+        super::instance(),
+        &helper,
+    )
+    .await
+    .expect("agent");
+    super::drained(&world.queue).await;
+    let context = world.context(agent);
+    let error = world
+        .incoming()
+        .items(
+            &context,
+            None,
+            std::num::NonZeroUsize::new(5).expect("limit"),
+        )
+        .await
+        .expect_err("an error");
+    assert!(!error.is_refusal());
+    assert_eq!(
+        super::count(&world.jobs, contract_jobs::graphql_roots::UNREAD_ROOT),
+        0
+    );
 }

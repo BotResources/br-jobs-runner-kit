@@ -3,15 +3,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_agentic_contract::{
-    AgentLabel, AgentPort, Fields, InboxContext, InboxItem, InboxPort, InstanceId, MailItem,
-    PortError, Reason, ThreadRef,
+    AgentLabel, AgentPort, Fields, IncomingContext, IncomingItem, IncomingPort, InstanceId,
+    MailItem, PortError, Reason, ThreadRef,
 };
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_llm_messages::EntryId;
-use br_runner_jobs::test_double::{Call, ScriptedJobs, trigger_json, work_from_trigger};
-use br_runner_jobs::{
-    AgentBook, BookLookup, Gate, IgnoreReports, MarkGate, NodeEntry, QueueSettings, book_lookup,
-    mark_gate,
+use br_runner_jobs::{MarkGate, NodeEntry, mark_gate};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs, trigger_json, work_from_trigger};
+use br_runner_jobs_client::{
+    AgentBook, BookLookup, Gate, IgnoreReports, QueueSettings, book_lookup,
 };
 use contract_jobs::graphql_roots::UNREAD_ROOT;
 use serde::{Deserialize, Serialize};
@@ -41,13 +41,13 @@ fn id(n: u128) -> Uuid {
 
 struct Run {
     jobs: Arc<ScriptedJobs>,
-    queue: br_runner_jobs::DeliveryQueue,
+    queue: br_runner_jobs_client::DeliveryQueue,
     book: Arc<AgentBook>,
 }
 
 async fn run() -> Run {
     let jobs = ScriptedJobs::new(
-        br_runner_jobs::RunnerType::new("runner").expect("a runner type"),
+        br_runner_jobs_client::RunnerType::new("runner").expect("a runner type"),
         "instance-a",
     );
     let passport = Passport::human(
@@ -95,7 +95,7 @@ async fn given_a_node_entry_when_the_agent_port_and_the_entry_ask_for_one_key_th
  {
     let run = run().await;
     let entry = NodeEntry::new("node", lookup_of(&run.book));
-    assert!(entry.inbox_port().is_none());
+    assert!(entry.incoming_port().is_none());
     let from_entry = entry.agent_id(&run.book, &label()).expect("an agent");
     let from_port = entry
         .agent_port()
@@ -133,17 +133,17 @@ async fn given_a_node_with_inbox_when_an_item_is_listed_and_marked_then_the_mark
         "items": [{ "itemId": id(101), "seq": 1, "itemKind": "CC_NOTICE", "address": agent.as_uuid(),
             "mailId": id(201), "subject": "subject", "attachments": null, "noticeType": null }],
     } }));
-    let context = InboxContext {
+    let context = IncomingContext {
         instance: instance(),
         thread: ThreadRef::from_uuid(id(901)).expect("thread"),
         agent,
     };
-    let inbox = entry.inbox_port().expect("an inbox");
+    let inbox = entry.incoming_port().expect("an inbox");
     let batch = inbox
         .items(&context, None, NonZeroUsize::new(10).expect("limit"))
         .await
         .expect("a batch");
-    let InboxItem::Mail(MailItem::Cc { subject, .. }) = &batch.items[0] else {
+    let IncomingItem::Mail(MailItem::Cc { subject, .. }) = &batch.items[0] else {
         panic!("{batch:?}");
     };
     assert_eq!(subject, "subject");

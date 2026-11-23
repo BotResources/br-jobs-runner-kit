@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use br_agentic_contract::{AgentLabel, AgentPort, PortError};
 
+use super::support::{id, scripted};
 use super::world::restored_writer;
 use super::{Snap, World, drained, instance, label, yields};
-use crate::adapter::{NodeEntry, book_lookup, mark_gate_stored};
-use crate::book::AgentKey;
-use crate::book::tests::{id, scripted};
-use crate::error::Error;
-use crate::model::AgentDeclaration;
-use crate::test_double::Call;
+use crate::adapter::{NodeEntry, mark_gate_stored};
+use br_runner_jobs_client::AgentDeclaration;
+use br_runner_jobs_client::AgentKey;
+use br_runner_jobs_client::Error;
+use br_runner_jobs_client::book_lookup;
+use br_runner_jobs_client::test_double::Call;
 
 fn registered(world: &World) -> Vec<AgentDeclaration> {
     world
@@ -158,41 +159,39 @@ fn given_a_node_without_inbox_then_it_has_no_inbox_adapter_and_a_node_with_inbox
     let lookup = book_lookup(|_| async { Err(PortError::fault("unused")) });
     assert!(
         NodeEntry::new("node", lookup.clone())
-            .inbox_port()
+            .incoming_port()
             .is_none()
     );
     let with = NodeEntry::with_inbox("node", lookup, label(), mark_gate_stored());
-    assert!(with.inbox_port().is_some());
+    assert!(with.incoming_port().is_some());
 }
 
 #[tokio::test]
-async fn given_a_lookup_that_fails_when_any_inbox_call_is_made_then_each_is_an_error_of_the_port() {
-    use br_agentic_contract::{InboxContext, InboxPort, MailId};
+async fn given_a_lookup_that_fails_when_any_incoming_call_is_made_then_each_is_an_error_of_the_port()
+ {
+    use br_agentic_contract::{IncomingContext, IncomingPort};
     use std::num::NonZeroUsize;
 
     let lookup = book_lookup(|_| async { Err(PortError::fault("no run for this instance")) });
     let entry = NodeEntry::with_inbox("node", lookup, label(), mark_gate_stored());
-    let inbox = entry.inbox_port().expect("an inbox");
-    let context = InboxContext {
+    let inbox = entry.incoming_port().expect("an inbox");
+    let context = IncomingContext {
         instance: instance(),
         thread: super::thread(),
         agent: br_llm_messages::AgentId::from_uuid(id(70)).expect("agent"),
     };
     let one = NonZeroUsize::new(1).expect("limit");
-    let mail = MailId::from_uuid(id(201)).expect("mail");
     let entry_id = br_llm_messages::EntryId::from_uuid(id(201)).expect("entry");
     assert!(inbox.items(&context, None, one).await.is_err());
-    assert!(inbox.wait(&context).await.is_err());
     assert!(inbox.mark_read(&context, entry_id).await.is_err());
-    assert!(inbox.documents(&context, mail).await.is_err());
 }
 
 #[tokio::test]
 async fn given_a_restored_agent_id_that_is_not_a_uuid_v7_then_the_book_is_not_made() {
     let jobs = scripted();
-    let work = crate::book::tests::work(&jobs);
+    let work = super::support::work(&jobs);
     let (queue, _) = work
-        .delivery_queue(crate::book::tests::settings())
+        .delivery_queue(super::support::settings())
         .await
         .expect("a queue");
     let mut restored = restored_writer();
