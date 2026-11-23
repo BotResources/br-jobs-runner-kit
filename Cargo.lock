@@ -550,7 +550,7 @@ dependencies = [
 [[package]]
 name = "contract-threads"
 version = "0.10.0"
-source = "git+https://github.com/BotResources/svc-threads?rev=adc9a5c013c7303b28c585da10648050edad99d9#adc9a5c013c7303b28c585da10648050edad99d9"
+source = "git+https://github.com/BotResources/svc-threads?tag=contract-threads%2Fv0.10.0#6c6eb4fc27b2de6d696b4a147f5ba35ee1f2eff5"
 dependencies = [
  "br-core-integration",
  "br-llm-messages",
