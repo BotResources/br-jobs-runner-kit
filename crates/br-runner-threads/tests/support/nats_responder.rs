@@ -6,7 +6,7 @@ use br_core_integration::{IntegrationCommand, IntegrationEvent};
 use br_util_nats_fabric::event_subject;
 use contract_threads::{
     AiDelivery, FailMessageV2, MessageCommandConfirmed, MessageCommandRefused, MessageStatus,
-    MessageTurn, ReasonCode, StoreMessageV2, ThreadCommandConfirmed, ThreadCommandRefused,
+    MessageTurn, ReasonCode, StoreMessageV3, ThreadCommandConfirmed, ThreadCommandRefused,
     ThreadsEvent,
 };
 use futures::StreamExt;
@@ -170,7 +170,7 @@ fn status_of(arrived: &Received) -> MessageStatus {
     match arrived.command_type() {
         "message.complete" => MessageStatus::Completed,
         "message.fail" => failed_status(arrived),
-        _ => match arrived.payload::<StoreMessageV2>().message {
+        _ => match arrived.payload::<StoreMessageV3>().message {
             MessageTurn::Ai(turn) if matches!(turn.delivery, AiDelivery::Streaming) => {
                 MessageStatus::Streaming
             }

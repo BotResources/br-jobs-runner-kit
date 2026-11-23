@@ -12,8 +12,7 @@ async fn writing_a_message_sends_a_completed_ai_message_with_its_values() {
     let threads = MemoryThreads::new();
     let thread_id = v7();
     let mut message = ai_message(thread_id);
-    let (parent, job, acting, impersonator) = (v7(), v7(), v7(), v7());
-    message.parent_message_id = Some(parent);
+    let (job, acting, impersonator) = (v7(), v7(), v7());
     message.job_id = Some(job);
     message.acting_user_id = Some(acting);
     message.impersonator_id = Some(impersonator);
@@ -31,7 +30,6 @@ async fn writing_a_message_sends_a_completed_ai_message_with_its_values() {
     assert_eq!(command.id, message.command_id);
     assert_eq!(store.thread_id, thread_id);
     assert_eq!(store.message_id, message.turn.id().as_uuid());
-    assert_eq!(store.parent_message_id, Some(parent));
     assert_eq!(store.job_id, Some(job));
     assert_eq!(store.acting_user_id, Some(acting));
     assert_eq!(store.impersonator_id, Some(impersonator));
@@ -46,7 +44,7 @@ async fn writing_a_message_sends_a_completed_ai_message_with_its_values() {
 }
 
 #[tokio::test]
-async fn a_message_with_no_parent_starts_the_tree() {
+async fn a_message_names_no_other_message_and_its_absent_values_are_not_sent() {
     let threads = MemoryThreads::new();
     let message = ai_message(v7());
 
@@ -58,10 +56,11 @@ async fn a_message_with_no_parent_starts_the_tree() {
 
     let command = last_command(&threads);
     let store = store_of(&command.body);
-    assert_eq!(store.parent_message_id, None);
     assert_eq!(store.job_id, None);
     assert_eq!(store.acting_user_id, None);
     assert_eq!(store.impersonator_id, None);
+    let sent = serde_json::to_value(store).expect("json");
+    assert!(sent.get("parent_message_id").is_none(), "{sent}");
 }
 
 #[tokio::test]
@@ -194,8 +193,7 @@ async fn opening_a_stream_sends_a_streaming_message_with_no_turn_and_no_annotati
     let threads = MemoryThreads::new();
     let client = threads.client();
     let mut open = open_request(v7());
-    let (parent, job, acting, impersonator) = (v7(), v7(), v7(), v7());
-    open.parent_message_id = Some(parent);
+    let (job, acting, impersonator) = (v7(), v7(), v7());
     open.job_id = Some(job);
     open.acting_user_id = Some(acting);
     open.impersonator_id = Some(impersonator);
@@ -209,7 +207,6 @@ async fn opening_a_stream_sends_a_streaming_message_with_no_turn_and_no_annotati
     assert_eq!(store.message_id, open.message_id.as_uuid());
     assert_eq!(handle.message_id(), open.message_id.as_uuid());
     assert_eq!(store.thread_id, open.thread_id);
-    assert_eq!(store.parent_message_id, Some(parent));
     assert_eq!(store.job_id, Some(job));
     assert_eq!(store.acting_user_id, Some(acting));
     assert_eq!(store.impersonator_id, Some(impersonator));

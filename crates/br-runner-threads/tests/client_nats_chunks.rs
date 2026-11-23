@@ -6,7 +6,7 @@ use br_core_integration::IntegrationCommand;
 use br_runner_threads::{ClosureKind, Error, MessageStatus, StreamHandle};
 use br_util_nats_fabric::command_subject;
 use contract_threads::{
-    Chunk, ChunkFrame, CompleteMessageV2, FailMessageV2, StoreMessageV2, TURN_CONTENT_ACCUMULATOR,
+    Chunk, ChunkFrame, CompleteMessageV2, FailMessageV2, StoreMessageV3, TURN_CONTENT_ACCUMULATOR,
     ThreadsCommand, chunk_subject, seal_hash,
 };
 use support::client_closing_x::kind_of;
@@ -222,9 +222,9 @@ async fn an_opening_carries_its_job_acting_user_and_impersonator_to_the_command_
     assert_eq!(commands.len(), 1);
     assert_eq!(
         commands[0].subject,
-        command_subject(&StoreMessageV2::coords())
+        command_subject(&StoreMessageV3::coords())
     );
-    let envelope: IntegrationCommand<StoreMessageV2> = commands[0].json();
+    let envelope: IntegrationCommand<StoreMessageV3> = commands[0].json();
     assert_eq!(envelope.command_id, open.command_id);
     assert_eq!(envelope.payload.job_id, Some(job));
     assert_eq!(envelope.payload.acting_user_id, Some(acting));

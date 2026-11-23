@@ -2,7 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
-use contract_threads::{Chunk, CompleteMessageV2, CreateThread, FailMessageV2, StoreMessageV2};
+use contract_threads::{Chunk, CompleteMessageV2, CreateThread, FailMessageV2, StoreMessageV3};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -15,7 +15,7 @@ pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CommandBody {
     CreateThread(CreateThread),
-    Store(StoreMessageV2),
+    Store(StoreMessageV3),
     Complete(CompleteMessageV2),
     Fail(FailMessageV2),
 }

@@ -15,17 +15,20 @@ impl ThreadClient {
         self.context(operations::CONTEXT, variables, query).await
     }
 
-    pub async fn read_context_of_branch(
+    /// Reads the context of a thread up to one of its messages: the
+    /// conversation stops at the message `up_to`, included. A message that
+    /// the thread does not hold gives an empty conversation.
+    pub async fn read_context_up_to(
         &self,
         query: &ContextQuery,
-        branch_tip: Uuid,
+        up_to: Uuid,
     ) -> Result<Option<ThreadContext>, Error> {
         let variables = json!({
             "threadId": query.thread_id,
             "agentId": agent_text(query),
-            "branchTip": branch_tip,
+            "upTo": up_to,
         });
-        self.context(operations::CONTEXT_OF_BRANCH, variables, query)
+        self.context(operations::CONTEXT_UP_TO, variables, query)
             .await
     }
 

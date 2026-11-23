@@ -29,7 +29,6 @@ pub struct Confirmed {
 pub struct WholeMessage {
     pub command_id: Uuid,
     pub thread_id: Uuid,
-    pub parent_message_id: Option<Uuid>,
     pub agent_id: AgentId,
     pub author_name: String,
     pub job_id: Option<Uuid>,
@@ -45,7 +44,6 @@ pub struct OpenStream {
     pub command_id: Uuid,
     pub thread_id: Uuid,
     pub message_id: TurnId,
-    pub parent_message_id: Option<Uuid>,
     pub agent_id: AgentId,
     pub author_name: String,
     pub job_id: Option<Uuid>,

@@ -23,8 +23,6 @@ impl Inner {
                 "the context holds no conversation".to_owned(),
             )));
         };
-        let tip = conversation.turns().last().map(|turn| turn.id().as_uuid());
-        self.slot(*thread).mem.lock().await.tip = tip;
         if conversation.id().as_uuid() == thread.as_uuid() {
             return Ok(conversation);
         }

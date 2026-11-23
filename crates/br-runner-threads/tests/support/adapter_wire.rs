@@ -4,13 +4,13 @@ use br_llm_messages::{
     ResponseMetadata, TextBlock, Turn, TurnEntry, TurnId,
 };
 use br_runner_threads::test_double::{CommandBody, MemoryThreads};
-use contract_threads::{AiDelivery, AiTurn, Chunk, MessageTurn, StoreMessageV2};
+use contract_threads::{AiDelivery, AiTurn, Chunk, MessageTurn, StoreMessageV3};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::ids::{input_turn, notice_entry};
 
-pub fn stores(threads: &MemoryThreads) -> Vec<StoreMessageV2> {
+pub fn stores(threads: &MemoryThreads) -> Vec<StoreMessageV3> {
     threads
         .commands()
         .into_iter()
@@ -21,14 +21,14 @@ pub fn stores(threads: &MemoryThreads) -> Vec<StoreMessageV2> {
         .collect()
 }
 
-pub fn ai_of(store: &StoreMessageV2) -> &AiTurn {
+pub fn ai_of(store: &StoreMessageV3) -> &AiTurn {
     match &store.message {
         MessageTurn::Ai(turn) => turn,
         MessageTurn::User(_) => panic!("a user message, not an AI message"),
     }
 }
 
-pub fn is_streaming(store: &StoreMessageV2) -> bool {
+pub fn is_streaming(store: &StoreMessageV3) -> bool {
     matches!(ai_of(store).delivery, AiDelivery::Streaming)
 }
 

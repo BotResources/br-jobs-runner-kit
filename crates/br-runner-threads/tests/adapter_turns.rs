@@ -38,7 +38,6 @@ async fn an_input_turn_goes_to_threads_as_one_whole_message_under_the_write_cont
     let store = &stores[0];
     assert_eq!(store.message_id, turn.id().as_uuid());
     assert_eq!(store.thread_id, thread.as_uuid());
-    assert_eq!(store.parent_message_id, None);
     assert_eq!(store.job_id, Some(job));
     assert_eq!(store.acting_user_id, Some(user));
     assert_eq!(store.impersonator_id, Some(impersonator));

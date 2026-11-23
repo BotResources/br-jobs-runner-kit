@@ -27,13 +27,11 @@ impl Inner {
         let slot = self.slot(*thread);
         let agent = ctx.agent.as_uuid();
         self.ordered(&slot, move |inner, slot| async move {
-            let mut mem = slot.mem.lock().await;
             let command = wire::store(
                 Uuid::now_v7(),
                 StoreParts {
                     thread_id,
                     message_id: message,
-                    parent_message_id: mem.parent_of(message),
                     job_id: ctx.job_id,
                     acting_user_id: ctx.acting_user_id,
                     impersonator_id: ctx.impersonator_id,
@@ -49,7 +47,6 @@ impl Inner {
             );
             let item = Inner::whole_item(&slot, command, agent, message, entries);
             inner.accept(&slot, item).await?;
-            mem.chained(message);
             Ok(())
         })
         .await

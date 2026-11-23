@@ -5,7 +5,7 @@ use br_core_integration::IntegrationCommand;
 use br_core_kernel::Actor;
 use br_runner_threads::{Cause, Confirmed, Error, MessageStatus};
 use br_util_nats_fabric::command_subject;
-use contract_threads::{CreateThread, ReasonCode, StoreMessageV2, ThreadsCommand};
+use contract_threads::{CreateThread, ReasonCode, StoreMessageV3, ThreadsCommand};
 use serde_json::{Value, json};
 use support::nats_fixtures::*;
 use support::nats_responder::{Reply, Responder};
@@ -69,9 +69,9 @@ async fn a_whole_message_is_confirmed_with_its_status_and_stored_as_a_store_comm
     assert_eq!(commands.len(), 1);
     assert_eq!(
         commands[0].subject,
-        command_subject(&StoreMessageV2::coords())
+        command_subject(&StoreMessageV3::coords())
     );
-    let envelope: IntegrationCommand<StoreMessageV2> = commands[0].json();
+    let envelope: IntegrationCommand<StoreMessageV3> = commands[0].json();
     assert_eq!(envelope.payload.thread_id, message.thread_id);
     assert_eq!(envelope.payload.message_id, message.turn.id().as_uuid());
 }
