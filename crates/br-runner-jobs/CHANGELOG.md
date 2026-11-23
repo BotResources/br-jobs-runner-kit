@@ -6,11 +6,11 @@ Adds the adapter of the harness mail port of `br-agentic-harness-contract` 0.1.0
 
 ### Added
 
-- `MailPortAdapter`, the adapter of the `MailPort` (`items`, `mark_read`, `send`, `documents`), given by `NodeEntry::mail_port`. Listing and marking are those of the incoming adapter, on the same agent book map. Marking hands over the finish of a "Run completed" call notice and then the marker, with no gate. Sending hands the mail into the delivery queue and returns at once. Documents makes one read of the mail and one fetch for each attachment.
+- `MailPortAdapter`, the adapter of the `MailPort` (`items`, `mark_read`, `send`, `documents`), given by `NodeEntry::mail_port`. Listing and marking are those of the incoming adapter, on the same agent book map. Marking hands over the finish of a "Run completed" call notice and then the marker, with no gate. Sending hands the mail into the delivery queue and returns at once, always as the agent of the context: the mail value carries no sender, so the sender rule of the intent has no case to apply. Documents makes one read of the mail and one fetch for each attachment.
 - `NodeEntry::with_mail(node, lookup, label)`, the entry of a node that has an inbox for a runner that uses the harness, with no mark gate. An entry made with a gate gives no mail adapter, and an entry made without one gives no incoming adapter.
 - The example `agent_and_mail`.
 - The dependency on `br-agentic-harness-contract` 0.1.0 (per-crate pin).
-- CI step: `check-bus-access.sh br-runner-jobs --none` fails if the crate depends on the bus client or a bus crate, or names a subject.
+- CI step: `check-bus-access.sh br-runner-jobs --none` fails if the Cargo.toml of the crate lists the bus client or a bus crate directly (plain, table or renamed form), or if the source names a subject. The check is direct only; the client crate carries the bus.
 - Tests for the sentences that had none: a marker held by a gate, delivered, or removed after `Dropped` leaves the item out of the listing and a later Run lists it again; the node entry makes no call to jobs; the constructors of the adapters are not public; the text forms show no Passport, token, credential or Job id of the Work.
 
 ### Changed

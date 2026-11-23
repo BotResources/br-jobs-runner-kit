@@ -88,7 +88,7 @@ fresh_none() {
 
 root="$WORK/none-ok"
 fresh_none "$root"
-expect 0 "ok demo: no bus client" "a crate with no bus at all passes" bash "$GATE" demo --none "$root"
+expect 0 "ok demo: Cargo.toml lists no bus client" "a crate with no bus at all passes" bash "$GATE" demo --none "$root"
 
 root="$WORK/none-nats"
 fresh_none "$root"
@@ -111,6 +111,16 @@ for dependency in 'async-nats = "0.48"' 'br-util-nats-fabric = { version = "0.1"
     printf '%s\n' "$dependency" >>"$root/crates/demo/Cargo.toml"
     expect 1 "lists the bus client or a bus crate" "none mode: the dependency $dependency fails" bash "$GATE" demo --none "$root"
 done
+
+root="$WORK/none-dep-table"
+fresh_none "$root"
+printf '[dependencies.async-nats]\nversion = "0.48"\n' >>"$root/crates/demo/Cargo.toml"
+expect 1 "lists the bus client or a bus crate" "none mode: the table form of the bus client fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-dep-renamed"
+fresh_none "$root"
+printf 'transport = { package = "async-nats", version = "0.48" }\n' >>"$root/crates/demo/Cargo.toml"
+expect 1 "lists the bus client or a bus crate" "none mode: a renamed bus client fails" bash "$GATE" demo --none "$root"
 
 root="$WORK/none-literal"
 fresh_none "$root"

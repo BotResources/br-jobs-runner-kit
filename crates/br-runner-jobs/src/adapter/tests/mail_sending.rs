@@ -110,6 +110,19 @@ async fn given_a_mail_with_attachments_when_it_is_sent_then_each_document_is_upl
         sends(&world)[0]["attachments"].as_array().map(Vec::len),
         Some(2)
     );
+    let roots: Vec<&str> = world
+        .jobs
+        .calls()
+        .iter()
+        .filter_map(|call| match call {
+            Call::Graphql { document, .. } if document.contains(UPLOAD_ATTACHMENT_ROOT) => {
+                Some("upload")
+            }
+            Call::Graphql { document, .. } if document.contains(SEND_MAIL_ROOT) => Some("send"),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(roots, vec!["upload", "upload", "send"]);
 }
 
 #[tokio::test]

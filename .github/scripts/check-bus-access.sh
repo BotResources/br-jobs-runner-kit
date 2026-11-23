@@ -28,7 +28,7 @@ if [ "$module" = "--none" ]; then
             fail "the bus is named in $file"
         fi
     done
-    if grep -E '^(async-nats|async_nats|br-util-nats-fabric|br_util_nats_fabric)[A-Za-z0-9_-]* *[=.]' "$dir/Cargo.toml" >/dev/null; then
+    if grep -E '^(async-nats|async_nats|br-util-nats-fabric|br_util_nats_fabric)[A-Za-z0-9_-]* *[=.]|^\[[a-z.-]*dependencies\.(async-nats|async_nats|br-util-nats-fabric|br_util_nats_fabric)|package *= *"(async-nats|br-util-nats-fabric)"' "$dir/Cargo.toml" >/dev/null; then
         fail "Cargo.toml lists the bus client or a bus crate"
     fi
 elif [ ! -d "$dir/src/$module" ]; then
@@ -62,7 +62,7 @@ if [ "$failed" -ne 0 ]; then
 fi
 
 if [ "$module" = "--none" ]; then
-    echo "ok $crate: no bus client, no bus crate, no Fabric, and src holds no subject, stream or bucket literal"
+    echo "ok $crate: Cargo.toml lists no bus client or bus crate directly, no Fabric, and src holds no subject, stream or bucket literal"
     exit 0
 fi
 
