@@ -20,7 +20,7 @@ pub const PRESENCE_TTL: Duration = Duration::from_secs(90);
 pub const OFFLINE_ENDPOINT: &str = "http://127.0.0.1:9/graphql";
 
 pub struct World {
-    pub server: Server,
+    pub _server: Server,
     pub client: async_nats::Client,
     pub js: Context,
 }
@@ -50,7 +50,11 @@ impl World {
         let server = Server::start();
         let client = server.client().await;
         let js = jetstream::new(client.clone());
-        Self { server, client, js }
+        Self {
+            _server: server,
+            client,
+            js,
+        }
     }
 
     pub async fn ready() -> Self {
@@ -116,20 +120,6 @@ impl World {
             .await;
         self.create_stream(INTEGRATION_CMD, wildcard(&command_subject(&created)), false)
             .await;
-    }
-
-    pub async fn delete_stream(&self, name: &str) {
-        self.js
-            .delete_stream(name)
-            .await
-            .expect("the stream is deleted");
-    }
-
-    pub async fn delete_bucket(&self, name: &str) {
-        self.js
-            .delete_key_value(name)
-            .await
-            .expect("the bucket is deleted");
     }
 
     pub async fn bucket(&self, name: &str) -> kv::Store {

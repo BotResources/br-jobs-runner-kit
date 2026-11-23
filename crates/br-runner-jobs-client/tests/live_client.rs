@@ -1,5 +1,3 @@
-#![allow(dead_code)] // the support is shared with the in-crate tests and each file uses part of it
-
 #[path = "support/live_server.rs"]
 mod live_server;
 #[path = "support/live_standin.rs"]
@@ -176,7 +174,7 @@ async fn given_a_listener_when_claiming_then_the_served_run_becomes_a_work_witho
     let (run_id, job_id) = (Uuid::now_v7(), Uuid::now_v7());
     let reply = serde_json::to_vec(&ClaimReplyV2::served(trigger(run_id, job_id))).expect("json");
     let subject = claim_v2_subject(&SubjectSegment::runner_type("analyst").expect("segment"));
-    let _listener = Responder::start(&world.client, subject, Some(reply)).await;
+    let mut listener = Responder::start(&world.client, subject, Some(reply)).await;
     let work = client
         .claim(Uuid::now_v7(), Duration::from_millis(500))
         .await
@@ -184,6 +182,7 @@ async fn given_a_listener_when_claiming_then_the_served_run_becomes_a_work_witho
         .expect("a run");
     assert_eq!((work.run_id(), work.job_id()), (run_id, job_id));
     assert!(work.ack().await.is_err());
+    assert!(!listener.request().await.is_empty());
 }
 
 #[tokio::test]
@@ -199,7 +198,7 @@ async fn given_a_listener_with_nothing_to_serve_when_claiming_then_none() {
     })
     .expect("json");
     let subject = claim_v2_subject(&SubjectSegment::runner_type("analyst").expect("segment"));
-    let _listener = Responder::start(&world.client, subject, Some(reply)).await;
+    let mut listener = Responder::start(&world.client, subject, Some(reply)).await;
     assert!(
         client
             .claim(Uuid::now_v7(), Duration::from_millis(500))
@@ -207,6 +206,7 @@ async fn given_a_listener_with_nothing_to_serve_when_claiming_then_none() {
             .expect("a reply")
             .is_none()
     );
+    assert!(!listener.request().await.is_empty());
 }
 
 #[tokio::test]

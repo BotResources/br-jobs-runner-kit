@@ -26,7 +26,7 @@ impl WriteSession for ChildWrite<'_> {
 impl WorkSender {
     fn child_command(write: &Write) -> Option<ChildCommand> {
         match write {
-            Write::Create(create) => Some(ChildCommand::Create(create.clone())),
+            Write::Create(create) => Some(ChildCommand::Create(Box::new(create.clone()))),
             Write::Finish {
                 run_id,
                 job_id,

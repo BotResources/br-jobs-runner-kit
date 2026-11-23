@@ -29,7 +29,7 @@ impl Server {
         server
     }
 
-    fn spawn(&mut self) {
+    pub(super) fn spawn(&mut self) {
         let binary = std::env::var("NATS_SERVER_BIN").unwrap_or_else(|_| "nats-server".to_owned());
         self.child = Some(
             Command::new(binary)
@@ -54,11 +54,6 @@ impl Server {
             let _ = child.kill();
             let _ = child.wait();
         }
-    }
-
-    pub fn restart(&mut self) {
-        self.stop();
-        self.spawn();
     }
 
     pub fn url(&self) -> String {

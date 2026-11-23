@@ -1,6 +1,4 @@
 #[path = "../examples/call_a_runner.rs"]
-#[allow(dead_code)]
-// the example has its own main and helpers, unused when it is included as a module
 mod call_a_runner;
 
 use br_runner_jobs_client::test_double::{Answer, MemoryCall, memory_caller, result_ref};
@@ -16,6 +14,11 @@ fn content(message: &str) -> Content {
         message: message.to_owned(),
         attachments: Vec::new(),
     }
+}
+
+#[test]
+fn the_example_main_runs() {
+    call_a_runner::main();
 }
 
 #[tokio::test]

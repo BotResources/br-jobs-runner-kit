@@ -53,7 +53,7 @@ async fn work_over(endpoint: &str, credential: Arc<dyn Credential>) -> (Arc<Scri
 async fn echo(status: u16) -> HttpServer {
     let handler = serve(move |request| {
         let echoed = request.header("authorization").unwrap_or("none").to_owned();
-        Action::Reply(status, format!("rejected for {echoed}").into_bytes())
+        Action::reply(status, format!("rejected for {echoed}").into_bytes())
     });
     HttpServer::start(handler).await
 }

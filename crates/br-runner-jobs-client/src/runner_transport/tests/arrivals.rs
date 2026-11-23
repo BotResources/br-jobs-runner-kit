@@ -4,7 +4,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::cut_state::pull_waiting;
-use super::live_standin::publish_event;
+use super::live_events::publish_event;
 use super::live_world::{World, eventually};
 use super::{arrival_settings, live, next, silent};
 use crate::backend::Backend;

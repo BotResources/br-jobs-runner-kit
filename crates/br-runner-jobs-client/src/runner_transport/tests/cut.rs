@@ -9,7 +9,8 @@ use super::Live;
 use super::arrivals::arrive;
 use super::cut_proxy::Proxy;
 use super::cut_state::{delivered_up_to, last_sequence, pull_waiting};
-use super::live_standin::{publish_trigger, trigger, try_publish_event};
+use super::live_events::try_publish_event;
+use super::live_standin::{publish_trigger, trigger};
 use super::live_world::{WAIT, World, connection_on, eventually};
 use super::next;
 use super::{arrival_settings, live};
@@ -18,7 +19,7 @@ use crate::error::Error;
 use crate::model::CancelEvent;
 
 async fn cut(world: &mut World) {
-    world.server.restart();
+    world.server_mut().restart();
     eventually("the bus answers again", || async {
         tokio::time::timeout(Duration::from_secs(1), world.js.get_stream(TRIGGER_STREAM))
             .await
@@ -227,7 +228,7 @@ async fn given_events_stored_while_the_bus_is_cut_then_each_one_comes_or_the_fee
 async fn given_an_event_written_to_a_connection_that_is_then_cut_when_the_connection_returns_then_the_event_comes()
  {
     let world = World::ready().await;
-    let proxy = Proxy::start(world.server.url()).await;
+    let proxy = Proxy::start(world.server().url()).await;
     let client = async_nats::connect(proxy.url()).await.expect("a client");
     let live = Live::connect(
         crate::RunnerType::new("analyst").expect("a runner type"),

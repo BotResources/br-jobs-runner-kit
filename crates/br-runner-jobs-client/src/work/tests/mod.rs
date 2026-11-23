@@ -91,6 +91,4 @@ pub(super) fn settings() -> QueueSettings {
     }
 }
 
-#[allow(dead_code)] // the stand-in is shared with the tests of the connection crate and each file uses part of it
-#[path = "../../../../br-runner-connection/tests/support/server.rs"]
 pub(super) mod http_server;

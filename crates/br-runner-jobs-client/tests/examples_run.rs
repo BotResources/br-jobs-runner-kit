@@ -1,6 +1,4 @@
 #[path = "../examples/run_one_work.rs"]
-#[allow(dead_code)]
-// the example has its own main and helpers, unused when it is included as a module
 mod run_one_work;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
@@ -99,4 +97,10 @@ async fn the_work_of_run_one_work_ends_with_the_answer_the_saved_state_and_the_c
         })
         .expect("the answer upload");
     assert!(uploaded.contains("received: the tickets"), "{uploaded}");
+}
+
+#[test]
+fn the_example_main_without_arguments_ends_with_the_usage() {
+    let error = run_one_work::main().expect_err("a usage error");
+    assert!(error.to_string().starts_with("usage: run_one_work"));
 }

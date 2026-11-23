@@ -139,7 +139,7 @@ async fn given_an_open_feed_when_its_consumer_is_deleted_then_the_feed_ends_with
 async fn given_triggers_feeds_and_commands_in_use_then_the_only_durable_consumer_is_the_trigger_one()
  {
     use super::commands::{commands_on, create_command};
-    use super::live_standin::publish_event;
+    use super::live_events::publish_event;
     use crate::backend::{Backend, ChildCommand};
     use contract_jobs::event_v2::{JobQueuedV2, RequesterRef};
     use contract_jobs::runner::TRIGGER_STREAM;
@@ -189,7 +189,10 @@ async fn given_triggers_feeds_and_commands_in_use_then_the_only_durable_consumer
         .await;
     };
     let (result, ()) = tokio::join!(
-        live.child_command(ChildCommand::Create(command), super::live_world::WAIT),
+        live.child_command(
+            ChildCommand::Create(Box::new(command)),
+            super::live_world::WAIT
+        ),
         service
     );
     result.map_err(|e| e.to_string()).expect("accepted");

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::commands::commands_on;
 use super::live;
-use super::live_standin::publish_event;
+use super::live_events::publish_event;
 use super::live_world::{WAIT, World};
 use crate::backend::{Backend, ChildCommand};
 use crate::error::{Cause, Error, Operation};

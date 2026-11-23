@@ -51,6 +51,6 @@ pub async fn call_a_runner(
     Ok(answer)
 }
 
-fn main() {
+pub fn main() {
     println!("call_a_runner(&caller, child_job_id, runner_type, request) needs a CallerHandle");
 }

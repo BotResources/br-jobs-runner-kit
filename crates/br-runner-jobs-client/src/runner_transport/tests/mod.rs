@@ -18,15 +18,16 @@ mod started;
 mod surface;
 mod triggers;
 
-#[allow(dead_code)] // the support is shared with the integration tests and each file uses part of it
+#[path = "../../../tests/support/live_events.rs"]
+mod live_events;
 #[path = "../../../tests/support/live_server.rs"]
 mod live_server;
-#[allow(dead_code)] // the support is shared with the integration tests and each file uses part of it
 #[path = "../../../tests/support/live_standin.rs"]
 mod live_standin;
-#[allow(dead_code)] // the support is shared with the integration tests and each file uses part of it
 #[path = "../../../tests/support/live_world.rs"]
 mod live_world;
+#[path = "../../../tests/support/live_world_admin.rs"]
+mod live_world_admin;
 
 use std::time::Duration;
 
