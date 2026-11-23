@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+Released 2026-11-24.
+
+Re-pin on `br-runner-jobs-client` 0.1.1 (was 0.1.0), also in the dev-dependencies. No change of the public surface or of the behaviour. A caller of this crate moves to the same tag of `br-runner-jobs-client`, or the types are two copies.
+
 ## 0.3.0
 
 The node builds on `br-runner-jobs-client` 0.1.0 and no longer depends on `br-runner-jobs`.
