@@ -1,13 +1,14 @@
 # br-runner-threads
 
-The Threads side of a runner. It gives the adapters of the Threads ports of `br-agentic-contract` (`ThreadPortAdapter` for the thread port, `ThreadAccessAdapter` for the thread access, with the response stream and the result stream it gives) and, under them, `ThreadClient`, a typed client of the Threads service that a runner can also use alone. The client does one operation once. The adapter keeps a durable-by-seam queue for each thread and sends again what Threads did not take for a reason that can pass. It knows no job, run, mail, node or tool.
+The Threads side of a runner. It gives the adapters of the Threads ports of `br-agentic-contract` (`ThreadPortAdapter` for the thread port, `ThreadAccessAdapter` for the thread access, with the response stream and the result stream it gives), the adapter of the history port of the harness (`br-agentic-harness-contract`) that the same `ThreadAccessAdapter` is, and, under them, `ThreadClient`, a typed client of the Threads service that a runner can also use alone. The client does one operation once. The adapter keeps a durable-by-seam queue for each thread and sends again what Threads did not take for a reason that can pass. It knows no job, run, mail, node or tool.
 
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.6.1", version = "0.6.1" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.7.0", version = "0.7.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
+br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.1.0", version = "0.1.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
 br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
 uuid = { version = "1", features = ["v7"] }
@@ -161,6 +162,8 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 | `Closing`, `ClosureKind` | A closing request: Completed, BudgetExhausted, Failed, Interrupted or Cancelled. |
 | `NewThread`, `ThreadOrigin`, `WholeMessage`, `OpenStream`, `PlacedAnnotation`, `Annotation`, `AnnotationBody`, `ContextQuery`, `ThreadContext`, `ContextContent`, `Member`, `Resource`, `SetTitle`, `UploadRequest`, `UploadAccess`, `Confirmed`, `MessageStatus` | The request and value types of the client operations. |
 | `ThreadAccessAdapter::new(client, ThreadAccessSettings)` | The adapter of the thread access port, with the thread queue. Also `queue_state()`, `entry_stored(thread, entry)`, `instance_ended(agent)` and `add_annotation(thread, turn_id, after, annotation)`, which are not methods of the port. |
+| `ThreadAccessAdapter` as `HarnessHistory` | The same value is the history port of the harness: every operation of the thread access, and `stored(thread, entry)`, the report of 'Adapter of the harness history port'. One adapter, one store, one thread queue. |
+| `Error::UnknownEntry` | The fault that the history report gives for an entry the adapter has no record of. |
 | `ThreadPortAdapter::new(find)` | The adapter of the thread port: `find` gives the thread id of a snapshot. |
 | `WriteContext`, `WriteContextFn` | The seam that gives agent, author, job, acting user and impersonator for the writes of a thread. |
 | `QueueStore`, `MemoryQueueStore`, `StoredItem` | The seam that keeps the items of the thread queue (`append`, `list`, `remove`) and its in-memory implementation. |
@@ -168,6 +171,15 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 | `QueueState`, `ThreadQueueState`, `OldestItem`, `FailedAttempt` | The state of the thread queue, read at once. |
 | `Error`, `Failure`, `Cause`, `Refusal`, `CredentialFailure`, `CredentialKind` | The single error type and its parts. All are `#[non_exhaustive]`: match with a final `_` arm. |
 | `test_double::MemoryThreads`, `test_double::refusal`, `test_double::failure` (feature `test-double`) | A client over memory that records the commands, the chunks and the GraphQL operations and answers as the caller scripts; `refusal(code, message, command_id)` and `failure(cause, text)` build the `Refusal` and the `Failure` that a script returns. |
+
+## Adapter of the harness history port
+
+- The history port of the harness extends the thread access: the adapter of the thread access is also the adapter of this port, one value, one store, one thread queue. A runner gives it as the thread access to a node and as the history port to the harness. Every rule of the thread access holds for it, unchanged.
+- `stored(thread, entry)` follows the stored signal of `br-agentic-harness-contract` and gives `Stored`, `Dropped`, or a fault of the port (`Error::UnknownEntry`), nothing else. `Stored` only when Threads confirmed the entry: for the whole message of an input turn, when its command is confirmed and not `FAILED`; for an entry written as chunks, when the closing of its message is confirmed and not `FAILED`. A chunk that the bus took is not enough. `Dropped` when an item of the entry was removed after a report, or the closing of its message was refused or confirmed `FAILED`, or the whole message was confirmed `FAILED`. It lasts until a later Run stores the entry again.
+- Until one of these happens the report waits and the mail stays unread. For an entry in an AI turn that is until the closing of the turn, and a turn that is never closed leaves the report waiting. That is allowed.
+- For an entry the adapter has no record of (it holds no item of it and removed none, or it never saw the thread) the report is `UnknownEntry`, never `Stored` and never `Dropped`; the harness leaves the mail unread. Items that a store kept from an earlier adapter count as records.
+- `entry_stored` keeps its 0.6 behaviour for a runner that wires `br-runner-jobs` without the harness: it can answer `Stored` for an unknown entry, and `Stored` for a chunk the bus took.
+- The crate depends on `br-agentic-harness-contract` and resolves one copy of `ThreadAccess` with `br-agentic-contract` (same git url and tag). `tests/harness_history.rs` proves that one adapter value is used as the thread access and as the history port; the tests of 0.6 run unchanged.
 
 ## Bus access
 

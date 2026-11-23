@@ -195,6 +195,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-agentic-harness-contract"
+version = "0.1.0"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness-contract%2Fv0.1.0#c396988efe540070223e1b91d4f2cc39cf798c2f"
+dependencies = [
+ "br-agentic-contract 0.3.0",
+ "br-llm-messages",
+ "thiserror",
+]
+
+[[package]]
 name = "br-core-auth"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/br-rust-common?tag=br-core-auth%2Fv0.1.0#7f028db1498ded2b3c5469bb2baa8e52597100b8"
@@ -423,10 +433,11 @@ dependencies = [
 
 [[package]]
 name = "br-runner-threads"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-nats",
  "br-agentic-contract 0.3.0",
+ "br-agentic-harness-contract",
  "br-core-events",
  "br-core-integration",
  "br-core-kernel",

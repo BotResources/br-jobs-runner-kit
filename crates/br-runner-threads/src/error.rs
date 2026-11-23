@@ -97,6 +97,8 @@ pub enum Error {
     InfraMissing(String),
     #[error("store: {0}")]
     Store(String),
+    #[error("unknown entry: {0}")]
+    UnknownEntry(String),
 }
 
 impl Error {

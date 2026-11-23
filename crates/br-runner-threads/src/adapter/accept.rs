@@ -42,6 +42,7 @@ impl Inner {
             for entry in &item.entries {
                 queue.dropped.remove(entry);
             }
+            queue.note_accepted(&item);
             queue.items.push_back(Queued {
                 item,
                 no,

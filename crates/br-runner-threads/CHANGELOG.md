@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0
+
+The adapter of the history port of the harness (`br-agentic-harness-contract` 0.1.0). Additive; no break.
+
+### Added
+
+- `ThreadAccessAdapter` implements `br_agentic_harness_contract::HarnessHistory`: the same value is the thread access of a node and the history port of the harness (one adapter, one store, one thread queue). `stored(thread, entry)` gives `Stored` only when Threads confirmed the entry (the command of a whole message, not `FAILED`; for chunked entries, the closing of the message, not `FAILED`), `Dropped` when an item of the entry was removed after a report or the closing was refused or `FAILED`, and a fault of the port for an unknown entry. It waits meanwhile; a turn that is never closed leaves it waiting.
+- `Error::UnknownEntry`.
+- Dependency on `br-agentic-harness-contract` 0.1.0 (same git url and tag family as `br-agentic-contract` 0.3.0, one copy of `ThreadAccess`).
+
+### Unchanged
+
+- `entry_stored` keeps its 0.6 behaviour, for runners without the harness: it can answer `Stored` for an unknown entry.
+
 ## 0.6.1
 
 Re-pin on `br-agentic-contract` 0.3.0 (was 0.2.0). No change of the public surface.
