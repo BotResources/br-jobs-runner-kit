@@ -222,6 +222,13 @@ pub struct CallNotice {
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
+pub struct SequencedItem {
+    pub seq: i64,
+    pub item: UnreadItem,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum UnreadItem {
     DirectMail {
         item_id: Uuid,

@@ -6,7 +6,7 @@ use super::lift::call;
 use super::{WorkIds, decode, documents, items};
 use crate::backend::Backend;
 use crate::error::{Error, Operation};
-use crate::model::{Mail, UnreadItem};
+use crate::model::{Mail, SequencedItem, UnreadItem};
 use contract_jobs::graphql_roots::{MAIL_ROOT, UNREAD_ROOT};
 
 pub(crate) async fn unread(
@@ -24,24 +24,44 @@ pub(crate) async fn unread(
         .collect()
 }
 
+pub(crate) async fn unread_sequenced(
+    backend: &dyn Backend,
+    work: &WorkIds,
+    address: Option<Uuid>,
+) -> Result<Vec<SequencedItem>, Error> {
+    let root = unread_root(backend, work, address).await?;
+    decode::list(&root, "items")?
+        .iter()
+        .map(items::sequenced)
+        .collect()
+}
+
 pub(crate) async fn unread_each(
     backend: &dyn Backend,
     work: &WorkIds,
     address: Option<Uuid>,
 ) -> Result<Vec<Read>, Error> {
+    let root = unread_root(backend, work, address).await?;
+    Ok(decode::list(&root, "items")?
+        .iter()
+        .map(items::read)
+        .collect())
+}
+
+async fn unread_root(
+    backend: &dyn Backend,
+    work: &WorkIds,
+    address: Option<Uuid>,
+) -> Result<Value, Error> {
     let variables = json!({ "work": work.json(), "address": address });
-    let root = call(
+    call(
         backend,
         Operation::Read,
         UNREAD_ROOT,
         &documents::UNREAD,
         variables,
     )
-    .await?;
-    Ok(decode::list(&root, "items")?
-        .iter()
-        .map(items::read)
-        .collect())
+    .await
 }
 
 pub(crate) async fn read_mail(

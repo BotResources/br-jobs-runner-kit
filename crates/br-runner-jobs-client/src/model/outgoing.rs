@@ -17,6 +17,29 @@ pub struct NewMailInput {
     pub attachments: Vec<NewMailAttachment>,
 }
 
+impl NewMailInput {
+    pub fn new(
+        mail_id: Uuid,
+        from_address: Uuid,
+        author: impl Into<String>,
+        source_conversation: Uuid,
+        subject: impl Into<String>,
+        body: impl Into<String>,
+    ) -> Self {
+        Self {
+            mail_id,
+            from_address,
+            author: author.into(),
+            source_conversation,
+            subject: subject.into(),
+            body: body.into(),
+            to: Vec::new(),
+            cc: Vec::new(),
+            attachments: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewMailAttachment {
     pub attachment_id: Uuid,

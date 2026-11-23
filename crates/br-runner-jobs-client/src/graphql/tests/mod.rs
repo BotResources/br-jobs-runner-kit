@@ -3,6 +3,7 @@ mod documents;
 mod lifting;
 mod mail;
 mod notices;
+mod seq;
 mod state;
 mod unknown;
 mod unread;
