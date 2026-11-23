@@ -1,8 +1,8 @@
 mod support;
 
 use br_runner_as_tool::{PayloadKind, ToolMode};
-use br_runner_jobs::test_double::{Answer, memory_caller};
-use br_runner_jobs::{CallMode, Error, PayloadForm, Removal};
+use br_runner_jobs_client::test_double::{Answer, memory_caller};
+use br_runner_jobs_client::{CallMode, Error, PayloadForm, Removal};
 use serde_json::json;
 use support::*;
 
@@ -209,7 +209,7 @@ async fn given_two_background_calls_when_called_then_each_has_its_own_child_job_
         .calls()
         .into_iter()
         .filter_map(|call| match call {
-            br_runner_jobs::test_double::MemoryCall::Create(input) => Some(input),
+            br_runner_jobs_client::test_double::MemoryCall::Create(input) => Some(input),
             _ => None,
         })
         .collect();

@@ -2,7 +2,7 @@ use br_agentic_contract::Tool;
 use br_llm_clients_core::{Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{PayloadKind, RunnerTool, ToolMode};
-use br_runner_jobs::{CallerHandle, RunnerType};
+use br_runner_jobs_client::{CallerHandle, RunnerType};
 use uuid::Uuid;
 
 pub fn report_writer_tool(

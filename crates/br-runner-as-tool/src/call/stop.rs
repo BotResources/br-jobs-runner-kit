@@ -1,5 +1,5 @@
 use br_agentic_contract::{Cause, ToolContent, ToolFault};
-use br_runner_jobs::{Error, Refusal};
+use br_runner_jobs_client::{Error, Refusal};
 
 pub(super) enum Stop {
     Flag(String),

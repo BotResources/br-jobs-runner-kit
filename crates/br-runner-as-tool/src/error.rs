@@ -1,5 +1,5 @@
 use br_llm_clients_core::BuildError;
-use br_runner_jobs::Removal;
+use br_runner_jobs_client::Removal;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]

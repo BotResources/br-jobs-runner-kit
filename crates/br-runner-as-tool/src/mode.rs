@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use br_runner_jobs::CallMode;
+use br_runner_jobs_client::CallMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

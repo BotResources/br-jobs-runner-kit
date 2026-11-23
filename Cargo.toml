@@ -45,3 +45,4 @@ br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs
 [patch."https://github.com/BotResources/br-jobs-runner-kit"]
 br-runner-connection = { path = "crates/br-runner-connection" }
 br-runner-jobs = { path = "crates/br-runner-jobs" }
+br-runner-jobs-client = { path = "crates/br-runner-jobs-client" }

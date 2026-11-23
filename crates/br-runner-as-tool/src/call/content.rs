@@ -1,5 +1,5 @@
 use br_agentic_contract::{ToolBlock, ToolContent};
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 
 use super::Stop;
 

@@ -10,8 +10,8 @@ use br_graph_contract::{CancelHandle, CancelToken};
 use br_llm_clients_core::Parameters;
 use br_llm_messages::{OpaqueJson, ToolName};
 use br_runner_as_tool::{RunnerTool, ToolMode};
-use br_runner_jobs::test_double::{MemoryCall, MemoryScript};
-use br_runner_jobs::{
+use br_runner_jobs_client::test_double::{MemoryCall, MemoryScript};
+use br_runner_jobs_client::{
     CallerHandle, Content, CreateChildInput, Error, Operation, RunnerType, SyncEnd,
 };
 use serde_json::Value;

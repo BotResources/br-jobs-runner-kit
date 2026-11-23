@@ -1,21 +1,21 @@
 # br-runner-as-tool
 
-A runner type as a tool. It gives `RunnerTool`: you build it with the runner type (the `RunnerType` value of `br-runner-jobs`), the tool name, the tool description, the argument schema, the tool mode and the caller handle of `br-runner-jobs`, and it gives a `Tool` of `br-agentic-contract`. An agentic node that calls this tool makes the other runner do a piece of work and gets its answer. The crate is on the calling side only: the called runner needs nothing from it, and the crate imports no runner and reads no registry.
+A runner type as a tool. It gives `RunnerTool`: you build it with the runner type (the `RunnerType` value of `br-runner-jobs-client`), the tool name, the tool description, the argument schema, the tool mode and the caller handle of `br-runner-jobs-client`, and it gives a `Tool` of `br-agentic-contract`. An agentic node that calls this tool makes the other runner do a piece of work and gets its answer. The crate is on the calling side only: the called runner needs nothing from it, and the crate imports no runner and reads no registry.
 
 The calling runner is the runner whose agentic node calls the tool. The called runner is the runner type that the tool makes work. "Tool" always means what the model calls; "runner" always means an image and a pod.
 
 ## Install
 
 ```toml
-br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.2.0", version = "0.2.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
-br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
+br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.3.0", version = "0.3.0" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
 uuid = { version = "1", features = ["v7"] }
 ```
 
-A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. For tests and examples, `br-runner-jobs` has the feature `test-double`, which gives an in-memory caller handle (`br_runner_jobs::test_double::memory_caller`) that you script to answer late, never, with an error or with a given end.
+A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. For tests and examples, `br-runner-jobs-client` has the feature `test-double`, which gives an in-memory caller handle (`br_runner_jobs_client::test_double::memory_caller`) that you script to answer late, never, with an error or with a given end.
 
 ## Quickstart
 
@@ -26,7 +26,7 @@ use br_agentic_contract::Tool;
 use br_llm_clients_core::{Parameter, ParameterKind, Parameters};
 use br_llm_messages::ToolName;
 use br_runner_as_tool::{RunnerTool, ToolMode};
-use br_runner_jobs::{CallerHandle, RunnerType};
+use br_runner_jobs_client::{CallerHandle, RunnerType};
 
 pub fn analyst_tool(caller: CallerHandle) -> Result<Tool, Box<dyn std::error::Error>> {
     let question = Parameter::new(
@@ -58,7 +58,7 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 
 | Item | Role |
 |---|---|
-| `RunnerTool::new(runner_type, name, description, parameters, mode, caller)` | The required inputs. `runner_type` is the `RunnerType` of `br-runner-jobs`, `name` is a `ToolName`, `parameters` are the `Parameters` of `br-llm-clients-core`, `caller` is the `CallerHandle` of the run. |
+| `RunnerTool::new(runner_type, name, description, parameters, mode, caller)` | The required inputs. `runner_type` is the `RunnerType` of `br-runner-jobs-client`, `name` is a `ToolName`, `parameters` are the `Parameters` of `br-llm-clients-core`, `caller` is the `CallerHandle` of the run. |
 | `.config(value)`, `.max_attempts(count)` | The configuration of the child Job and the count of Runs that jobs may make for it. Both go to the create as given. |
 | `.payload_kind(kind)`, `.keep_result(flag)` | `PayloadKind::Inline` (default) or `PayloadKind::Kept`; the keep flag of the Result read (default off). |
 | `.payload_builder(function)`, `.result_processor(function)` | The two async functions of the author. |
@@ -153,10 +153,10 @@ The other two examples are in `examples/` and run in the tests: `background_tool
 ## Limits
 
 - The crate does not know whether jobs accepted an upload or a create in background mode.
-- The Result of the called runner is the `Content` that `br-runner-jobs` gives (a message and attachments). A message that holds JSON is given as that text.
+- The Result of the called runner is the `Content` that `br-runner-jobs-client` gives (a message and attachments). A message that holds JSON is given as that text.
 - A sync call whose child Job is cancelled by someone else ends as a cancelled end (an error flag). When the same cancel removes the caller, jobs gives no end: the call then ends at the cancel view, or as a fault when the book of the run is dropped.
-- A completed end that holds neither an inline Result nor a reference is given by the live `br-runner-jobs` as `Unreadable`, not as an end of the sync call. The call then gives a fault and one cancel.
+- A completed end that holds neither an inline Result nor a reference is given by the live `br-runner-jobs-client` as `Unreadable`, not as an end of the sync call. The call then gives a fault and one cancel.
 - An end of the sync call of a kind this crate does not know is a fault (`UnknownEnd`).
 - A create removed from the queue without a refusal (`DependsOnRemoved`, `LeftUnsent`) is a fault whose cause is `CreateRemoved`.
 - A `Tool` used after its run ended gives what the caller handle gives; the crate does not check it.
-- The tests and the examples use the in-memory caller side of `br-runner-jobs`: no bus, no GraphQL.
+- The tests and the examples use the in-memory caller side of `br-runner-jobs-client`: no bus, no GraphQL.

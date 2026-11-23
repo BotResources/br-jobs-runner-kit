@@ -1,5 +1,5 @@
 use br_agentic_contract::{CancelView, ToolBlock, ToolContent};
-use br_runner_jobs::WriteEnd;
+use br_runner_jobs_client::WriteEnd;
 use uuid::Uuid;
 
 use super::prepare::Prepared;

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+Uses `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0. The crate no longer depends on `br-runner-jobs`. The behavior of a call is the one of 0.2.0.
+
+### Breaking
+
+- `RunnerTool::new` takes the `CallerHandle` of `br-runner-jobs-client`, the runner type is the `RunnerType` of `br-runner-jobs-client`, the result processor takes its `Content`, and `RunnerToolError`, `CreateRemoved` and `UnknownEnd` hold its types; the crate no longer resolves `br-runner-jobs`.
+- The `Tool` is the `Tool` of `br-agentic-contract` 0.3.0.
+
+### Added
+
+- A test that proves the crate has no dependency on `br-runner-jobs`.
+
 ## 0.2.0
 
 ### Changed

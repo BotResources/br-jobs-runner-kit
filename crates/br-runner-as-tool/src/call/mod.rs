@@ -10,7 +10,7 @@ mod sync_call;
 
 use br_agentic_contract::{CancelView, PortFuture, ResultStream, ToolCode, ToolContent, ToolFault};
 use br_llm_messages::OpaqueJson;
-use br_runner_jobs::{CallerHandle, RunnerType};
+use br_runner_jobs_client::{CallerHandle, RunnerType};
 use serde_json::Value;
 
 use crate::author::{PayloadBuilder, ResultProcessor};
