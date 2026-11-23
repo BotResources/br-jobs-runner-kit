@@ -118,3 +118,43 @@ async fn given_a_listing_in_pages_when_the_cursor_is_asked_then_it_carries_the_s
     assert_eq!(second.next, Some(Cursor::new(format!("8:{}", id(120)))));
     assert_eq!(count(&world.jobs, UNREAD_ROOT), 1);
 }
+
+#[tokio::test]
+async fn given_a_cursor_that_is_not_a_position_when_the_page_is_asked_then_the_error_is_a_fault_and_jobs_is_not_called()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let context = world.context(agent);
+    let cursor = Cursor::new("not a position");
+    let error = world
+        .incoming()
+        .items(
+            &context,
+            Some(&cursor),
+            NonZeroUsize::new(2).expect("a limit"),
+        )
+        .await
+        .expect_err("an error");
+    assert!(!error.is_refusal());
+    assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
+}
+
+#[tokio::test]
+async fn given_a_plain_item_id_cursor_when_the_page_is_asked_then_the_error_is_a_fault_and_jobs_is_not_called()
+ {
+    let world = World::new(mark_gate_stored()).await;
+    let agent = world.registered_agent().await;
+    let context = world.context(agent);
+    let cursor = Cursor::new(id(101).to_string());
+    let error = world
+        .incoming()
+        .items(
+            &context,
+            Some(&cursor),
+            NonZeroUsize::new(2).expect("a limit"),
+        )
+        .await
+        .expect_err("an error");
+    assert!(!error.is_refusal());
+    assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
+}

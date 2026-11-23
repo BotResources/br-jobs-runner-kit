@@ -69,22 +69,6 @@ async fn given_a_cursor_the_adapter_no_longer_holds_when_the_next_page_is_asked_
 }
 
 #[tokio::test]
-async fn given_a_cursor_that_is_not_an_item_id_when_the_page_is_asked_then_the_error_is_a_fault_and_jobs_is_not_called()
- {
-    let world = World::new(mark_gate_stored()).await;
-    let agent = world.registered_agent().await;
-    let context = world.context(agent);
-    let cursor = Cursor::new("not a position");
-    let error = world
-        .incoming()
-        .items(&context, Some(&cursor), limit(2))
-        .await
-        .expect_err("an error");
-    assert!(!error.is_refusal());
-    assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
-}
-
-#[tokio::test]
 async fn given_a_new_agent_whose_registration_is_queued_when_it_is_listed_then_the_inbox_is_empty_and_jobs_gets_no_call()
  {
     let jobs = scripted();
