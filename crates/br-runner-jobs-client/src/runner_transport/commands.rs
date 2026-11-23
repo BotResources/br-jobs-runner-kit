@@ -97,7 +97,7 @@ impl Live {
 
     pub(super) fn child(&self, command: ChildCommand) -> Box<dyn ChildSession + '_> {
         match command {
-            ChildCommand::Create(create) => self.create_child(*create),
+            ChildCommand::Create(create) => self.create_child(create),
             ChildCommand::Finish {
                 command_id,
                 job_id,

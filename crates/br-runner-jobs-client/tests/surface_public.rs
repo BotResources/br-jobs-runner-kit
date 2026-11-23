@@ -5,9 +5,9 @@ use br_agentic_contract::{InstanceId, PortError};
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_runner_jobs_client::test_double::{ScriptedJobs, trigger_json, work_from_trigger};
 use br_runner_jobs_client::{
-    AgentBook, AgentKey, Backend, BookLookup, EntryKind, Gate, IgnoreReports, MailEntry,
-    QueueSettings, QueueWriter, Recipients, RunnerType, Wake, Work, WorkCore, WorkIds, Write,
-    WriteKind, book_lookup,
+    AgentBook, AgentKey, BookLookup, EntryKind, Gate, IgnoreReports, MailEntry, QueueSettings,
+    QueueWriter, Recipients, RunnerType, Wake, Work, WorkCore, WorkIds, Write, WriteKind,
+    book_lookup,
 };
 use uuid::Uuid;
 
@@ -89,7 +89,7 @@ async fn given_a_book_when_an_adapter_library_uses_its_public_methods_then_the_s
     };
     book.keep_recipients(id(32), recipients.clone());
     assert_eq!(book.recipients(id(32)), Some(recipients));
-    assert_eq!(book.core().run_id, id(2));
+    assert_eq!(book.core().run_id(), id(2));
 }
 
 #[tokio::test]
@@ -166,7 +166,5 @@ async fn given_a_work_when_its_core_is_read_then_the_ids_of_a_graphql_call_are_t
     assert_eq!(ids.run_id, id(2));
     assert_eq!(ids.instance_key, "instance-a");
     assert_eq!(ids.json()["instanceKey"], "instance-a");
-    let backend: &dyn Backend = core.backend.as_ref();
-    assert_eq!(backend.instance_key(), "instance-a");
-    assert_eq!(backend.runner_type(), &runner_type());
+    assert_eq!(core.run_id(), id(2));
 }

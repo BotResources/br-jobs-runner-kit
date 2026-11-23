@@ -6,16 +6,17 @@ use uuid::Uuid;
 
 use crate::backend::Backend;
 use crate::graphql::WorkIds;
+use crate::mail::MailHandle;
 
 pub struct WorkCore {
-    pub backend: Arc<dyn Backend>,
-    pub job_id: Uuid,
-    pub run_id: Uuid,
-    pub parent_job_id: Uuid,
-    pub initial_job_id: Uuid,
-    pub passport_json: Value,
-    pub queue_made: AtomicBool,
-    pub book_made: AtomicBool,
+    pub(crate) backend: Arc<dyn Backend>,
+    pub(crate) job_id: Uuid,
+    pub(crate) run_id: Uuid,
+    pub(crate) parent_job_id: Uuid,
+    pub(crate) initial_job_id: Uuid,
+    pub(crate) passport_json: Value,
+    pub(crate) queue_made: AtomicBool,
+    pub(crate) book_made: AtomicBool,
 }
 
 impl WorkCore {
@@ -25,6 +26,14 @@ impl WorkCore {
             run_id: self.run_id,
             instance_key: self.backend.instance_key().to_owned(),
         }
+    }
+
+    pub fn run_id(&self) -> Uuid {
+        self.run_id
+    }
+
+    pub fn mail_handle(self: &Arc<Self>) -> MailHandle {
+        MailHandle::new(Arc::clone(self))
     }
 
     pub(crate) fn claim_once(flag: &AtomicBool, what: &str) -> Result<(), crate::Error> {

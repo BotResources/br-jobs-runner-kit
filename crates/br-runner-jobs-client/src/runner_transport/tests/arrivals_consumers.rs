@@ -189,10 +189,7 @@ async fn given_triggers_feeds_and_commands_in_use_then_the_only_durable_consumer
         .await;
     };
     let (result, ()) = tokio::join!(
-        live.child_command(
-            ChildCommand::Create(Box::new(command)),
-            super::live_world::WAIT
-        ),
+        live.child_command(ChildCommand::Create(command), super::live_world::WAIT),
         service
     );
     result.map_err(|e| e.to_string()).expect("accepted");

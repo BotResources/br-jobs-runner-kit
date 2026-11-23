@@ -112,7 +112,7 @@ async fn given_a_service_that_queues_when_creating_then_ok_and_the_command_is_th
         .await;
     };
     let (result, ()) = tokio::join!(
-        live.child_command(ChildCommand::Create(Box::new(command)), WAIT),
+        live.child_command(ChildCommand::Create(command), WAIT),
         service
     );
     result.map_err(|e| e.to_string()).expect("accepted");
@@ -149,7 +149,7 @@ async fn given_a_service_that_rejects_the_creation_when_creating_then_refused_wi
         .await;
     };
     let (result, ()) = tokio::join!(
-        live.child_command(ChildCommand::Create(Box::new(command)), WAIT),
+        live.child_command(ChildCommand::Create(command), WAIT),
         service
     );
     match result.expect_err("refused") {
@@ -191,10 +191,7 @@ async fn given_an_outcome_of_another_command_when_creating_then_it_is_not_taken_
         .await;
     };
     let (result, ()) = tokio::join!(
-        live.child_command(
-            ChildCommand::Create(Box::new(command)),
-            Duration::from_millis(600)
-        ),
+        live.child_command(ChildCommand::Create(command), Duration::from_millis(600)),
         service
     );
     match result.expect_err("no outcome of ours") {

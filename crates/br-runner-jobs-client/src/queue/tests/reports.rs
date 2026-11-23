@@ -32,10 +32,10 @@ fn given_a_create_with_secrets_when_it_is_formatted_whole_then_the_passport_is_n
         Write::Create(child) => child.clone(),
         other => panic!("{other:?}"),
     });
-    let command = crate::backend::ChildCommand::Create(Box::new(match create {
+    let command = crate::backend::ChildCommand::Create(match create {
         Write::Create(child) => child,
         other => panic!("{other:?}"),
-    }));
+    });
     for text in [
         format!("{wrapped:?}"),
         format!("{command:?}"),

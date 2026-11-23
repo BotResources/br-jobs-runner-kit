@@ -52,7 +52,7 @@ async fn given_a_create_whose_outcome_comes_between_two_attempts_then_the_next_a
     .await;
     let command = create_command(Uuid::now_v7(), Uuid::now_v7());
     let (command_id, job_id) = (command.command_id, command.job_id);
-    let mut session = live.child_session(ChildCommand::Create(Box::new(command)));
+    let mut session = live.child_session(ChildCommand::Create(command));
     silence(attempt(session.as_mut(), SHORT).await);
     publish_event(
         &world.js,
@@ -172,7 +172,7 @@ async fn given_no_outcome_for_two_attempts_then_each_attempt_sends_and_an_outcom
     .await;
     let command = create_command(Uuid::now_v7(), Uuid::now_v7());
     let (command_id, job_id) = (command.command_id, command.job_id);
-    let mut session = live.child_session(ChildCommand::Create(Box::new(command)));
+    let mut session = live.child_session(ChildCommand::Create(command));
     silence(attempt(session.as_mut(), SHORT).await);
     silence(attempt(session.as_mut(), SHORT).await);
     let service = async {
@@ -204,7 +204,7 @@ async fn given_an_outcome_wait_shorter_than_the_look_then_the_command_is_still_s
     )
     .await;
     let command = create_command(Uuid::now_v7(), Uuid::now_v7());
-    let mut session = live.child_session(ChildCommand::Create(Box::new(command)));
+    let mut session = live.child_session(ChildCommand::Create(command));
     silence(attempt(session.as_mut(), SHORT).await);
     let tight = Duration::from_millis(15);
     let _ = tokio::time::timeout(tight, session.attempt(tight)).await;

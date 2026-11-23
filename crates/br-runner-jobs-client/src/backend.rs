@@ -100,9 +100,11 @@ impl std::fmt::Debug for CreateChild {
     }
 }
 
+// the variant keeps the 0.2 shape that its importers match on
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChildCommand {
-    Create(Box<CreateChild>),
+    Create(CreateChild),
     Finish {
         command_id: Uuid,
         job_id: Uuid,
