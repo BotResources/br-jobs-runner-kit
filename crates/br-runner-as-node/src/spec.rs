@@ -1,4 +1,4 @@
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]

@@ -3,8 +3,8 @@ mod support;
 use std::sync::Arc;
 
 use br_graph_contract::{CancelToken, Cause, Event};
-use br_runner_jobs::test_double::Answer;
-use br_runner_jobs::{Removal, SyncEnd};
+use br_runner_jobs_client::test_double::Answer;
+use br_runner_jobs_client::{Removal, SyncEnd};
 use support::*;
 use tokio::sync::Notify;
 
@@ -72,7 +72,7 @@ async fn given_a_delivered_create_when_the_cancel_view_fires_then_one_cancel_fol
     );
     assert!(matches!(
         rig.script.calls().last(),
-        Some(br_runner_jobs::test_double::MemoryCall::Cancel { job_id, .. }) if *job_id == create.job_id
+        Some(br_runner_jobs_client::test_double::MemoryCall::Cancel { job_id, .. }) if *job_id == create.job_id
     ));
 }
 

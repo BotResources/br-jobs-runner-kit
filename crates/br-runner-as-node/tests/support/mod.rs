@@ -11,8 +11,8 @@ use br_graph_contract::{
     Reason, State,
 };
 use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
-use br_runner_jobs::test_double::{MemoryCall, MemoryScript, memory_caller};
-use br_runner_jobs::{CallerHandle, Content};
+use br_runner_jobs_client::test_double::{MemoryCall, MemoryScript, memory_caller};
+use br_runner_jobs_client::{CallerHandle, Content};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -149,15 +149,15 @@ pub fn hung_response(source: impl CallerSource, started: Arc<Notify>) -> RunnerA
     )
 }
 
-pub fn completed(message: &str) -> br_runner_jobs::SyncEnd {
-    br_runner_jobs::SyncEnd::Completed {
+pub fn completed(message: &str) -> br_runner_jobs_client::SyncEnd {
+    br_runner_jobs_client::SyncEnd::Completed {
         inline: Some(content(message)),
         result_ref: None,
     }
 }
 
-pub fn a_jobs_refusal(reason: &str) -> br_runner_jobs::Error {
-    br_runner_jobs::Error::refused(br_runner_jobs::Operation::Create, reason, "")
+pub fn a_jobs_refusal(reason: &str) -> br_runner_jobs_client::Error {
+    br_runner_jobs_client::Error::refused(br_runner_jobs_client::Operation::Create, reason, "")
 }
 
 pub async fn started(started: &Notify) {
@@ -253,7 +253,7 @@ pub async fn stays_pending<T>(future: impl Future<Output = T>) -> bool {
         .is_err()
 }
 
-pub async fn the_create(script: &MemoryScript) -> br_runner_jobs::CreateChildInput {
+pub async fn the_create(script: &MemoryScript) -> br_runner_jobs_client::CreateChildInput {
     within(async {
         loop {
             for call in script.calls() {

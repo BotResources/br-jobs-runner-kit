@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use br_graph_contract::{CancelView, Event, EventSender, Fields, InputReader, InstanceId, State};
-use br_runner_jobs::{CallMode, CallerHandle, CreateChildInput, PayloadForm, WriteEnd};
+use br_runner_jobs_client::{CallMode, CallerHandle, CreateChildInput, PayloadForm, WriteEnd};
 use uuid::Uuid;
 
 use crate::error::Error;

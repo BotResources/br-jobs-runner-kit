@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use br_graph_contract::{Cause, InstanceId, State};
 use br_runner_as_node::{Error, JobSpec, Payload, RunnerAsNode};
-use br_runner_jobs::test_double::Answer;
-use br_runner_jobs::{Error as JobsError, Removal, SyncEnd};
+use br_runner_jobs_client::test_double::Answer;
+use br_runner_jobs_client::{Error as JobsError, Removal, SyncEnd};
 use support::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -71,7 +71,7 @@ async fn given_a_response_function_that_fails_when_the_runner_ends_then_the_even
 async fn given_a_caller_source_that_fails_when_the_instance_runs_then_the_event_failed_holds_its_error_as_the_source_and_no_call_is_made()
  {
     let node = standard(|_id: InstanceId| async {
-        Err::<br_runner_jobs::CallerHandle, Cause>(Box::new(Own))
+        Err::<br_runner_jobs_client::CallerHandle, Cause>(Box::new(Own))
     });
     let token = br_graph_contract::CancelToken::new();
     let mut run = start(&node, token.view()).await;

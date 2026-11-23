@@ -1,4 +1,6 @@
-use br_runner_jobs::{Content, FailureReportView, Refusal as JobsRefusal, ResultRef, SyncEnd};
+use br_runner_jobs_client::{
+    Content, FailureReportView, Refusal as JobsRefusal, ResultRef, SyncEnd,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

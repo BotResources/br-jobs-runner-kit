@@ -1,6 +1,6 @@
 use br_graph_contract::{Fields, Reason};
 use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

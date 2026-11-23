@@ -2,8 +2,8 @@ mod support;
 
 use br_graph_contract::Event;
 use br_runner_as_node::{Outcome, Refusal};
-use br_runner_jobs::test_double::{Answer, MemoryCall, result_ref};
-use br_runner_jobs::{CallMode, PayloadForm, Removal, SyncEnd};
+use br_runner_jobs_client::test_double::{Answer, MemoryCall, result_ref};
+use br_runner_jobs_client::{CallMode, PayloadForm, Removal, SyncEnd};
 use support::*;
 use uuid::Uuid;
 

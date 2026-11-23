@@ -5,8 +5,8 @@ mod support;
 mod call_a_runner_as_node;
 
 use br_graph_contract::{CancelToken, Event, Input, InstanceId, Node, State};
-use br_runner_jobs::SyncEnd;
-use br_runner_jobs::test_double::Answer;
+use br_runner_jobs_client::SyncEnd;
+use br_runner_jobs_client::test_double::Answer;
 use call_a_runner_as_node::{Review, call_a_runner_as_node};
 use support::*;
 use uuid::Uuid;

@@ -9,15 +9,15 @@ The node is of kind `programmatic` and of subkind `runner_call`. It is generic o
 ## Install
 
 ```toml
-br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.2.0", version = "0.2.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
+br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.3.0", version = "0.3.0" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs`, and the types of `br-graph-contract`. `RunnerType`, the runner type of `br-runner-jobs`, is re-exported. Of the libraries of the platform, this crate imports at run time `br-graph-contract` and `br-runner-jobs` only.
+A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The public API names `CallerHandle`, `Content`, `ResultRef` and `FailureReportView` of `br-runner-jobs-client`, and the types of `br-graph-contract`. `RunnerType`, the runner type of `br-runner-jobs-client`, is re-exported. Of the libraries of the platform, this crate imports at run time `br-graph-contract` and `br-runner-jobs-client` only.
 
 ## Quickstart
 
@@ -26,7 +26,7 @@ This is `examples/call_a_runner_as_node.rs`. It makes a node that sends the ques
 ```rust,no_run
 use br_graph_contract::{Fields, Reason};
 use br_runner_as_node::{CallerSource, JobSpec, Outcome, Payload, RunnerAsNode, RunnerType};
-use br_runner_jobs::Content;
+use br_runner_jobs_client::Content;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -120,7 +120,7 @@ If the input end is dropped before any input comes, or the event end is dropped,
 
 ### Waits and hand-overs
 
-The node blocks only where it cannot go on without the answer: the caller source, the end, and your two functions. The upload, the create, the finish and the cancel are handed over with no wait; the delivery queue of `br-runner-jobs` sends them in hand-over order and sends a call again when it must. The node adds no timeout and no retry count and sends nothing again. The cancel view ends every wait of the node, the waits for your two functions included.
+The node blocks only where it cannot go on without the answer: the caller source, the end, and your two functions. The upload, the create, the finish and the cancel are handed over with no wait; the delivery queue of `br-runner-jobs-client` sends them in hand-over order and sends a call again when it must. The node adds no timeout and no retry count and sends nothing again. The cancel view ends every wait of the node, the waits for your two functions included.
 
 The end of the create is heard while the node waits for the end of the child Job:
 
@@ -157,7 +157,7 @@ The response function takes the state and the `Outcome`, may be async, and gives
 | `Cancelled { message }` | a party other than this node cancelled the child Job, and this node stays alive: jobs gives the end from the cancel notice. It is not the cancel of this node, whose cancel view gives the event `Cancelled` and no Outcome. If a cancel ends this node too and the end reaches the node first, your response function gets `Cancelled`, and the cancel view then ends its wait. You decide what it means, as for `Failed`; the node hands over no finish and no cancel for it |
 | `Refusal(Refusal)` | the create ended `Refused`: the `reason` and the `message` of jobs. It is not the event `Refused` |
 
-The library never decodes or fetches a Result, and never decides what a failure or a refusal means. A Result reference passes on as it came, and an inline Result is given in the form of `br-runner-jobs`; either may go in the state, and a later node may read a Result reference with the caller handle. The node hands over the finish before it calls your response function; whether a Result reference can still be read after the finish is decided by the jobs service, not by this library. You may turn a failed end into an update (an item of a map-reduce marked failed) or into an error. An update goes in the event `Result`, whatever the Outcome was; an error goes in the event `Failed`, unchanged.
+The library never decodes or fetches a Result, and never decides what a failure or a refusal means. A Result reference passes on as it came, and an inline Result is given in the form of `br-runner-jobs-client`; either may go in the state, and a later node may read a Result reference with the caller handle. The node hands over the finish before it calls your response function; whether a Result reference can still be read after the finish is decided by the jobs service, not by this library. You may turn a failed end into an update (an item of a map-reduce marked failed) or into an error. An update goes in the event `Result`, whatever the Outcome was; an error goes in the event `Failed`, unchanged.
 
 ## Caller source
 
@@ -165,7 +165,7 @@ The caller handle depends on the instance, as one graph serves many Runs. A call
 
 ## Faults
 
-A fault fails the instance with the event `Failed`, carrying an `Error`. The error holds the error of the caller source or of `br-runner-jobs` as its source when it has one (`UnknownEnd` and some `CreateRemoved` cases have none), and names no error type of `br-runner-jobs`.
+A fault fails the instance with the event `Failed`, carrying an `Error`. The error holds the error of the caller source or of `br-runner-jobs-client` as its source when it has one (`UnknownEnd` and some `CreateRemoved` cases have none), and names no error type of `br-runner-jobs-client`.
 
 | `Error` | Cause | Cancel handed over |
 |---|---|---|
@@ -204,7 +204,7 @@ Put a `RunnerAsNode` as the internal node of the map-reduce: each element gets a
 
 ## Testing your node
 
-The `test-double` feature of `br-runner-jobs` gives `memory_caller()`, a caller handle with a script: answer each write, give an end for a child Job id, and read the recorded calls. The child Job id is made by the node, so read it from the recorded create and then give the end:
+The `test-double` feature of `br-runner-jobs-client` gives `memory_caller()`, a caller handle with a script: answer each write, give an end for a child Job id, and read the recorded calls. The child Job id is made by the node, so read it from the recorded create and then give the end:
 
 A refusal can be made with `Refusal::new(reason, message)`, so you can call your response function with `Outcome::Refusal(Refusal::new("busy", "come back later"))` and check the update it gives.
 

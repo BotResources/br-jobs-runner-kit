@@ -2,7 +2,7 @@ mod support;
 
 use std::sync::Arc;
 
-use br_runner_jobs::test_double::Answer;
+use br_runner_jobs_client::test_double::Answer;
 use support::*;
 use tokio::sync::Notify;
 

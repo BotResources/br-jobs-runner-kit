@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+The node builds on `br-runner-jobs-client` 0.1.0 and no longer depends on `br-runner-jobs`.
+
+### Breaking
+
+- `RunnerType` is re-exported from `br-runner-jobs-client`. `RunnerAsNode::new` takes that `RunnerType`, and the caller source gives the `CallerHandle` of `br-runner-jobs-client` 0.1.0. A caller of this crate moves to the same tag of `br-runner-jobs-client`, or the types are two copies.
+- Of the libraries of the platform, the crate imports `br-graph-contract` and `br-runner-jobs-client` only. `br-runner-jobs` is no longer a dependency, also in the dev-dependencies: the tests use the `test-double` feature of `br-runner-jobs-client`.
+
 ## 0.2.0
 
 Released 2026-11-02.

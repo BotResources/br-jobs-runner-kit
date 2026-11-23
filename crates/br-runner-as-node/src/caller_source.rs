@@ -2,7 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use br_graph_contract::{Cause, InstanceId};
-use br_runner_jobs::CallerHandle;
+use br_runner_jobs_client::CallerHandle;
 
 pub type CallerFuture = Pin<Box<dyn Future<Output = Result<CallerHandle, Cause>> + Send>>;
 

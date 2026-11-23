@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_graph_contract::Event;
-use br_runner_jobs::test_double::{
+use br_runner_jobs_client::test_double::{
     Call, ChildCommand, ScriptedJobs, trigger_json, work_from_trigger,
 };
-use br_runner_jobs::{Arrival, IgnoreReports, QueueSettings, RunnerType, SyncEnd};
+use br_runner_jobs_client::{Arrival, IgnoreReports, QueueSettings, RunnerType, SyncEnd};
 use serde_json::{Value, json};
 use support::*;
 use uuid::Uuid;
@@ -27,8 +27,8 @@ fn fails(root: &str, reason: &str) -> Value {
 
 struct Stack {
     jobs: Arc<ScriptedJobs>,
-    book: br_runner_jobs::AgentBook,
-    queue: br_runner_jobs::DeliveryQueue,
+    book: br_runner_jobs_client::AgentBook,
+    queue: br_runner_jobs_client::DeliveryQueue,
 }
 
 async fn stack(upload: Value) -> Stack {
