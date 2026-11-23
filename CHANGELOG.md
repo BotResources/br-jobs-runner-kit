@@ -17,6 +17,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Added
 
+- `br-runner-as-tool` 0.3.0 (breaking): depends on `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0 in place of `br-runner-jobs`. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-threads` 0.6.1: re-pinned on `br-agentic-contract` 0.3.0; no change of the public surface. See `crates/br-runner-threads/CHANGELOG.md`.
 - `br-runner-jobs-client` 0.1.0 (new library): the typed client of the jobs service for a runner and the machinery around it, copied from the client part of `br-runner-jobs` 0.2.0. See `crates/br-runner-jobs-client/CHANGELOG.md`.
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.
