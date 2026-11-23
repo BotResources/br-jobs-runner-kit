@@ -143,6 +143,8 @@ jobs:
         run: cargo test -p br-runner-connection --locked -- --ignored --test-threads=1
       - name: run the br-runner-jobs e2e tests against a real JetStream
         run: cargo test -p br-runner-jobs --locked -- --ignored --test-threads=1
+      - name: run the br-runner-jobs-client e2e tests against a real JetStream
+        run: cargo test -p br-runner-jobs-client --locked -- --ignored --test-threads=1
       - name: run the br-runner-toolkit e2e tests against a real JetStream
         run: cargo test -p br-runner-toolkit --features test-host --locked -- --ignored --test-threads=1
 
@@ -191,6 +193,10 @@ jobs:
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-connection
       - name: br-runner-jobs reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-jobs --allow br-llm-clients-core
+      - name: br-runner-jobs-client reaches only br-llm-clients-core
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-jobs-client --allow br-llm-clients-core
+      - name: br-runner-jobs-client keeps the bus in runner_transport and names no subject
+        run: bash .github/scripts/check-bus-access.sh br-runner-jobs-client runner_transport
       - name: br-runner-as-tool reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-as-tool --allow br-llm-clients-core
       - name: br-runner-jobs keeps the bus in runner_transport and names no subject
