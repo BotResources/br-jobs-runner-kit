@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use br_runner_jobs::Error;
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::Error;
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
 use br_runner_toolkit::{RunRefusal, StartArgs, StartedRun, run_start};
 use support::*;
 
@@ -108,7 +108,7 @@ async fn given_a_started_fact_that_jobs_does_not_answer_when_the_drain_time_ends
         report.runs[0]
             .unsent
             .iter()
-            .any(|write| write.kind == br_runner_jobs::WriteKind::Started)
+            .any(|write| write.kind == br_runner_jobs_client::WriteKind::Started)
     );
     assert!(jobs.deliveries().is_empty());
     assert!(!executed.load(Ordering::SeqCst));

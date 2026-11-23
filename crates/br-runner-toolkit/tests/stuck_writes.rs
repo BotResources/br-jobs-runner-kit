@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use br_runner_jobs::Error;
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::Error;
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
 use br_runner_toolkit::RunnerBuilder;
 use support::*;
 use tokio_util::sync::CancellationToken;

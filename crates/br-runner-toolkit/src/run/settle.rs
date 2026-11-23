@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use br_graph_contract::Fields;
-use br_runner_jobs::DeliveryQueue;
+use br_runner_jobs_client::DeliveryQueue;
 
 use super::Ctx;
 use super::finish::{Ending, Terminal, hand_over};

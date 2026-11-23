@@ -2,8 +2,8 @@ mod support;
 
 use std::sync::{Arc, Mutex};
 
-use br_runner_jobs::LogLevel;
-use br_runner_jobs::test_double::{Call, Fact, ScriptedJobs};
+use br_runner_jobs_client::LogLevel;
+use br_runner_jobs_client::test_double::{Call, Fact, ScriptedJobs};
 use br_runner_toolkit::{RunRefusal, RunnerBuilder, StartArgs, StartedRun, run_start};
 use serde_json::json;
 use support::*;
@@ -237,10 +237,10 @@ async fn given_a_context_kept_after_the_run_ended_when_it_is_used_then_the_book_
     until(|| has_terminal(&jobs)).await;
     running.stop().await;
     let context = kept.lock().expect("lock").clone().expect("a context");
-    fn ended<T>(result: Result<T, br_runner_jobs::Error>) -> bool {
+    fn ended<T>(result: Result<T, br_runner_jobs_client::Error>) -> bool {
         matches!(
             result,
-            Err(br_runner_jobs::Error::InvalidInput(text)) if text == "the run has ended"
+            Err(br_runner_jobs_client::Error::InvalidInput(text)) if text == "the run has ended"
         )
     }
     assert!(ended(context.agent_book()));

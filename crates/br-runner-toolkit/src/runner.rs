@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use br_graph_contract::{Fields, Graph, State};
-use br_runner_jobs::{Capacity, Content, JobsClient, QueueObserver};
+use br_runner_jobs_client::{Capacity, Content, JobsClient, QueueObserver};
 use tokio_util::sync::CancellationToken;
 
 use crate::calls::Calls;

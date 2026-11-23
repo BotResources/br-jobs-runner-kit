@@ -77,7 +77,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    use br_runner_jobs::test_double::ScriptedJobs;
+    use br_runner_jobs_client::test_double::ScriptedJobs;
 
     use super::{LoopBodies, LoopTasks, spawn_loop};
     use crate::instances::Instances;

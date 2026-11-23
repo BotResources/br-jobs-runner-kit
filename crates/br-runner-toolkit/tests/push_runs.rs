@@ -1,7 +1,7 @@
 mod support;
 
-use br_runner_jobs::PresenceStatus;
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::PresenceStatus;
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
 use support::*;
 
 #[tokio::test(start_paused = true)]
@@ -23,7 +23,7 @@ async fn given_a_trigger_in_push_mode_when_the_graph_ends_then_started_acknowled
         .calls()
         .into_iter()
         .filter_map(|call| match call {
-            br_runner_jobs::test_double::Call::Graphql { document, .. } => Some(document),
+            br_runner_jobs_client::test_double::Call::Graphql { document, .. } => Some(document),
             _ => None,
         })
         .collect();

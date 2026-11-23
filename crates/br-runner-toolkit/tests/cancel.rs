@@ -3,8 +3,8 @@ mod support;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use br_runner_jobs::test_double::{Delivery, ScriptedJobs};
-use br_runner_jobs::{CancelEvent, DispatchMode, FailureKind, ModeEvent};
+use br_runner_jobs_client::test_double::{Delivery, ScriptedJobs};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, FailureKind, ModeEvent};
 use br_runner_toolkit::{
     FailureOverride, RunRefusal, StartArgs, StartedRun, failure_mapping, run_start,
 };

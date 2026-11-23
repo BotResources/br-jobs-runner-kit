@@ -48,7 +48,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use br_graph_executor::{Observation, Observer};
-    use br_runner_jobs::test_double::ScriptedJobs;
+    use br_runner_jobs_client::test_double::ScriptedJobs;
 
     use super::ExecObserver;
     use crate::hook::{InstanceEnded, lifecycle_hook};

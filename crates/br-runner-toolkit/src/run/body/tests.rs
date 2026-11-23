@@ -1,5 +1,5 @@
 use br_graph_executor::{Checkpoint, RunFailure};
-use br_runner_jobs::FailureKind;
+use br_runner_jobs_client::FailureKind;
 
 use super::{first_found, found_of};
 use crate::unit_support::Steps;

@@ -1,6 +1,6 @@
 mod support;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_toolkit::{RunRefusal, RunnerBuilder, StartArgs, StartedRun, run_start};
 use serde_json::json;
 use support::*;

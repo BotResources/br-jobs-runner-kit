@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
-use br_runner_jobs::test_double::{ScriptedJobs, trigger_json};
-use br_runner_jobs::{CancelEvent, DispatchMode, JobsClient, ModeEvent, RunnerType};
+use br_runner_jobs_client::test_double::{ScriptedJobs, trigger_json};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, JobsClient, ModeEvent, RunnerType};
 use br_runner_toolkit::{HostEvent, Settings, SettingsBuilder, StartArgs, TestHost};
 use serde_json::json;
 use uuid::Uuid;

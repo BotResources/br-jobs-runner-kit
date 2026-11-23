@@ -25,7 +25,7 @@ impl Error {
         }
     }
 
-    pub(crate) fn jobs(error: &br_runner_jobs::Error) -> Self {
+    pub(crate) fn jobs(error: &br_runner_jobs_client::Error) -> Self {
         Self::new(ErrorCode::JobsFailed, error.to_string())
     }
 

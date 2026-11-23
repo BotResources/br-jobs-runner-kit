@@ -2,7 +2,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use br_graph_contract::{CancelView, Fields};
-use br_runner_jobs::Work;
+use br_runner_jobs_client::Work;
 use futures::future::BoxFuture;
 
 use crate::context::RunContext;

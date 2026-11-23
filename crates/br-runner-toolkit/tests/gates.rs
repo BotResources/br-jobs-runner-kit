@@ -2,8 +2,8 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
-use br_runner_jobs::{CancelEvent, DispatchMode, ModeEvent};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::{CancelEvent, DispatchMode, ModeEvent};
 use serde_json::json;
 use support::*;
 

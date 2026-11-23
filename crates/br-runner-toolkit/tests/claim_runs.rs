@@ -2,7 +2,7 @@ mod support;
 
 use std::time::Duration;
 
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use serde_json::json;
 use support::*;
 use tracing::Level;
@@ -75,7 +75,7 @@ async fn given_a_claim_without_answer_when_the_next_beat_comes_then_the_same_cla
  {
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     claim_mode(&jobs);
-    jobs.push_claim_reply(Err(br_runner_jobs::Error::InfraMissing(
+    jobs.push_claim_reply(Err(br_runner_jobs_client::Error::InfraMissing(
         "the bus".to_owned(),
     )));
     jobs.push_claim_reply(Ok(refusal("not_claim_mode")));
@@ -133,7 +133,7 @@ async fn given_a_claim_that_cannot_be_made_when_it_fails_then_it_is_not_repeated
  {
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     claim_mode(&jobs);
-    jobs.push_claim_reply(Err(br_runner_jobs::Error::InvalidInput(
+    jobs.push_claim_reply(Err(br_runner_jobs_client::Error::InvalidInput(
         "the claim wait is zero".to_owned(),
     )));
     let running = run(&jobs, |b| b, 1, args(single(Behavior::Result("x")), false));
@@ -141,8 +141,8 @@ async fn given_a_claim_that_cannot_be_made_when_it_fails_then_it_is_not_repeated
     tokio::time::sleep(Duration::from_secs(300)).await;
     assert_eq!(claim_ids(&jobs).len(), 1);
     jobs.push_claim_reply(Ok(refusal("not_claim_mode")));
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
-        br_runner_jobs::DispatchMode::Claim,
+    jobs.push_mode(Ok(br_runner_jobs_client::ModeEvent::Mode(
+        br_runner_jobs_client::DispatchMode::Claim,
     )));
     until(|| claim_ids(&jobs).len() == 2).await;
     let ids = claim_ids(&jobs);
@@ -174,8 +174,8 @@ async fn given_a_not_claim_mode_refusal_when_it_comes_then_no_claim_is_sent_unti
     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
     assert_eq!(claim_ids(&jobs).len(), 1);
     jobs.push_claim_reply(Ok(refusal("malformed_claim")));
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
-        br_runner_jobs::DispatchMode::Claim,
+    jobs.push_mode(Ok(br_runner_jobs_client::ModeEvent::Mode(
+        br_runner_jobs_client::DispatchMode::Claim,
     )));
     until(|| claim_ids(&jobs).len() == 2).await;
     running.stop().await;
@@ -199,8 +199,8 @@ async fn given_a_slot_that_holds_a_claim_id_when_claims_stop_in_push_mode_then_i
         args(single(Behavior::UntilReleased(gate.clone(), "x")), false),
     );
     until(|| claim_ids(&jobs).len() == 2).await;
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
-        br_runner_jobs::DispatchMode::Push,
+    jobs.push_mode(Ok(br_runner_jobs_client::ModeEvent::Mode(
+        br_runner_jobs_client::DispatchMode::Push,
     )));
     until(|| claim_ids(&jobs).len() == 3).await;
     until(|| kinds(&jobs) == vec!["started"]).await;
@@ -209,8 +209,8 @@ async fn given_a_slot_that_holds_a_claim_id_when_claims_stop_in_push_mode_then_i
     assert_eq!(jobs.triggers_waiting(), 1);
     assert_eq!(claim_ids(&jobs).len(), 3);
     jobs.push_claim_reply(Ok(refusal("not_claim_mode")));
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
-        br_runner_jobs::DispatchMode::Push,
+    jobs.push_mode(Ok(br_runner_jobs_client::ModeEvent::Mode(
+        br_runner_jobs_client::DispatchMode::Push,
     )));
     until(|| claim_ids(&jobs).len() == 4).await;
     let ids = claim_ids(&jobs);
@@ -233,8 +233,8 @@ async fn no_claim_is_sent_after_the_refusal_until_the_mode_feed_gives_a_value(re
     tokio::time::sleep(Duration::from_secs(120)).await;
     assert_eq!(claim_ids(&jobs).len(), 1);
     jobs.push_claim_reply(Ok(refusal("not_claim_mode")));
-    jobs.push_mode(Ok(br_runner_jobs::ModeEvent::Mode(
-        br_runner_jobs::DispatchMode::Claim,
+    jobs.push_mode(Ok(br_runner_jobs_client::ModeEvent::Mode(
+        br_runner_jobs_client::DispatchMode::Claim,
     )));
     until(|| claim_ids(&jobs).len() == 2).await;
     running.stop().await;

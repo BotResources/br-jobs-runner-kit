@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use br_graph_contract::Fields;
-use br_runner_jobs::{Error, RefusalReason, Work};
+use br_runner_jobs_client::{Error, RefusalReason, Work};
 use tokio::sync::watch;
 use uuid::Uuid;
 

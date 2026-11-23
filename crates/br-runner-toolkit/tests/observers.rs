@@ -3,8 +3,8 @@ mod support;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use br_runner_jobs::test_double::ScriptedJobs;
-use br_runner_jobs::{QueueObserver, QueueReport, Removal};
+use br_runner_jobs_client::test_double::ScriptedJobs;
+use br_runner_jobs_client::{QueueObserver, QueueReport, Removal};
 use serde_json::json;
 use support::*;
 use tracing::Level;

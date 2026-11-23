@@ -1,15 +1,15 @@
 # br-runner-toolkit
 
-The main loop of a runner with the jobs service. The importer gives a ready `JobsClient` (from `br-runner-jobs`), a graph, a function that starts a run, and `Settings`. The toolkit keeps the runner present in the jobs service, takes Runs in parallel slots, drives each Run through the graph executor, sends the facts of each Run to jobs, and drains on shutdown. It talks to the jobs service only. It names no thread, no mail transport, no stream and no subject, and it does not name `async-nats`.
+The main loop of a runner with the jobs service. The importer gives a ready `JobsClient` (from `br-runner-jobs-client`), a graph, a function that starts a run, and `Settings`. The toolkit keeps the runner present in the jobs service, takes Runs in parallel slots, drives each Run through the graph executor, sends the facts of each Run to jobs, and drains on shutdown. It talks to the jobs service only. It names no thread, no mail transport, no stream and no subject, and it does not name `async-nats`.
 
 ## Install
 
 ```toml
-br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.2.0", version = "0.2.0" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
+br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.3.0", version = "0.3.0" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
-br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
 br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
 br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
 async-nats = "0.48"
@@ -18,6 +18,8 @@ tokio-util = "0.7"
 ```
 
 `async-nats` is needed only to build the `Connection` that the importer gives to `JobsClient`; the toolkit does not call it. `br-core-auth` is needed to name the `Passport` that `RunContext::passport` returns.
+
+`br-runner-jobs` (the node entries, the mark gate and the adapters of the ports) is not a dependency of this crate: it is a `dev-dependency` used by the tests and the example `restartable_agent`. A runner that uses its node entries pins it itself, beside the `br-runner-jobs-client` tag above.
 
 A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with. The `test-host` feature adds `TestHost`; use it from `dev-dependencies` only. It turns on no feature of tokio: the test chooses its own clock (see Test host).
 
@@ -31,7 +33,7 @@ use std::time::Duration;
 
 use br_core_kernel::ServiceAccountId;
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::{JobsClient, RunnerType};
+use br_runner_jobs_client::{JobsClient, RunnerType};
 use br_runner_toolkit::{DrainReport, RunnerBuilder, Settings, StartArgs};
 use tokio_util::sync::CancellationToken;
 
@@ -124,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 ```
 
-Two more examples. `restartable_agent` shows a runner that can restart: a tool written in the example gets the run context from the instance lookup after the instance was created, the node entry gives the address of the agent, a gate for the inbox is built by hand over a stand-in `entry_stored`, and the lifecycle hook calls a stand-in `instance_ended`. The stand-ins are plain functions in the example: the toolkit does not import `br-runner-threads`. `test_host` is the model of a runner test: one run under `TestHost` over a `JobsClient` built on the in-process double of `br-runner-jobs`, and the ordered events of that run.
+Two more examples. `restartable_agent` shows a runner that can restart: a tool written in the example gets the run context from the instance lookup after the instance was created, the node entry gives the address of the agent, a gate for the inbox is built by hand over a stand-in `entry_stored`, and the lifecycle hook calls a stand-in `instance_ended`. The stand-ins are plain functions in the example: the toolkit does not import `br-runner-threads`. `test_host` is the model of a runner test: one run under `TestHost` over a `JobsClient` built on the in-process double of `br-runner-jobs-client`, and the ordered events of that run.
 
 ## What the runner does
 
@@ -162,7 +164,7 @@ For each Run the runner, in this order: registers the Run (a cancel order alread
 
 ### Lookup and hooks
 
-`RunnerBuilder::instance_lookup` gives an `InstanceLookup` that a node uses to get the `AgentBook` and the `RunContext` of its Run from an `InstanceId`, and the `BookLookup` that `br-runner-jobs` needs to make an agent entry. Before `start` the lookup returns `NotStarted`. Three rules:
+`RunnerBuilder::instance_lookup` gives an `InstanceLookup` that a node uses to get the `AgentBook` and the `RunContext` of its Run from an `InstanceId`, and the `BookLookup` of `br-runner-jobs-client` that a node entry of `br-runner-jobs` needs to make an agent entry. Before `start` the lookup returns `NotStarted`. Three rules:
 
 1. A call of `book` or `run_context` for an instance id the runner does not hold waits until the executor reports that instance. For the id of a Run the runner has dropped, a wrong id, or an instance that a node creates by itself, the call never returns: the caller bounds it (for example with a select on its cancel token). A dropped call leaves nothing behind.
 2. Never await the lookup inside `create()` of a node. The executor reports an instance only after `create()` has returned, so such a call waits until the Run is cancelled. Call it from the task of the instance after `create()` has returned.
@@ -179,7 +181,7 @@ A lifecycle hook (`RunnerBuilder::with_lifecycle_hook`, built with `lifecycle_ho
 ### Other public items
 
 - `Settings::runner_version`, `max_concurrent_runs`, `ack_wait`, `drain_timeout`, `cancel_grace`, `claim_wait`, `outcome_wait` and `retry_wait` return the values the settings were built with.
-- `InstanceLookup::book_lookup` gives an `Arc<dyn BookLookup>` over the same instances, for `br-runner-jobs` to make an agent entry.
+- `InstanceLookup::book_lookup` gives an `Arc<dyn BookLookup>` over the same instances, for a node entry of `br-runner-jobs` to make an agent entry.
 - `TestHost::instance_lookup` gives the same `InstanceLookup` as `RunnerBuilder::instance_lookup`, for the host.
 - `TestHost::cancel_handle` gives a `HostCancel`; `HostCancel::cancel` cancels the Run of the host.
 
@@ -199,9 +201,9 @@ The companion library chart `br-runner-toolkit-chart` (in `charts/br-runner-tool
 
 With the feature `test-host`, `TestHost::new(client, settings_builder, start_args)` runs the same loop with one slot and no drain time, takes one Run, and returns `HostRun { events, drain }`. The host replaces two values of the settings it is given: `max_concurrent_runs` is 1 and the drain has no time limit, whatever the test gave for them. It also ignores the shutdown token and the process signals of the `StartArgs`: the host ends after its Run. `events` is one ordered list: the ends of the writes of the queue (delivered or removed), the acknowledgement or give-back of the trigger, the claims, the presence publications and deletions, and the run logs. `cancel_handle()` cancels the Run. If the loop cannot start, `run` returns the error.
 
-`examples/test_host.rs` is the model of a test with `TestHost`: it has a real `main` that runs it over the in-process double of `br-runner-jobs`. A test against a locally started `nats-server -js` runs the same host with the real clock and a real `Connection`; such a test is marked `#[ignore]` and run with `-- --ignored`.
+`examples/test_host.rs` is the model of a test with `TestHost`: it has a real `main` that runs it over the in-process double of `br-runner-jobs-client`. A test against a locally started `nats-server -js` runs the same host with the real clock and a real `Connection`; such a test is marked `#[ignore]` and run with `-- --ignored`.
 
-The host uses the tokio clock of the runtime of the test, and the test controls that clock. A paused clock (`start_paused`, `tokio::time::advance`, with `test-util` in the `dev-dependencies` of the test) is for the in-process double of `br-runner-jobs` only. Against a real or a locally started bus, use the real clock: a paused clock advances by itself when the runtime is idle, so a reply wait, an ack wait, a claim wait or the time to live can end during real network I/O.
+The host uses the tokio clock of the runtime of the test, and the test controls that clock. A paused clock (`start_paused`, `tokio::time::advance`, with `test-util` in the `dev-dependencies` of the test) is for the in-process double of `br-runner-jobs-client` only. Against a real or a locally started bus, use the real clock: a paused clock advances by itself when the runtime is idle, so a reply wait, an ack wait, a claim wait or the time to live can end during real network I/O.
 
 ## Not covered by tests
 
@@ -216,7 +218,7 @@ The host uses the tokio clock of the runtime of the test, and the test controls 
 
 | Thing | Why it is the way it is |
 |---|---|
-| No `async-nats` and no subject in this crate | Bus access is in `br-runner-jobs`; the toolkit sees only its typed client. |
+| No `async-nats` and no subject in this crate | Bus access is in `br-runner-jobs-client`; the toolkit sees only its typed client. |
 | `RunContext` holds weak references | A node keeping the queue or the book would stop the queue from draining at the end of the Run. |
 | A busy refusal without delay waits for the next beat | A fixed delay would be an invented limit; the beat is the one rhythm the runner already has. |
 | The default answer is the fields as JSON text | The graph has no answer node; the state is the only result every graph has. |

@@ -3,7 +3,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::{AgentBook, Arrival, ArrivalFeed, ArrivalSettings, Error, Work};
+use br_runner_jobs_client::{AgentBook, Arrival, ArrivalFeed, ArrivalSettings, Error, Work};
 use futures::FutureExt;
 use tokio::task::JoinHandle;
 use uuid::Uuid;

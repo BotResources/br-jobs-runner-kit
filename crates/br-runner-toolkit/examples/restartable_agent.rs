@@ -10,7 +10,8 @@ use br_graph_contract::{CancelToken, CancelView, InstanceId};
 use br_llm_clients_core::{Parameters, ToolSpec};
 use br_llm_messages::{EntryId, OpaqueJson, ToolName};
 use br_runner_connection::{Connection, FixedToken};
-use br_runner_jobs::{Content, Gate, JobsClient, MarkGate, NodeEntry, RunnerType, mark_gate};
+use br_runner_jobs::{MarkGate, NodeEntry, mark_gate};
+use br_runner_jobs_client::{Content, Gate, JobsClient, RunnerType};
 use br_runner_toolkit::{
     DrainReport, InstanceEnded, InstanceLookup, RunnerBuilder, Settings, StartArgs, lifecycle_hook,
 };

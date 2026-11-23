@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use br_graph_contract::Fields;
-use br_runner_jobs::{JobsClient, QueueObserver};
+use br_runner_jobs_client::{JobsClient, QueueObserver};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 

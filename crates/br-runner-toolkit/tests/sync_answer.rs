@@ -1,7 +1,7 @@
 mod support;
 
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
-use br_runner_jobs::{Content, FailureKind};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::{Content, FailureKind};
 use serde_json::{Value, json};
 use support::*;
 
@@ -131,11 +131,10 @@ async fn given_a_refused_answer_upload_when_the_run_completes_then_the_completed
     let failed = failed_fact(&jobs).expect("failed");
     assert_eq!(failed.reason_code, "answer_refused");
     assert_eq!(failed.kind, FailureKind::Permanent);
-    assert!(
-        !facts(&jobs)
-            .iter()
-            .any(|fact| matches!(fact, br_runner_jobs::test_double::Fact::Completed { .. }))
-    );
+    assert!(!facts(&jobs).iter().any(|fact| matches!(
+        fact,
+        br_runner_jobs_client::test_double::Fact::Completed { .. }
+    )));
 }
 
 #[tokio::test(start_paused = true)]

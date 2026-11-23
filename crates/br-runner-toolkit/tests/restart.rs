@@ -2,8 +2,8 @@ mod support;
 
 use std::sync::{Arc, Mutex};
 
-use br_runner_jobs::FailureKind;
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::FailureKind;
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
 use br_runner_toolkit::{RunRefusal, StartArgs, StartedRun, run_start};
 use serde_json::{Value, json};
 use support::*;

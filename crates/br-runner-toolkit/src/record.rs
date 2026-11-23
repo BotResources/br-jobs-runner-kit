@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use br_graph_contract::{CancelHandle, InstanceId};
-use br_runner_jobs::{AgentBook, BookedAgent, DeliveryQueue};
+use br_runner_jobs_client::{AgentBook, BookedAgent, DeliveryQueue};
 use tokio::sync::{Notify, watch};
 use uuid::Uuid;
 

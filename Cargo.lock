@@ -171,19 +171,6 @@ dependencies = [
 
 [[package]]
 name = "br-agentic-contract"
-version = "0.2.0"
-source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-contract%2Fv0.2.0#b5209a1cddead2c0794fe4cbc7e52de5692b4094"
-dependencies = [
- "br-graph-contract",
- "br-llm-clients-core",
- "br-llm-messages",
- "thiserror",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "br-agentic-contract"
 version = "0.3.0"
 source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-contract%2Fv0.3.0#eda28c0e9d3ae41c62c7355f31efdb1488ec036e"
 dependencies = [
@@ -199,7 +186,7 @@ name = "br-agentic-harness-contract"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness-contract%2Fv0.1.0#c396988efe540070223e1b91d4f2cc39cf798c2f"
 dependencies = [
- "br-agentic-contract 0.3.0",
+ "br-agentic-contract",
  "br-llm-messages",
  "thiserror",
 ]
@@ -351,7 +338,7 @@ dependencies = [
 name = "br-runner-as-tool"
 version = "0.3.0"
 dependencies = [
- "br-agentic-contract 0.3.0",
+ "br-agentic-contract",
  "br-graph-contract",
  "br-llm-clients-core",
  "br-llm-messages",
@@ -388,32 +375,9 @@ dependencies = [
 
 [[package]]
 name = "br-runner-jobs"
-version = "0.2.0"
-source = "git+https://github.com/BotResources/br-jobs-runner-kit?tag=br-runner-jobs%2Fv0.2.0#ed85478f25c8d254da2ffb6b64f67c25cf58fe50"
-dependencies = [
- "async-nats",
- "br-agentic-contract 0.2.0",
- "br-core-auth",
- "br-core-kernel",
- "br-llm-messages",
- "br-runner-connection",
- "br-util-nats-fabric",
- "chrono",
- "contract-jobs 0.8.0",
- "futures",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "br-runner-jobs"
 version = "0.3.0"
 dependencies = [
- "br-agentic-contract 0.3.0",
+ "br-agentic-contract",
  "br-core-auth",
  "br-llm-messages",
  "br-runner-jobs-client",
@@ -431,7 +395,7 @@ name = "br-runner-jobs-client"
 version = "0.1.0"
 dependencies = [
  "async-nats",
- "br-agentic-contract 0.3.0",
+ "br-agentic-contract",
  "br-core-auth",
  "br-core-kernel",
  "br-runner-connection",
@@ -453,7 +417,7 @@ name = "br-runner-threads"
 version = "0.7.0"
 dependencies = [
  "async-nats",
- "br-agentic-contract 0.3.0",
+ "br-agentic-contract",
  "br-agentic-harness-contract",
  "br-core-events",
  "br-core-integration",
@@ -474,10 +438,10 @@ dependencies = [
 
 [[package]]
 name = "br-runner-toolkit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-nats",
- "br-agentic-contract 0.2.0",
+ "br-agentic-contract",
  "br-core-auth",
  "br-core-kernel",
  "br-graph-contract",
@@ -485,7 +449,8 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs 0.2.0",
+ "br-runner-jobs",
+ "br-runner-jobs-client",
  "br-runner-toolkit",
  "br-util-nats-fabric",
  "chrono",

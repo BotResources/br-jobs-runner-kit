@@ -73,7 +73,7 @@ fn the_install_block_holds_every_crate_the_quickstart_names() {
     for ident in [
         "br_core_kernel",
         "br_runner_connection",
-        "br_runner_jobs",
+        "br_runner_jobs_client",
         "br_runner_toolkit",
         "tokio_util",
         "async_nats",

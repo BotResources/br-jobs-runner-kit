@@ -4,7 +4,7 @@ mod support;
 use std::time::Duration;
 
 use async_nats::jetstream::kv::Operation;
-use br_runner_jobs::{JobsClient, PresenceStatus, WriteKind};
+use br_runner_jobs_client::{JobsClient, PresenceStatus, WriteKind};
 use br_runner_toolkit::{HostEvent, HostRun, Settings, SettingsBuilder, TestHost};
 use contract_jobs::dispatch_mode::{DispatchMode, RunnerTypeDispatchMode, dispatch_mode_key};
 use contract_jobs::runner::{
@@ -104,7 +104,7 @@ fn delivered(kind: WriteKind) -> impl Fn(&HostEvent) -> bool {
     move |event| {
         matches!(
             event,
-            HostEvent::Queue(br_runner_jobs::QueueReport::Delivered { write }) if write.kind == kind
+            HostEvent::Queue(br_runner_jobs_client::QueueReport::Delivered { write }) if write.kind == kind
         )
     }
 }

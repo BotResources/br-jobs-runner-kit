@@ -3,8 +3,8 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
-use br_runner_jobs::test_double::{Call, ScriptedJobs};
-use br_runner_jobs::{ArrivalSettings, Error};
+use br_runner_jobs_client::test_double::{Call, ScriptedJobs};
+use br_runner_jobs_client::{ArrivalSettings, Error};
 use serde_json::json;
 use support::*;
 use tokio::sync::Notify;

@@ -2,15 +2,15 @@ mod support;
 
 use std::sync::Arc;
 
-use br_runner_jobs::FailureKind;
-use br_runner_jobs::test_double::ScriptedJobs;
+use br_runner_jobs_client::FailureKind;
+use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_toolkit::{
     FailureOverride, RunRefusal, StartArgs, StartedRun, failure_mapping, run_start,
 };
 use serde_json::json;
 use support::*;
 
-async fn failed_run(graph: Arc<br_graph_contract::Graph<Flow>>) -> br_runner_jobs::Failed {
+async fn failed_run(graph: Arc<br_graph_contract::Graph<Flow>>) -> br_runner_jobs_client::Failed {
     let jobs = ScriptedJobs::new(runner_type("analyst"), "i1");
     push_mode(&jobs);
     jobs.push_trigger(trigger(1));

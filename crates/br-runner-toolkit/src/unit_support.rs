@@ -3,8 +3,10 @@ use std::time::Duration;
 
 use br_core_auth::{AuthMethod, Passport, PassportClaims};
 use br_graph_contract::{CancelToken, InstanceId};
-use br_runner_jobs::test_double::{ScriptedJobs, trigger_json, work_from_trigger};
-use br_runner_jobs::{AgentBook, DeliveryQueue, IgnoreReports, QueueSettings, RunnerType, Work};
+use br_runner_jobs_client::test_double::{ScriptedJobs, trigger_json, work_from_trigger};
+use br_runner_jobs_client::{
+    AgentBook, DeliveryQueue, IgnoreReports, QueueSettings, RunnerType, Work,
+};
 use uuid::Uuid;
 
 #[path = "../tests/support/logs.rs"]
@@ -114,8 +116,8 @@ pub(crate) fn record(work: &Work) -> Arc<RunRecord> {
 }
 
 pub(crate) fn book_with_agent(work: &Work, queue: &DeliveryQueue, node: &str) -> AgentBook {
-    let agent = br_runner_jobs::RestoredAgent {
-        key: br_runner_jobs::AgentKey::new(node, "main"),
+    let agent = br_runner_jobs_client::RestoredAgent {
+        key: br_runner_jobs_client::AgentKey::new(node, "main"),
         agent_id: id(500),
         has_inbox: false,
     };
@@ -144,7 +146,7 @@ impl br_graph_contract::Fields for Steps {
 pub(crate) fn book_with_agents(
     work: &Work,
     queue: &DeliveryQueue,
-    agents: Vec<br_runner_jobs::RestoredAgent>,
+    agents: Vec<br_runner_jobs_client::RestoredAgent>,
 ) -> AgentBook {
     work.agent_book(queue, agents, false).expect("a book")
 }
@@ -224,6 +226,11 @@ pub(crate) fn idle_plan() -> Arc<crate::plan::Plan<Steps>> {
 pub(crate) fn started_facts(jobs: &Arc<ScriptedJobs>) -> usize {
     jobs.calls()
         .into_iter()
-        .filter(|call| matches!(call, br_runner_jobs::test_double::Call::Started { .. }))
+        .filter(|call| {
+            matches!(
+                call,
+                br_runner_jobs_client::test_double::Call::Started { .. }
+            )
+        })
         .count()
 }

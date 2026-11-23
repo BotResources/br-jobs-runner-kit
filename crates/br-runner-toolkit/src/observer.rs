@@ -1,7 +1,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
-use br_runner_jobs::{QueueObserver, QueueReport};
+use br_runner_jobs_client::{QueueObserver, QueueReport};
 use uuid::Uuid;
 
 use crate::tap::{HostEvent, Tap};

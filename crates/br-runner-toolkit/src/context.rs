@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 
 use br_core_auth::Passport;
-use br_runner_jobs::{
+use br_runner_jobs_client::{
     AgentBook, CallerHandle, Content, DeliveryQueue, Error, LogLevel, MailHandle, Work, WriteEnd,
 };
 use chrono::{DateTime, Utc};
