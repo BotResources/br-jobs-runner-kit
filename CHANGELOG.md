@@ -11,6 +11,10 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
+### Changed
+
+- `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. Same tag `br-agentic-contract/v0.2.0`; no release.
+
 ### Added
 
 - `br-runner-threads` 0.1.0 (new library): the typed client of the Threads service for runner code.

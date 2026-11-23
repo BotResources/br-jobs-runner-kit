@@ -10,7 +10,7 @@ description = "The main loop of a runner with the jobs service: registration thr
 test-host = []
 
 [dependencies]
-br-agentic-contract.workspace = true
+br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-core-auth = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-auth", tag = "br-core-auth/v0.1.0", version = "0.1.0" }
 br-graph-contract.workspace = true
 br-graph-executor.workspace = true
