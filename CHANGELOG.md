@@ -18,6 +18,7 @@ headings and is released under the tag `{library}/v{version}`.
 ### Added
 
 - `br-runner-jobs-client` 0.1.1: `NewMailInput::new` and the jobs seq of an unread item (`MailHandle::unread_sequenced`, `SequencedItem`); additive. See `crates/br-runner-jobs-client/CHANGELOG.md`.
+- `br-runner-as-node` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1; no change of the public surface. See `crates/br-runner-as-node/CHANGELOG.md`.
 - `br-runner-toolkit` 0.3.0 (breaking): depends on `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0 in place of `br-runner-jobs` 0.2.0, which stays only as a `dev-dependency`. The public builders and types name the types of the jobs client. See `crates/br-runner-toolkit/CHANGELOG.md`.
 - `br-runner-as-tool` 0.3.0 (breaking): depends on `br-runner-jobs-client` 0.1.0 and `br-agentic-contract` 0.3.0 in place of `br-runner-jobs`. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-as-node` 0.3.0 (breaking): imports `br-runner-jobs-client` 0.1.0 in place of `br-runner-jobs`; the re-export of RunnerType comes from the jobs client. See `crates/br-runner-as-node/CHANGELOG.md`.

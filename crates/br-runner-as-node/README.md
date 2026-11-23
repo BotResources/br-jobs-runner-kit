@@ -9,8 +9,8 @@ The node is of kind `programmatic` and of subkind `runner_call`. It is generic o
 ## Install
 
 ```toml
-br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.3.0", version = "0.3.0" }
-br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
+br-runner-as-node = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-node", tag = "br-runner-as-node/v0.3.1", version = "0.3.1" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
