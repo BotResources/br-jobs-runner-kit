@@ -17,6 +17,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with.
 
+This crate is on `br-agentic-contract` 0.3.0; `br-runner-jobs`, `br-runner-toolkit` and `br-runner-as-tool` stay on 0.2.0 until their own coming releases, so `ThreadRef` is a different type in them: move this crate together with the crates of the kit that share its types.
+
 ## Quickstart
 
 This is `examples/runner_wiring.rs`. It builds the `Connection`, the `ThreadClient` and the `ThreadAccessAdapter`, writes an input turn that holds a runtime notice (Threads refuses a human message held in an input turn, see Limits), reads the mark of the mail with `entry_stored`, and ends the agent with `instance_ended`.
