@@ -1,6 +1,6 @@
 [package]
 name = "br-runner-toolkit"
-version = "0.3.0"
+version = "0.3.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -31,7 +31,7 @@ br-core-kernel.workspace = true
 br-llm-clients-core.workspace = true
 br-llm-messages.workspace = true
 br-runner-connection.workspace = true
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.3.0", version = "0.3.0" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.4.0", version = "0.4.0" }
 br-runner-jobs-client = { workspace = true, features = ["test-double"] }
 br-runner-toolkit = { path = ".", version = ">=0.2.0", features = ["test-host"] }
 br-util-nats-fabric.workspace = true

@@ -17,6 +17,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Added
 
+- `br-runner-toolkit` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1 and `br-runner-jobs` 0.4.0 (dev-dependency); no change of the public surface. See `crates/br-runner-toolkit/CHANGELOG.md`.
 - `br-runner-as-tool` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1; no change of the public surface. See `crates/br-runner-as-tool/CHANGELOG.md`.
 - `br-runner-jobs-client` 0.1.1: `NewMailInput::new` and the jobs seq of an unread item (`MailHandle::unread_sequenced`, `SequencedItem`); additive. See `crates/br-runner-jobs-client/CHANGELOG.md`.
 - `br-runner-as-node` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1; no change of the public surface. See `crates/br-runner-as-node/CHANGELOG.md`.

@@ -5,8 +5,8 @@ The main loop of a runner with the jobs service. The importer gives a ready `Job
 ## Install
 
 ```toml
-br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.3.0", version = "0.3.0" }
-br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.0", version = "0.1.0" }
+br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.3.1", version = "0.3.1" }
+br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
