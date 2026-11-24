@@ -61,27 +61,11 @@ async fn given_a_cursor_the_adapter_no_longer_holds_when_the_next_page_is_asked_
     let agent = world.registered_agent().await;
     let items = (1..=3).map(|n| cc_item(agent.as_uuid(), n)).collect();
     world.jobs.graphql_default(only_unread(items));
-    let cursor = Cursor::new(id(101).to_string());
+    let cursor = Cursor::new(format!("1:{}", id(101)));
     let batch = page(&world, Some(&cursor), 10).await;
     let found: Vec<_> = batch.items.iter().map(|i| i.id().as_uuid()).collect();
     assert_eq!(found, vec![id(202), id(203)]);
     assert_eq!(count(&world.jobs, UNREAD_ROOT), 1);
-}
-
-#[tokio::test]
-async fn given_a_cursor_that_is_not_an_item_id_when_the_page_is_asked_then_the_error_is_a_fault_and_jobs_is_not_called()
- {
-    let world = World::new(mark_gate_stored()).await;
-    let agent = world.registered_agent().await;
-    let context = world.context(agent);
-    let cursor = Cursor::new("not a position");
-    let error = world
-        .incoming()
-        .items(&context, Some(&cursor), limit(2))
-        .await
-        .expect_err("an error");
-    assert!(!error.is_refusal());
-    assert_eq!(count(&world.jobs, UNREAD_ROOT), 0);
 }
 
 #[tokio::test]

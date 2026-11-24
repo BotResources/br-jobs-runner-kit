@@ -8,16 +8,19 @@ use br_runner_jobs_client::{AgentBook, AgentKey, BookLookup};
 use super::agent_port::AgentPortAdapter;
 use super::gate::MarkGate;
 use super::incoming_port::IncomingPortAdapter;
+use super::incoming_port::seq_memory::SeqMemory;
+use super::mail_port::MailPortAdapter;
 
 pub(super) struct InboxSetup {
     pub label: AgentLabel,
-    pub gate: MarkGate,
+    pub gate: Option<MarkGate>,
 }
 
 pub(super) struct Shared {
     pub node: String,
     pub lookup: Arc<dyn BookLookup>,
     pub inbox: Option<InboxSetup>,
+    pub seqs: SeqMemory,
 }
 
 impl Shared {
@@ -54,6 +57,7 @@ impl NodeEntry {
                 node: node_name.into(),
                 lookup,
                 inbox: None,
+                seqs: SeqMemory::default(),
             }),
         }
     }
@@ -70,8 +74,27 @@ impl NodeEntry {
                 lookup,
                 inbox: Some(InboxSetup {
                     label: inbox_label,
-                    gate: mark_gate,
+                    gate: Some(mark_gate),
                 }),
+                seqs: SeqMemory::default(),
+            }),
+        }
+    }
+
+    pub fn with_mail(
+        node_name: impl Into<String>,
+        lookup: Arc<dyn BookLookup>,
+        inbox_label: AgentLabel,
+    ) -> Self {
+        Self {
+            shared: Arc::new(Shared {
+                node: node_name.into(),
+                lookup,
+                inbox: Some(InboxSetup {
+                    label: inbox_label,
+                    gate: None,
+                }),
+                seqs: SeqMemory::default(),
             }),
         }
     }
@@ -84,7 +107,16 @@ impl NodeEntry {
         self.shared
             .inbox
             .as_ref()
-            .map(|_| IncomingPortAdapter::new(Arc::clone(&self.shared)))
+            .and_then(|inbox| inbox.gate.clone())
+            .map(|gate| IncomingPortAdapter::new(Arc::clone(&self.shared), gate))
+    }
+
+    pub fn mail_port(&self) -> Option<MailPortAdapter> {
+        self.shared
+            .inbox
+            .as_ref()
+            .filter(|inbox| inbox.gate.is_none())
+            .map(|_| MailPortAdapter::new(Arc::clone(&self.shared)))
     }
 
     pub fn agent_id(&self, book: &AgentBook, label: &AgentLabel) -> Result<AgentId, PortError> {
@@ -97,6 +129,14 @@ impl fmt::Debug for NodeEntry {
         f.debug_struct("NodeEntry")
             .field("node", &self.shared.node)
             .field("has_inbox", &self.shared.inbox.is_some())
+            .field(
+                "has_gate",
+                &self
+                    .shared
+                    .inbox
+                    .as_ref()
+                    .is_some_and(|inbox| inbox.gate.is_some()),
+            )
             .finish_non_exhaustive()
     }
 }

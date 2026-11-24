@@ -1,5 +1,6 @@
 const README: &str = include_str!("../README.md");
 const QUICKSTART: &str = include_str!("../examples/agent_and_incoming.rs");
+const MAIL_EXAMPLE: &str = include_str!("../examples/agent_and_mail.rs");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 const WORKSPACE: &str = include_str!("../../../Cargo.toml");
 
@@ -8,6 +9,14 @@ fn the_quickstart_of_the_readme_is_the_agent_and_incoming_example_word_for_word(
     assert!(
         README.contains(QUICKSTART.trim_end()),
         "README.md must hold examples/agent_and_incoming.rs as it is"
+    );
+}
+
+#[test]
+fn the_second_example_of_the_readme_is_the_agent_and_mail_example_word_for_word() {
+    assert!(
+        README.contains(MAIL_EXAMPLE.trim_end()),
+        "README.md must hold examples/agent_and_mail.rs as it is"
     );
 }
 
@@ -66,7 +75,7 @@ fn version_of(line: &str) -> &str {
 #[test]
 fn every_pin_of_the_install_block_is_the_pin_the_crate_is_built_with() {
     let pins = install_block();
-    assert!(pins.len() >= 4, "{pins:?}");
+    assert!(pins.len() >= 5, "{pins:?}");
     for (name, value) in pins.iter().filter(|(name, _)| name != "br-runner-jobs") {
         let line = built_with(name);
         if value.contains("git = ") && !line.contains("path = ") {
@@ -89,7 +98,7 @@ fn the_install_block_holds_every_crate_the_quickstart_names() {
         .map(|(name, _)| name.replace('-', "_"))
         .collect();
     let mut named = Vec::new();
-    for line in QUICKSTART.lines() {
+    for line in QUICKSTART.lines().chain(MAIL_EXAMPLE.lines()) {
         for (at, _) in line.match_indices("::") {
             let before = &line[..at];
             let start = before
@@ -105,7 +114,7 @@ fn the_install_block_holds_every_crate_the_quickstart_names() {
     named.retain(|ident| ident != "std");
     named.sort();
     named.dedup();
-    assert!(named.len() >= 3, "{named:?}");
+    assert!(named.len() >= 4, "{named:?}");
     for ident in named {
         assert!(
             pinned.contains(&ident),

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-crate="${1:?usage: check-bus-access.sh <crate> <module> [root]}"
-module="${2:?usage: check-bus-access.sh <crate> <module> [root]}"
+crate="${1:?usage: check-bus-access.sh <crate> <module|--none> [root]}"
+module="${2:?usage: check-bus-access.sh <crate> <module|--none> [root]}"
 root="${3:-.}"
 dir="$root/crates/$crate"
 failed=0
@@ -22,11 +22,20 @@ outside_module() {
     sources | grep -v "^$dir/src/$module/" || true
 }
 
-if [ ! -d "$dir/src/$module" ]; then
+if [ "$module" = "--none" ]; then
+    for file in $(sources); do
+        if grep -n -E 'async_nats|async-nats|Fabric|jetstream|\.bus\(\)|bus_request' "$file" >/dev/null; then
+            fail "the bus is named in $file"
+        fi
+    done
+    if grep -E '^(async-nats|async_nats|br-util-nats-fabric|br_util_nats_fabric)[A-Za-z0-9_-]* *[=.]|^\[[a-z.-]*dependencies\.(async-nats|async_nats|br-util-nats-fabric|br_util_nats_fabric)|package *= *"(async-nats|br-util-nats-fabric)"' "$dir/Cargo.toml" >/dev/null; then
+        fail "Cargo.toml lists the bus client or a bus crate"
+    fi
+elif [ ! -d "$dir/src/$module" ]; then
     fail "the module src/$module does not exist"
 fi
 
-for file in $(outside_module); do
+for file in $([ "$module" = "--none" ] || outside_module); do
     if grep -n -E 'async_nats|async-nats' "$file" >/dev/null; then
         fail "async_nats is named outside src/$module: $file"
     fi
@@ -50,6 +59,11 @@ fi
 
 if [ "$failed" -ne 0 ]; then
     exit 1
+fi
+
+if [ "$module" = "--none" ]; then
+    echo "ok $crate: Cargo.toml lists no bus client or bus crate directly, no Fabric, and src holds no subject, stream or bucket literal"
+    exit 0
 fi
 
 echo "ok $crate: async_nats, the Fabric build and the bus accessor stay in src/$module, and src holds no subject, stream or bucket literal"

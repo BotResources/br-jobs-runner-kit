@@ -1,7 +1,10 @@
 pub(super) mod convert;
-mod listing;
-mod marking;
+mod listed;
+pub(super) mod listing;
+pub(super) mod marking;
 mod notice_text;
+mod position;
+pub(super) mod seq_memory;
 
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -14,25 +17,27 @@ use br_llm_messages::EntryId;
 use br_runner_jobs_client::{AgentBook, Error};
 use uuid::Uuid;
 
+use super::gate::MarkGate;
 use super::node_entry::Shared;
 
 #[derive(Clone)]
 pub struct IncomingPortAdapter {
     shared: Arc<Shared>,
+    gate: MarkGate,
 }
 
 impl IncomingPortAdapter {
-    pub(super) fn new(shared: Arc<Shared>) -> Self {
-        Self { shared }
+    pub(super) fn new(shared: Arc<Shared>, gate: MarkGate) -> Self {
+        Self { shared, gate }
     }
 }
 
-pub(super) struct Resolved {
+pub(in crate::adapter) struct Resolved {
     pub book: Arc<AgentBook>,
     pub agent: Uuid,
 }
 
-pub(super) async fn resolve(
+pub(in crate::adapter) async fn resolve(
     shared: &Shared,
     context: &IncomingContext,
 ) -> Result<Resolved, PortError> {
@@ -64,7 +69,7 @@ impl IncomingPort for IncomingPortAdapter {
         context: &'a IncomingContext,
         item: EntryId,
     ) -> PortFuture<'a, Result<(), PortError>> {
-        Box::pin(marking::mark_read(&self.shared, context, item))
+        Box::pin(marking::mark_read(&self.shared, &self.gate, context, item))
     }
 }
 

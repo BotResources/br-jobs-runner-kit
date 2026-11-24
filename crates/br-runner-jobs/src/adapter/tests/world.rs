@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use super::support::{id, scripted, settings, work};
-use crate::adapter::{IncomingPortAdapter, MarkGate, NodeEntry, mark_gate};
-use br_runner_jobs_client::book_lookup;
+use crate::adapter::{IncomingPortAdapter, MailPortAdapter, MarkGate, NodeEntry, mark_gate};
 use br_runner_jobs_client::test_double::ScriptedJobs;
 use br_runner_jobs_client::{AgentBook, RestoredAgent};
+use br_runner_jobs_client::{BookLookup, book_lookup};
 use br_runner_jobs_client::{DeliveryQueue, Gate, QueueObserver, QueueReport, QueueSettings};
 
 pub(in crate::adapter) const NODE: &str = "node";
@@ -107,6 +107,7 @@ pub(in crate::adapter) struct World {
     pub queue: DeliveryQueue,
     pub book: Arc<AgentBook>,
     pub entry: NodeEntry,
+    pub lookup: Arc<dyn BookLookup>,
     pub reports: Arc<Reports>,
 }
 
@@ -128,6 +129,31 @@ impl World {
         restored: Vec<RestoredAgent>,
         gate: MarkGate,
     ) -> Self {
+        Self::assemble(jobs, restored, |lookup| {
+            NodeEntry::with_inbox("node", lookup, label(), gate)
+        })
+        .await
+    }
+
+    pub(in crate::adapter) async fn mail() -> Self {
+        Self::build_mail(scripted(), Vec::new()).await
+    }
+
+    pub(in crate::adapter) async fn build_mail(
+        jobs: Arc<ScriptedJobs>,
+        restored: Vec<RestoredAgent>,
+    ) -> Self {
+        Self::assemble(jobs, restored, |lookup| {
+            NodeEntry::with_mail("node", lookup, label())
+        })
+        .await
+    }
+
+    async fn assemble(
+        jobs: Arc<ScriptedJobs>,
+        restored: Vec<RestoredAgent>,
+        make_entry: impl FnOnce(Arc<dyn BookLookup>) -> NodeEntry,
+    ) -> Self {
         let reports = Arc::new(Reports::default());
         let work = work(&jobs);
         let queue_settings = QueueSettings {
@@ -143,18 +169,34 @@ impl World {
                 async move { Ok(book) }
             })
         };
-        let entry = NodeEntry::with_inbox("node", lookup, label(), gate);
+        let entry = make_entry(Arc::clone(&lookup));
         Self {
             jobs,
             queue,
             book,
             entry,
+            lookup,
             reports,
         }
     }
 
     pub(in crate::adapter) fn incoming(&self) -> IncomingPortAdapter {
         self.entry.incoming_port().expect("a node with an inbox")
+    }
+
+    pub(in crate::adapter) fn mail_port(&self) -> MailPortAdapter {
+        self.entry
+            .mail_port()
+            .expect("a node entry made for the harness")
+    }
+
+    pub(in crate::adapter) fn incoming_on_the_same_book(
+        &self,
+        gate: MarkGate,
+    ) -> IncomingPortAdapter {
+        NodeEntry::with_inbox("node", Arc::clone(&self.lookup), label(), gate)
+            .incoming_port()
+            .expect("a node with an inbox")
     }
 
     pub(in crate::adapter) async fn agent(&self) -> AgentId {

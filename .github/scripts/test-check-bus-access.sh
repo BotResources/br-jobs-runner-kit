@@ -77,6 +77,60 @@ root="$WORK/nocrate"
 mkdir -p "$root"
 expect 2 "does not exist" "a missing crate fails" bash "$GATE" demo transport "$root"
 
+fresh_none() {
+    local root="$1"
+    rm -rf "$root"
+    mkdir -p "$root/crates/demo/src/adapter/tests"
+    printf '[dependencies]\nbr-runner-jobs-client = "0.1"\n' >"$root/crates/demo/Cargo.toml"
+    printf 'pub fn nothing() {}\n' >"$root/crates/demo/src/lib.rs"
+    printf 'use async_nats::Client;\n' >"$root/crates/demo/src/adapter/tests/mod.rs"
+}
+
+root="$WORK/none-ok"
+fresh_none "$root"
+expect 0 "ok demo: Cargo.toml lists no bus client" "a crate with no bus at all passes" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-nats"
+fresh_none "$root"
+printf 'use async_nats::Client;\n' >"$root/crates/demo/src/lib.rs"
+expect 1 "the bus is named in" "none mode: async_nats in src fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-fabric"
+fresh_none "$root"
+printf 'fn make(js: J) { let _ = Fabric::new(js); }\n' >"$root/crates/demo/src/lib.rs"
+expect 1 "the bus is named in" "none mode: a Fabric in src fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-accessor"
+fresh_none "$root"
+printf 'fn go(c: C) { let _ = c.bus(); }\n' >"$root/crates/demo/src/lib.rs"
+expect 1 "the bus is named in" "none mode: the bus accessor fails" bash "$GATE" demo --none "$root"
+
+for dependency in 'async-nats = "0.48"' 'br-util-nats-fabric = { version = "0.1" }'; do
+    root="$WORK/none-dep-$dependency"
+    fresh_none "$root"
+    printf '%s\n' "$dependency" >>"$root/crates/demo/Cargo.toml"
+    expect 1 "lists the bus client or a bus crate" "none mode: the dependency $dependency fails" bash "$GATE" demo --none "$root"
+done
+
+root="$WORK/none-dep-table"
+fresh_none "$root"
+printf '[dependencies.async-nats]\nversion = "0.48"\n' >>"$root/crates/demo/Cargo.toml"
+expect 1 "lists the bus client or a bus crate" "none mode: the table form of the bus client fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-dep-renamed"
+fresh_none "$root"
+printf 'transport = { package = "async-nats", version = "0.48" }\n' >>"$root/crates/demo/Cargo.toml"
+expect 1 "lists the bus client or a bus crate" "none mode: a renamed bus client fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-literal"
+fresh_none "$root"
+printf 'const SUBJECT: &str = "integration.evt";\n' >"$root/crates/demo/src/lib.rs"
+expect 1 "literal is in" "none mode: a subject literal fails" bash "$GATE" demo --none "$root"
+
+root="$WORK/none-nocrate"
+mkdir -p "$root"
+expect 2 "does not exist" "none mode: a missing crate fails" bash "$GATE" demo --none "$root"
+
 if [[ "$failures" -ne 0 ]]; then
     echo "$failures case(s) failed" >&2
     exit 1

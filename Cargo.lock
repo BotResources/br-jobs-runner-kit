@@ -376,8 +376,21 @@ dependencies = [
 [[package]]
 name = "br-runner-jobs"
 version = "0.3.0"
+source = "git+https://github.com/BotResources/br-jobs-runner-kit?tag=br-runner-jobs%2Fv0.3.0#442e51444d082b173a226dcfd6502cc1dd94b5ee"
 dependencies = [
  "br-agentic-contract",
+ "br-llm-messages",
+ "br-runner-jobs-client",
+ "futures",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-jobs"
+version = "0.4.0"
+dependencies = [
+ "br-agentic-contract",
+ "br-agentic-harness-contract",
  "br-core-auth",
  "br-llm-messages",
  "br-runner-jobs-client",
@@ -449,7 +462,7 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
+ "br-runner-jobs 0.3.0",
  "br-runner-jobs-client",
  "br-runner-toolkit",
  "br-util-nats-fabric",
