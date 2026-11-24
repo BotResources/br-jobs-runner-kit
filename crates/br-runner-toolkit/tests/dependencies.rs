@@ -29,7 +29,7 @@ fn given_the_manifest_when_the_dev_dependencies_are_read_then_the_adapter_librar
  {
     let dev = section("dev-dependencies");
     assert!(dev.contains("package = \"br-runner-jobs\""));
-    assert!(dev.contains("br-runner-jobs/v0.3.0"));
+    assert!(dev.contains("br-runner-jobs/v0.4.0"));
     assert!(dev.contains("features = [\"test-double\"]"));
 }
 

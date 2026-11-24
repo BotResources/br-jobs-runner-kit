@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+Released 2026-11-24.
+
+Re-pin on `br-runner-jobs-client` 0.1.1 (was 0.1.0) and on `br-runner-jobs` 0.4.0 (was 0.3.0, dev-dependency). No change of the public surface or of the behavior.
+
 ## 0.3.0
 
 Opens the line 0.3. The toolkit takes the jobs side from `br-runner-jobs-client` 0.1.0 and the contract `br-agentic-contract` 0.3.0.
