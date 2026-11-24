@@ -182,6 +182,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-agentic-harness"
+version = "0.1.1"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness%2Fv0.1.1#8042e55dc2369c998397469bb35c40618d795a86"
+dependencies = [
+ "br-agentic-contract",
+ "br-agentic-harness-contract",
+ "br-graph-contract",
+ "br-llm-clients-core",
+ "br-llm-messages",
+ "serde",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "br-agentic-harness-contract"
 version = "0.1.0"
 source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness-contract%2Fv0.1.0#c396988efe540070223e1b91d4f2cc39cf798c2f"
@@ -463,6 +478,27 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-wiring-example"
+version = "0.0.0"
+dependencies = [
+ "br-agentic-contract",
+ "br-agentic-harness",
+ "br-agentic-harness-contract",
+ "br-core-auth",
+ "br-graph-contract",
+ "br-llm-messages",
+ "br-runner-jobs",
+ "br-runner-jobs-client",
+ "br-runner-threads",
+ "br-runner-toolkit",
+ "contract-jobs 0.8.0",
+ "serde",
+ "serde_json",
+ "tokio",
  "uuid",
 ]
 
