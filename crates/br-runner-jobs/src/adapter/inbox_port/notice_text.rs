@@ -24,47 +24,12 @@ fn result_lines(inline: Option<&Content>, notice: &CallNotice) -> Vec<String> {
     lines
 }
 
-/// The longest diagnostic text a notice's cause line carries.
-const CAUSE_CHARS: usize = 500;
-
-/// `Reason code: <code>` and, when the child's failure report holds a
-/// diagnostic, `Cause: <code>: <diagnostic text>`: the child's own statement
-/// of the technical cause, which the message of jobs does not hold.
 fn failure_lines(notice: &CallNotice) -> Vec<String> {
-    let mut lines = Vec::new();
-    if let Some(report) = &notice.report {
-        lines.push(format!("Reason code: {}", report.reason_code));
-        if let Some(text) = diagnostic_text(&report.diagnostic) {
-            lines.push(format!(
-                "Cause: {}: {}",
-                report.reason_code,
-                one_line(&text)
-            ));
-        }
-    }
-    lines
-}
-
-/// The `text` member of a diagnostic when it is a non-blank string, else the
-/// diagnostic as compact JSON when it is a non-empty object.
-fn diagnostic_text(diagnostic: &serde_json::Value) -> Option<String> {
-    if let Some(text) = diagnostic.get("text").and_then(serde_json::Value::as_str) {
-        return (!text.trim().is_empty()).then(|| text.to_owned());
-    }
-    match diagnostic.as_object() {
-        Some(object) if !object.is_empty() => Some(diagnostic.to_string()),
-        _ => None,
-    }
-}
-
-fn one_line(text: &str) -> String {
-    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if line.chars().count() <= CAUSE_CHARS {
-        return line;
-    }
-    let mut cut: String = line.chars().take(CAUSE_CHARS).collect();
-    cut.push('…');
-    cut
+    notice
+        .report
+        .iter()
+        .map(|report| format!("Reason code: {}", report.reason_code))
+        .collect()
 }
 
 pub(super) fn call_notice(notice: &CallNotice) -> String {
@@ -101,7 +66,3 @@ pub(super) fn unknown_item(item_kind: &str, message: Option<&str>) -> String {
     lines.extend(message.map(str::to_owned));
     lines.join("\n")
 }
-
-#[cfg(test)]
-#[path = "notice_text_tests.rs"]
-mod tests;
