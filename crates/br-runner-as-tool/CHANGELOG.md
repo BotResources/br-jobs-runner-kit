@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
-### Changed
+Released 2026-11-25.
+
+### Fixed
 
 - A sync call whose child Job failed with a failure report holding a diagnostic ends with a last line `Cause: <reason code>: <diagnostic text>` after the message of jobs: the child's own statement of the technical cause, which the message of jobs does not hold. The text is the diagnostic's `text` member (else the diagnostic object as JSON), on one line, cut at 500 characters.
 
