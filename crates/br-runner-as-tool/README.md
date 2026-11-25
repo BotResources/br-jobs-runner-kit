@@ -7,7 +7,7 @@ The calling runner is the runner whose agentic node calls the tool. The called r
 ## Install
 
 ```toml
-br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.2.0", version = "0.2.0" }
+br-runner-as-tool = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-as-tool", tag = "br-runner-as-tool/v0.2.1", version = "0.2.1" }
 br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.2.0", version = "0.2.0" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.2.0", version = "0.2.0" }
 br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-core", tag = "br-llm-clients-core/v0.5.0", version = "0.5.0" }
