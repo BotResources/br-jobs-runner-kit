@@ -13,6 +13,8 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Changed
 
+- `br-runner-as-tool` 0.3.2: the error flag of a failed SYNC child ends with `Cause: <reason code>: <diagnostic text>` (see `crates/br-runner-as-tool/CHANGELOG.md`). `Cargo.lock` records its new version.
+
 - `br-agentic-contract` is pinned in each crate that uses it (`br-runner-as-tool`, `br-runner-jobs`, `br-runner-threads`, `br-runner-toolkit`), no longer in the workspace dependencies. `br-runner-as-tool` is on `br-agentic-contract/v0.3.0` since its 0.3.0, `br-runner-threads` since its 0.6.1, `br-runner-jobs` since its 0.3.0, and `br-runner-toolkit` since its 0.3.0.
 
 ### Added
