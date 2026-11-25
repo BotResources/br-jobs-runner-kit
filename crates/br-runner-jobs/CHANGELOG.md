@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The notice of a failed call given to an agent's inbox adds, after `Reason code:`, a line `Cause: <reason code>: <diagnostic text>` when the failure report holds a diagnostic (its `text` member, else the object as JSON), on one line, cut at 500 characters.
+
 ## 0.2.0
 
 Moves the crate to the wire library `contract-jobs` 0.8.0: the started fact becomes a request with a typed reply, the arrival feed reads the version 2 doorbell through an ephemeral consumer, and the unread read gives the mail notice, the cancel notice and the refusal notice.
