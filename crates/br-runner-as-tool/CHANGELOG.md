@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+Released 2026-11-25.
+
+### Fixed
+
+- A failed child now gives its cause: when its failure report holds a diagnostic, the error flag of a SYNC call ends with a line `Cause: <reason code>: <diagnostic text>` (one line, at most 500 characters). The message of jobs holds only the reason code, so the agent did not see why the child failed.
+
 ## 0.3.1
 
 Released 2026-11-24.

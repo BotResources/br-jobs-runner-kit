@@ -3,7 +3,7 @@ use br_runner_jobs_client::{Content, EndWait, Error, ResultRef, SyncEnd, WriteEn
 use futures::{FutureExt, select_biased};
 use uuid::Uuid;
 
-use super::content::{default_content, ended_text};
+use super::content::{default_content, ended_text, failed_text};
 use super::prepare::Prepared;
 use super::race::unless_cancelled;
 use super::stop::refusal_text;
@@ -72,10 +72,10 @@ impl RunnerToolCode {
             SyncEnd::Completed { inline, result_ref } => {
                 self.completed(child, inline, result_ref, cancel).await
             }
-            SyncEnd::Failed { message, .. } => Err(Stop::Flag(ended_text(
+            SyncEnd::Failed { report, message } => Err(Stop::Flag(failed_text(
                 self.runner_type.as_str(),
-                "failed",
                 &message,
+                report.as_ref(),
             ))),
             SyncEnd::Cancelled { message } => Err(Stop::Flag(ended_text(
                 self.runner_type.as_str(),
