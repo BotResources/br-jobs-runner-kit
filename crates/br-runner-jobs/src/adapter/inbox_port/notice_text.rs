@@ -35,7 +35,11 @@ fn failure_lines(notice: &CallNotice) -> Vec<String> {
     if let Some(report) = &notice.report {
         lines.push(format!("Reason code: {}", report.reason_code));
         if let Some(text) = diagnostic_text(&report.diagnostic) {
-            lines.push(format!("Cause: {}: {}", report.reason_code, one_line(&text)));
+            lines.push(format!(
+                "Cause: {}: {}",
+                report.reason_code,
+                one_line(&text)
+            ));
         }
     }
     lines

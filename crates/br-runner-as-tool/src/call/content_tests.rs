@@ -10,13 +10,20 @@ fn given_a_diagnostic_text_when_the_cause_is_read_then_it_names_the_reason_code_
     );
     assert_eq!(
         cause.as_deref(),
-        Some("Cause: model_call_failed: the client failed: rejected by the provider (HTTP 400): bad model")
+        Some(
+            "Cause: model_call_failed: the client failed: rejected by the provider (HTTP 400): bad model"
+        )
     );
 }
 
 #[test]
 fn given_no_diagnostic_when_the_cause_is_read_then_there_is_none() {
-    for diagnostic in [json!(null), json!({}), json!({ "text": "  " }), json!("bare")] {
+    for diagnostic in [
+        json!(null),
+        json!({}),
+        json!({ "text": "  " }),
+        json!("bare"),
+    ] {
         assert_eq!(cause_line("failed", &diagnostic), None, "{diagnostic}");
     }
 }
