@@ -28,7 +28,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Fixed
 
-- `br-runner-as-tool` 0.2.1: the error flag of a failed SYNC child ends with `Cause: <reason code>: <diagnostic text>` (see `crates/br-runner-as-tool/CHANGELOG.md`). `Cargo.lock` records its new version.
+- `br-runner-as-tool` 0.2.1: the error flag of a failed SYNC child ends with `Cause: <reason code>: <diagnostic text>` (see `crates/br-runner-as-tool/CHANGELOG.md`). `Cargo.lock` records its new version, and `url` 2.5.9 (RUSTSEC-2026-0592).
 
 - `br-runner-connection` 0.1.1: input checks and error reading fixed (readable `UNAUTHENTICATED`, input checks, subject and size checks of the bus, the text of the service carried as given and no longer redacted, `Cause::NoListener`, the four examples). A dependency gate (`check-no-llm-clients.sh`) forbids any `br-llm-clients*` library in its graph. See `crates/br-runner-connection/CHANGELOG.md`.
 
