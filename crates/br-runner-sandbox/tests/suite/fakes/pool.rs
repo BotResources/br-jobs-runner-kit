@@ -11,6 +11,8 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use super::FakeCluster;
+use super::gate::Gate;
+use super::merge::{merge, texts};
 use super::pool_fixtures::pool;
 
 #[derive(Default)]
@@ -36,24 +38,7 @@ pub struct PoolCluster {
     state: Arc<Mutex<PoolState>>,
     changes: Arc<watch::Sender<u64>>,
     pub scripts: FakeCluster,
-}
-
-fn merge(target: &mut BTreeMap<String, String>, section: Option<&Value>) {
-    let Some(entries) = section.and_then(Value::as_object) else {
-        return;
-    };
-    for (key, value) in entries {
-        match value.as_str() {
-            Some(text) => target.insert(key.clone(), text.to_owned()),
-            None => target.remove(key),
-        };
-    }
-}
-
-fn texts(section: Option<&Value>) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    merge(&mut out, section);
-    out
+    pub gate: Gate,
 }
 
 impl PoolCluster {
@@ -62,6 +47,7 @@ impl PoolCluster {
             state: Arc::default(),
             changes: Arc::new(watch::channel(0).0),
             scripts: FakeCluster::new(),
+            gate: Gate::default(),
         };
         cluster.lock().ready_on_create = true;
         cluster.lock().replica_set = Some(pool(Vec::new()));
@@ -144,6 +130,67 @@ impl PoolCluster {
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
+
+    fn apply_patch(&self, name: &str, patch: &Value) -> Result<PodView, ClusterError> {
+        let mut state = self.lock();
+        state.calls.push(format!("patch {name}"));
+        let text = patch.to_string();
+        if state
+            .failing_patch_keys
+            .iter()
+            .any(|key| text.contains(key.as_str()))
+        {
+            return Err(ClusterError::Call(
+                "the API server refuses this patch".to_owned(),
+            ));
+        }
+        state.patches.push((name.to_owned(), patch.clone()));
+        state.version += 1;
+        let version = state.version.to_string();
+        let stale = state.stale.remove(name);
+        let pod = state
+            .pods
+            .get_mut(name)
+            .ok_or_else(|| ClusterError::Gone(name.to_owned()))?;
+        let wanted = patch
+            .pointer("/metadata/resourceVersion")
+            .and_then(Value::as_str);
+        if stale || wanted.is_some_and(|wanted| wanted != pod.resource_version) {
+            pod.resource_version = version;
+            return Err(ClusterError::Conflict(name.to_owned()));
+        }
+        merge(&mut pod.labels, patch.pointer("/metadata/labels"));
+        merge(&mut pod.annotations, patch.pointer("/metadata/annotations"));
+        pod.resource_version = version;
+        Ok(pod.clone())
+    }
+
+    fn insert_created(&self, manifest: &Value) -> PodView {
+        let mut state = self.lock();
+        state.created_count += 1;
+        let name = manifest
+            .pointer("/metadata/generateName")
+            .and_then(Value::as_str)
+            .map_or_else(
+                || "created".to_owned(),
+                |prefix| format!("{prefix}{}", state.created_count),
+            );
+        state.calls.push(format!("create {name}"));
+        state.created.push(manifest.clone());
+        state.version += 1;
+        let ready = state.ready_on_create;
+        let pod = PodView {
+            name: name.clone(),
+            resource_version: state.version.to_string(),
+            labels: texts(manifest.pointer("/metadata/labels")),
+            annotations: texts(manifest.pointer("/metadata/annotations")),
+            phase: Some(if ready { "Running" } else { "Pending" }.to_owned()),
+            ready_condition: ready,
+            deleting: false,
+        };
+        state.pods.insert(name, pod.clone());
+        pod
+    }
 }
 
 impl Cluster for PoolCluster {
@@ -171,70 +218,18 @@ impl Cluster for PoolCluster {
 
     fn patch_pod<'a>(&'a self, name: &'a str, patch: &'a Value) -> ClusterFuture<'a, PodView> {
         Box::pin(async move {
-            let mut state = self.lock();
-            state.calls.push(format!("patch {name}"));
-            let text = patch.to_string();
-            if state
-                .failing_patch_keys
-                .iter()
-                .any(|key| text.contains(key.as_str()))
-            {
-                return Err(ClusterError::Call(
-                    "the API server refuses this patch".to_owned(),
-                ));
-            }
-            state.patches.push((name.to_owned(), patch.clone()));
-            state.version += 1;
-            let version = state.version.to_string();
-            let stale = state.stale.remove(name);
-            let pod = state
-                .pods
-                .get_mut(name)
-                .ok_or_else(|| ClusterError::Gone(name.to_owned()))?;
-            let wanted = patch
-                .pointer("/metadata/resourceVersion")
-                .and_then(Value::as_str);
-            if stale || wanted.is_some_and(|wanted| wanted != pod.resource_version) {
-                pod.resource_version = version;
-                return Err(ClusterError::Conflict(name.to_owned()));
-            }
-            merge(&mut pod.labels, patch.pointer("/metadata/labels"));
-            merge(&mut pod.annotations, patch.pointer("/metadata/annotations"));
-            pod.resource_version = version;
-            let patched = pod.clone();
-            drop(state);
+            let patched = self.apply_patch(name, patch)?;
             self.changed();
+            self.gate.after_patch().await;
             Ok(patched)
         })
     }
 
     fn create_pod<'a>(&'a self, manifest: &'a Value) -> ClusterFuture<'a, PodView> {
         Box::pin(async move {
-            let mut state = self.lock();
-            state.created_count += 1;
-            let name = manifest
-                .pointer("/metadata/generateName")
-                .and_then(Value::as_str)
-                .map_or_else(
-                    || "created".to_owned(),
-                    |prefix| format!("{prefix}{}", state.created_count),
-                );
-            state.calls.push(format!("create {name}"));
-            state.created.push(manifest.clone());
-            state.version += 1;
-            let ready = state.ready_on_create;
-            let pod = PodView {
-                name: name.clone(),
-                resource_version: state.version.to_string(),
-                labels: texts(manifest.pointer("/metadata/labels")),
-                annotations: texts(manifest.pointer("/metadata/annotations")),
-                phase: Some(if ready { "Running" } else { "Pending" }.to_owned()),
-                ready_condition: ready,
-                deleting: false,
-            };
-            state.pods.insert(name, pod.clone());
-            drop(state);
+            let pod = self.insert_created(manifest);
             self.changed();
+            self.gate.after_create().await;
             Ok(pod)
         })
     }

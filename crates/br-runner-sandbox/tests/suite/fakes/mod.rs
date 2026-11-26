@@ -1,8 +1,10 @@
 mod boxes;
 mod clock;
 mod cluster;
+mod gate;
 mod http;
 mod log;
+mod merge;
 mod pool;
 mod pool_fixtures;
 mod rig;
