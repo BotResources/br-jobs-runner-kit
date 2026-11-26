@@ -2,7 +2,7 @@
 
 Every folder `images/<name>/` that holds a `Dockerfile` is an image. The repository root is the build context, so a `Dockerfile` can copy `LICENSE`, `crates/` and the like. `<name>` matches `^[a-z0-9][a-z0-9._-]*$` (a registry name); a folder with another name fails the plan.
 
-Images: [`br-sandbox-tools`](br-sandbox-tools/README.md).
+Images: [`br-sandbox-tools`](br-sandbox-tools/README.md), [`br-sandbox-python`](br-sandbox-python/README.md).
 
 ## Workflows
 
