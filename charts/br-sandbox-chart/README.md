@@ -2,7 +2,7 @@
 
 The Helm chart of the sandbox. One installation per cluster. It renders everything that is declarative: namespaces, quotas, admission policy, network policies, warm pools, roles, the keeper and the network check. Licence: Apache-2.0. The chart is released by the workflow `chart-release`; it is not a library of the Libraries registry.
 
-It does not claim a pod, run a command, save or restore (the library `br-runner-sandbox`), size a pool or delete a save (the library `br-sandbox-keeper`). It creates no bucket, no Secret and no credential value.
+It does not claim a pod, execute a command, save or restore (the library `br-runner-sandbox`), size a pool or delete a save (the library `br-sandbox-keeper`). It creates no bucket, no Secret and no credential value.
 
 ## What a render holds
 
@@ -160,7 +160,7 @@ One policy and binding per (client, mode); values (size, runtime class, reposito
 - Patch rules (`BR_SANDBOX_LABELS`): a patch changes only `br.sandbox/` keys of labels and annotations; `role` and `pool-id` never change; a claimed pod never leaves `claimed`.
 - Init and seed containers are containers of the pod and follow rules 4 to 7.
 
-The refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role, with the runner service account, in a sandbox namespace, are proved by a cluster test. That test is not part of the offline suite of this chart and has not been executed at this version. The CEL of the admission policy is not compiled offline, so at this version it has been neither compiled nor run on a cluster.
+The refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role, with the runner service account, in a sandbox namespace, are proved by a cluster test. That test is not part of the offline suite of this chart and has not been executed at this version. The CEL of the admission policy is not compiled offline, so at this version it has been neither compiled nor executed on a cluster.
 
 ## Image contract
 
@@ -214,4 +214,4 @@ The chart itself is Apache-2.0 and ships no GPL program. Kubernetes (Apache-2.0)
 
 ## Tests
 
-`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. The cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) are not part of this suite and have not run at this version; they are to be executed on a test cluster.
+`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. The cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) are not part of this suite and have not been executed at this version; they are to be executed on a test cluster.
