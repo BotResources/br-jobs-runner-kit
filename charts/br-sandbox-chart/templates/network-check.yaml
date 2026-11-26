@@ -1,0 +1,96 @@
+{{- if .Values.network_check.enabled }}
+{{- $system := include "br-sandbox-chart.system_namespace" . }}
+{{- $namespaces := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- $script := .Files.Get "files/network-check.sh" }}
+{{- range $ns := $namespaces }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+data:
+  network-check.sh: |
+    {{- $script | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+data:
+  network-check.sh: |
+    {{- $script | nindent 4 }}
+  namespaces: |
+    {{- range $ns := $namespaces }}
+    {{ $ns.name }} {{ $ns.mode }}
+    {{- end }}
+  node-addresses: |
+    {{- range concat .Values.network.node_addresses .Values.network.node_public_addresses .Values.network.load_balancer_addresses }}
+    {{ . | trimSuffix "/32" | trimSuffix "/128" }}
+    {{- end }}
+  extra-targets: |
+    {{- range .Values.network_check.targets }}
+    {{ . }}
+    {{- end }}
+  {{- range $ns := $namespaces }}
+  probe-{{ $ns.name }}.yaml: |
+    {{- $metadata := dict "name" "br-sandbox-netcheck-probe" "namespace" $ns.name "labels" (dict "br.sandbox/role" "sandbox" "br.sandbox/pool" "probe" "br.sandbox/pool-id" $ns.poolId) }}
+    {{- $pod := dict "apiVersion" "v1" "kind" "Pod" "metadata" $metadata "spec" (include "br-sandbox-chart.pod.spec" (dict "root" $ "ns" $ns "probe" true) | fromYaml) }}
+    {{- toYaml $pod | nindent 4 }}
+  {{- end }}
+{{- $name := printf "br-sandbox-netcheck-%s" (default "initial" .Values.network_check.run_id) }}
+{{- $pullSecrets := include "br-sandbox-chart.pull_secrets" . | fromJsonArray }}
+{{- $image := include "br-sandbox-chart.image.mirrored" (dict "root" . "ref" .Values.network_check.image) }}
+{{- $container := dict "name" "netcheck" "image" $image "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" . "ref" .Values.network_check.image)) "command" (list "sh" "/netcheck/network-check.sh" "discover") "env" (list (dict "name" "TMPDIR" "value" "/tmp")) "securityContext" (include "br-sandbox-chart.system.security" . | fromJson) "volumeMounts" (list (dict "name" "netcheck" "mountPath" "/netcheck" "readOnly" true) (dict "name" "tmp" "mountPath" "/tmp")) "resources" (dict "requests" (dict "cpu" "50m" "memory" "64Mi") "limits" (dict "cpu" "500m" "memory" "256Mi")) }}
+{{- $podSpec := dict "serviceAccountName" "br-sandbox-netcheck" "restartPolicy" "Never" "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) "containers" (list $container) "volumes" (list (dict "name" "netcheck" "configMap" (dict "name" "br-sandbox-netcheck")) (dict "name" "tmp" "emptyDir" (dict))) }}
+{{- if $pullSecrets }}
+{{- $_ := set $podSpec "imagePullSecrets" $pullSecrets }}
+{{- end }}
+{{- $podLabels := dict "br.sandbox/system" "netcheck" }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        {{- toYaml $podLabels | nindent 8 }}
+    spec:
+      {{- toYaml $podSpec | nindent 6 }}
+{{- if .Values.network_check.cron }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.network_check.cron | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            {{- toYaml $podLabels | nindent 12 }}
+        spec:
+          {{- toYaml $podSpec | nindent 10 }}
+{{- end }}
+{{- end }}

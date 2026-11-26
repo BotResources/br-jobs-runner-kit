@@ -1,0 +1,76 @@
+installation:
+  namespace_prefix: sbx
+image: registry.example.test/agents/base:1.0
+tools:
+  image:
+    repository: registry.example.test/tools/br-sandbox-tools
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+save:
+  ttl_seconds: 60
+store:
+  endpoint: https://store.example.test
+  bucket: saves
+  region: example-1
+  path_style: true
+  credentials_secret: store-credentials
+network:
+  pod_cidr: 10.42.0.0/16
+  service_cidr: 10.43.0.0/16
+  node_addresses:
+    - 10.0.0.11
+    - 10.0.0.12
+  node_public_addresses:
+    - 203.0.113.11
+    - 203.0.113.12
+  load_balancer_addresses:
+    - 203.0.113.20
+  public_resolvers:
+    - 198.51.100.53
+    - 198.51.100.54
+  api_server_addresses:
+    - 10.0.0.11/32
+  store_cidrs:
+    - 10.0.1.0/24
+network_check:
+  image: registry.example.test/tools/probe:1.0
+  targets:
+    - bus.example.test:4222
+    - db.example.test:5432
+clients:
+  alpha:
+    modes:
+      none:
+        runner:
+          service_account: runner
+          namespace: runners
+      allow:
+        runner:
+          service_account: runner
+          namespace: runners
+        allow:
+          domains:
+            - git.example.test
+          cidrs:
+            - 192.0.2.0/24
+      full:
+        runner:
+          service_account: runner
+          namespace: runners
+        pool:
+          size:
+            cpu:
+              request: "1"
+              limit: "4"
+            memory:
+              request: 2Gi
+              limit: 4Gi
+            disk:
+              request: 4Gi
+              limit: 10Gi
+          max_sandboxes: 10
+  beta:
+    modes:
+      none:
+        runner:
+          service_account: runner
+          namespace: runners

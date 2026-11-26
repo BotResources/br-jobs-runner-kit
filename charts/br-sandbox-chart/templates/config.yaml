@@ -1,0 +1,27 @@
+{{- $system := include "br-sandbox-chart.system_namespace" . }}
+{{- $namespaces := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- range $ns := $namespaces }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-config
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "br-sandbox-chart.config.namespace" (dict "root" $ "ns" $ns) | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-config
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "br-sandbox-chart.config.system" . | nindent 4 }}
+{{- include "br-sandbox-chart.slot.keeper.objects" . }}

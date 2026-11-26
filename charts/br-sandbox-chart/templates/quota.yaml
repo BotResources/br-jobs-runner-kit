@@ -1,0 +1,44 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- $size := $ns.pool.size }}
+{{- $pods := add ($ns.pool.max_sandboxes | int64) ($.Values.quota.extra_pods | int64) }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: br-sandbox-quota
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  hard:
+    pods: {{ $pods | quote }}
+    requests.cpu: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.cpu.request "n" $pods) | quote }}
+    requests.memory: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.memory.request "n" $pods) | quote }}
+    requests.ephemeral-storage: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.disk.request "n" $pods) | quote }}
+    limits.cpu: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.cpu.limit "n" $pods) | quote }}
+    limits.memory: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.memory.limit "n" $pods) | quote }}
+    limits.ephemeral-storage: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.disk.limit "n" $pods) | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: br-sandbox-limits
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: {{ $size.cpu.request | toString | quote }}
+        memory: {{ $size.memory.request | toString | quote }}
+        ephemeral-storage: {{ $size.disk.request | toString | quote }}
+      default:
+        cpu: {{ $size.cpu.limit | toString | quote }}
+        memory: {{ $size.memory.limit | toString | quote }}
+        ephemeral-storage: {{ $size.disk.limit | toString | quote }}
+      max:
+        cpu: {{ $size.cpu.limit | toString | quote }}
+        memory: {{ $size.memory.limit | toString | quote }}
+        ephemeral-storage: {{ $size.disk.limit | toString | quote }}
+{{- end }}
