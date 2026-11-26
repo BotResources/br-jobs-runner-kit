@@ -92,7 +92,7 @@ document = docx.Document()
 document.add_paragraph("smoke")
 document.save("/docs/s.docx")
 book = openpyxl.Workbook()
-book.active["A1"] = "smoke"
+book.active.append(["smoke"])
 book.save("/docs/s.xlsx")
 deck = pptx.Presentation()
 deck.slides.add_slide(deck.slide_layouts[0]).shapes.title.text = "smoke"
