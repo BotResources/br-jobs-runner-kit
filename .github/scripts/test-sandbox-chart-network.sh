@@ -58,14 +58,42 @@ check_network_check_except_lists_hold_every_internal_range() {
 }
 
 check_no_project_value_in_the_chart() {
-    section "no host, registry or client name outside the fixtures"
+    section "no host or registry outside the fixtures"
     local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local)$'
     local found
     found="$(cd "$CHART" && hosts_of Chart.yaml README.md CHANGELOG.md values.yaml values.schema.json templates/* files/* | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
     t "no host in the chart files outside the allowed suffixes" test -z "$found"
-    t "no client or project name in the chart files" test -z "$(cd "$CHART" && grep -rniE "ghcr|docker\.io|quay\.io${FORBIDDEN_NAMES:+|${FORBIDDEN_NAMES}}" README.md CHANGELOG.md values.yaml values.schema.json templates files || true)"
+    t "no registry host in the chart files" test -z "$(cd "$CHART" && grep -rniE "ghcr|docker\.io|quay\.io" README.md CHANGELOG.md values.yaml values.schema.json templates files || true)"
     t "the fixtures hold only example.test hosts" test -z "$(cd "$CHART/ci" && hosts_of ./*.yaml | grep -v 'example\.test$' || true)"
     t "the render holds no host that is not a value or a Kubernetes name" test -z "$(hosts_of "$WORK/mirror_yaml.yaml" | grep -vE "$allowed" || true)"
+}
+
+limit_range_is() {
+    jqt "$1" --arg request_cpu "$2" --arg request_memory "$3" --arg request_disk "$4" --arg limit_cpu "$5" --arg limit_memory "$6" --arg limit_disk "$7" '
+        .[] | select(.kind == "LimitRange" and .metadata.namespace == "sbx-alpha-none") | .spec.limits | length == 1 and (.[0]
+        | .type == "Container"
+        and .defaultRequest == {cpu: $request_cpu, memory: $request_memory, "ephemeral-storage": $request_disk}
+        and .default == {cpu: $limit_cpu, memory: $limit_memory, "ephemeral-storage": $limit_disk}
+        and .max == {cpu: $limit_cpu, memory: $limit_memory, "ephemeral-storage": $limit_disk})'
+}
+
+quota_is() {
+    jqt "$1" --arg request_cpu "$2" --arg request_memory "$3" --arg request_disk "$4" --arg limit_cpu "$5" --arg limit_memory "$6" --arg limit_disk "$7" '
+        .[] | select(.kind == "ResourceQuota" and .metadata.namespace == "sbx-alpha-none") | .spec.hard
+        | .["requests.cpu"] == $request_cpu and .["requests.memory"] == $request_memory and .["requests.ephemeral-storage"] == $request_disk
+        and .["limits.cpu"] == $limit_cpu and .["limits.memory"] == $limit_memory and .["limits.ephemeral-storage"] == $limit_disk'
+}
+
+policy_size_is() {
+    jqt "$1" --arg request_cpu "$2" --arg request_memory "$3" --arg request_disk "$4" --arg limit_cpu "$5" --arg limit_memory "$6" --arg limit_disk "$7" '
+        .[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "sbx-alpha-none-pod") | .spec.validations[]
+        | select(.message | startswith("BR_SANDBOX_RESOURCES:")) | .expression
+        | contains("quantity(c.resources.requests[\u0027cpu\u0027]).isGreaterThan(quantity(\u0027" + $request_cpu + "\u0027))")
+        and contains("quantity(c.resources.requests[\u0027memory\u0027]).isGreaterThan(quantity(\u0027" + $request_memory + "\u0027))")
+        and contains("quantity(c.resources.requests[\u0027ephemeral-storage\u0027]).isGreaterThan(quantity(\u0027" + $request_disk + "\u0027))")
+        and contains("quantity(c.resources.limits[\u0027cpu\u0027]).isGreaterThan(quantity(\u0027" + $limit_cpu + "\u0027))")
+        and contains("quantity(c.resources.limits[\u0027memory\u0027]).isGreaterThan(quantity(\u0027" + $limit_memory + "\u0027))")
+        and contains("quantity(c.resources.limits[\u0027ephemeral-storage\u0027]).isGreaterThan(quantity(\u0027" + $limit_disk + "\u0027))")'
 }
 
 check_one_size_key_per_resource() {
@@ -81,7 +109,13 @@ check_one_size_key_per_resource() {
     changed="$(jq 'map(select(.kind != "ReplicaSet" and .kind != "ResourceQuota" and .kind != "LimitRange" and .kind != "ValidatingAdmissionPolicy" and .kind != "ConfigMap"))' "$WORK/big.json")"
     t "a bigger size changes only quota, limit range, policy, config and pod resources" test "$normal" = "$changed"
     t "the pod differs only in resources" test "$(jq -S '[.[] | select(.kind == "ReplicaSet") | del(.spec.template.spec.containers[].resources)]' "$WORK/ex.json")" = "$(jq -S '[.[] | select(.kind == "ReplicaSet") | del(.spec.template.spec.containers[].resources)]' "$WORK/big.json")"
-    t "the bigger size reaches the quota, the limit range and the policy" test "$(jq -r '[.[] | select(.kind == "ResourceQuota" or .kind == "LimitRange" or .kind == "ValidatingAdmissionPolicy")] | tostring | test("limits.cpu")' "$WORK/big.json")" = true
+    render bigger -f "$EXAMPLE" --set pool.size.cpu.request=700m --set pool.size.cpu.limit=3 --set pool.size.memory.request=3Gi --set pool.size.memory.limit=5Gi --set pool.size.disk.request=6Gi --set pool.size.disk.limit=9Gi
+    t "the default size reaches the limit range of its namespace" limit_range_is ex 500m 1Gi 2Gi 2 2Gi 5Gi
+    t "the new size reaches the limit range: default request, default and max follow it" limit_range_is bigger 700m 3Gi 6Gi 3 5Gi 9Gi
+    t "the default size reaches the quota of its namespace" quota_is ex 12200m 24736Mi 49312Mi 50 49792Mi 123520Mi
+    t "the new size reaches the quota: each of the six quantities follows it" quota_is bigger 17000m 73888Mi 147616Mi 74 123520Mi 221824Mi
+    t "the default size reaches the size rule of the policy" policy_size_is ex 500m 1Gi 2Gi 2 2Gi 5Gi
+    t "the new size reaches the size rule of the policy: each of the six bounds follows it" policy_size_is bigger 700m 3Gi 6Gi 3 5Gi 9Gi
     t "the pool of a namespace carries its own size" jqt ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.containers[0].resources.limits.cpu == "4"'
 }
 

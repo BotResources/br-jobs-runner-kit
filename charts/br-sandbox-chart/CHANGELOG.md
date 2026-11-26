@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+Fixes and a new render failure.
+
+- New render failure `BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client,mode,namespace}`: a `runner.service_account` named `sandbox` with a `runner.namespace` that is a sandbox namespace of the installation fails the render. The runner identity must not be the identity of the sandbox pods. Values that passed before with such a pair now fail; any other pair is unchanged.
+- The README states that a node needs a kubelet with subordinate id ranges for user namespaces, that the chart ships and requires no node label for it, that a node without it refuses the pod at start, and that `pool.node_selector` restricts the pool to prepared nodes.
+- The README states that the check of foreign values in the chart files covers registries and host names only, and that a client or project name is checked by review.
+- Tests: the size of the pool is checked against the values of the LimitRange (default request, default, max), the six quantities of the ResourceQuota and the six bounds of the size rule of the admission policy, with two sizes. No binding of the render names the `sandbox` service account of a sandbox namespace. `pool.node_selector` reaches the pod. The check of foreign values no longer reads a variable that nothing sets.
+
 ## 0.1.0
 
 First release. The chart of the sandbox: one installation per cluster, one namespace per (client, mode).
