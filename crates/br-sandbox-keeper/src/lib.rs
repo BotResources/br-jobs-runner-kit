@@ -3,11 +3,12 @@ mod cluster;
 mod config;
 mod convert;
 mod error;
+mod facts;
 #[cfg(test)]
 mod fakes;
-mod facts;
 mod http;
 mod leader;
+mod metrics;
 mod readiness;
 mod rules;
 #[cfg(test)]

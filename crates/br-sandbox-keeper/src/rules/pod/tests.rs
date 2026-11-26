@@ -30,8 +30,14 @@ fn a_warm_pod_is_deleted_at_creation_plus_the_maximum_age() {
     let pod = warm("w", 1000);
     assert_eq!(judge(&pod, 2799).action, Action::Keep);
     assert_eq!(judge(&pod, 2799).recheck_at, Some(at(2800)));
-    assert_eq!(judge(&pod, 2800).action, Action::Delete(DeleteReason::WarmMaxAge));
-    assert_eq!(judge(&pod, 9000).action, Action::Delete(DeleteReason::WarmMaxAge));
+    assert_eq!(
+        judge(&pod, 2800).action,
+        Action::Delete(DeleteReason::WarmMaxAge)
+    );
+    assert_eq!(
+        judge(&pod, 9000).action,
+        Action::Delete(DeleteReason::WarmMaxAge)
+    );
 }
 
 #[test]
@@ -47,7 +53,10 @@ fn a_clean_pod_with_a_small_state_is_deleted_at_once() {
     let pod = saved("c", 5000, 9_999_999);
     assert_eq!(judge(&pod, 5000).action, Action::Delete(DeleteReason::Idle));
     let empty = saved("c", 5000, 0);
-    assert_eq!(judge(&empty, 5000).action, Action::Delete(DeleteReason::Idle));
+    assert_eq!(
+        judge(&empty, 5000).action,
+        Action::Delete(DeleteReason::Idle)
+    );
 }
 
 #[test]
@@ -67,7 +76,10 @@ fn the_idle_ttl_and_the_threshold_are_the_ones_of_the_pool() {
         Action::Delete(DeleteReason::Idle)
     );
     let big = saved("c", 5000, 100);
-    assert_eq!(judge_pod(&big, &custom, None, at(5029)).action, Action::Keep);
+    assert_eq!(
+        judge_pod(&big, &custom, None, at(5029)).action,
+        Action::Keep
+    );
     assert_eq!(
         judge_pod(&big, &custom, None, at(5030)).action,
         Action::Delete(DeleteReason::Idle)
@@ -79,7 +91,10 @@ fn a_clean_pod_with_no_idle_since_is_deleted_at_claimed_at_plus_the_stuck_ttl() 
     let pod = claimed("c", true, 1000);
     assert_eq!(judge(&pod, 8199).action, Action::Keep);
     assert_eq!(judge(&pod, 8199).recheck_at, Some(at(8200)));
-    assert_eq!(judge(&pod, 8200).action, Action::Delete(DeleteReason::Stuck));
+    assert_eq!(
+        judge(&pod, 8200).action,
+        Action::Delete(DeleteReason::Stuck)
+    );
 }
 
 #[test]
@@ -87,7 +102,10 @@ fn a_dirty_pod_is_deleted_at_claimed_at_plus_the_stuck_ttl_and_not_before() {
     let pod = claimed("d", false, 1000);
     assert_eq!(judge(&pod, 1001).action, Action::Keep);
     assert_eq!(judge(&pod, 8199).action, Action::Keep);
-    assert_eq!(judge(&pod, 8200).action, Action::Delete(DeleteReason::Stuck));
+    assert_eq!(
+        judge(&pod, 8200).action,
+        Action::Delete(DeleteReason::Stuck)
+    );
 }
 
 #[test]
@@ -107,7 +125,10 @@ fn a_failed_pod_is_deleted_failed_pod_ttl_after_it_was_first_seen() {
         ..warm("f", 0)
     };
     let seen = Some(at(4000));
-    assert_eq!(judge_pod(&pod, &rules(), seen, at(4299)).action, Action::Keep);
+    assert_eq!(
+        judge_pod(&pod, &rules(), seen, at(4299)).action,
+        Action::Keep
+    );
     assert_eq!(
         judge_pod(&pod, &rules(), seen, at(4299)).recheck_at,
         Some(at(4300))
@@ -180,7 +201,10 @@ fn a_pending_warm_pod_older_than_the_maximum_age_is_deleted_not_alarmed() {
         ready: false,
         ..warm("p", 1000)
     };
-    assert_eq!(judge(&pod, 2800).action, Action::Delete(DeleteReason::WarmMaxAge));
+    assert_eq!(
+        judge(&pod, 2800).action,
+        Action::Delete(DeleteReason::WarmMaxAge)
+    );
 }
 
 #[test]
@@ -206,14 +230,62 @@ fn a_pod_that_is_being_deleted_is_left_alone() {
 #[test]
 fn an_annotation_that_the_rule_needs_and_is_missing_or_unreadable_is_never_deleted_for() {
     let cases: Vec<(PodFacts, &str)> = vec![
-        (PodFacts { clean: Mark::Absent, ..claimed("a", true, 0) }, "clean"),
-        (PodFacts { clean: Mark::Unreadable, ..claimed("a", true, 0) }, "clean"),
-        (PodFacts { claimed_at: Mark::Absent, ..claimed("a", false, 0) }, "claimed-at"),
-        (PodFacts { claimed_at: Mark::Unreadable, ..claimed("a", false, 0) }, "claimed-at"),
-        (PodFacts { claimed_at: Mark::Unreadable, ..claimed("a", true, 0) }, "claimed-at"),
-        (PodFacts { idle_since: Mark::Unreadable, ..claimed("a", true, 0) }, "idle-since"),
-        (PodFacts { state_bytes: Mark::Absent, ..saved("a", 0, 0) }, "state-bytes"),
-        (PodFacts { state_bytes: Mark::Unreadable, ..saved("a", 0, 0) }, "state-bytes"),
+        (
+            PodFacts {
+                clean: Mark::Absent,
+                ..claimed("a", true, 0)
+            },
+            "clean",
+        ),
+        (
+            PodFacts {
+                clean: Mark::Unreadable,
+                ..claimed("a", true, 0)
+            },
+            "clean",
+        ),
+        (
+            PodFacts {
+                claimed_at: Mark::Absent,
+                ..claimed("a", false, 0)
+            },
+            "claimed-at",
+        ),
+        (
+            PodFacts {
+                claimed_at: Mark::Unreadable,
+                ..claimed("a", false, 0)
+            },
+            "claimed-at",
+        ),
+        (
+            PodFacts {
+                claimed_at: Mark::Unreadable,
+                ..claimed("a", true, 0)
+            },
+            "claimed-at",
+        ),
+        (
+            PodFacts {
+                idle_since: Mark::Unreadable,
+                ..claimed("a", true, 0)
+            },
+            "idle-since",
+        ),
+        (
+            PodFacts {
+                state_bytes: Mark::Absent,
+                ..saved("a", 0, 0)
+            },
+            "state-bytes",
+        ),
+        (
+            PodFacts {
+                state_bytes: Mark::Unreadable,
+                ..saved("a", 0, 0)
+            },
+            "state-bytes",
+        ),
     ];
     for (pod, field) in cases {
         let judged = judge(&pod, 1_000_000_000);

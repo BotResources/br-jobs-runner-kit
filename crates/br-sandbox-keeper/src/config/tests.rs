@@ -87,7 +87,9 @@ fn the_default_selector_follows_the_label_prefix() {
 #[test]
 fn a_key_that_the_library_does_not_know_is_a_fault() {
     let result = load(&with("store_credentials_secret", json!("x")));
-    assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("store_credentials_secret")));
+    assert!(
+        matches!(result, Err(ConfigError::Document(text)) if text.contains("store_credentials_secret"))
+    );
     let result = load(&with_pool("size", json!(1)));
     assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("size")));
 }
@@ -112,11 +114,19 @@ fn each_required_key_is_required() {
     ] {
         assert_eq!(
             load(&without(key)),
-            Err(ConfigError::Missing { key: key.to_owned() }),
+            Err(ConfigError::Missing {
+                key: key.to_owned()
+            }),
             "{key}"
         );
     }
-    for key in ["id", "namespace", "replicaset", "min_replicas", "max_replicas"] {
+    for key in [
+        "id",
+        "namespace",
+        "replicaset",
+        "min_replicas",
+        "max_replicas",
+    ] {
         let mut base = document();
         base["pools"][0].as_object_mut().unwrap().remove(key);
         assert_eq!(
@@ -162,7 +172,9 @@ fn a_duration_that_drives_a_timer_is_never_zero() {
     ] {
         assert_eq!(
             load(&with(key, json!(0))),
-            Err(ConfigError::NotAboveZero { key: key.to_owned() }),
+            Err(ConfigError::NotAboveZero {
+                key: key.to_owned()
+            }),
             "{key}"
         );
     }
@@ -227,7 +239,11 @@ fn the_lease_durations_must_fall_in_strict_order() {
         let mut base = with("lease_duration_seconds", json!(duration));
         base["renew_deadline_seconds"] = json!(renew);
         base["retry_period_seconds"] = json!(retry);
-        assert_eq!(load(&base), Err(ConfigError::LeaseOrder), "{duration} {renew} {retry}");
+        assert_eq!(
+            load(&base),
+            Err(ConfigError::LeaseOrder),
+            "{duration} {renew} {retry}"
+        );
     }
 }
 
@@ -320,7 +336,12 @@ fn a_document_with_no_pool_is_a_fault() {
 #[test]
 fn the_store_endpoint_is_an_http_url_with_no_user_information() {
     assert!(load(&with("store_endpoint", json!("http://seaweed:8333"))).is_ok());
-    for bad in ["s3.example.test", "ftp://host", "https://user:pw@host", "file:///x"] {
+    for bad in [
+        "s3.example.test",
+        "ftp://host",
+        "https://user:pw@host",
+        "file:///x",
+    ] {
         assert!(
             matches!(
                 load(&with("store_endpoint", json!(bad))),

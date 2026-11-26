@@ -8,7 +8,10 @@ use k8s_openapi::api::coordination::v1::{Lease, LeaseSpec};
 use k8s_openapi::api::core::v1::{Event, EventSource, Namespace, ObjectReference, Pod};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{MicroTime, ObjectMeta, Time};
 use k8s_openapi::jiff;
-use kube::api::{DeleteParams, ListParams, Patch, PatchParams, PostParams, Preconditions, WatchEvent, WatchParams};
+use kube::api::{
+    DeleteParams, ListParams, Patch, PatchParams, PostParams, Preconditions, WatchEvent,
+    WatchParams,
+};
 use kube::{Api, Client, Config};
 use serde_json::json;
 
@@ -41,7 +44,9 @@ fn instant(time: Timestamp) -> jiff::Timestamp {
     let millis = time
         .to_system_time()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| i64::try_from(since.as_millis()).unwrap_or(i64::MAX));
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        });
     jiff::Timestamp::from_millisecond(millis).unwrap_or(jiff::Timestamp::UNIX_EPOCH)
 }
 
@@ -58,7 +63,6 @@ impl KubeCluster {
         let client = Client::try_from(config).map_err(|error| ApiError::Call(error.to_string()))?;
         Ok(Self::new(client, keys))
     }
-
 }
 
 fn pod_selector(keys: &PodKeys) -> String {
@@ -86,12 +90,22 @@ struct Watch {
 }
 
 fn non_empty(candidate: Option<&String>, previous: String) -> String {
-    candidate.filter(|text| !text.is_empty()).cloned().unwrap_or(previous)
+    candidate
+        .filter(|text| !text.is_empty())
+        .cloned()
+        .unwrap_or(previous)
 }
 
 impl Watch {
-    async fn open(&self, version: &str) -> Option<BoxStream<'static, kube::Result<WatchEvent<Pod>>>> {
-        self.api.watch(&self.watch, version).await.ok().map(StreamExt::boxed)
+    async fn open(
+        &self,
+        version: &str,
+    ) -> Option<BoxStream<'static, kube::Result<WatchEvent<Pod>>>> {
+        self.api
+            .watch(&self.watch, version)
+            .await
+            .ok()
+            .map(StreamExt::boxed)
     }
 
     async fn pause_then_relist(&self) -> (Vec<PodEvent>, Phase) {
@@ -104,7 +118,11 @@ impl Watch {
             return self.pause_then_relist().await;
         };
         let version = list.metadata.resource_version.clone().unwrap_or_default();
-        let facts = list.items.iter().filter_map(|pod| pod_facts(pod, &self.keys)).collect();
+        let facts = list
+            .items
+            .iter()
+            .filter_map(|pod| pod_facts(pod, &self.keys))
+            .collect();
         let snapshot = PodEvent::Snapshot(facts);
         match self.open(&version).await {
             Some(events) => (vec![snapshot], Phase::Watch { version, events }),
@@ -116,19 +134,29 @@ impl Watch {
     }
 
     async fn step(&self, phase: Phase) -> (Vec<PodEvent>, Phase) {
-        let Phase::Watch { version, mut events } = phase else {
+        let Phase::Watch {
+            version,
+            mut events,
+        } = phase
+        else {
             return self.relist().await;
         };
         match events.next().await {
             Some(Ok(WatchEvent::Added(pod) | WatchEvent::Modified(pod))) => {
                 let version = non_empty(pod.metadata.resource_version.as_ref(), version);
                 let applied = pod_facts(&pod, &self.keys).map(PodEvent::Applied);
-                (applied.into_iter().collect(), Phase::Watch { version, events })
+                (
+                    applied.into_iter().collect(),
+                    Phase::Watch { version, events },
+                )
             }
             Some(Ok(WatchEvent::Deleted(pod))) => {
                 let version = non_empty(pod.metadata.resource_version.as_ref(), version);
                 let name = pod.metadata.name.clone().unwrap_or_default();
-                (vec![PodEvent::Deleted { name }], Phase::Watch { version, events })
+                (
+                    vec![PodEvent::Deleted { name }],
+                    Phase::Watch { version, events },
+                )
             }
             Some(Ok(WatchEvent::Bookmark(bookmark))) => (
                 Vec::new(),
@@ -150,8 +178,14 @@ fn lease_facts(lease: &Lease) -> LeaseFacts {
     let spec = lease.spec.clone().unwrap_or_default();
     LeaseFacts {
         holder: spec.holder_identity.filter(|holder| !holder.is_empty()),
-        acquire_time: spec.acquire_time.as_ref().map(|time| timestamp_of(&Time(time.0))),
-        renew_time: spec.renew_time.as_ref().map(|time| timestamp_of(&Time(time.0))),
+        acquire_time: spec
+            .acquire_time
+            .as_ref()
+            .map(|time| timestamp_of(&Time(time.0))),
+        renew_time: spec
+            .renew_time
+            .as_ref()
+            .map(|time| timestamp_of(&Time(time.0))),
         duration: spec
             .lease_duration_seconds
             .and_then(|seconds| u64::try_from(seconds).ok())
@@ -188,7 +222,11 @@ impl KubeApi for KubeCluster {
                 .list(&ListParams::default().labels(selector))
                 .await
                 .map_err(call_error)?;
-            Ok(list.items.into_iter().filter_map(|item| item.metadata.name).collect())
+            Ok(list
+                .items
+                .into_iter()
+                .filter_map(|item| item.metadata.name)
+                .collect())
         })
     }
 
@@ -268,10 +306,14 @@ impl KubeApi for KubeCluster {
                 "metadata": {"name": name},
                 "spec": {"replicas": replicas}
             });
-            api.patch(name, &PatchParams::apply(FIELD_MANAGER).force(), &Patch::Apply(body))
-                .await
-                .map(|_| ())
-                .map_err(call_error)
+            api.patch(
+                name,
+                &PatchParams::apply(FIELD_MANAGER).force(),
+                &Patch::Apply(body),
+            )
+            .await
+            .map(|_| ())
+            .map_err(call_error)
         })
     }
 
@@ -295,10 +337,14 @@ impl KubeApi for KubeCluster {
                     "lastTransitionTime": write.last_transition_time.to_string()
                 }]}
             });
-            api.patch_status(name, &PatchParams::apply(FIELD_MANAGER).force(), &Patch::Apply(body))
-                .await
-                .map(|_| ())
-                .map_err(call_error)
+            api.patch_status(
+                name,
+                &PatchParams::apply(FIELD_MANAGER).force(),
+                &Patch::Apply(body),
+            )
+            .await
+            .map(|_| ())
+            .map_err(call_error)
         })
     }
 
@@ -346,7 +392,11 @@ impl KubeApi for KubeCluster {
         })
     }
 
-    fn get_lease<'a>(&'a self, namespace: &'a str, name: &'a str) -> ApiFuture<'a, Option<LeaseFacts>> {
+    fn get_lease<'a>(
+        &'a self,
+        namespace: &'a str,
+        name: &'a str,
+    ) -> ApiFuture<'a, Option<LeaseFacts>> {
         Box::pin(async move {
             let api: Api<Lease> = Api::namespaced(self.client.clone(), namespace);
             let found = api.get_opt(name).await.map_err(call_error)?;
@@ -362,10 +412,13 @@ impl KubeApi for KubeCluster {
     ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
             let api: Api<Lease> = Api::namespaced(self.client.clone(), namespace);
-            api.create(&PostParams::default(), &lease_object(name, namespace, write, None))
-                .await
-                .map(|_| ())
-                .map_err(call_error)
+            api.create(
+                &PostParams::default(),
+                &lease_object(name, namespace, write, None),
+            )
+            .await
+            .map(|_| ())
+            .map_err(call_error)
         })
     }
 
@@ -430,7 +483,10 @@ mod tests {
 
     #[test]
     fn the_pod_selector_names_the_two_pool_states_under_the_prefix() {
-        assert_eq!(pod_selector(&PodKeys::default()), "br.sandbox/pool in (warm,claimed)");
+        assert_eq!(
+            pod_selector(&PodKeys::default()),
+            "br.sandbox/pool in (warm,claimed)"
+        );
         let other = PodKeys::new(br_runner_sandbox::LabelPrefix::new("acme.sbx").unwrap());
         assert_eq!(pod_selector(&other), "acme.sbx/pool in (warm,claimed)");
     }

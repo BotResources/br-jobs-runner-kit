@@ -25,7 +25,8 @@ fn call(error: BackendError) -> BucketError {
 }
 
 fn path(key: &str) -> Result<Path, BucketError> {
-    Path::parse(key.trim_end_matches('/')).map_err(|_| BucketError::Call(format!("{key:?} is not a valid key")))
+    Path::parse(key.trim_end_matches('/'))
+        .map_err(|_| BucketError::Call(format!("{key:?} is not a valid key")))
 }
 
 fn missing_bucket(error: &BackendError) -> bool {

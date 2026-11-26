@@ -26,7 +26,8 @@ impl Readiness {
     }
 
     pub fn is_ready(&self) -> bool {
-        self.store_ready.load(Ordering::SeqCst) && self.synced.lock().unwrap().is_superset(&self.expected)
+        self.store_ready.load(Ordering::SeqCst)
+            && self.synced.lock().unwrap().is_superset(&self.expected)
     }
 }
 

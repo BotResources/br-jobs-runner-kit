@@ -61,11 +61,7 @@ fn time_of_day(key: &str, text: &str, allow_midnight_end: bool) -> Result<u32, C
 
 fn floor_window(pool: &str, index: usize, input: FloorInput) -> Result<FloorWindow, ConfigError> {
     let key = |name: &str| format!("pools[{pool}].floors[{index}].{name}");
-    let from = time_of_day(
-        &key("from"),
-        &text(&key("from"), input.from)?,
-        false,
-    )?;
+    let from = time_of_day(&key("from"), &text(&key("from"), input.from)?, false)?;
     let to = time_of_day(&key("to"), &text(&key("to"), input.to)?, true)?;
     if to <= from {
         return Err(ConfigError::WindowEndsNoLater {
@@ -87,8 +83,18 @@ impl PoolConfig {
         let id = text(&key("id"), input.id)?;
         let namespace = text(&key("namespace"), input.namespace)?;
         let replicaset = text(&key("replicaset"), input.replicaset)?;
-        let min_replicas = small(&key("min_replicas"), input.min_replicas, None, Zero::Allowed)?;
-        let max_replicas = small(&key("max_replicas"), input.max_replicas, None, Zero::Allowed)?;
+        let min_replicas = small(
+            &key("min_replicas"),
+            input.min_replicas,
+            None,
+            Zero::Allowed,
+        )?;
+        let max_replicas = small(
+            &key("max_replicas"),
+            input.max_replicas,
+            None,
+            Zero::Allowed,
+        )?;
         if min_replicas > max_replicas {
             return Err(ConfigError::MinAboveMax { pool: id });
         }
@@ -98,7 +104,12 @@ impl PoolConfig {
             .map(|(position, floor)| floor_window(&id, position, floor))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            refill: seconds(&key("refill_seconds"), input.refill_seconds, Some(3), Zero::Allowed)?,
+            refill: seconds(
+                &key("refill_seconds"),
+                input.refill_seconds,
+                Some(3),
+                Zero::Allowed,
+            )?,
             margin: small(&key("margin"), input.margin, Some(2), Zero::Allowed)?,
             idle_ttl: seconds(
                 &key("idle_ttl_seconds"),

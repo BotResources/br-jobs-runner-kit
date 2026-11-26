@@ -68,10 +68,13 @@ impl TurnGrouper {
         match kind {
             Kind::Manifest => turn.manifest = Some(info),
             Kind::Part(attempt) => {
-                let listing = turn.attempts.entry(attempt).or_insert_with(|| AttemptListing {
-                    keys: Vec::new(),
-                    newest: info.last_modified,
-                });
+                let listing = turn
+                    .attempts
+                    .entry(attempt)
+                    .or_insert_with(|| AttemptListing {
+                        keys: Vec::new(),
+                        newest: info.last_modified,
+                    });
                 listing.newest = listing.newest.max(info.last_modified);
                 listing.keys.push(info.key);
             }
@@ -130,7 +133,9 @@ pub fn read_manifest(turn: &TurnListing, bytes: &[u8]) -> ManifestRead {
         return ManifestRead::Absent;
     };
     match Manifest::parse(bytes) {
-        Ok(manifest) if manifest_key(manifest.key()) == listed.key => ManifestRead::Parsed(manifest),
+        Ok(manifest) if manifest_key(manifest.key()) == listed.key => {
+            ManifestRead::Parsed(manifest)
+        }
         _ => ManifestRead::Unreadable,
     }
 }
@@ -198,9 +203,16 @@ pub fn needs_read(info: &ObjectInfo, now: Timestamp, rules: &SweepRules) -> bool
     elapsed(now, info.last_modified) >= rules.tombstone_ttl
 }
 
-pub fn record_is_old(bytes: &[u8], now: Timestamp, rules: &SweepRules) -> Result<bool, FormatError> {
+pub fn record_is_old(
+    bytes: &[u8],
+    now: Timestamp,
+    rules: &SweepRules,
+) -> Result<bool, FormatError> {
     let record = Record::parse(bytes)?;
-    Ok(record.age_anchor().plus(rules.tombstone_ttl).has_passed(now))
+    Ok(record
+        .age_anchor()
+        .plus(rules.tombstone_ttl)
+        .has_passed(now))
 }
 
 pub fn tombstone_is_old(
@@ -209,7 +221,10 @@ pub fn tombstone_is_old(
     rules: &SweepRules,
 ) -> Result<bool, FormatError> {
     let tombstone = Tombstone::parse(bytes)?;
-    Ok(tombstone.expired_at().plus(rules.tombstone_ttl).has_passed(now))
+    Ok(tombstone
+        .expired_at()
+        .plus(rules.tombstone_ttl)
+        .has_passed(now))
 }
 
 #[cfg(test)]

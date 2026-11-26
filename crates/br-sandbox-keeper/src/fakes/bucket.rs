@@ -30,7 +30,11 @@ impl FakeBucket {
     }
 
     pub fn body(&self, key: &str) -> Option<Vec<u8>> {
-        self.objects.lock().unwrap().get(key).map(|(body, _)| body.clone())
+        self.objects
+            .lock()
+            .unwrap()
+            .get(key)
+            .map(|(body, _)| body.clone())
     }
 
     pub fn keys(&self) -> Vec<String> {
@@ -86,10 +90,11 @@ impl Bucket for FakeBucket {
         limit: usize,
     ) -> BucketFuture<'a, Vec<ObjectInfo>> {
         Box::pin(async move {
-            self.list_calls
-                .lock()
-                .unwrap()
-                .push((prefix.to_owned(), after.map(str::to_owned), limit));
+            self.list_calls.lock().unwrap().push((
+                prefix.to_owned(),
+                after.map(str::to_owned),
+                limit,
+            ));
             let objects = self.objects.lock().unwrap();
             Ok(objects
                 .iter()

@@ -123,7 +123,11 @@ pub trait KubeApi: Send + Sync {
         message: &'a str,
     ) -> ApiFuture<'a, ()>;
 
-    fn get_lease<'a>(&'a self, namespace: &'a str, name: &'a str) -> ApiFuture<'a, Option<LeaseFacts>>;
+    fn get_lease<'a>(
+        &'a self,
+        namespace: &'a str,
+        name: &'a str,
+    ) -> ApiFuture<'a, Option<LeaseFacts>>;
 
     fn create_lease<'a>(
         &'a self,

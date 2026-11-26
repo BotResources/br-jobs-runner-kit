@@ -37,12 +37,22 @@ pub fn route(state: &HttpState, request: &Request<Incoming>) -> Response<Full<By
 
 fn route_of(state: &HttpState, method: &Method, path: &str) -> Response<Full<Bytes>> {
     if method != Method::GET {
-        return reply(StatusCode::METHOD_NOT_ALLOWED, TEXT, "method not allowed\n".to_owned());
+        return reply(
+            StatusCode::METHOD_NOT_ALLOWED,
+            TEXT,
+            "method not allowed\n".to_owned(),
+        );
     }
     match path {
         "/livez" => reply(StatusCode::OK, TEXT, "ok\n".to_owned()),
-        "/readyz" if state.readiness.is_ready() => reply(StatusCode::OK, TEXT, "ready\n".to_owned()),
-        "/readyz" => reply(StatusCode::SERVICE_UNAVAILABLE, TEXT, "not ready\n".to_owned()),
+        "/readyz" if state.readiness.is_ready() => {
+            reply(StatusCode::OK, TEXT, "ready\n".to_owned())
+        }
+        "/readyz" => reply(
+            StatusCode::SERVICE_UNAVAILABLE,
+            TEXT,
+            "not ready\n".to_owned(),
+        ),
         "/metrics" => reply(StatusCode::OK, PROMETHEUS, (state.metrics)()),
         _ => reply(StatusCode::NOT_FOUND, TEXT, "not found\n".to_owned()),
     }

@@ -132,7 +132,11 @@ mod tests {
 
     #[test]
     fn the_floor_now_is_the_highest_of_the_windows_in_force() {
-        let pool = pool(vec![window(0, 3600, 4), window(1800, 7200, 9), window(7200, 10_000, 30)]);
+        let pool = pool(vec![
+            window(0, 3600, 4),
+            window(1800, 7200, 9),
+            window(7200, 10_000, 30),
+        ]);
         let zero = |hour: &str| Timestamp::parse(&format!("2026-03-01T{hour}Z")).unwrap();
         assert_eq!(floor_now(&pool, zero("00:00:00"), Tz::UTC), 4);
         assert_eq!(floor_now(&pool, zero("00:45:00"), Tz::UTC), 9);

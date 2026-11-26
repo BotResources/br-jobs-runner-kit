@@ -111,7 +111,12 @@ impl Elector {
                 return self.lease.retry_period;
             }
         };
-        let action = lease_action(current.as_ref(), &self.identity, started, self.lease.duration);
+        let action = lease_action(
+            current.as_ref(),
+            &self.identity,
+            started,
+            self.lease.duration,
+        );
         let write = |transitions: i32, acquire_time: Timestamp| LeaseWrite {
             holder: self.identity.clone(),
             acquire_time,
@@ -156,7 +161,9 @@ impl Elector {
             (LeaseAction::Renew | LeaseAction::Take, None) => Err(ApiError::NotFound),
         };
         match outcome {
-            Ok(()) => self.leadership.renewed(started.plus(self.lease.renew_deadline)),
+            Ok(()) => self
+                .leadership
+                .renewed(started.plus(self.lease.renew_deadline)),
             Err(ApiError::Conflict) => {
                 tracing::info!("the lease was taken by another writer");
                 if action != LeaseAction::Renew {

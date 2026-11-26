@@ -16,7 +16,9 @@ pub enum ConfigError {
     BucketAboveWindow,
     #[error("scale_down_step must be at least 1")]
     StepBelowOne,
-    #[error("lease_duration_seconds must be above renew_deadline_seconds, which must be above retry_period_seconds")]
+    #[error(
+        "lease_duration_seconds must be above renew_deadline_seconds, which must be above retry_period_seconds"
+    )]
     LeaseOrder,
     #[error("the time zone {0:?} is not a known name")]
     UnknownTimezone(String),

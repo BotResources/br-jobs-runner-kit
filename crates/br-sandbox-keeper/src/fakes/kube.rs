@@ -14,12 +14,32 @@ use crate::rules::ConditionWrite;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Call {
-    Delete { name: String, uid: String, resource_version: String },
-    Replicas { name: String, replicas: i32 },
-    Condition { name: String, status: String, reason: String, message: String },
-    Event { reason: &'static str, message: String },
-    LeaseCreate { holder: String },
-    LeaseUpdate { holder: String, resource_version: String },
+    Delete {
+        name: String,
+        uid: String,
+        resource_version: String,
+    },
+    Replicas {
+        name: String,
+        replicas: i32,
+    },
+    Condition {
+        name: String,
+        status: String,
+        reason: String,
+        message: String,
+    },
+    Event {
+        reason: &'static str,
+        message: String,
+    },
+    LeaseCreate {
+        holder: String,
+    },
+    LeaseUpdate {
+        holder: String,
+        resource_version: String,
+    },
 }
 
 #[derive(Default)]
@@ -58,7 +78,8 @@ fn failure(operation: &'static str) -> ApiError {
 
 impl FakeKube {
     pub fn set_namespaces(&self, namespaces: &[&str]) {
-        self.state.lock().unwrap().namespaces = namespaces.iter().map(|ns| (*ns).to_owned()).collect();
+        self.state.lock().unwrap().namespaces =
+            namespaces.iter().map(|ns| (*ns).to_owned()).collect();
     }
 
     pub fn add_replica_set(&self, namespace: &str, name: &str, replicas: Option<i32>) {
@@ -95,7 +116,12 @@ impl FakeKube {
         state.emit(namespace, PodEvent::Applied(pod));
     }
 
-    pub fn silent_update_pod(&self, namespace: &str, name: &str, change: impl FnOnce(&mut PodFacts)) {
+    pub fn silent_update_pod(
+        &self,
+        namespace: &str,
+        name: &str,
+        change: impl FnOnce(&mut PodFacts),
+    ) {
         let mut state = self.state.lock().unwrap();
         let version = state.bump();
         let pod = state
@@ -125,7 +151,12 @@ impl FakeKube {
             .expect("a known replica set")
     }
 
-    pub fn set_replica_set_conditions(&self, namespace: &str, name: &str, conditions: Vec<ConditionFacts>) {
+    pub fn set_replica_set_conditions(
+        &self,
+        namespace: &str,
+        name: &str,
+        conditions: Vec<ConditionFacts>,
+    ) {
         let mut state = self.state.lock().unwrap();
         state
             .replica_sets
@@ -233,12 +264,20 @@ impl KubeApi for FakeKube {
             let key = (namespace.to_owned(), name.to_owned());
             match state.pods.get(&key) {
                 None => Ok(DeleteOutcome::Gone),
-                Some(pod) if pod.uid != version.uid || pod.resource_version != version.resource_version => {
+                Some(pod)
+                    if pod.uid != version.uid
+                        || pod.resource_version != version.resource_version =>
+                {
                     Ok(DeleteOutcome::Conflict)
                 }
                 Some(_) => {
                     state.pods.remove(&key);
-                    state.emit(namespace, PodEvent::Deleted { name: name.to_owned() });
+                    state.emit(
+                        namespace,
+                        PodEvent::Deleted {
+                            name: name.to_owned(),
+                        },
+                    );
                     Ok(DeleteOutcome::Deleted)
                 }
             }
@@ -262,14 +301,25 @@ impl KubeApi for FakeKube {
         })
     }
 
-    fn apply_replicas<'a>(&'a self, namespace: &'a str, name: &'a str, replicas: i32) -> ApiFuture<'a, ()> {
+    fn apply_replicas<'a>(
+        &'a self,
+        namespace: &'a str,
+        name: &'a str,
+        replicas: i32,
+    ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
             let mut state = self.state.lock().unwrap();
-            state.calls.push(Call::Replicas { name: name.to_owned(), replicas });
+            state.calls.push(Call::Replicas {
+                name: name.to_owned(),
+                replicas,
+            });
             if state.failing.contains("apply_replicas") {
                 return Err(failure("apply_replicas"));
             }
-            if let Some(set) = state.replica_sets.get_mut(&(namespace.to_owned(), name.to_owned())) {
+            if let Some(set) = state
+                .replica_sets
+                .get_mut(&(namespace.to_owned(), name.to_owned()))
+            {
                 set.replicas = Some(replicas);
             }
             Ok(())
@@ -293,8 +343,12 @@ impl KubeApi for FakeKube {
             if state.failing.contains("apply_condition") {
                 return Err(failure("apply_condition"));
             }
-            if let Some(set) = state.replica_sets.get_mut(&(namespace.to_owned(), name.to_owned())) {
-                set.conditions.retain(|condition| condition.kind != "WarmPodsFailing");
+            if let Some(set) = state
+                .replica_sets
+                .get_mut(&(namespace.to_owned(), name.to_owned()))
+            {
+                set.conditions
+                    .retain(|condition| condition.kind != "WarmPodsFailing");
                 set.conditions.push(ConditionFacts {
                     kind: "WarmPodsFailing".to_owned(),
                     status: write.status.to_owned(),
@@ -316,7 +370,10 @@ impl KubeApi for FakeKube {
     ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
             let mut state = self.state.lock().unwrap();
-            state.calls.push(Call::Event { reason: event.reason(), message: message.to_owned() });
+            state.calls.push(Call::Event {
+                reason: event.reason(),
+                message: message.to_owned(),
+            });
             if state.failing.contains("create_event") {
                 return Err(failure("create_event"));
             }
@@ -324,17 +381,28 @@ impl KubeApi for FakeKube {
         })
     }
 
-    fn get_lease<'a>(&'a self, _namespace: &'a str, _name: &'a str) -> ApiFuture<'a, Option<LeaseFacts>> {
+    fn get_lease<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _name: &'a str,
+    ) -> ApiFuture<'a, Option<LeaseFacts>> {
         Box::pin(async move {
             self.check("get_lease")?;
             Ok(self.lease())
         })
     }
 
-    fn create_lease<'a>(&'a self, _namespace: &'a str, _name: &'a str, write: &'a LeaseWrite) -> ApiFuture<'a, ()> {
+    fn create_lease<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _name: &'a str,
+        write: &'a LeaseWrite,
+    ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
             let mut state = self.state.lock().unwrap();
-            state.calls.push(Call::LeaseCreate { holder: write.holder.clone() });
+            state.calls.push(Call::LeaseCreate {
+                holder: write.holder.clone(),
+            });
             if state.failing.contains("create_lease") {
                 return Err(failure("create_lease"));
             }
@@ -367,7 +435,10 @@ impl KubeApi for FakeKube {
                 state.conflicting_leases -= 1;
                 return Err(ApiError::Conflict);
             }
-            let current = state.lease.as_ref().map(|lease| lease.resource_version.clone());
+            let current = state
+                .lease
+                .as_ref()
+                .map(|lease| lease.resource_version.clone());
             if current.as_deref() != Some(resource_version) {
                 return Err(ApiError::Conflict);
             }

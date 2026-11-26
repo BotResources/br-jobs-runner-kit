@@ -196,7 +196,8 @@ mod tests {
     #[test]
     fn a_pod_without_the_pool_state_label_is_not_ours() {
         let keys = PodKeys::default();
-        let bare = pod(json!({"metadata": {"name": "proxy", "labels": {"br.sandbox/role": "proxy"}}}));
+        let bare =
+            pod(json!({"metadata": {"name": "proxy", "labels": {"br.sandbox/role": "proxy"}}}));
         assert!(pod_facts(&bare, &keys).is_none());
         let other = pod(json!({"metadata": {"name": "x", "labels": {"br.sandbox/pool": "probe"}}}));
         assert!(pod_facts(&other, &keys).is_none());
@@ -209,13 +210,19 @@ mod tests {
         assert_eq!(facts.pool_id.as_deref(), Some("acme"));
         assert_eq!(facts.thread.as_deref(), Some("t"));
         assert_eq!(facts.clean, Mark::Value(true));
-        assert_eq!(facts.claimed_at, Mark::Value(Timestamp::parse("2026-01-01T00:01:00Z").unwrap()));
+        assert_eq!(
+            facts.claimed_at,
+            Mark::Value(Timestamp::parse("2026-01-01T00:01:00Z").unwrap())
+        );
         assert_eq!(
             facts.idle_since,
             Mark::Value(Timestamp::parse("2026-01-01T00:02:00.500Z").unwrap())
         );
         assert_eq!(facts.state_bytes, Mark::Value(12345));
-        assert_eq!(facts.created_at, Timestamp::parse("2026-01-01T00:00:10Z").unwrap());
+        assert_eq!(
+            facts.created_at,
+            Timestamp::parse("2026-01-01T00:00:10Z").unwrap()
+        );
         assert!(facts.ready);
         assert!(!facts.owned);
         assert_eq!(facts.phase, Phase::Running);
@@ -226,8 +233,14 @@ mod tests {
     fn the_container_states_of_init_and_main_containers_are_read() {
         let facts = pod_facts(&claimed_pod(), &PodKeys::default()).unwrap();
         assert_eq!(facts.containers.len(), 2);
-        assert_eq!(facts.containers[0].terminated.as_ref().unwrap().exit_code, 3);
-        assert_eq!(facts.containers[1].waiting_reason.as_deref(), Some("CrashLoopBackOff"));
+        assert_eq!(
+            facts.containers[0].terminated.as_ref().unwrap().exit_code,
+            3
+        );
+        assert_eq!(
+            facts.containers[1].waiting_reason.as_deref(),
+            Some("CrashLoopBackOff")
+        );
     }
 
     #[test]

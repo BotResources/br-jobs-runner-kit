@@ -42,7 +42,9 @@ fn a_lease_of_another_replica_is_waited_for_until_its_duration_has_passed() {
     let other = lease(Some("b"), Some(90), 15);
     assert_eq!(
         lease_action(Some(&other), "a", at(104), Duration::from_secs(15)),
-        LeaseAction::Wait { recheck_at: Some(at(105)) }
+        LeaseAction::Wait {
+            recheck_at: Some(at(105))
+        }
     );
     assert_eq!(
         lease_action(Some(&other), "a", at(105), Duration::from_secs(15)),
@@ -53,11 +55,21 @@ fn a_lease_of_another_replica_is_waited_for_until_its_duration_has_passed() {
 #[test]
 fn a_released_or_never_renewed_lease_is_taken() {
     assert_eq!(
-        lease_action(Some(&lease(None, Some(99), 15)), "a", at(100), Duration::from_secs(15)),
+        lease_action(
+            Some(&lease(None, Some(99), 15)),
+            "a",
+            at(100),
+            Duration::from_secs(15)
+        ),
         LeaseAction::Take
     );
     assert_eq!(
-        lease_action(Some(&lease(Some("b"), None, 15)), "a", at(100), Duration::from_secs(15)),
+        lease_action(
+            Some(&lease(Some("b"), None, 15)),
+            "a",
+            at(100),
+            Duration::from_secs(15)
+        ),
         LeaseAction::Take
     );
 }
@@ -68,7 +80,9 @@ fn a_lease_without_a_duration_uses_the_own_duration() {
     other.duration = None;
     assert_eq!(
         lease_action(Some(&other), "a", at(100), Duration::from_secs(15)),
-        LeaseAction::Wait { recheck_at: Some(at(105)) }
+        LeaseAction::Wait {
+            recheck_at: Some(at(105))
+        }
     );
 }
 
@@ -103,7 +117,12 @@ async fn the_first_replica_creates_the_lease_and_leads() {
     assert!(!a.leadership.is_leader());
     a.elector.round().await;
     assert!(a.leadership.is_leader());
-    assert_eq!(kube.calls(), vec![Call::LeaseCreate { holder: "a".to_owned() }]);
+    assert_eq!(
+        kube.calls(),
+        vec![Call::LeaseCreate {
+            holder: "a".to_owned()
+        }]
+    );
     assert_eq!(kube.lease().unwrap().transitions, 0);
 }
 

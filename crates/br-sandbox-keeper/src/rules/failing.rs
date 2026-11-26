@@ -55,7 +55,11 @@ pub fn pod_failure(pod: &PodFacts) -> Option<PodFailure> {
     if pod.ready || pod.deleting {
         return None;
     }
-    let failures: Vec<PodFailure> = pod.containers.iter().filter_map(container_failure).collect();
+    let failures: Vec<PodFailure> = pod
+        .containers
+        .iter()
+        .filter_map(container_failure)
+        .collect();
     failures
         .iter()
         .find(|failure| failure.kind == FailureKind::ImagePull)
@@ -114,7 +118,11 @@ pub fn condition_write(
     judged: &PoolJudgement,
     now: Timestamp,
 ) -> Option<ConditionWrite> {
-    let status = if judged.failing { STATUS_TRUE } else { STATUS_FALSE };
+    let status = if judged.failing {
+        STATUS_TRUE
+    } else {
+        STATUS_FALSE
+    };
     let existing = current
         .iter()
         .find(|condition| condition.kind == CONDITION_WARM_PODS_FAILING);
@@ -172,13 +180,24 @@ mod tests {
 
     #[test]
     fn a_container_that_ended_with_exit_code_0_is_not_failing() {
-        assert_eq!(pod_failure(&pending("a", vec![terminated(0, "Completed")])), None);
+        assert_eq!(
+            pod_failure(&pending("a", vec![terminated(0, "Completed")])),
+            None
+        );
     }
 
     #[test]
     fn a_container_that_waits_for_another_reason_is_not_failing() {
-        for reason in ["ContainerCreating", "PodInitializing", "CreateContainerConfigError"] {
-            assert_eq!(pod_failure(&pending("a", vec![waiting(reason)])), None, "{reason}");
+        for reason in [
+            "ContainerCreating",
+            "PodInitializing",
+            "CreateContainerConfigError",
+        ] {
+            assert_eq!(
+                pod_failure(&pending("a", vec![waiting(reason)])),
+                None,
+                "{reason}"
+            );
         }
     }
 
@@ -198,13 +217,19 @@ mod tests {
 
     #[test]
     fn an_init_container_counts_like_a_main_container() {
-        let pod = pending("a", vec![terminated(0, "Completed"), waiting("ImagePullBackOff")]);
+        let pod = pending(
+            "a",
+            vec![terminated(0, "Completed"), waiting("ImagePullBackOff")],
+        );
         assert_eq!(pod_failure(&pod).unwrap().kind, FailureKind::ImagePull);
     }
 
     #[test]
     fn a_pod_with_both_causes_reports_the_pull_failure() {
-        let pod = pending("a", vec![waiting("CrashLoopBackOff"), waiting("ErrImagePull")]);
+        let pod = pending(
+            "a",
+            vec![waiting("CrashLoopBackOff"), waiting("ErrImagePull")],
+        );
         let failure = pod_failure(&pod).unwrap();
         assert_eq!(failure.kind, FailureKind::ImagePull);
         assert_eq!(failure.kubelet_reason, "ErrImagePull");
@@ -212,7 +237,10 @@ mod tests {
 
     #[test]
     fn a_pool_with_no_failing_pod_is_judged_not_failing() {
-        let pods = [warm("a", 0), pending("b", vec![waiting("ContainerCreating")])];
+        let pods = [
+            warm("a", 0),
+            pending("b", vec![waiting("ContainerCreating")]),
+        ];
         let judged = judge_pool(&pods);
         assert!(!judged.failing);
         assert_eq!(judged.message, "");
@@ -229,7 +257,10 @@ mod tests {
         let judged = judge_pool(&pods);
         assert!(judged.failing);
         assert_eq!(judged.reason, "ImagePullFailing");
-        assert_eq!(judged.message, "2 warm pod(s) failing; kubelet reason: ErrImagePull");
+        assert_eq!(
+            judged.message,
+            "2 warm pod(s) failing; kubelet reason: ErrImagePull"
+        );
     }
 
     #[test]
@@ -253,7 +284,10 @@ mod tests {
     fn the_message_holds_no_text_of_the_kubelet_but_its_reason() {
         let pod = pending("a", vec![waiting("ImagePullBackOff")]);
         let judged = judge_pool(&[pod]);
-        assert_eq!(judged.message, "1 warm pod(s) failing; kubelet reason: ImagePullBackOff");
+        assert_eq!(
+            judged.message,
+            "1 warm pod(s) failing; kubelet reason: ImagePullBackOff"
+        );
     }
 
     fn judged(failing: bool) -> PoolJudgement {
@@ -311,7 +345,12 @@ mod tests {
 
     #[test]
     fn a_new_reason_or_message_with_the_same_status_keeps_the_transition_time() {
-        let current = [existing("True", "StartCrashing", "1 warm pod(s) failing; kubelet reason: Error", 100)];
+        let current = [existing(
+            "True",
+            "StartCrashing",
+            "1 warm pod(s) failing; kubelet reason: Error",
+            100,
+        )];
         let write = condition_write(&current, &judged(true), at(500)).unwrap();
         assert_eq!(write.reason, "ImagePullFailing");
         assert_eq!(write.last_transition_time, at(100));
@@ -319,7 +358,12 @@ mod tests {
 
     #[test]
     fn a_condition_that_is_already_as_judged_is_not_written() {
-        let same = [existing("True", "ImagePullFailing", &judged(true).message, 100)];
+        let same = [existing(
+            "True",
+            "ImagePullFailing",
+            &judged(true).message,
+            100,
+        )];
         assert_eq!(condition_write(&same, &judged(true), at(500)), None);
         let none = [existing("False", "NoWarmPodFailing", "", 100)];
         assert_eq!(condition_write(&none, &judged(false), at(500)), None);

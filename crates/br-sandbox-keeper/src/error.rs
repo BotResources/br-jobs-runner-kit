@@ -10,6 +10,8 @@ pub enum KeeperError {
     StoreUnreachable(String),
     #[error("the bucket {0:?} is absent at start")]
     BucketAbsent(String),
-    #[error("the namespace {namespace:?} of the pool {pool:?} does not match the managed namespace selector")]
+    #[error(
+        "the namespace {namespace:?} of the pool {pool:?} does not match the managed namespace selector"
+    )]
     PoolNamespaceNotManaged { pool: String, namespace: String },
 }

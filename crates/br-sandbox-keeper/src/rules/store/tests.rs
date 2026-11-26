@@ -70,7 +70,10 @@ fn the_tombstone_is_a_pure_function_of_the_manifest_and_the_age_without_the_marg
     assert_eq!(tombstone.reason(), "expired");
     let again = tombstone_for(&manifest, Duration::from_secs(1000));
     assert_eq!(tombstone.to_vec().unwrap(), again.to_vec().unwrap());
-    assert_eq!(Tombstone::parse(&tombstone.to_vec().unwrap()).unwrap(), tombstone);
+    assert_eq!(
+        Tombstone::parse(&tombstone.to_vec().unwrap()).unwrap(),
+        tombstone
+    );
 }
 
 #[test]
@@ -81,7 +84,13 @@ fn the_grouper_groups_the_objects_of_a_turn_and_keeps_the_newest_time_of_an_atte
     for object in [
         info(&part_key(&key, first), 100),
         info(&part_key(&key, second), 300),
-        info(&format!("{}/part-1.tar.zst", part_key(&key, second).trim_end_matches("/part-0.tar.zst")), 500),
+        info(
+            &format!(
+                "{}/part-1.tar.zst",
+                part_key(&key, second).trim_end_matches("/part-0.tar.zst")
+            ),
+            500,
+        ),
         info(&br_runner_sandbox::manifest_key(&key), 600),
     ] {
         assert!(grouper.push(object).is_none());
@@ -97,12 +106,24 @@ fn the_grouper_groups_the_objects_of_a_turn_and_keeps_the_newest_time_of_an_atte
 fn the_grouper_emits_a_turn_when_the_next_turn_begins_and_ignores_other_keys() {
     let (one, two) = (save_key(), save_key());
     let mut grouper = TurnGrouper::default();
-    assert!(grouper.push(info(&br_runner_sandbox::manifest_key(&one), 1)).is_none());
+    assert!(
+        grouper
+            .push(info(&br_runner_sandbox::manifest_key(&one), 1))
+            .is_none()
+    );
     assert!(grouper.push(info("saves/readme.txt", 1)).is_none());
     assert!(grouper.push(info("saves/a/b/c/d/e/f/g/h", 1)).is_none());
-    let done = grouper.push(info(&br_runner_sandbox::manifest_key(&two), 2)).unwrap();
+    let done = grouper
+        .push(info(&br_runner_sandbox::manifest_key(&two), 2))
+        .unwrap();
     assert!(done.dir.ends_with(&one.turn().to_string()));
-    assert!(grouper.finish().unwrap().dir.ends_with(&two.turn().to_string()));
+    assert!(
+        grouper
+            .finish()
+            .unwrap()
+            .dir
+            .ends_with(&two.turn().to_string())
+    );
     assert!(grouper.finish().is_none());
 }
 
@@ -118,7 +139,11 @@ fn a_manifest_is_read_when_it_may_be_expired_or_when_attempts_compete() {
     let two = listing(&key, Some(10_000), &[(attempt, 10_000), (rival, 10_000)]);
     assert!(!needs_manifest(&two, at(10_500), &rules()));
     assert!(needs_manifest(&two, at(10_000 + 3601), &long_lived()));
-    assert!(!needs_manifest(&listing(&key, None, &[(attempt, 1)]), at(99_999), &rules()));
+    assert!(!needs_manifest(
+        &listing(&key, None, &[(attempt, 1)]),
+        at(99_999),
+        &rules()
+    ));
 }
 
 #[test]
@@ -127,10 +152,16 @@ fn the_manifest_read_checks_that_the_manifest_belongs_to_its_key() {
     let attempt = AttemptId::mint();
     let made = manifest(&key, attempt, at(10_000));
     let turn = listing(&key, Some(1), &[(attempt, 1)]);
-    assert!(matches!(read_manifest(&turn, &made.to_vec().unwrap()), ManifestRead::Parsed(_)));
+    assert!(matches!(
+        read_manifest(&turn, &made.to_vec().unwrap()),
+        ManifestRead::Parsed(_)
+    ));
     assert_eq!(read_manifest(&turn, b"{"), ManifestRead::Unreadable);
     let other = manifest(&save_key(), attempt, at(10_000));
-    assert_eq!(read_manifest(&turn, &other.to_vec().unwrap()), ManifestRead::Unreadable);
+    assert_eq!(
+        read_manifest(&turn, &other.to_vec().unwrap()),
+        ManifestRead::Unreadable
+    );
     assert_eq!(
         read_manifest(&listing(&key, None, &[(attempt, 1)]), b"anything"),
         ManifestRead::Absent
@@ -143,15 +174,26 @@ fn an_expired_save_is_removed_tombstone_then_manifest_then_every_part_and_the_re
     let (named, rival) = (AttemptId::mint(), AttemptId::mint());
     let made = manifest(&key, named, at(10_000));
     let turn = listing(&key, Some(10_000), &[(named, 10_000), (rival, 10_001)]);
-    let steps = plan_turn(&turn, &ManifestRead::Parsed(made.clone()), at(11_061), &rules());
+    let steps = plan_turn(
+        &turn,
+        &ManifestRead::Parsed(made.clone()),
+        at(11_061),
+        &rules(),
+    );
     let tombstone = tombstone_for(&made, rules().save_ttl).to_vec().unwrap();
-    assert_eq!(steps[0], StoreStep::PutTombstone {
-        key: br_runner_sandbox::tombstone_key(&key),
-        body: tombstone,
-    });
-    assert_eq!(steps[1], StoreStep::DeleteManifest {
-        key: br_runner_sandbox::manifest_key(&key),
-    });
+    assert_eq!(
+        steps[0],
+        StoreStep::PutTombstone {
+            key: br_runner_sandbox::tombstone_key(&key),
+            body: tombstone,
+        }
+    );
+    assert_eq!(
+        steps[1],
+        StoreStep::DeleteManifest {
+            key: br_runner_sandbox::manifest_key(&key),
+        }
+    );
     let mut parts: Vec<_> = steps[2..]
         .iter()
         .map(|step| match step {
@@ -164,7 +206,8 @@ fn an_expired_save_is_removed_tombstone_then_manifest_then_every_part_and_the_re
     expected.sort();
     assert_eq!(parts, expected);
     assert!(steps.iter().all(|step| match step {
-        StoreStep::PutTombstone { key, .. } | StoreStep::DeleteManifest { key }
+        StoreStep::PutTombstone { key, .. }
+        | StoreStep::DeleteManifest { key }
         | StoreStep::DeleteExpiredPart { key } => !key.starts_with("records/"),
         StoreStep::DeleteOrphanAttempt { .. } => false,
     }));
@@ -188,9 +231,12 @@ fn an_attempt_that_the_manifest_does_not_name_is_an_orphan_once_its_newest_objec
     let read = ManifestRead::Parsed(made);
     assert!(plan_turn(&turn, &read, at(10_001 + 3600), &long_lived()).is_empty());
     let steps = plan_turn(&turn, &read, at(10_001 + 3601), &long_lived());
-    assert_eq!(steps, vec![StoreStep::DeleteOrphanAttempt {
-        keys: vec![part_key(&key, loser)]
-    }]);
+    assert_eq!(
+        steps,
+        vec![StoreStep::DeleteOrphanAttempt {
+            keys: vec![part_key(&key, loser)]
+        }]
+    );
 }
 
 #[test]
@@ -199,7 +245,15 @@ fn the_parts_that_a_manifest_names_are_never_an_orphan() {
     let named = AttemptId::mint();
     let made = manifest(&key, named, at(10_000));
     let turn = listing(&key, Some(10_000), &[(named, 10_000)]);
-    assert!(plan_turn(&turn, &ManifestRead::Parsed(made), at(10_500), &long_lived()).is_empty());
+    assert!(
+        plan_turn(
+            &turn,
+            &ManifestRead::Parsed(made),
+            at(10_500),
+            &long_lived()
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -208,7 +262,12 @@ fn a_turn_with_no_manifest_has_orphan_attempts_once_old_and_a_live_upload_is_nev
     let (old, live) = (AttemptId::mint(), AttemptId::mint());
     let turn = listing(&key, None, &[(old, 1000), (live, 6000)]);
     let steps = plan_turn(&turn, &ManifestRead::Absent, at(5000), &rules());
-    assert_eq!(steps, vec![StoreStep::DeleteOrphanAttempt { keys: vec![part_key(&key, old)] }]);
+    assert_eq!(
+        steps,
+        vec![StoreStep::DeleteOrphanAttempt {
+            keys: vec![part_key(&key, old)]
+        }]
+    );
     let none = plan_turn(&turn, &ManifestRead::Absent, at(4600), &rules());
     assert!(none.is_empty());
 }
@@ -217,13 +276,18 @@ fn a_turn_with_no_manifest_has_orphan_attempts_once_old_and_a_live_upload_is_nev
 fn the_age_of_an_attempt_counts_from_its_newest_object() {
     let key = save_key();
     let attempt = AttemptId::mint();
-    let dir = part_key(&key, attempt).trim_end_matches("part-0.tar.zst").to_owned();
+    let dir = part_key(&key, attempt)
+        .trim_end_matches("part-0.tar.zst")
+        .to_owned();
     let mut grouper = TurnGrouper::default();
     grouper.push(info(&format!("{dir}part-0.tar.zst"), 100));
     grouper.push(info(&format!("{dir}part-1.tar.zst"), 9000));
     let turn = grouper.finish().unwrap();
     assert!(plan_turn(&turn, &ManifestRead::Absent, at(9000 + 3600), &rules()).is_empty());
-    assert_eq!(plan_turn(&turn, &ManifestRead::Absent, at(9000 + 3601), &rules()).len(), 1);
+    assert_eq!(
+        plan_turn(&turn, &ManifestRead::Absent, at(9000 + 3601), &rules()).len(),
+        1
+    );
 }
 
 #[test]
@@ -241,10 +305,22 @@ fn a_record_is_old_when_the_ttl_has_passed_since_its_end_or_its_start() {
     let started = Record::started(AttemptId::mint(), at(1000));
     let done = started.done(at(5000));
     let ttl = rules().tombstone_ttl.as_secs();
-    assert_eq!(record_is_old(&started.to_vec().unwrap(), at(1000 + ttl - 1), &rules()), Ok(false));
-    assert_eq!(record_is_old(&started.to_vec().unwrap(), at(1000 + ttl), &rules()), Ok(true));
-    assert_eq!(record_is_old(&done.to_vec().unwrap(), at(5000 + ttl - 1), &rules()), Ok(false));
-    assert_eq!(record_is_old(&done.to_vec().unwrap(), at(5000 + ttl), &rules()), Ok(true));
+    assert_eq!(
+        record_is_old(&started.to_vec().unwrap(), at(1000 + ttl - 1), &rules()),
+        Ok(false)
+    );
+    assert_eq!(
+        record_is_old(&started.to_vec().unwrap(), at(1000 + ttl), &rules()),
+        Ok(true)
+    );
+    assert_eq!(
+        record_is_old(&done.to_vec().unwrap(), at(5000 + ttl - 1), &rules()),
+        Ok(false)
+    );
+    assert_eq!(
+        record_is_old(&done.to_vec().unwrap(), at(5000 + ttl), &rules()),
+        Ok(true)
+    );
     assert!(record_is_old(b"{", at(0), &rules()).is_err());
     assert!(record_key(&key).starts_with("records/"));
 }
@@ -253,16 +329,28 @@ fn a_record_is_old_when_the_ttl_has_passed_since_its_end_or_its_start() {
 fn a_tombstone_is_old_when_the_ttl_has_passed_since_its_expiry_without_the_margin() {
     let key = save_key();
     let made = manifest(&key, AttemptId::mint(), at(10_000));
-    let bytes = tombstone_for(&made, Duration::from_secs(1000)).to_vec().unwrap();
+    let bytes = tombstone_for(&made, Duration::from_secs(1000))
+        .to_vec()
+        .unwrap();
     let ttl = rules().tombstone_ttl.as_secs();
-    assert_eq!(tombstone_is_old(&bytes, at(11_000 + ttl - 1), &rules()), Ok(false));
-    assert_eq!(tombstone_is_old(&bytes, at(11_000 + ttl), &rules()), Ok(true));
+    assert_eq!(
+        tombstone_is_old(&bytes, at(11_000 + ttl - 1), &rules()),
+        Ok(false)
+    );
+    assert_eq!(
+        tombstone_is_old(&bytes, at(11_000 + ttl), &rules()),
+        Ok(true)
+    );
     assert!(tombstone_is_old(b"x", at(0), &rules()).is_err());
 }
 
 #[test]
 fn an_object_is_read_for_age_only_when_its_own_time_is_older_than_the_ttl() {
     let ttl = rules().tombstone_ttl.as_secs();
-    assert!(!needs_read(&info("records/x", 100), at(100 + ttl - 1), &rules()));
+    assert!(!needs_read(
+        &info("records/x", 100),
+        at(100 + ttl - 1),
+        &rules()
+    ));
     assert!(needs_read(&info("records/x", 100), at(100 + ttl), &rules()));
 }

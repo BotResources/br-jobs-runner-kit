@@ -82,13 +82,24 @@ mod tests {
     #[tokio::test]
     async fn a_write_goes_through_under_tombstones_only() {
         let (fake, bucket) = guarded();
-        bucket.put("tombstones/c/t/a/u.json", Bytes::from_static(b"x")).await.unwrap();
+        bucket
+            .put("tombstones/c/t/a/u.json", Bytes::from_static(b"x"))
+            .await
+            .unwrap();
         assert!(fake.contains("tombstones/c/t/a/u.json"));
-        for key in ["saves/c/t/a/u/manifest.json", "records/c/t/a/u.json", "other/x", "tombstones"] {
+        for key in [
+            "saves/c/t/a/u/manifest.json",
+            "records/c/t/a/u.json",
+            "other/x",
+            "tombstones",
+        ] {
             let result = bucket.put(key, Bytes::from_static(b"x")).await;
             assert_eq!(
                 result,
-                Err(BucketError::Forbidden { action: "write", key: key.to_owned() }),
+                Err(BucketError::Forbidden {
+                    action: "write",
+                    key: key.to_owned()
+                }),
                 "{key}"
             );
             assert!(!fake.contains(key));
@@ -106,8 +117,14 @@ mod tests {
             bucket.delete(key).await.unwrap();
             assert!(!fake.contains(key));
         }
-        assert!(matches!(bucket.get("other/a").await, Err(BucketError::Forbidden { .. })));
-        assert!(matches!(bucket.delete("other/a").await, Err(BucketError::Forbidden { .. })));
+        assert!(matches!(
+            bucket.get("other/a").await,
+            Err(BucketError::Forbidden { .. })
+        ));
+        assert!(matches!(
+            bucket.delete("other/a").await,
+            Err(BucketError::Forbidden { .. })
+        ));
         assert!(fake.contains("other/a"));
         assert!(matches!(
             bucket.list_page("other/", None, 10).await,

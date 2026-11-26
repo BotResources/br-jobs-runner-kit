@@ -54,7 +54,10 @@ async fn metrics_answers_the_text_format() {
     let (address, shutdown, _) = start(true).await;
     let (status, head, body) = request(address, "GET", "/metrics").await;
     assert_eq!(status, 200);
-    assert!(head.to_ascii_lowercase().contains("text/plain; version=0.0.4"));
+    assert!(
+        head.to_ascii_lowercase()
+            .contains("text/plain; version=0.0.4")
+    );
     assert_eq!(body, "# TYPE x gauge\nx 1\n");
     shutdown.cancel();
 }
@@ -71,7 +74,10 @@ async fn another_path_is_404_and_another_method_is_405() {
 #[tokio::test]
 async fn the_server_stops_at_the_shutdown_signal() {
     let readiness = Arc::new(Readiness::new([]));
-    let state = Arc::new(HttpState { readiness, metrics: Box::new(String::new) });
+    let state = Arc::new(HttpState {
+        readiness,
+        metrics: Box::new(String::new),
+    });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let shutdown = CancellationToken::new();
     let handle = tokio::spawn(serve(listener, state, shutdown.clone()));

@@ -72,7 +72,9 @@ fn unreadable(field: &'static str) -> Judgment {
 
 fn stuck(pod: &PodFacts, rules: &ExpiryRules, now: Timestamp) -> Judgment {
     match &pod.claimed_at {
-        Mark::Value(claimed_at) => at_deadline(claimed_at.plus(rules.stuck_ttl), DeleteReason::Stuck, now),
+        Mark::Value(claimed_at) => {
+            at_deadline(claimed_at.plus(rules.stuck_ttl), DeleteReason::Stuck, now)
+        }
         Mark::Absent | Mark::Unreadable => unreadable("claimed-at"),
     }
 }

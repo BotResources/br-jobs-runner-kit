@@ -106,7 +106,10 @@ mod tests {
 
     #[test]
     fn an_equal_size_changes_nothing() {
-        assert_eq!(damp(ScaleState::default(), 5, 5, at(1000), &rules()).replicas, 5);
+        assert_eq!(
+            damp(ScaleState::default(), 5, 5, at(1000), &rules()).replicas,
+            5
+        );
     }
 
     #[test]
