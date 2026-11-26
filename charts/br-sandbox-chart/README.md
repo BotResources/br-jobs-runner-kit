@@ -11,12 +11,39 @@ It does not claim a pod, run a command, save or restore (the library `br-runner-
 | Namespace `{prefix}-{client}-{mode}`, ServiceAccount `sandbox` (no token, no Role), ResourceQuota `br-sandbox-quota`, LimitRange `br-sandbox-limits`, ConfigMap `br-sandbox-config` | each (client, mode) | always |
 | ReplicaSet `warm-{client}-{mode}` | each (client, mode) | always, never sets `spec.replicas` |
 | NetworkPolicy `default-deny`, `egress-full` or `egress-allow` | each (client, mode) | always |
+| Namespace `{sandbox namespace}-egress`, NetworkPolicies `default-deny`, `ingress-tunnel` and `egress-proxy`, ResourceQuota `br-sandbox-egress-quota` | each (client, mode) that uses a proxy | mode `allow`; mode `full` when `credential_set` is not empty |
 | ValidatingAdmissionPolicy and binding `{prefix}-{client}-{mode}-pod` | each (client, mode) | always |
 | Role and RoleBinding `br-sandbox-runner` | each (client, mode) | always |
 | Role and RoleBinding `br-sandbox-keeper`, keeper Deployment, ServiceAccount, lease Role, ClusterRole `namespaces` read, NetworkPolicies `default-deny` and `egress-keeper` | system namespace | `keeper.enabled` |
 | ServiceAccount, ClusterRole and Role `br-sandbox-netcheck`, ConfigMap `br-sandbox-netcheck`, Job `br-sandbox-netcheck-{run_id}`, CronJob, NetworkPolicy `egress-netcheck` | system namespace and each (client, mode) | `network_check.enabled` |
 
 The system namespace is `{prefix}-system`. It does not carry `br.sandbox/managed`, so the Kyverno exclusion does not touch it.
+
+## Layout: two namespaces for a mode with a proxy
+
+A (client, mode) that uses a proxy has two namespaces. Mode `allow` always has them; mode `full` has them when `clients.<client>.modes.full.credential_set` is not empty. Mode `none` and mode `full` without a credential set have the sandbox namespace only.
+
+| | Sandbox namespace `{prefix}-{client}-{mode}` | Egress namespace `{prefix}-{client}-{mode}-egress` |
+|---|---|---|
+| Holds | the sandbox pods, the warm pool, the CA certificate (not secret) | the proxy pods, the credential Secret, the CA key Secret, the sealed Secrets of the proxy |
+| Label | `br.sandbox/managed=true`, `br.sandbox/mode`, `br.sandbox/client` | `br.sandbox/egress=true`, `br.sandbox/mode`, `br.sandbox/client`; never `br.sandbox/managed` |
+| Pod Security | `baseline` enforced, `restricted` warn and audit | the same |
+| Role and RoleBinding | `br-sandbox-runner`, `br-sandbox-keeper`, `br-sandbox-netcheck` | none |
+| Policies | `default-deny`, `egress-allow` or `egress-full` | `default-deny`, `ingress-tunnel`, `egress-proxy` |
+| Quota | `br-sandbox-quota` and `br-sandbox-limits` | `br-sandbox-egress-quota` (pods only, `egress.quota.pods`) |
+| Admission policy | one per namespace, `role=sandbox` pods only | none |
+
+No identity of the chart (the runner, the keeper, the network check, the sandbox ServiceAccount) has a Role or a RoleBinding in an egress namespace, so none of them reaches a proxy pod by `pods/exec` or `pods` patch, and none reads a Secret there. The controller of the proxy Deployment is the only identity that makes or changes a pod there; it comes with the proxy change of this chart. The one cluster-wide right on pods is the read (`get`, `list`) of the network check ClusterRole; no identity has a cluster-wide right on `secrets`. A runner namespace that equals an egress namespace fails the render with `BR_SANDBOX_SHARED_NAMESPACE`.
+
+The egress namespace does not carry `br.sandbox/managed=true`, on purpose: the admission policy of a sandbox namespace binds on that label and refuses every pod that is not `role=sandbox`, so it would refuse the proxy pods. The consequence for a Kyverno exclusion (or any policy that selects the managed namespaces): the exclusion text that names `br.sandbox/managed=true` does not cover the egress namespace. If the cluster policy of the project needs an exclusion there (user namespaces, runtime class), it selects `br.sandbox/egress=true`. The egress namespace has no `hostUsers: false` requirement from the chart; the proxy change sets its own pod security. A consumer that lists namespaces by `br.sandbox/client` or `br.sandbox/mode` also sees the egress namespaces and selects `br.sandbox/managed=true` to get the sandbox ones.
+
+**Where the secrets live.** The credential Secret, the CA key Secret and every sealed Secret of the proxy are created in the egress namespace by the deploy tool; the chart renders none. The CA certificate (not secret) stays in the sandbox namespace, for the sandbox pods: the chart renders nothing of it now, and the proxy change places it there. The pull secrets of `pull_secrets` must exist in the egress namespace too: an image pull reads the Secret of the namespace of the pod.
+
+**Name.** `{sandbox namespace}-egress` is a working name. It comes from the helper `br-sandbox-chart.egress.namespace`, the only place that writes the suffix; a change of the pattern is a change of that helper. A name over 63 characters fails the render with `BR_SANDBOX_NAME_TOO_LONG`, and a name equal to another namespace of the render (the system namespace, a sandbox namespace, a runner namespace) fails with `BR_SANDBOX_SHARED_NAMESPACE`. One egress namespace belongs to one (client, mode): two clients never share one.
+
+**What the egress namespace renders now.** Its Namespace, its default-deny, its two allow rules and its quota. The proxy Deployment, Service, ConfigMap and Secrets are not rendered yet: they come in a later change of this chart through the slot `br-sandbox-chart.slot.egress.objects`, which receives the root, the namespace item and the name of the egress namespace (`dict "root" . "ns" $ns "namespace" $name`). Until then no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).
+
+**Rules of the egress namespace.** `default-deny` on every pod, both directions. `ingress-tunnel`: proxy pods take traffic only from the pods `br.sandbox/role=sandbox` of the sandbox namespace of the same (client, mode) (namespace and pod selector in the same item), TCP on `egress.proxy.port`; no other port, so the reload port of the proxy is reached by no sandbox. `egress-proxy`: proxy pods reach `0.0.0.0/0` (and `::/0` with `dual_stack`) except three groups: the internal ranges (`network.internal_cidrs`), the pod and service networks, and the node, node public and load balancer addresses. The rule names no pod and no namespace, and no cluster DNS: the proxy resolves through public resolvers.
 
 ## Values
 
@@ -47,24 +74,26 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 | `pool.size.{cpu,memory,disk}.{request,limit}` | 500m/2, 1Gi/2Gi, 2Gi/5Gi | The one size key of each resource. `disk` is `ephemeral-storage`. |
 | `pool.{floor,max_sandboxes,refill_seconds,margin}` | 1, 20, 3, 2 | Read by the keeper. |
 | `pool.terminationGracePeriodSeconds`, `pool.node_selector` | `1`, `{}` | |
-| `quota.extra_pods` | `4` | Pods of the quota = `max_sandboxes` + this (proxy, network check, slack). |
+| `quota.extra_pods` | `4` | Pods of the quota = `max_sandboxes` + this (network check probe pod, slack; the proxy pods count in the egress namespace). |
 | `network.{pod_cidr,service_cidr}` | required | |
 | `network.{node_addresses,node_public_addresses,load_balancer_addresses}` | required lists | `[]` must be written on purpose; no default exists. |
 | `network.public_resolvers` | required if a mode is `allow` or `full` | Nameservers of the pods of mode `full`. |
 | `network.internal_cidrs` | RFC1918, 100.64/10, 169.254/16, 127/8 | |
 | `network.ipv6` | `single_stack` | `dual_stack` adds `::/0` except `fc00::/7`, `fe80::/10` and the IPv6 addresses of the lists. |
 | `network.{api_server_addresses,store_cidrs}` | required with keeper or network check; at least one | Egress of the keeper (API server, store) and the network check (API server). |
-| `admission.proxy_controller_user` | `system:serviceaccount:kube-system:replicaset-controller` | The only user allowed to create a `role=proxy` pod. |
 | `clients.<client>.modes.<mode>` | required | `mode` is `none`, `allow` or `full`, else `BR_SANDBOX_MODE_UNKNOWN`. A key present is a namespace. |
 | `...modes.<mode>.pool` | `{}` | Overrides any key of `pool` for this namespace. |
 | `...modes.<mode>.runner.{service_account,namespace}` | required | Subject of the runner Role. |
 | `...modes.<mode>.allow.{domains,cidrs}` | `[]` | For mode `allow`; consumed by the egress proxy of a later change of this chart. A non-empty list fails the render with `BR_SANDBOX_EGRESS_DISABLED` while `egress.enabled` is false. |
-| `...modes.<mode>.credential_set` | `{}` | SLOT, filled by a later change of this chart; one set per namespace. A non-empty value fails the render with `BR_SANDBOX_EGRESS_DISABLED` while `egress.enabled` is false. |
-| `egress.enabled`, `egress.proxy.port` | `false`, `8888` | SLOT. `enabled: true` fails the render (`BR_SANDBOX_SLOT_EMPTY`) until a later change of this chart fills its slots. |
+| `...modes.<mode>.credential_set` | `{}` | One set per namespace; its content is read by a later change of this chart. A non-empty value fails the render with `BR_SANDBOX_EGRESS_DISABLED` while `egress.enabled` is false, and with `BR_SANDBOX_CREDENTIAL_SET_MODE` for mode `none`. Non-empty in mode `full`: the (client, mode) gets an egress namespace and its sandbox reaches only the proxy. |
+| `egress.enabled`, `egress.proxy.port` | `false`, `8888` | `enabled: true` lets the allow lists and credential sets render. The proxy objects are a later change of this chart; `port` is the tunnel port of both namespaces. |
+| `egress.quota.pods` | `4` | Pods of the quota of an egress namespace. |
 | `keeper.{enabled,image,replicas,settings,resources}`, `keeper.lease.{duration_seconds,renew_deadline_seconds,retry_period_seconds}` | `false`, required if enabled, `2`, `{}`, 50m/64Mi and 500m/256Mi, 15/10/2 | `settings` goes untouched into the system config; the library `br-sandbox-keeper` adds its keys to the schema. |
 | `network_check.{enabled,image,targets,run_id,cron}` | `true`, required if enabled, `[]`, `""`, `""` | A new `run_id` starts a new Job. `targets` are `host:port` entries (the bus, the database). |
 
-Render errors: `BR_SANDBOX_MISSING_VALUE`, `BR_SANDBOX_MODE_UNKNOWN`, `BR_SANDBOX_SHARED_NAMESPACE` (two equal names, the system namespace included), `BR_SANDBOX_SAVE_AGE_INVALID`, `BR_SANDBOX_POOL_INVALID` (floor above `max_sandboxes`), `BR_SANDBOX_SLOT_EMPTY`.
+Values that changed with the two-namespace layout: `admission.proxy_controller_user` is removed (and the whole `admission` block); `egress.quota.pods` is added; `egress.enabled: true` no longer fails the render. No other key changed.
+
+Render errors: `BR_SANDBOX_MISSING_VALUE`, `BR_SANDBOX_MODE_UNKNOWN`, `BR_SANDBOX_SHARED_NAMESPACE` (two equal names: the system, sandbox and egress namespaces and the runner namespaces), `BR_SANDBOX_NAME_TOO_LONG` (a namespace name over 63 characters), `BR_SANDBOX_SAVE_AGE_INVALID`, `BR_SANDBOX_POOL_INVALID` (floor above `max_sandboxes`), `BR_SANDBOX_EGRESS_DISABLED`, `BR_SANDBOX_CREDENTIAL_SET_MODE`.
 
 Constants, not keys (a value that weakens one is a different chart): label prefix `br.sandbox`, `hostUsers: false`, seccomp `RuntimeDefault`, the seven capabilities, no service account token, no ingress, no port, Pod Security `baseline` enforced, `restricted` warn and audit.
 
@@ -77,7 +106,7 @@ Later changes of this chart (the egress proxy and the keeper objects) fill these
 | `br-sandbox-chart.slot.egress.env` | the agent container (YAML list) | `HTTPS_PROXY`, CA paths, placeholders |
 | `br-sandbox-chart.slot.egress.volumes` | the pod (YAML list) | CA ConfigMap |
 | `br-sandbox-chart.slot.egress.volume_mounts` | the agent container (YAML list) | CA mount |
-| `br-sandbox-chart.slot.egress.objects` | no caller yet | proxy Deployment, Service, ConfigMap, Secret mount, proxy NetworkPolicies, proxy Role |
+| `br-sandbox-chart.slot.egress.objects` | `templates/egress.yaml`, once per egress namespace, with `dict "root" . "ns" $ns "namespace" <egress namespace name>` | proxy Deployment, Service, ConfigMap and Secret mount, all in the egress namespace; the proxy controller identity, the only identity with a right there |
 | `br-sandbox-chart.slot.keeper.objects` | `templates/config.yaml` | anything else the keeper needs |
 
 ## Modes
@@ -85,10 +114,10 @@ Later changes of this chart (the egress proxy and the keeper objects) fill these
 | Mode | NetworkPolicies of the namespace | Pod DNS |
 |---|---|---|
 | `none` | `default-deny` only (ingress and egress, every pod) | `dnsPolicy: None`, nameserver `127.0.0.1` |
-| `allow` | `default-deny` and `egress-allow`: sandbox pods reach only pods `br.sandbox/role=proxy` of the namespace, TCP on `egress.proxy.port` | same as `none` |
-| `full` | `default-deny` and `egress-full`: `0.0.0.0/0` except internal, pod, service, node, node public and load balancer lists; with `dual_stack` also `::/0` except `fc00::/7`, `fe80::/10` and the IPv6 addresses. No rule names a pod or a namespace, so no cluster DNS | nameservers `network.public_resolvers` |
+| `allow` | `default-deny` and `egress-allow`: sandbox pods reach only the pods `br.sandbox/role=proxy` of the egress namespace of the same (client, mode), TCP on `egress.proxy.port`; namespace and pod are selected in the same rule item; no DNS | same as `none` |
+| `full` | `default-deny` and `egress-full`. With a credential set: the same rule as mode `allow`, nothing else, and the pod resolver is `127.0.0.1`. Without: `0.0.0.0/0` except internal, pod, service, node, node public and load balancer lists; with `dual_stack` also `::/0` except `fc00::/7`, `fe80::/10` and the IPv6 addresses. No rule names a pod or a namespace, so no cluster DNS | nameservers `network.public_resolvers` |
 
-No policy has an ingress rule. The sandbox side selects `br.sandbox/role=sandbox`, never the pool label, so a claimed pod keeps its path. Mode `allow` has no egress until a later change of this chart renders the proxy (fail closed). A tool can send DNS to any public host in mode `full`; only the pod resolver is fixed.
+No policy of a sandbox namespace or of the system namespace has an ingress rule; the only ingress rule of the chart is `ingress-tunnel` of an egress namespace. The sandbox side selects `br.sandbox/role=sandbox`, never the pool label, so a claimed pod keeps its path. A mode with a proxy has no egress until a later change of this chart renders the proxy (fail closed). A tool can send DNS to any public host in mode `full`; only the pod resolver is fixed.
 
 A bound host that sends a credential value back shows it to the sandbox (no scrub exists; the proxy has no response scrub). The chart claims nothing else about credentials.
 
@@ -99,8 +128,9 @@ One prefix, `br.sandbox`. The adapter, the keeper and the policies use exactly t
 | Name | Kind | Set by | Value |
 |---|---|---|---|
 | `br.sandbox/managed` | namespace label | chart | `true`; the label of the Kyverno exclusion and of the policy binding |
-| `br.sandbox/mode`, `br.sandbox/client` | namespace label | chart | mode, client |
-| `br.sandbox/role` | pod label | pod template | `sandbox` (or `proxy`, set by the egress proxy of a later change of this chart); never changes |
+| `br.sandbox/egress` | namespace label | chart | `true` on an egress namespace only; never together with `br.sandbox/managed` |
+| `br.sandbox/mode`, `br.sandbox/client` | namespace label | chart | mode, client (sandbox and egress namespaces) |
+| `br.sandbox/role` | pod label | pod template | `sandbox` in a sandbox namespace, `proxy` in an egress namespace (set by the egress proxy of a later change of this chart); never changes |
 | `br.sandbox/pool` | pod label | template, then claim | `warm`, then `claimed` (one way); `probe` for a check pod |
 | `br.sandbox/pool-id` | pod label | template | `{client}-{mode}`; never changes |
 | `br.sandbox/thread`, `br.sandbox/agent`, `br.sandbox/creds` | pod label | claim | ids |
@@ -117,14 +147,14 @@ Agent container `agent`: the project image, command `{tools.mount_path}/bin/paus
 
 ## Admission policy
 
-One policy and binding per (client, mode); values (size, runtime class, repositories, proxy user) are inlined. The binding matches the namespace by `br.sandbox/managed=true` and by name. It matches every pod, `CREATE` and `UPDATE`, and fails closed.
+One policy and binding per (client, mode); values (size, runtime class, repositories) are inlined. The binding matches the namespace by `br.sandbox/managed=true` and by name. It matches every pod, `CREATE` and `UPDATE`, and fails closed.
 
-- A pod passes if it is `role=sandbox` and follows the rules below, or `role=proxy` and its creator is `admission.proxy_controller_user`. A pod with neither role is refused (`BR_SANDBOX_ROLE`). The role cannot change (`BR_SANDBOX_ROLE_IMMUTABLE`).
+- A pod passes if it is `role=sandbox` and follows the rules below. Any other role, or none, is refused (`BR_SANDBOX_ROLE`), `role=proxy` included: a proxy pod does not live in a sandbox namespace, it lives in the egress namespace, which the policy does not bind. The role cannot change (`BR_SANDBOX_ROLE_IMMUTABLE`).
 - Rules of a sandbox pod: 1 `hostUsers` false (`USERNS_REQUIRED`); 2 no host network, PID, IPC, port (`HOST_NAMESPACE`); 3 only `emptyDir` and `configMap` volumes, no `secretKeyRef`, no `secretRef` (`VOLUME_FORBIDDEN`); 4 drop ALL, add only the seven (`CAPABILITY`); 5 no privilege, no escalation, seccomp `RuntimeDefault` on the pod and, when a container sets a profile, on that container (`PRIVILEGE`); 6 cpu, memory and ephemeral-storage requests and limits on every container, not above the size of the pool (`RESOURCES`); 7 every image from an allowed repository (project image, tools image, check image, each with the mirror) with a tag or a digest (`IMAGE`); 8 no token, runtime class equals the chart value (`TOKEN_OR_RUNTIME`); 9 on update the security contexts, resources, volumes and `hostUsers` stay (`IMMUTABLE`).
 - Patch rules (`BR_SANDBOX_LABELS`): a patch changes only `br.sandbox/` keys of labels and annotations; `role` and `pool-id` never change; a claimed pod never leaves `claimed`.
 - Init and seed containers are containers of the pod and follow rules 4 to 7.
 
-The exact user name of the controller that creates the proxy pods is not proven offline. A wrong name fails closed: the proxy pod is refused and does not start. The cluster test proves the name on the test cluster, and proves with the runner service account that an unlabelled pod, a `role=proxy` pod and a relabel of the role are refused. The CEL text is also not compiled offline.
+The cluster test proves with the runner service account that an unlabelled pod, a `role=proxy` pod and a relabel of the role are refused in a sandbox namespace. The CEL text is not compiled offline.
 
 ## Image contract
 
@@ -144,6 +174,8 @@ The Job `br-sandbox-netcheck-{run_id}` (and an optional CronJob) lists the nodes
 |---|---|
 | Namespace per (client, mode) | A mode cannot mix; the namespace checks hold by the namespace and not by a label. |
 | The policy matches every pod | A pod without `role=sandbox` would escape and a runner with `pods create` could mount a Secret. |
+| Proxy pods and their Secrets in a second namespace | The runner holds `pods/exec` and `pods` patch in the sandbox namespace; a proxy pod there would let a compromised runner read the credential value and the CA key. No identity of the chart has a right in the egress namespace. |
+| Egress namespace without `br.sandbox/managed` | The admission policy of a sandbox namespace accepts `role=sandbox` pods only; it must not bind the proxy namespace. |
 | Policy per namespace | The size and the repositories are inlined, so a pool size is a single key. |
 | `hostUsers: false` fixed | Root in the pod is a high host user; the seven capabilities hold only inside. |
 | `pause` from the tools mount | The agent image has no reaper; an orphan stayed alive after SIGTERM with `sleep infinity`. |
@@ -164,13 +196,13 @@ The Job `br-sandbox-netcheck-{run_id}` (and an optional CronJob) lists the nodes
 | `br-sandbox-python` | test and reference agent image of this repository | Python PSF-2.0; pandas BSD-3-Clause; openpyxl MIT; python-docx MIT; python-pptx MIT; LibreOffice MPL-2.0 (its repository holds the table) |
 | `br-sandbox-keeper` | keeper | Apache-2.0 (ours) |
 | check image | check Job | chosen by the project |
-| proxy image | egress proxy (a later change of this chart) | Apache-2.0 (iron-proxy) |
+| proxy image | egress proxy (a later change of this chart), runs in the egress namespace | Apache-2.0 (iron-proxy) |
 
 The chart itself is Apache-2.0 and ships no GPL program. Kubernetes (Apache-2.0), Helm (Apache-2.0) and Kyverno are not shipped.
 
 ## Needs of the cluster (not done by the chart)
 
-`kubelet` in `/etc/subuid` and `/etc/subgid` on each node; the Kyverno exclusion for namespaces with `br.sandbox/managed=true` (without it mode `none` is not possible); the bucket with its lifecycle rule; the sealed Secret of `store.credentials_secret`. Each Secret named in `pull_secrets` in every sandbox namespace and in the system namespace (an image pull reads the Secret of the namespace of the pod; the chart renders no Secret). Policy objects need Kubernetes 1.30 or later (ValidatingAdmissionPolicy v1).
+`kubelet` in `/etc/subuid` and `/etc/subgid` on each node; the Kyverno exclusion for namespaces with `br.sandbox/managed=true` (without it mode `none` is not possible); the bucket with its lifecycle rule; the sealed Secret of `store.credentials_secret`. Each Secret named in `pull_secrets` in every sandbox namespace and in the system namespace, and in every egress namespace (an image pull reads the Secret of the namespace of the pod; the chart renders no Secret). Policy objects need Kubernetes 1.30 or later (ValidatingAdmissionPolicy v1).
 
 ## Tests
 

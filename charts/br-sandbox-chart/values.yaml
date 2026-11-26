@@ -73,13 +73,13 @@ network:
     - 169.254.0.0/16
     - 127.0.0.0/8
   ipv6: single_stack
-admission:
-  proxy_controller_user: system:serviceaccount:kube-system:replicaset-controller
 clients: {}
 egress:
   enabled: false
   proxy:
     port: 8888
+  quota:
+    pods: 4
 keeper:
   enabled: false
   replicas: 2

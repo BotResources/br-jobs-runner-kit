@@ -23,7 +23,7 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $mount := $values.tools.mount_path -}}
 {{- $seed := $values.tools.seed_container.enabled -}}
 {{- $nameservers := list "127.0.0.1" -}}
-{{- if eq $ns.mode "full" -}}
+{{- if and (eq $ns.mode "full") (not $ns.egress) -}}
 {{- $nameservers = $values.network.public_resolvers -}}
 {{- end -}}
 {{- $spec := dict "hostUsers" false "automountServiceAccountToken" false "enableServiceLinks" false "serviceAccountName" "sandbox" "terminationGracePeriodSeconds" ($ns.pool.terminationGracePeriodSeconds | int64) "dnsPolicy" "None" "dnsConfig" (dict "nameservers" $nameservers) "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) -}}

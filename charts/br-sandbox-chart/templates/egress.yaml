@@ -1,0 +1,94 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- if $ns.egress }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns.egress }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+    br.sandbox/egress: "true"
+    br.sandbox/mode: {{ $ns.mode | quote }}
+    br.sandbox/client: {{ $ns.client | quote }}
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ $ns.egress }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-tunnel
+  namespace: {{ $ns.egress }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/role: proxy
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns.name }}
+          podSelector:
+            matchLabels:
+              br.sandbox/role: sandbox
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.egress.proxy.port | int64 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-proxy
+  namespace: {{ $ns.egress }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/role: proxy
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "4") | fromJsonArray | toYaml | nindent 14 }}
+    {{- if eq $.Values.network.ipv6 "dual_stack" }}
+    - to:
+        - ipBlock:
+            cidr: ::/0
+            except:
+              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "6") | fromJsonArray | toYaml | nindent 14 }}
+    {{- end }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: br-sandbox-egress-quota
+  namespace: {{ $ns.egress }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  hard:
+    pods: {{ $.Values.egress.quota.pods | int64 | quote }}
+{{- include "br-sandbox-chart.slot.egress.objects" (dict "root" $ "ns" $ns "namespace" $ns.egress) }}
+{{- end }}
+{{- end }}

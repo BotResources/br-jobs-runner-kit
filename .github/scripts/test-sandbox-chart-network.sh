@@ -14,9 +14,9 @@ check_network_policy_none_has_deny_only() {
 }
 
 check_network_policy_allow_reaches_only_the_proxy() {
-    section "network policy allow: only the proxy pods of the namespace, TCP on the proxy port"
+    section "network policy allow: only the proxy pods of the egress namespace, TCP on the proxy port"
     t "allow has default-deny and egress-allow" test "$(policy_names sbx-alpha-allow)" = "default-deny,egress-allow"
-    t "egress-allow has one rule: proxy pods, TCP 8888, nothing else" jqt ex "${NP} | select(.metadata.name == \"egress-allow\") | select(.spec.policyTypes == [\"Egress\"] and (.spec.egress | length) == 1 and .spec.egress[0].to == [{\"podSelector\": {\"matchLabels\": {\"br.sandbox/role\": \"proxy\"}}}] and .spec.egress[0].ports == [{\"protocol\": \"TCP\", \"port\": 8888}])"
+    t "egress-allow has one rule: proxy pods of the egress namespace in the same item, TCP 8888, nothing else" jqt ex "${NP} | select(.metadata.name == \"egress-allow\") | select(.spec.policyTypes == [\"Egress\"] and (.spec.egress | length) == 1 and .spec.egress[0].to == [{\"namespaceSelector\": {\"matchLabels\": {\"kubernetes.io/metadata.name\": \"sbx-alpha-allow-egress\"}}, \"podSelector\": {\"matchLabels\": {\"br.sandbox/role\": \"proxy\"}}}] and .spec.egress[0].ports == [{\"protocol\": \"TCP\", \"port\": 8888}])"
     t "egress-allow selects the sandbox pods by role, not by pool" jqt ex "${NP} | select(.metadata.name == \"egress-allow\") | .spec.podSelector == {\"matchLabels\": {\"br.sandbox/role\": \"sandbox\"}}"
     render port -f "$EXAMPLE" --set egress.proxy.port=9999
     t "the proxy port is a value" jqt port '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-allow") | .spec.egress[0].ports[0].port == 9999'
@@ -39,9 +39,9 @@ check_network_policy_mode_is_unknown_or_from_values() {
 
 check_one_namespace_per_client_and_mode() {
     section "namespaces per client and mode, default-deny in each"
-    t "four sandbox namespaces plus the system namespace" test "$(jqv ex '[.[] | select(.kind == "Namespace") | .metadata.name] | sort | join(",")')" = "sbx-alpha-allow,sbx-alpha-full,sbx-alpha-none,sbx-beta-none,sbx-system"
+    t "four sandbox namespaces, the egress namespace of mode allow and the system namespace" test "$(jqv ex '[.[] | select(.kind == "Namespace") | .metadata.name] | sort | join(",")')" = "sbx-alpha-allow,sbx-alpha-allow-egress,sbx-alpha-full,sbx-alpha-none,sbx-beta-none,sbx-system"
     t "every sandbox namespace has default-deny on both directions" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.name] as $n | [.[] | select(.kind == "NetworkPolicy" and .metadata.name == "default-deny" and (.spec.policyTypes | sort) == ["Egress", "Ingress"]) | .metadata.namespace] as $d | ($n - $d) == []'
-    t "no policy has an ingress rule" jqt ex "[${NP} | select(.spec | has(\"ingress\"))] | length == 0"
+    t "no policy of a sandbox or system namespace has an ingress rule" jqt ex "[${NP} | select((.metadata.namespace | endswith(\"-egress\") | not) and (.spec | has(\"ingress\")))] | length == 0"
     fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=system,client_b=alpha,namespace=sbx-alpha-none}" -f "$(vals shared '.installation.system_namespace = "sbx-alpha-none"')"
 }
 
@@ -106,7 +106,7 @@ check_image_is_one_value() {
 check_pool_has_no_replicas_and_a_quota_for_it() {
     section "the keeper owns spec.replicas, the quota holds the pool, a pod leaves fast"
     t "no ReplicaSet and no keeper Deployment sets spec.replicas except the keeper's own" jqt keeper '[.[] | select(.kind == "ReplicaSet") | .spec | has("replicas")] | any | not'
-    t "the quota allows max_sandboxes plus the extra pods" jqt ex '[.[] | select(.kind == "ResourceQuota")] | map(.spec.hard.pods | tonumber) | sort == [14, 24, 24, 24]'
+    t "the quota allows max_sandboxes plus the extra pods" jqt ex '[.[] | select(.kind == "ResourceQuota" and (.metadata.namespace | endswith("-egress") | not))] | map(.spec.hard.pods | tonumber) | sort == [14, 24, 24, 24]'
     local namespace max pods
     for namespace in sbx-alpha-allow sbx-alpha-full sbx-alpha-none sbx-beta-none; do
         max="$(yq "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-config\" and .metadata.namespace == \"${namespace}\") | .data[\"config.yaml\"] | from_yaml | .pool.max_sandboxes" "$WORK/ex_yaml.yaml")"

@@ -1,6 +1,6 @@
 {
   "sbx-alpha-none": {
-    "BR_SANDBOX_ROLE": "variables.role == 'sandbox' || (variables.role == 'proxy' && variables.proxyCreator)",
+    "BR_SANDBOX_ROLE": "variables.role == 'sandbox'",
     "BR_SANDBOX_ROLE_IMMUTABLE": "request.operation == 'CREATE' || variables.role == variables.oldRole",
     "BR_SANDBOX_USERNS_REQUIRED": "variables.role != 'sandbox' || (has(object.spec.hostUsers) && object.spec.hostUsers == false)",
     "BR_SANDBOX_HOST_NAMESPACE": "variables.role != 'sandbox' || (!(has(object.spec.hostNetwork) && object.spec.hostNetwork) && !(has(object.spec.hostPID) && object.spec.hostPID) && !(has(object.spec.hostIPC) && object.spec.hostIPC) && variables.containers.all(c, !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0)))",

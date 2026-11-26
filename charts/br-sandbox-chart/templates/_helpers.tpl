@@ -15,11 +15,26 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- range $client, $clientValues := .Values.clients -}}
 {{- range $mode, $modeValues := $clientValues.modes -}}
 {{- $pool := mergeOverwrite (deepCopy $root.Values.pool) (deepCopy ($modeValues.pool | default dict)) -}}
-{{- $item := dict "client" $client "mode" $mode "name" (printf "%s-%s-%s" $root.Values.installation.namespace_prefix $client $mode) "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) -}}
+{{- $name := printf "%s-%s-%s" $root.Values.installation.namespace_prefix $client $mode -}}
+{{- $egress := "" -}}
+{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
+{{- $egress = include "br-sandbox-chart.egress.namespace" $name -}}
+{{- end -}}
+{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) -}}
 {{- $out = append $out $item -}}
 {{- end -}}
 {{- end -}}
 {{- toJson $out -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.egress.namespace" -}}
+{{- printf "%s-egress" . -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.egress.proxied" -}}
+{{- if or (eq .mode "allow") (and (eq .mode "full") (gt (len (get .values "credential_set" | default dict)) 0)) -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.image.repository" -}}

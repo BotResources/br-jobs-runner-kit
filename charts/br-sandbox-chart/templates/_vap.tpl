@@ -20,7 +20,7 @@
 {{- $prefixList := printf "[%s]" (join ", " $quoted) -}}
 {{- $sandbox := "variables.role != 'sandbox' || " -}}
 {{- $rules := list
-  (dict "code" "BR_SANDBOX_ROLE" "message" "a pod of a sandbox namespace carries br.sandbox/role=sandbox, or br.sandbox/role=proxy and is created by the proxy controller" "expression" "variables.role == 'sandbox' || (variables.role == 'proxy' && variables.proxyCreator)")
+  (dict "code" "BR_SANDBOX_ROLE" "message" "a pod of a sandbox namespace carries br.sandbox/role=sandbox; any other role, or none, is refused" "expression" "variables.role == 'sandbox'")
   (dict "code" "BR_SANDBOX_ROLE_IMMUTABLE" "message" "the label br.sandbox/role cannot change" "expression" "request.operation == 'CREATE' || variables.role == variables.oldRole")
   (dict "code" "BR_SANDBOX_USERNS_REQUIRED" "message" "spec.hostUsers must be false" "expression" (print $sandbox "(has(object.spec.hostUsers) && object.spec.hostUsers == false)"))
   (dict "code" "BR_SANDBOX_HOST_NAMESPACE" "message" "hostNetwork, hostPID, hostIPC and hostPort are refused" "expression" (print $sandbox "(!(has(object.spec.hostNetwork) && object.spec.hostNetwork) && !(has(object.spec.hostPID) && object.spec.hostPID) && !(has(object.spec.hostIPC) && object.spec.hostIPC) && variables.containers.all(c, !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0)))"))

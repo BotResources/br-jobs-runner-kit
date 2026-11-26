@@ -35,15 +35,13 @@ check_VAP_every_rule_exists_per_namespace() {
 }
 
 check_VAP_role_rules() {
-    section "VAP role and patch rules: match, role, proxy creator, immutable role, patch rules"
+    section "VAP role and patch rules: match, role, immutable role, patch rules"
     t "the binding matches the managed label and the namespace name" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding") | .spec.matchResources.namespaceSelector.matchLabels | select(.["br.sandbox/managed"] == "true" and (.["kubernetes.io/metadata.name"] | startswith("sbx-")))] | length == 4'
-    t "a pod with neither role is refused: the role rule has two cases only" has_rule_text sbx-alpha-none BR_SANDBOX_ROLE "variables.role == 'sandbox' || (variables.role == 'proxy' && variables.proxyCreator)"
-    t "the role rule has no third case" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_ROLE:\")) | .expression | length] | all(. < 130)"
-    t "the proxy creator is one user name from a value" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.variables[] | select(.name == "proxyCreator") | .expression == "request.userInfo.username == \"system:serviceaccount:kube-system:replicaset-controller\""] | all'
-    render proxyuser -f "$EXAMPLE" --set admission.proxy_controller_user=system:serviceaccount:example:other-controller
-    t "a wrong or other controller name changes only that equality, so a mismatch refuses the proxy" jqt proxyuser '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.variables[] | select(.name == "proxyCreator") | .expression] | unique == ["request.userInfo.username == \"system:serviceaccount:example:other-controller\""]'
-    t "no other expression reads the user" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[].expression | select(test("userInfo"))] | length == 0'
-    t "the proxy creator value cannot be empty" test "$(helm template t "$CHART" -f "$EXAMPLE" --set admission.proxy_controller_user= 2>&1 | grep -c 'proxy_controller_user')" -ge 1
+    t "a pod with a role other than sandbox is refused: the role rule has one case only" has_rule_text sbx-alpha-none BR_SANDBOX_ROLE "variables.role == 'sandbox'"
+    t "the role rule is exactly the one case" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_ROLE:\")) | .expression] | all(. == \"variables.role == 'sandbox'\")"
+    t "the role rule names no proxy case and no creator" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_ROLE:\")) | (.expression, .message) | select(test(\"proxy\"))] | length == 0"
+    t "the policy has no proxy creator variable and no expression reads the user" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | (.spec.variables[].name | select(. == "proxyCreator")), (.spec.validations[].expression | select(test("userInfo|proxyCreator")))] | length == 0'
+    t "the proxy controller value no longer exists" test "$(helm template t "$CHART" -f "$EXAMPLE" --set admission.proxy_controller_user=system:serviceaccount:example:other-controller 2>&1 | grep -c 'admission')" -ge 1
     t "the role cannot change on update" has_rule_text sbx-alpha-none BR_SANDBOX_ROLE_IMMUTABLE "request.operation == 'CREATE' || variables.role == variables.oldRole"
     t "role and pool-id are immutable, other labels are frozen" has_rule_text sbx-alpha-none BR_SANDBOX_LABELS "['br.sandbox/role', 'br.sandbox/pool-id'].all(k"
     t "a patch touches only br.sandbox/ keys" has_rule_text sbx-alpha-none BR_SANDBOX_LABELS "k.startsWith('br.sandbox/') || (k in oldObject.metadata.labels"
@@ -127,8 +125,8 @@ check_VAP_every_expression_is_the_exact_text() {
     t "the policy holds exactly the twelve rules and no other" jqt ex "[${VAP} | select(.metadata.name == \"sbx-alpha-none-pod\") | [.spec.validations[].message | split(\":\")[0]] | . == (\"${CODES}\" | split(\" \"))] | all"
     t "the size rule of a pool with another size equals the expected text" expression_is_exactly sbx-alpha-full BR_SANDBOX_RESOURCES
     t "the image rule of the allow namespace equals the expected text" expression_is_exactly sbx-alpha-allow BR_SANDBOX_IMAGE
-    t "a pod with neither role is refused: the role rule is the two cases and no third" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
+    t "a pod with a role other than sandbox is refused: the role rule is the one case" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
     t "the user-namespace rule has no alternative before the guard and the clause" expression_is_exactly sbx-alpha-none BR_SANDBOX_USERNS_REQUIRED
     t "no expression holds a literal true or false operand of || or &&" jqt ex "[${VAP} | .spec.validations[].expression | select(test(\"(^|[(]|[|][|] |&& )(true|false) ([|][|]|&&)|([|][|]|&&) (true|false)([) ]|$)\"))] | length == 0"
-    t "every isolation rule starts with the guard that exempts only role=proxy pods" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|LABELS)\")) | .expression | startswith(\"variables.role != 'sandbox' || \") and (. | split(\"variables.role != 'sandbox' || \") | length == 2)] | all"
+    t "every isolation rule starts with the guard for role=sandbox pods; any other role is refused by the role rule" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|LABELS)\")) | .expression | startswith(\"variables.role != 'sandbox' || \") and (. | split(\"variables.role != 'sandbox' || \") | length == 2)] | all"
 }

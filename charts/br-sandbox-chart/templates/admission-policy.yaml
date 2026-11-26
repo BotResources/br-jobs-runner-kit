@@ -22,8 +22,6 @@ spec:
       expression: {{ "(has(oldObject.metadata.labels) && 'br.sandbox/role' in oldObject.metadata.labels) ? oldObject.metadata.labels['br.sandbox/role'] : ''" | include "br-sandbox-chart.json_string" }}
     - name: containers
       expression: {{ "object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers : [])" | include "br-sandbox-chart.json_string" }}
-    - name: proxyCreator
-      expression: {{ printf "request.userInfo.username == %s" ($.Values.admission.proxy_controller_user | toJson) | include "br-sandbox-chart.json_string" }}
   validations:
     {{- range $rule := include "br-sandbox-chart.vap.rules" (dict "root" $ "ns" $ns) | fromJsonArray }}
     - expression: {{ $rule.expression | include "br-sandbox-chart.json_string" }}

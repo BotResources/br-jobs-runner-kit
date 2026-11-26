@@ -68,7 +68,8 @@ check_slots_render_nothing() {
         t "the slot ${slot} exists" grep -q "define \"br-sandbox-chart.slot.${slot}\"" "$CHART/templates/_slots.tpl"
     done
     t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "ReplicaSet", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
-    t "egress.enabled true fails until a later change of this chart fills its slots" test "$(helm template t "$CHART" -f "$EXAMPLE" --set egress.enabled=true 2>&1 | grep -c 'BR_SANDBOX_SLOT_EMPTY')" -ge 1
+    render egon -f "$EXAMPLE" --set egress.enabled=true
+    t "egress.enabled true renders no proxy object: the slot objects stay empty" jqt egon '([.[] | select(.kind == "Namespace")] | length) > 0 and ([.[] | select(.kind == "Deployment" or .kind == "Service" or .kind == "Secret")] | length) == 0'
 }
 
 check_egress_values_fail_while_egress_is_disabled() {

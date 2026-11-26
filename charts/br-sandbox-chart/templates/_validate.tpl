@@ -21,9 +21,6 @@
 {{- if le (.Values.save.ttl_seconds | int64) 0 -}}
 {{- fail "BR_SANDBOX_SAVE_AGE_INVALID{key=save.ttl_seconds}" -}}
 {{- end -}}
-{{- if .Values.egress.enabled -}}
-{{- fail "BR_SANDBOX_SLOT_EMPTY{slot=egress}" -}}
-{{- end -}}
 {{- if .Values.keeper.enabled -}}
 {{- range $path := list "keeper.image" "network.api_server_addresses" "network.store_cidrs" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
@@ -37,6 +34,7 @@
 {{- $prefix := .Values.installation.namespace_prefix -}}
 {{- $system := default (printf "%s-system" $prefix) .Values.installation.system_namespace -}}
 {{- $seen := dict $system "system" -}}
+{{- $egressNames := dict -}}
 {{- $needsResolvers := false -}}
 {{- range $client, $clientValues := .Values.clients -}}
 {{- if not (hasKey $clientValues "modes") -}}
@@ -61,14 +59,38 @@
 {{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=credential_set}" $client $mode) -}}
 {{- end -}}
 {{- end -}}
+{{- if and $root.Values.egress.enabled (eq $mode "none") (get $modeValues "credential_set" | default dict | len) -}}
+{{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{client=%s,mode=%s}" $client $mode) -}}
+{{- end -}}
 {{- $name := printf "%s-%s-%s" $prefix $client $mode -}}
 {{- if hasKey $seen $name -}}
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}
 {{- end -}}
 {{- $_ := set $seen $name $client -}}
+{{- if gt (len $name) 63 -}}
+{{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{client=%s,mode=%s,namespace=%s}" $client $mode $name) -}}
+{{- end -}}
+{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
+{{- $egressName := include "br-sandbox-chart.egress.namespace" $name -}}
+{{- if gt (len $egressName) 63 -}}
+{{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{client=%s,mode=%s,namespace=%s}" $client $mode $egressName) -}}
+{{- end -}}
+{{- if hasKey $seen $egressName -}}
+{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $egressName) $client $egressName) -}}
+{{- end -}}
+{{- $_ := set $seen $egressName $client -}}
+{{- $_ := set $egressNames $egressName $client -}}
+{{- end -}}
 {{- $pool := mergeOverwrite (deepCopy $root.Values.pool) (deepCopy ($modeValues.pool | default dict)) -}}
 {{- if gt ($pool.floor | int64) ($pool.max_sandboxes | int64) -}}
 {{- fail (printf "BR_SANDBOX_POOL_INVALID{client=%s,mode=%s,reason=floor_above_max_sandboxes}" $client $mode) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range $client, $clientValues := .Values.clients -}}
+{{- range $mode, $modeValues := $clientValues.modes -}}
+{{- if hasKey $egressNames $modeValues.runner.namespace -}}
+{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=runner-of-%s,namespace=%s}" (get $egressNames $modeValues.runner.namespace) $client $modeValues.runner.namespace) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
