@@ -14,7 +14,7 @@ RUN apt-get update \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /tmp/requirements.txt
+COPY images/br-sandbox-python/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --root-user-action=ignore -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 

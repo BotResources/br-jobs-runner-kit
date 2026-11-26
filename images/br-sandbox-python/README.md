@@ -20,11 +20,11 @@ The image satisfies the sandbox image contract: `/bin/sh`, `cat` and `find`, for
 ## Build and test
 
 ```sh
-docker build -t br-sandbox-python:local images/br-sandbox-python
-images/br-sandbox-python/smoke.sh br-sandbox-python:local
+docker build -t br-sandbox-python:local -f images/br-sandbox-python/Dockerfile .
+images/br-sandbox-python/test.sh br-sandbox-python:local linux/arm64
 ```
 
-`smoke.sh` runs the image as uid 12345 with all capabilities dropped, and converts a docx, an xlsx and a pptx to pdf with headless LibreOffice.
+`test.sh` runs the image as uid 12345 with all capabilities dropped, and converts a docx, an xlsx and a pptx to pdf with headless LibreOffice.
 
 ## Use
 

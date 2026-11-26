@@ -1,15 +1,17 @@
 #!/bin/sh
 set -eu
 
-image="${1:?usage: smoke.sh <image reference>}"
+image="${1:?usage: test.sh <image reference> [platform]}"
+platform="${2:-}"
+results="${RESULTS_FILE:-/dev/null}"
 uid=12345
 
 run() {
-  docker run --rm --user "${uid}:${uid}" --cap-drop ALL --security-opt no-new-privileges "$image" "$@"
+  docker run --rm ${platform:+--platform "$platform"} --user "${uid}:${uid}" --cap-drop ALL --security-opt no-new-privileges "$image" "$@"
 }
 
 fail() {
-  echo "FAIL: $1" >&2
+  echo "FAIL: $1" | tee -a "$results" >&2
   exit 1
 }
 
@@ -17,7 +19,7 @@ check() {
   name="$1"
   shift
   if "$@" >/dev/null 2>&1; then
-    echo "ok   $name"
+    echo "ok   $name" | tee -a "$results"
   else
     fail "$name"
   fi
