@@ -2,15 +2,18 @@
 
 ROLE='.[] | select(.kind == "Role" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "%s")'
 
+role_filter() {
+    printf '%s' "${ROLE//%s/$1}"
+}
+
 role_rules() {
-    # shellcheck disable=SC2059
-    jqv "$2" "$(printf "$ROLE" "$1") | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")"
+    jqv "$2" "$(role_filter "$1") | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")"
 }
 
 check_runner_role_and_binding() {
     section "runner Role: pods, exec, replicasets read, the config"
     t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(role_rules br-sandbox-runner ex)" = "configmaps:get pods/exec:create pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
-    t "the runner Role names the ConfigMap it reads" jqt ex "$(printf "$ROLE" br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
+    t "the runner Role names the ConfigMap it reads" jqt ex "$(role_filter br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
     t "the runner binding names the service account of the values" jqt ex '.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner" and .metadata.namespace == "sbx-beta-none") | .subjects == [{"kind": "ServiceAccount", "name": "runner", "namespace": "runners"}]'
     t "no Role of the render grants secrets" jqt keeper '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
     t "no Role of the render grants a wildcard verb" jqt keeper '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].verbs[] | select(. == "*")] | length == 0'
@@ -18,7 +21,7 @@ check_runner_role_and_binding() {
 
 check_keeper_rights() {
     section "keeper rights"
-    t "the keeper Role has pods without patch, replicasets with patch, status patch, events create" test "$(jq -r "$(printf "$ROLE" br-sandbox-keeper) | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")" "$WORK/keeper.json")" = "events:create pods:delete,get,list,watch replicasets/status:patch replicasets:get,list,patch,watch"
+    t "the keeper Role has pods without patch, replicasets with patch, status patch, events create" test "$(jq -r "$(role_filter br-sandbox-keeper) | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")" "$WORK/keeper.json")" = "events:create pods:delete,get,list,watch replicasets/status:patch replicasets:get,list,patch,watch"
     t "the keeper reads namespaces cluster-wide, nothing more cluster-wide" jqt keeper '[.[] | select(.kind == "ClusterRole" and (.metadata.name | endswith("keeper-namespaces"))) | .rules] == [[{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list", "watch"]}]]'
     t "the keeper holds leases in its own namespace" jqt keeper '.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-keeper-lease" and .metadata.namespace == "sbx-system") | .rules == [{"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["get", "create", "update"]}]'
     t "without the keeper no keeper object is rendered" jqt ex '[.[] | select((.metadata.name // "") | test("keeper"))] | length == 0'

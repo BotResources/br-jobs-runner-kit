@@ -149,7 +149,7 @@ The Job `br-sandbox-netcheck-{run_id}` (and an optional CronJob) lists the nodes
 | `pause` from the tools mount | The agent image has no reaper; an orphan stayed alive after SIGTERM with `sleep infinity`. |
 | Seed in a second container | `pods/exec` cannot choose a user; a root writer is needed so that a non-root agent sees a read-only seed. |
 | No `spec.replicas` | The keeper writes it; a chart value would fight the deploy tool. |
-| Quota = size x (`max_sandboxes` + `extra_pods`) | The refill must not be refused; the small seed and init resources fit in the extra pods. |
+| Quota = size x (`max_sandboxes` + `extra_pods`) + seed container resources x `max_sandboxes` (when `tools.seed_container.enabled`) | The refill must not be refused: each sandbox pod holds the agent and the seed container, and the extra pods hold one size each. The init container does not add: a pod counts the larger of its init containers and the sum of its containers. |
 | Selects `role`, never `pool` | A claim changes `pool`; the network path must not move. |
 | `default-deny` in the system namespace only with keeper or check | An empty chart adds no policy there. |
 | `egress-netcheck` allows all egress | The check must try to reach internal targets; the Job holds a read role, so it runs on demand. |

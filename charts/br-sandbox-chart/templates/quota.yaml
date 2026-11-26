@@ -1,6 +1,11 @@
 {{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
 {{- $size := $ns.pool.size }}
 {{- $pods := add ($ns.pool.max_sandboxes | int64) ($.Values.quota.extra_pods | int64) }}
+{{- $seed := $.Values.tools.seed_container }}
+{{- $seedPods := 0 }}
+{{- if $seed.enabled }}
+{{- $seedPods = $ns.pool.max_sandboxes | int64 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ResourceQuota
@@ -12,12 +17,12 @@ metadata:
 spec:
   hard:
     pods: {{ $pods | quote }}
-    requests.cpu: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.cpu.request "n" $pods) | quote }}
-    requests.memory: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.memory.request "n" $pods) | quote }}
-    requests.ephemeral-storage: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.disk.request "n" $pods) | quote }}
-    limits.cpu: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.cpu.limit "n" $pods) | quote }}
-    limits.memory: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.memory.limit "n" $pods) | quote }}
-    limits.ephemeral-storage: {{ include "br-sandbox-chart.qty.mul" (dict "q" $size.disk.limit "n" $pods) | quote }}
+    requests.cpu: {{ include "br-sandbox-chart.qty.total" (dict "kind" "cpu" "q" $size.cpu.request "n" $pods "seed" (dig "resources" "requests" "cpu" "0" $seed) "seed_n" $seedPods) | quote }}
+    requests.memory: {{ include "br-sandbox-chart.qty.total" (dict "kind" "bytes" "q" $size.memory.request "n" $pods "seed" (dig "resources" "requests" "memory" "0" $seed) "seed_n" $seedPods) | quote }}
+    requests.ephemeral-storage: {{ include "br-sandbox-chart.qty.total" (dict "kind" "bytes" "q" $size.disk.request "n" $pods "seed" (dig "resources" "requests" "ephemeral-storage" "0" $seed) "seed_n" $seedPods) | quote }}
+    limits.cpu: {{ include "br-sandbox-chart.qty.total" (dict "kind" "cpu" "q" $size.cpu.limit "n" $pods "seed" (dig "resources" "limits" "cpu" "0" $seed) "seed_n" $seedPods) | quote }}
+    limits.memory: {{ include "br-sandbox-chart.qty.total" (dict "kind" "bytes" "q" $size.memory.limit "n" $pods "seed" (dig "resources" "limits" "memory" "0" $seed) "seed_n" $seedPods) | quote }}
+    limits.ephemeral-storage: {{ include "br-sandbox-chart.qty.total" (dict "kind" "bytes" "q" $size.disk.limit "n" $pods "seed" (dig "resources" "limits" "ephemeral-storage" "0" $seed) "seed_n" $seedPods) | quote }}
 ---
 apiVersion: v1
 kind: LimitRange

@@ -81,14 +81,45 @@ Always
 {{- toJson $out -}}
 {{- end -}}
 
-{{- define "br-sandbox-chart.qty.mul" -}}
-{{- $parts := mustRegexFind "^[0-9]+(\\.[0-9]+)?" (toString .q) -}}
-{{- $suffix := trimPrefix $parts (toString .q) -}}
-{{- $n := mulf (float64 $parts) (float64 .n) -}}
-{{- if eq (floor $n) $n -}}
-{{- printf "%d%s" (int64 $n) $suffix -}}
+{{- define "br-sandbox-chart.qty.factors" -}}
+{{- if eq .kind "cpu" -}}
+{{- toJson (dict "m" 1.0 "" 1000.0) -}}
 {{- else -}}
-{{- printf "%v%s" $n $suffix -}}
+{{- toJson (dict "" 1.0 "K" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.qty.base" -}}
+{{- $text := toString .q -}}
+{{- $number := mustRegexFind "^[0-9]+(\\.[0-9]+)?" $text -}}
+{{- $factors := include "br-sandbox-chart.qty.factors" . | fromJson -}}
+{{- $suffix := trimPrefix $number $text -}}
+{{- if not (hasKey $factors $suffix) -}}
+{{- fail (printf "BR_SANDBOX_QUANTITY_INVALID{value=%s}" $text) -}}
+{{- end -}}
+{{- printf "%d" (round (mulf (float64 $number) (get $factors $suffix)) 0 | int64) -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.qty.total" -}}
+{{- $text := toString .q -}}
+{{- $suffix := trimPrefix (mustRegexFind "^[0-9]+(\\.[0-9]+)?" $text) $text -}}
+{{- $factors := include "br-sandbox-chart.qty.factors" . | fromJson -}}
+{{- $each := include "br-sandbox-chart.qty.base" . | int64 -}}
+{{- $seed := include "br-sandbox-chart.qty.base" (dict "kind" .kind "q" .seed) | int64 -}}
+{{- $total := add (mul $each (.n | int64)) (mul $seed (.seed_n | int64)) -}}
+{{- $unit := get $factors $suffix | int64 -}}
+{{- if eq (mod $total $unit) 0 -}}
+{{- printf "%d%s" (div $total $unit) $suffix -}}
+{{- else if eq .kind "cpu" -}}
+{{- printf "%dm" $total -}}
+{{- else if eq (mod $total 1073741824) 0 -}}
+{{- printf "%dGi" (div $total 1073741824) -}}
+{{- else if eq (mod $total 1048576) 0 -}}
+{{- printf "%dMi" (div $total 1048576) -}}
+{{- else if eq (mod $total 1024) 0 -}}
+{{- printf "%dKi" (div $total 1024) -}}
+{{- else -}}
+{{- printf "%d" $total -}}
 {{- end -}}
 {{- end -}}
 

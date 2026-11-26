@@ -114,7 +114,7 @@ check_pool_has_no_replicas_and_a_quota_for_it() {
         t "the quota of ${namespace} holds at least max_sandboxes pods" test "$pods" -ge "$max"
     done
     t "a pod leaves in one second" jqt ex '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.terminationGracePeriodSeconds] | unique == [1]'
-    t "the quota multiplies the size by the pod count" jqt ex '.[] | select(.kind == "ResourceQuota" and .metadata.namespace == "sbx-alpha-none") | .spec.hard | .["requests.cpu"] == "12000m" and .["requests.memory"] == "24Gi" and .["limits.ephemeral-storage"] == "120Gi"'
+    t "the quota multiplies the size by the pod count and adds the seed container of each sandbox" jqt ex '.[] | select(.kind == "ResourceQuota" and .metadata.namespace == "sbx-alpha-none") | .spec.hard | .["requests.cpu"] == "12200m" and .["requests.memory"] == "24736Mi" and .["limits.ephemeral-storage"] == "123520Mi"'
     t "a floor above max_sandboxes fails" test "$(helm template t "$CHART" -f "$EXAMPLE" --set pool.floor=30 2>&1 | grep -c 'BR_SANDBOX_POOL_INVALID')" -ge 1
 }
 

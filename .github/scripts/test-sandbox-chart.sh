@@ -2,19 +2,13 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=test-sandbox-chart-lib.sh
 source "$HERE/test-sandbox-chart-lib.sh"
-# shellcheck source=test-sandbox-chart-network.sh
 source "$HERE/test-sandbox-chart-network.sh"
-# shellcheck source=test-sandbox-chart-pod.sh
 source "$HERE/test-sandbox-chart-pod.sh"
-# shellcheck source=test-sandbox-chart-policy.sh
+source "$HERE/test-sandbox-chart-quota.sh"
 source "$HERE/test-sandbox-chart-policy.sh"
-# shellcheck source=test-sandbox-chart-rbac.sh
 source "$HERE/test-sandbox-chart-rbac.sh"
-# shellcheck source=test-sandbox-chart-docs.sh
 source "$HERE/test-sandbox-chart-docs.sh"
-# shellcheck source=test-sandbox-chart-netcheck.sh
 source "$HERE/test-sandbox-chart-netcheck.sh"
 
 render ex -f "$EXAMPLE"
