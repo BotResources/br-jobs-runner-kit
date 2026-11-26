@@ -113,3 +113,36 @@ has "0700 directory of root: message" "$(cat /tmp/e3)" "Permission denied"
 test_10b_save_read_side_as_non_root() {
   run_host_test 10b "bsdtar create on a root-owned directory as uid 10001 (read side of save)" test_10b_body
 }
+
+test_10c_body() {
+  local setup='
+rm -rf /data/one10c /data/out10c /data/one10c.tar /data/two10c.tar
+mkdir -p /data/one10c/work /data/out10c
+printf alpha > /data/one10c/work/a.txt; chmod 640 /data/one10c/work/a.txt
+printf beta > /data/one10c/work/b.txt; chmod 600 /data/one10c/work/b.txt
+pass "set-up done"
+'
+  local checks='
+B=/opt/sbx/bin/bsdtar
+$B $SAVE_FLAGS -C /data/one10c -- work/a.txt >/data/one10c.tar 2>/tmp/e1; rc=$?
+eq "create of one path: exit" "$rc" 0
+eq "create of one path: stderr" "$(cat /tmp/e1)" ""
+eq "create of one path: the tar holds that one entry" "$($B -t -f /data/one10c.tar | tr "\n" " ")" "work/a.txt "
+$B $SAVE_FLAGS -C /data/one10c -- work >/data/two10c.tar 2>/tmp/e2; rc=$?
+eq "create of the directory: exit" "$rc" 0
+eq "create of the directory: the tar holds the directory and the two files" "$($B -t -f /data/two10c.tar | LC_ALL=C sort | tr "\n" " ")" "work/ work/a.txt work/b.txt "
+$B $RESTORE_FLAGS -C /data/out10c work/b.txt </data/two10c.tar >/tmp/o3 2>/tmp/e3; rc=$?
+eq "extract of one entry: exit" "$rc" 0
+eq "extract of one entry: stdout" "$(cat /tmp/o3)" ""
+eq "extract of one entry: stderr" "$(cat /tmp/e3)" ""
+eq "extract of one entry: only that file is written" "$(find /data/out10c -mindepth 1 | LC_ALL=C sort | tr "\n" " ")" "/data/out10c/work /data/out10c/work/b.txt "
+eq "extract of one entry: content" "$(cat /data/out10c/work/b.txt)" beta
+eq "extract of one entry: mode" "$(stat -c %a /data/out10c/work/b.txt)" 600
+'
+  probe_checks "$setup" -v "${DATA_VOL}:/data" $SEVEN_CAPS
+  probe_checks "$checks" -v "${DATA_VOL}:/data" $SEVEN_CAPS
+}
+
+test_10c_one_file_each_way() {
+  run_host_test 10c "one file read by create of one path and one file written by extract of one entry, with the output checked" test_10c_body
+}

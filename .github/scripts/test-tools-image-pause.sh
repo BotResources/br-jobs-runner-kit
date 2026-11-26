@@ -77,3 +77,28 @@ test_7_body() {
 test_7_pause_as_pid_1() {
   run_host_test 7 "pause as pid 1: reaps orphans, ends on SIGTERM and SIGINT with exit 0, under 1 MiB" test_7_body
 }
+
+test_7b_body() {
+  local name="${RUN_ID}-pause-quiet" output_file="${WORK_DIR}/pause-quiet.out" state result client code
+  printf 'bytes on stdin\nmore bytes\n' | docker run -i --init=false --name "$name" --platform "$PLATFORM" -v "${TOOLS_VOL}:/opt/sbx:ro" $SEVEN_CAPS \
+    "$PROBE_IMAGE" /opt/sbx/bin/pause --version -h an-argument >"$output_file" 2>&1 &
+  client=$!
+  wait_for_container_state "$name" running
+  sleep 3
+  eq "pause with arguments and bytes on stdin still runs after the end of its input" "$(docker inspect -f '{{.State.Status}}' "$name")" running
+  docker exec "$name" bash -c "$ORPHAN_SCRIPT"
+  sleep 4
+  state=$(orphan_state "$name")
+  eq "pause with arguments and bytes on stdin reaps the orphan" "$state" "gone zombies=0 "
+  result=$(exit_after_signal "$name" TERM)
+  eq "SIGTERM ends pause with exit 0" "${result% *}" 0
+  wait "$client"
+  code=$?
+  eq "the client of docker run gets the exit code 0" "$code" 0
+  eq "pause printed nothing on stdout and stderr" "$(cat "$output_file")" ""
+  docker rm -f "$name" >/dev/null
+}
+
+test_7b_pause_is_silent() {
+  run_host_test 7b "pause prints nothing and ignores its arguments and its stdin; it still reaps and stops on SIGTERM" test_7b_body
+}

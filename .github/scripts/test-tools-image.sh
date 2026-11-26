@@ -19,9 +19,11 @@ cleanup() {
   docker volume ls -q --filter "name=${RUN_ID}" | xargs -r docker volume rm >/dev/null 2>&1
   rm -rf "$WORK_DIR"
 }
-trap cleanup EXIT
 
 source "${SCRIPT_DIR}/test-tools-image-lib.sh"
+source "${SCRIPT_DIR}/test-tools-image-gate.sh"
+: >"$RESULTS_FILE"
+trap exit_gate EXIT
 
 SAVE_FLAGS=$(readme_flags "$README" 's/^| save | `bsdtar \(.*\) -C <root> -- <path>\.\.\.` |$/\1/p') || exit 1
 RESTORE_FLAGS=$(readme_flags "$README" 's/^| restore and copy-in[^|]*| `bsdtar \(.*\) -C <dir>` |$/\1/p') || exit 1
@@ -37,6 +39,7 @@ source "${SCRIPT_DIR}/test-tools-image-stream.sh"
 source "${SCRIPT_DIR}/test-tools-image-names.sh"
 source "${SCRIPT_DIR}/test-tools-image-pause.sh"
 source "${SCRIPT_DIR}/test-tools-image-roles.sh"
+source "${SCRIPT_DIR}/test-tools-image-special.sh"
 
 docker pull --quiet --platform "$PLATFORM" "$PROBE_IMAGE" >/dev/null
 docker volume create "$DATA_VOL" >/dev/null
@@ -49,6 +52,7 @@ test_1_static_and_version
 test_1b_image_size
 test_11_image_content
 test_2_init_extraction
+test_2b_remount_refused
 test_12_init_extraction_as_sandbox_user
 test_3_n15_round_trip
 test_4_capability_set
@@ -56,9 +60,12 @@ test_5_end_of_input
 test_6_names
 test_8_special_entries
 test_7_pause_as_pid_1
+test_7b_pause_is_silent
 test_9_non_root_same_owner
 test_10_read_only_root_second_container
 test_10b_save_read_side_as_non_root
+test_10c_one_file_each_way
+test_13_special_files_and_sparse_files
 
 echo "failed tests: ${FAILED_TESTS}"
 [ "$FAILED_TESTS" -eq 0 ]
