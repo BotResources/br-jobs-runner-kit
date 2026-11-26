@@ -108,4 +108,7 @@ check_the_upstream_trust_of_the_proxy_is_optional() {
     fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.upstream_ca.config_map=upstream-roots --set egress.proxy.upstream_ca.secret=x
     fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.upstream_ca.config_map=upstream-roots --set egress.proxy.upstream_ca.key=a/b
     t "the README says the proxy trusts the system roots of its image and what the key does" grep -qF 'The proxy trusts the system roots of its image.' "$README"
+    t "the README says the file must hold every root the proxy needs, the public roots too" grep -qF 'the file must hold every root that the proxy needs, the public roots too if it also reaches public hosts' "$README"
+    t "the schema description of the key says the same" test "$(yq -r '.properties.egress.properties.proxy.properties.upstream_ca.description' "$CHART/values.schema.json" | grep -c 'must hold every root the proxy needs, the public roots too')" -eq 1
+    t "the CHANGELOG says the same" grep -qF 'the file must hold every root the proxy needs (the public roots too, if it also reaches public hosts)' "$CHART/CHANGELOG.md"
 }
