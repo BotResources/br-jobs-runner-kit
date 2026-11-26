@@ -5,10 +5,10 @@ The Threads side of a runner. It gives the adapters of the Threads ports of `br-
 ## Install
 
 ```toml
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.7.0", version = "0.7.0" }
+br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.8.0", version = "0.8.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
-br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.1.0", version = "0.1.0" }
+br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.2.0", version = "0.2.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
 br-core-kernel = { git = "https://github.com/BotResources/br-rust-common", package = "br-core-kernel", tag = "br-core-kernel/v0.1.0", version = "0.1.0" }
 uuid = { version = "1", features = ["v7"] }
@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with.
 
-This crate is on `br-agentic-contract` 0.3.0; `br-runner-jobs`, `br-runner-toolkit` and `br-runner-as-tool` stay on 0.2.0 until their own coming releases, so `ThreadRef` is a different type in them: move this crate together with the crates of the kit that share its types.
+This crate is on `br-agentic-contract` 0.3.0 and `br-agentic-harness-contract` 0.2.0. `br-runner-jobs` 0.5.0, this crate and `br-runner-wiring-example` resolve the harness contract 0.2.0 from the same git url and the same tag, and `ThreadRef` comes from `br-agentic-contract` 0.3.0, of which the dependency graph holds one copy: move this crate together with `br-runner-jobs`.
 
 ## Quickstart
 
@@ -179,7 +179,7 @@ The other examples are in `examples/` and run in the tests: `runner_ports` (the 
 - Until one of these happens the report waits and the mail stays unread. For an entry in an AI turn that is until the closing of the turn, and a turn that is never closed leaves the report waiting. That is allowed.
 - For an entry the adapter has no record of (it holds no item of it and removed none, or it never saw the thread) the report is `UnknownEntry`, never `Stored` and never `Dropped`; the harness leaves the mail unread. Items that a store kept from an earlier adapter count as records.
 - `entry_stored` keeps its 0.6 behaviour for a runner that wires `br-runner-jobs` without the harness: it can answer `Stored` for an unknown entry, and `Stored` for a chunk the bus took.
-- The crate depends on `br-agentic-harness-contract` and resolves one copy of `ThreadAccess` with `br-agentic-contract` (same git url and tag). `tests/harness_history.rs` proves that one adapter value is used as the thread access and as the history port; the tests of 0.6 run unchanged.
+- The crate depends on `br-agentic-harness-contract` 0.2.0 and resolves one copy of `ThreadAccess` with `br-agentic-contract` (same git url and tag). `tests/harness_history.rs` proves that one adapter value is used as the thread access and as the history port; the tests of 0.6 run unchanged.
 
 ## Bus access
 

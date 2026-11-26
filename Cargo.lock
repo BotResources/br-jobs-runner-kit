@@ -183,11 +183,11 @@ dependencies = [
 
 [[package]]
 name = "br-agentic-harness"
-version = "0.1.1"
-source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness%2Fv0.1.1#8042e55dc2369c998397469bb35c40618d795a86"
+version = "0.2.0"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness%2Fv0.2.0#ff67bb784e6a907f3962f064a81d349b281422e1"
 dependencies = [
  "br-agentic-contract",
- "br-agentic-harness-contract",
+ "br-agentic-harness-contract 0.2.0",
  "br-graph-contract",
  "br-llm-clients-core",
  "br-llm-messages",
@@ -203,6 +203,17 @@ source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-har
 dependencies = [
  "br-agentic-contract",
  "br-llm-messages",
+ "thiserror",
+]
+
+[[package]]
+name = "br-agentic-harness-contract"
+version = "0.2.0"
+source = "git+https://github.com/BotResources/br-llm-graph-rs?tag=br-agentic-harness-contract%2Fv0.2.0#d4f02038e6a0063abd2ef566e180200d1b6c6e76"
+dependencies = [
+ "br-agentic-contract",
+ "br-llm-messages",
+ "sha2 0.10.9",
  "thiserror",
 ]
 
@@ -391,9 +402,22 @@ dependencies = [
 [[package]]
 name = "br-runner-jobs"
 version = "0.4.0"
+source = "git+https://github.com/BotResources/br-jobs-runner-kit?tag=br-runner-jobs%2Fv0.4.0#06532e278363b309dfd14c5696ae57b2ca46db66"
 dependencies = [
  "br-agentic-contract",
- "br-agentic-harness-contract",
+ "br-agentic-harness-contract 0.1.0",
+ "br-llm-messages",
+ "br-runner-jobs-client",
+ "futures",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-jobs"
+version = "0.5.0"
+dependencies = [
+ "br-agentic-contract",
+ "br-agentic-harness-contract 0.2.0",
  "br-core-auth",
  "br-llm-messages",
  "br-runner-jobs-client",
@@ -430,11 +454,11 @@ dependencies = [
 
 [[package]]
 name = "br-runner-threads"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "async-nats",
  "br-agentic-contract",
- "br-agentic-harness-contract",
+ "br-agentic-harness-contract 0.2.0",
  "br-core-events",
  "br-core-integration",
  "br-core-kernel",
@@ -465,7 +489,7 @@ dependencies = [
  "br-llm-clients-core",
  "br-llm-messages",
  "br-runner-connection",
- "br-runner-jobs",
+ "br-runner-jobs 0.4.0",
  "br-runner-jobs-client",
  "br-runner-toolkit",
  "br-util-nats-fabric",
@@ -487,11 +511,11 @@ version = "0.0.0"
 dependencies = [
  "br-agentic-contract",
  "br-agentic-harness",
- "br-agentic-harness-contract",
+ "br-agentic-harness-contract 0.2.0",
  "br-core-auth",
  "br-graph-contract",
  "br-llm-messages",
- "br-runner-jobs",
+ "br-runner-jobs 0.5.0",
  "br-runner-jobs-client",
  "br-runner-threads",
  "br-runner-toolkit",

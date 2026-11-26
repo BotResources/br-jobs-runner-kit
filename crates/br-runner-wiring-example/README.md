@@ -18,9 +18,9 @@ The node lists the unread mail, writes it as an input turn to the thread, marks 
 | Crate | Tag |
 |---|---|
 | `br-agentic-contract` | `br-agentic-contract/v0.3.0` |
-| `br-agentic-harness-contract` | `br-agentic-harness-contract/v0.1.0` |
-| `br-agentic-harness` | `br-agentic-harness/v0.1.1` (its own harness-contract pin is v0.1.0) |
+| `br-agentic-harness-contract` | `br-agentic-harness-contract/v0.2.0` |
+| `br-agentic-harness` | `br-agentic-harness/v0.2.0` |
 | `br-runner-jobs-client` | `br-runner-jobs-client/v0.1.1` |
-| `br-runner-jobs` | `br-runner-jobs/v0.4.0` |
-| `br-runner-threads` | `br-runner-threads/v0.7.0` |
+| `br-runner-jobs` | path of the workspace, version 0.5.0 |
+| `br-runner-threads` | path of the workspace, version 0.8.0 |
 | `br-runner-toolkit` | `br-runner-toolkit/v0.3.1` |
