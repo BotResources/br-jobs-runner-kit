@@ -32,7 +32,7 @@ Every item below is public, and no other item is. The cluster, store and clock t
 | Call | What the adapter does |
 |---|---|
 | `open` | It takes the instance first (a second open of an instance that has an open box is a refusal). Then, in this order: the mode check against `network_mode` (a refusal, before any call to the cluster or the store); with no parent turn the start is `Fresh(NoSaveEver)` and the store is not read; with a parent, the live reuse of a kept pod of the thread and the agent (one list by labels, one patch that carries the version read; an expired save of a pod deletes the pod and gives `Fresh(SaveExpired)`), then the three reads of the store; the claim of a Ready warm pod (one patch with the version, the next pod on a conflict or a missing pod, at most `claim_max_attempts` tries); when no Ready warm pod exists and the condition `WarmPodsFailing` of the pool ReplicaSet is `True`, `ImageFailing` at once with no cold pod; the cold pod from the template of the pool ReplicaSet (`pool=claimed`, thread and agent labels, `clean=false`, `claimed-at`, no owner reference, the `role` label and the spec untouched), waited for at most `open_timeout_seconds`; the restore and the seed write at the same time; the result. A restore that does not end well deletes its pod, and a new pod is claimed with the seed only. A seed write that fails deletes the pod and is a port fault. A pool ReplicaSet that does not exist is a port fault. |
-| a dropped `open` | The instance is removed at once, and the pod that the call claimed or made is deleted by a task of the runtime, from the moment the claim patch or the create call has returned. A drop while that patch or create call is in flight can leave the pod that it claimed or made with `clean=false`, held by no box of this adapter, because the adapter has no name to hold before the call returns (a cold pod is named by the cluster, and a pod held before a conflicting claim would delete the pod of another open). A delete that is lost leaves the same pod. In both cases the keeper removes a pod with `clean=false`. |
+| a dropped `open` | The instance is removed at once, and the pod that the call claimed or made is deleted by a task of the runtime, from the moment the claim patch or the create call has returned. A drop while that patch or create call is in flight can leave the pod that it claimed or made with `clean=false`, held by no box of this adapter, because the adapter has no name to hold before the call returns (a cold pod is named by the cluster, and a pod held before a conflicting claim would delete the pod of another open). A delete that is lost leaves the same pod. In both cases the component that manages the pool removes a pod with `clean=false`. |
 | `save` | The save flow of `Env::save`. The box is marked saved in memory only when the pod annotation patch succeeded. |
 | `release` | A saved box with `bytes_raw` at or above `idle_keep_min_state_bytes` keeps its pod and gets `idle-since` set at the release; any other box has its pod deleted. A pod that is already gone is a success. The box is marked released in every case, also when the delete fails (a port fault). Releasing twice is accepted. |
 | `run`, `read`, `write`, `list`, `kill`, `save` on a box that was never opened or is released | A port fault, with no exec. |
@@ -52,7 +52,7 @@ The harness drives the order of open, save and release through the `RunLifecycle
 - The store must honour a conditional create (`If-None-Match`). `S3Store` writes the manifest with one. A store that answers that the conditional create is not implemented gives `StoreError::ConditionalCreateUnsupported`. A store that accepts the call and ignores the condition is not detected and is not supported: a second writer of one key may then replace the manifest.
 - The caller opens one turn of an agent at a time. Two turns of one agent at the same time are not guaranteed to be safe: each gets its own pod, and a save of a turn that already has a manifest is the refusal "already saved".
 - A `Continued` box may still hold the processes that an earlier turn left. A `Restored` box holds none.
-- No limit is set on the size or on the number of files of a save or of a seed. A save is one part. A save above the disk of the pod is not handled. No time is promised for a restore.
+- No limit is set on the size or on the number of files of a save or of a seed. A save is one part. A save above the disk of the pod is not handled. A restore is bounded by `restore_timeout_seconds`: one that exceeds it ends as `Fresh(RestoreFailed)`. Its speed is not guaranteed (no figure such as 100 MB in 500 ms is promised).
 - A box does not survive a restart of the adapter: the adapter keeps its boxes in memory, so an operation on a `BoxId` of an earlier run is a port fault. The pod keeps its annotations, and the next open starts from them or from the last save by the rules of `open`.
 
 ## What the adapter expects from the chart
@@ -63,6 +63,18 @@ The harness drives the order of open, save and release through the `RunLifecycle
 - The static `bsdtar` is at `seed_tools_path` (`/sbx/bin/bsdtar` by default) in the seed container and at `tools_path` (`/opt/sbx/bin/bsdtar` by default) in the agent container.
 - `/work` and `/home/agent` are writable by the agent user. The image of the agent container has `/bin/sh`, `cat` and `find`.
 - The rights of the adapter in its namespace: on `pods` get, list, watch, patch, create and delete; on `pods/exec` create; on `replicasets` get, list and watch. The adapter needs no right on secrets and no right in another namespace.
+
+## What the adapter expects from the component that manages the pool
+
+The adapter does not write any of the following. Another component does, and the adapter only reads the result.
+
+- The component writes the condition `WarmPodsFailing` on the status of the pool ReplicaSet: status `True`, with the reason `ImagePullFailing` or `StartCrashing`, when a warm pod of the pool fails to start, and `False` when none fails. This crate never writes that condition. Without it the adapter never gives `ImageFailing`: when no pod can be used, `open` ends with `ImageUnavailable`, and with `cold_create` on it first waits `open_timeout_seconds` for the cold pod.
+- The component removes the pods that stay with `clean=false` and the kept pods that are past their idle time, expires the saves (it writes the tombstone, then deletes the manifest, then the part), and sweeps the parts of uploads that never got a manifest. The adapter writes no tombstone and deletes no save by age (`erase` aside).
+
+## What the adapter expects from the bucket
+
+- The bucket named by `store_bucket` exists. The adapter never creates it.
+- The credentials in `store_credentials` allow, on that bucket, get, put (including the conditional create of the manifest), delete, list, and multipart upload (the part of a save is a streamed multipart upload).
 
 ## Image errors
 
@@ -109,7 +121,7 @@ The harness drives the order of open, save and release through the `RunLifecycle
 | The cold pod copies only the labels, the annotations and the spec of the template | The name, the owner reference and the other metadata of the template would make the pod a member of the ReplicaSet. |
 | The S3 delete is one request per key | Some S3-compatible stores have no multi-object delete. A delete of a key that is not there is a success. |
 | The part is checked by its stored size after the upload | The store has no checksum the adapter can trust on every compatible store, so the size is read back and compared with the size counted while streaming. |
-| The manifest is written last, with a conditional create | The manifest is the commit mark. A conflict is `AlreadySaved` and the part stays for the keeper. |
+| The manifest is written last, with a conditional create | The manifest is the commit mark. A conflict is `AlreadySaved` and the part stays for the component that manages the pool. |
 | The stderr of an exec is never put in an error or a log | A command can print a secret. The foreground `run` returns the stderr to the harness as part of the result of the command. The other calls (`read`, `write`, `list`, `kill`) hold it in memory in the output of the exec and drop it with the output, and the `bsdtar` calls of save and restore drain it and drop it so that the process does not block. No error and no log holds it. |
 | `reqwest` is a dependency with no code of its own | It carries the `rustls-no-provider` feature of the TLS that the S3 client uses. |
 | `AbsolutePath` drops empty and `.` parts | `/work/` and `/work` are one path, so a scope never holds the same folder twice. |
