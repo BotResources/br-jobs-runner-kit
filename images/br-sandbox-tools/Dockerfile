@@ -30,7 +30,9 @@ RUN tar -xzf libarchive.tar.gz \
 
 RUN tar -xzf musl.tar.gz musl-${MUSL_VERSION}/COPYRIGHT \
  && install -D -m 0444 musl-${MUSL_VERSION}/COPYRIGHT /stage/licenses/musl-COPYRIGHT \
- && test "$(apk info musl | head -n 1 | cut -d- -f2)" = "${MUSL_VERSION}"
+ && for package in musl musl-dev; do \
+      test "$(apk info "$package" | head -n 1 | cut -d' ' -f1 | sed "s/^${package}-//; s/-r[0-9]*$//")" = "${MUSL_VERSION}"; \
+    done
 
 COPY images/br-sandbox-tools/pause.c /src/pause.c
 RUN gcc -Os -static -no-pie -Wall -Wextra -Werror -o /stage/bin/pause pause.c \
@@ -54,4 +56,4 @@ LABEL org.opencontainers.image.title="br-sandbox-tools" \
 COPY --from=build /stage/bin/bsdtar /stage/bin/pause /sbx/bin/
 COPY --from=build /stage/tools.tar /stage/VERSION /sbx/
 COPY --from=build /stage/licenses/ /sbx/LICENSES/
-COPY LICENSE /sbx/LICENSES/br-sandbox-tools-Apache-2.0
+COPY --chmod=0444 LICENSE /sbx/LICENSES/br-sandbox-tools-Apache-2.0
