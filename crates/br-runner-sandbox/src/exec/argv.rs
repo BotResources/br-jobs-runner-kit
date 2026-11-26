@@ -2,7 +2,7 @@ use br_agentic_harness_contract::FilePath;
 
 use crate::config::AbsolutePath;
 
-pub const WORK_DIR: &str = "/work";
+pub(crate) const WORK_DIR: &str = "/work";
 
 const NO_METADATA: [&str; 3] = ["--no-xattrs", "--no-acls", "--no-fflags"];
 

@@ -15,4 +15,4 @@ pub use error::ClusterError;
 pub use exec::{ExecIo, ExecOut, ExecRequest, ExecStdin};
 pub use kube_cluster::KubeCluster;
 pub use selector::LabelSelector;
-pub use views::{CONDITION_TRUE, ConditionView, PHASE_RUNNING, PodEvent, PodView, ReplicaSetView};
+pub use views::{ConditionView, PodEvent, PodView, ReplicaSetView};
