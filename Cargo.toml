@@ -37,9 +37,9 @@ br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", 
 br-util-nats-fabric = { git = "https://github.com/BotResources/br-rust-common", package = "br-util-nats-fabric", tag = "br-util-nats-fabric/v0.1.0", version = "0.1.0" }
 contract-threads = { git = "https://github.com/BotResources/svc-threads", package = "contract-threads", tag = "contract-threads/v0.10.0", version = "0.10.0" }
 br-runner-connection = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-connection", tag = "br-runner-connection/v0.1.1", version = "0.1.1" }
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.4.0", version = "0.4.0" }
+br-runner-jobs = { path = "crates/br-runner-jobs", version = "0.5.0" }
 br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
-br-runner-threads = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-threads", tag = "br-runner-threads/v0.7.0", version = "0.7.0" }
+br-runner-threads = { path = "crates/br-runner-threads", version = "0.8.0" }
 br-runner-toolkit = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-toolkit", tag = "br-runner-toolkit/v0.3.1", version = "0.3.1" }
 br-graph-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-contract", tag = "br-graph-contract/v0.1.0", version = "0.1.0" }
 br-graph-executor = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-graph-executor", tag = "br-graph-executor/v0.1.0", version = "0.1.0" }
@@ -47,7 +47,5 @@ br-llm-clients-core = { git = "https://github.com/BotResources/br-llm-clients-rs
 
 [patch."https://github.com/BotResources/br-jobs-runner-kit"]
 br-runner-connection = { path = "crates/br-runner-connection" }
-br-runner-jobs = { path = "crates/br-runner-jobs" }
 br-runner-jobs-client = { path = "crates/br-runner-jobs-client" }
-br-runner-threads = { path = "crates/br-runner-threads" }
 br-runner-toolkit = { path = "crates/br-runner-toolkit" }

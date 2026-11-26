@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+The adapter of the harness mail port meets the port as `br-agentic-harness-contract` 0.2.0 states it. No change of the public surface of this crate.
+
+### Changed
+
+- The dependency on `br-agentic-harness-contract` is 0.2.0 (per-crate pin). The mail port is the same as in 0.1.0, so `MailPortAdapter` is unchanged and its tests run unchanged.
+
 ## 0.4.0
 
 Adds the adapter of the harness mail port of `br-agentic-harness-contract` 0.1.0 and the fixes of the audit of 0.3.0.

@@ -5,10 +5,10 @@ The adapters that bind the jobs service to the ports of a runner. It gives the a
 ## Install
 
 ```toml
-br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.4.0", version = "0.4.0" }
+br-runner-jobs = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs", tag = "br-runner-jobs/v0.5.0", version = "0.5.0" }
 br-runner-jobs-client = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-jobs-client", tag = "br-runner-jobs-client/v0.1.1", version = "0.1.1" }
 br-agentic-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-contract", tag = "br-agentic-contract/v0.3.0", version = "0.3.0" }
-br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.1.0", version = "0.1.0" }
+br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.2.0", version = "0.2.0" }
 br-llm-messages = { git = "https://github.com/BotResources/br-llm-messages-rs", package = "br-llm-messages", tag = "br-llm-messages/v2.1.0", version = "2.1.0" }
 ```
 
@@ -177,7 +177,7 @@ pub fn main() {
 - The context is the `IncomingContext`; a call for an agent that does not hold the inbox of the node entry is an error of the port (a fault), for all four operations. The adapter has no operation to wait for an item.
 - Listing and marking are those of the incoming adapter: the same items, batches, cursor, entry ids and book map. An item that one adapter listed can be marked through the other.
 - Marking returns at once and does not wait for jobs. The marker joins the delivery queue with no gate: the harness tells the mail port to mark a mail only after the stored signal of its history port answered `Stored`, and this crate does not read that signal. A mail that the harness does not mark stays unread in jobs. For a call notice "Run completed" the finish of the child Job is handed over first, then the marker, before the call returns. An item already read or not held is not an error.
-- Sending returns when the adapter accepted the mail, which is at once, not when jobs has it. The mail value carries no sender (`NewMail` has no sender field in `br-agentic-harness-contract` 0.1.0), so the sender rule of the intent has no case to apply, and the adapter always sends as the agent of the context. A mail with no recipient in `to`, or with a recipient listed twice in `to` and `cc` together, is refused with a reason and nothing is handed over. Each document of the mail is sent as an attachment with the document reference as its text content (`text/plain`). A second send of the same mail id is handed over again; jobs makes the write idempotent by the mail id.
+- Sending returns when the adapter accepted the mail, which is at once, not when jobs has it. The mail value carries no sender (`NewMail` has no sender field in `br-agentic-harness-contract` 0.2.0), so the sender rule of the intent has no case to apply, and the adapter always sends as the agent of the context. A mail with no recipient in `to`, or with a recipient listed twice in `to` and `cc` together, is refused with a reason and nothing is handed over. Each document of the mail is sent as an attachment with the document reference as its text content (`text/plain`). A second send of the same mail id is handed over again; jobs makes the write idempotent by the mail id.
 - Documents: one read of the mail and one fetch for each attachment, each bounded by the reply wait of the connection; a call with no answer is an error of the port. Only a mail that has the agent in `to` gives documents; any other mail is refused with a reason. A mail with no attachment gives none.
 
 **Errors and ids**

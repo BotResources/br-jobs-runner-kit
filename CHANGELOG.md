@@ -17,6 +17,8 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Changed
 
+- `br-runner-jobs` 0.5.0 and `br-runner-threads` 0.8.0: depend on `br-agentic-harness-contract` 0.2.0. `br-runner-wiring-example` takes both crates from the workspace paths and moves to `br-agentic-harness-contract` 0.2.0 and `br-agentic-harness` 0.2.0. `br-runner-toolkit` keeps its dev-dependency on the tag `br-runner-jobs/v0.4.0`, so `Cargo.lock` holds a second copy of `br-agentic-harness-contract` (0.1.0) for that dev-only edge; `br-agentic-contract` has one copy (0.3.0). No change of the public surface of either crate. `Cargo.lock` records the new versions. See `crates/br-runner-jobs/CHANGELOG.md` and `crates/br-runner-threads/CHANGELOG.md`.
+
 - `images/br-sandbox-tools/README.md`: the licence table no longer says that no copyleft code is present. It lists the GCC runtime code that `gcc` 15.2.0 links into the static programs (start-up objects on both architectures; 16 `libgcc.a` members in `bsdtar` on `linux/arm64`, none on `linux/amd64`) under GPL-3.0-or-later WITH GCC-exception-3.1, with the measure. The `licenses` label of the image lists the GCC runtime exception.
 
 - `br-runner-as-tool` 0.3.2: the error flag of a failed SYNC child ends with `Cause: <reason code>: <diagnostic text>` (see `crates/br-runner-as-tool/CHANGELOG.md`). `Cargo.lock` records its new version.
