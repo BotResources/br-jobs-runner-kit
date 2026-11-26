@@ -1,6 +1,6 @@
 # br-runner-sandbox
 
-The adapter library of the sandbox port of `br-agentic-harness-contract`: a pod of a Kubernetes cluster, claimed from a pool of warm pods, with a save and a restore of the work folder between the turns of one agent. This version holds the parts of the adapter that need no cluster: the configuration, the keys of the pod contract and of the object store, the formats of the saved objects, the reader and the writer of a saved part, the archive of the seed, the typed image errors and the pure decisions of open, save and release.
+The adapter library of the sandbox port of `br-agentic-harness-contract`: a pod of a Kubernetes cluster, claimed from a pool of warm pods, with a save and a restore of the work folder between the turns of one agent. This version holds the pure parts (the configuration, the keys, the formats of the saved objects, the reader and the writer of a saved part, the archive of the seed, the typed image errors and the decisions of open, save and release) and the layers that talk to a cluster and to an object store: the store client, the cluster boundary, the exec layer, and the save, the restore and the seed write. The claim of a pod, the warm pod watch, the cold pods, the release, the erase and the `SandboxPort` implementation are not in this version yet.
 
 ## Install
 
@@ -22,6 +22,11 @@ A crate that names the types of a sibling in its public API must reach that sibl
 | `PartEncoder`, `PartDecoder`, `TarCounter` | The writer and the reader of a part: one zstd stream of one tar, with the size and the SHA-256 of the raw and of the stored bytes, and the count of the tar entries. |
 | `seed_archive`, `seed_hash_text`, `seed_mode`, `check_seed_path` | The archive of a seed set (owner 0:0, the write bits of the mode removed) and the text of the hash of the seed set. |
 | `ImageError`, `Error` | The image errors with their details, and the error type of the crate. The image errors reach the port as the cause `OpenFault` of a fault, which `OpenFault::of` reads. |
+| `Store`, `S3Store`, `PutOutcome`, `PartUpload`, `StoreError` | The object store boundary (get, streamed get, size, put, conditional create, streamed upload, list, delete) and its S3-compatible client with the system TLS roots. A conditional create that finds the object gives `PutOutcome::AlreadyExists`. |
+| `Cluster`, `KubeCluster`, `PodView`, `ReplicaSetView`, `LabelSelector`, `ExecRequest`, `ExecIo`, `ClusterError` | The boundary of the kube API (list, get, patch, create and delete of pods, the pool ReplicaSet and its condition, the pod watch, the pod exec with stdin, stdout, stderr and the exit code) and its implementation on `kube`. |
+| `Env`, `Clock`, `SystemClock` | The context of the flows: the configuration, a `Cluster`, a `Store` and a clock. |
+| `Env::run`, `read`, `write`, `list`, `kill`, `argv`, `file_archive`, `parse_find_output`, `ExecError` | The exec layer: `sh -c` in `/work`, `cat`, `find`, a write through bsdtar extract with the stdin closed at the end, a kill by process id, and the argument lists of bsdtar. |
+| `Env::save`, `Env::restore`, `Env::write_seed`, `Env::load_manifest`, `Env::read_store_view`, `SaveOutcome`, `RestoreVerdict` | The save flow (a streamed part, then the record and the manifest as the commit mark, then the pod annotations), the restore flow with the manifest recheck, the seed write through the seed container, and the read of the store view of a key. |
 | `check_web_access`, `judge_live_pod`, `plan_start`, `recheck_after_restore`, `release_plan` and the patch functions | The decisions of open, save and release that are pure functions of values. |
 
 ## Configuration keys
@@ -60,4 +65,10 @@ A crate that names the types of a sibling in its public API must reach that sibl
 | A manifest is parsed against the key that was asked | A manifest names the key of its own part. A manifest that names another key, or a part key that is not the one built from its own fields, is refused when read. |
 | The decoder stops at the sizes of the manifest | A part that is larger than its manifest says is a fault, not a stream to follow to its end. |
 | `ImageError` keeps the details, the port gets `OpenFault` | The port reads the cause as `OpenFault`, a value with no field. The reason, the message and the wait stay on `ImageError` for the logs of the caller. |
+| The crate installs the `ring` crypto provider of rustls when none is set | The TLS clients of the store and of the cluster are built with no provider of their own, so a process with no provider would stop at the first client. A provider set by the caller is kept. |
+| The S3 delete is one request per key | Some S3-compatible stores have no multi-object delete. A delete of a key that is not there is a success. |
+| The part is checked by its stored size after the upload | The store has no checksum the adapter can trust on every compatible store, so the size is read back and compared with the size counted while streaming. |
+| The manifest is written last, with a conditional create | The manifest is the commit mark. A conflict is `AlreadySaved` and the part stays for the keeper. |
+| The stderr of an exec is read and never kept | A command can print a secret. It is drained so the process does not block, and no error holds it. |
+| `reqwest` is a dependency with no code of its own | It carries the `rustls-no-provider` feature of the TLS that the S3 client uses. |
 | `AbsolutePath` drops empty and `.` parts | `/work/` and `/work` are one path, so a scope never holds the same folder twice. |
