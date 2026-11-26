@@ -31,34 +31,59 @@ observed() {
   printf 'no_result'
 }
 
+add_target() {
+  printf '%s\n' "$2" >>"$work/targets"
+  printf '%s\n' "$1" >>"$work/classes"
+}
+
 first_service() {
-  printf '%s\n' "$(kubectl get svc "$1" -n "$2" -o jsonpath="{.spec.clusterIP}:{.spec.ports[0].port}")"
+  address=$(kubectl get svc "$1" -n "$2" -o jsonpath="{.spec.clusterIP}:{.spec.ports[0].port}") || address=""
+  case "$address" in
+    "" | :* | None:*) ;;
+    *) add_target "$3" "$address" ;;
+  esac
 }
 
 collect_targets() {
-  cat "$dir/extra-targets" >"$work/targets"
+  : >"$work/targets"
+  : >"$work/classes"
   : >"$work/stale"
-  kubectl get nodes -o jsonpath='{range .items[*]}{range .status.addresses[*]}{.type}{" "}{.address}{"\n"}{end}{end}' >"$work/nodes"
+  while read -r line; do
+    if [ -n "$line" ]; then
+      add_target targets "$line"
+    fi
+  done <"$dir/extra-targets"
+  kubectl get nodes -o jsonpath='{range .items[*]}{range .status.addresses[*]}{.type}{" "}{.address}{"\n"}{end}{end}' >"$work/nodes" || : >"$work/nodes"
   while read -r type address; do
     case "$type" in
       InternalIP | ExternalIP) ;;
       *) continue ;;
     esac
     in_list "$address" "$dir/node-addresses" || printf '%s\n' "$address" >>"$work/stale"
-    printf '%s:10250\n%s:6443\n' "$address" "$address" >>"$work/targets"
+    add_target node_kubelet "$address:10250"
+    add_target node_api "$address:6443"
   done <"$work/nodes"
-  first_service kubernetes default >>"$work/targets"
-  first_service kube-dns kube-system >>"$work/targets"
-  printf 'kubernetes.default.svc.cluster.local:443\n' >>"$work/targets"
+  first_service kubernetes default api_service
+  first_service kube-dns kube-system dns_service
+  add_target cluster_name kubernetes.default.svc.cluster.local:443
   kubectl get pods -A -o jsonpath='{range .items[*]}{.status.podIP}{":"}{.spec.containers[0].ports[0].containerPort}{"\n"}{end}' |
     while read -r pod; do
       case "$pod" in
         *[0-9]:[0-9]*)
-          printf '%s\n' "$pod" >>"$work/targets"
+          add_target pod "$pod"
           break
           ;;
       esac
     done || true
+}
+
+missing_classes() {
+  for class in targets node_kubelet node_api api_service dns_service cluster_name pod; do
+    if ! in_list "$class" "$work/classes"; then
+      printf '{"net":"cluster","mode":"all","target":"%s","kind":"target_class","expected":"present","observed":"missing","control":"ok"}\n' "$class"
+      printf '1\n' >>"$work/failures"
+    fi
+  done
 }
 
 control() {
@@ -101,6 +126,7 @@ discover() {
     done <"$work/stale"
     printf '1\n' >>"$work/failures"
   fi
+  missing_classes
   control
   while read -r ns mode; do
     [ -n "$ns" ] || continue

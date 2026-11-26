@@ -18,18 +18,24 @@ case "$1" in
     get)
         case "$2" in
             nodes)
+                [ "${NO_NODES:-}" = 1 ] && exit 0
                 printf 'InternalIP 10.0.0.11\nExternalIP 203.0.113.11\nHostname node-a\n'
                 [ -n "${STALE_NODE:-}" ] && printf 'InternalIP %s\n' "$STALE_NODE"
                 exit 0
                 ;;
             svc)
+                [ "${NO_SVC:-}" = 1 ] && exit 0
                 case "$3" in
                     kubernetes) printf '10.43.0.1:443' ;;
                     kube-dns) printf '10.43.0.10:53' ;;
                 esac
                 exit 0
                 ;;
-            pods) printf '10.42.0.5:8080\n:\n'; exit 0 ;;
+            pods)
+                [ "${NO_POD_PORT:-}" = 1 ] && { printf '10.42.0.5:\n:\n'; exit 0; }
+                printf '10.42.0.5:8080\n:\n'
+                exit 0
+                ;;
         esac
         ;;
     create)
@@ -88,5 +94,23 @@ check_network_check_script_against_stubs() {
     out="$(run_netcheck env NC_MODE=all PROBE_MODE=none NO_LOG=1 2>&1)" || rc=$?
     t "a probe pod with no log fails the job" test "$rc" -ne 0
     t "the missing result is reported as no_result" grep -q '"observed":"no_result"' <<<"$out"
+    local class
+    for class in node:NO_NODES=1:node_kubelet pod:NO_POD_PORT=1:pod api:NO_SVC=1:api_service; do
+        rc=0
+        out="$(run_netcheck env NC_MODE=all PROBE_MODE=none "$(cut -d: -f2 <<<"$class")" 2>&1)" || rc=$?
+        t "no ${class%%:*} target fails the job" test "$rc" -ne 0
+        t "the missing class $(cut -d: -f3 <<<"$class") is reported" grep -qF "\"target\":\"$(cut -d: -f3 <<<"$class")\",\"kind\":\"target_class\",\"expected\":\"present\",\"observed\":\"missing\"" <<<"$out"
+    done
+    rc=0
+    out="$(run_netcheck env NC_MODE=all PROBE_MODE=none NO_POD_PORT=1 2>&1)" || rc=$?
+    t "with no pod port every other class still reports and no pod target is probed" test "$(grep -c '"kind":"tcp"' <<<"$out")" -ge 30 -a "$(grep -c '"target":"10.42.0.5' <<<"$out")" -eq 0
+    mkdir -p "$WORK/netchecknotargets"
+    cp "$(netcheck_dir)"/* "$WORK/netchecknotargets/"
+    : >"$WORK/netchecknotargets/extra-targets"
+    rc=0
+    out="$(run_netcheck env NC_MODE=all PROBE_MODE=none NETCHECK_DIR="$WORK/netchecknotargets" 2>&1)" || rc=$?
+    t "no listed bus or database target fails the job" test "$rc" -ne 0
+    t "the missing targets class is reported" grep -qF '"target":"targets","kind":"target_class"' <<<"$out"
+    t "a complete target set reports no missing class" test "$(run_netcheck env NC_MODE=all PROBE_MODE=none 2>&1 | grep -c '"observed":"missing"')" -eq 0
     t "the probe substitutes the target list into the pod manifest" grep -q '10.0.0.11:10250' "$WORK/netcheckstub/pod.yaml"
 }
