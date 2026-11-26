@@ -1,6 +1,6 @@
 # br-sandbox-python
 
-Test and reference image of the sandbox. Each project defines its own image; this one shows the contract and serves the battery.
+Test and reference image of the sandbox. Each project defines its own image; this one shows the contract and is the reference image for tests of the sandbox.
 
 ## Content
 
