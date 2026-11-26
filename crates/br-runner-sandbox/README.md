@@ -40,7 +40,7 @@ A crate that names the types of a sibling in its public API must reach that sibl
 | `release` | A saved box with `bytes_raw` at or above `idle_keep_min_state_bytes` keeps its pod and gets `idle-since` set at the release; any other box has its pod deleted. A pod that is already gone is a success. The box is marked released in every case, also when the delete fails (a port fault). Releasing twice is accepted. |
 | `run`, `read`, `write`, `list`, `kill`, `save` on a box that was never opened or is released | A port fault, with no exec. |
 
-The harness drives the order of open, save and release through its run lifecycle, which belongs to the harness: this crate holds no `RunLifecycle` implementation and does not depend on the harness.
+The harness drives the order of open, save and release through the `RunLifecycle` trait, which belongs to the harness: this crate holds no implementation of it and does not depend on the harness.
 
 ## Image errors
 
