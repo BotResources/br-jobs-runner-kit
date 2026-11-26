@@ -1,0 +1,260 @@
+name: images-build
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image name (a folder of images/ with a Dockerfile); empty builds all
+        type: string
+        required: false
+        default: ""
+      images_dir:
+        description: Folder that holds the image folders, relative to the root of the repository, with no '..'; only the folder images can be pushed
+        type: string
+        required: false
+        default: images
+      push:
+        description: Push the tested images to ghcr.io
+        type: boolean
+        required: true
+      tag:
+        description: Tag of the manifest lists; required when push is true
+        type: string
+        required: false
+        default: ""
+      ref:
+        description: Commit to build and to name in the revision label; empty builds the commit of the caller
+        type: string
+        required: false
+        default: ""
+    outputs:
+      digests:
+        description: JSON object, image name to registry reference with the manifest list digest; {} when nothing was pushed
+        value: ${{ jobs.digests.outputs.digests || '{}' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.discover.outputs.images }}
+      revision: ${{ steps.revision.outputs.revision }}
+      registry: ${{ steps.registry.outputs.registry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - name: tests of the helper scripts
+        run: bash .github/scripts/test-images-scripts.sh
+      - name: check the inputs
+        env:
+          PUSH: ${{ inputs.push }}
+          TAG: ${{ inputs.tag }}
+          IMAGES_DIR: ${{ inputs.images_dir }}
+        run: bash .github/scripts/images-check-inputs.sh "$PUSH" "$TAG" "$IMAGES_DIR"
+      - name: discover images
+        id: discover
+        env:
+          IMAGE_INPUT: ${{ inputs.image }}
+          IMAGES_ROOT: ${{ inputs.images_dir }}
+        run: echo "images=$(bash .github/scripts/images-discover.sh "$IMAGE_INPUT")" >>"$GITHUB_OUTPUT"
+      - name: revision
+        id: revision
+        run: echo "revision=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+      - name: registry
+        id: registry
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "registry=ghcr.io/${OWNER,,}" >>"$GITHUB_OUTPUT"
+      - name: summary
+        env:
+          IMAGES: ${{ steps.discover.outputs.images }}
+          IMAGES_DIR: ${{ inputs.images_dir }}
+          REVISION: ${{ steps.revision.outputs.revision }}
+          PUSH: ${{ inputs.push }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          {
+            echo "### Image plan"
+            echo
+            echo "- images: \`${IMAGES}\` in \`${IMAGES_DIR}\`"
+            echo "- revision: \`${REVISION}\`"
+            echo "- push: \`${PUSH}\`"
+            echo "- tag: \`${TAG}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: build and test ${{ matrix.image }} ${{ matrix.platform }}
+    needs: plan
+    if: needs.plan.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: inputs.push
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: names of the local image and of the cache scope
+        id: names
+        env:
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          arch="${PLATFORM#linux/}"
+          echo "local=local/${IMAGE}:${arch}" >>"$GITHUB_OUTPUT"
+          echo "scope=${IMAGE}-${arch}" >>"$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        with:
+          context: .
+          file: ${{ inputs.images_dir }}/${{ matrix.image }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          load: ${{ !inputs.push }}
+          outputs: ${{ inputs.push && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', needs.plan.outputs.registry, matrix.image) || '' }}
+          provenance: false
+          sbom: false
+          tags: ${{ !inputs.push && steps.names.outputs.local || '' }}
+          build-args: |
+            REVISION=${{ needs.plan.outputs.revision }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ inputs.tag || needs.plan.outputs.revision }}
+            org.opencontainers.image.revision=${{ needs.plan.outputs.revision }}
+          cache-from: type=gha,scope=${{ steps.names.outputs.scope }}
+          cache-to: type=gha,mode=max,scope=${{ steps.names.outputs.scope }}
+      - name: image to test
+        id: target
+        env:
+          PUSH: ${{ inputs.push }}
+          REGISTRY: ${{ needs.plan.outputs.registry }}
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          LOCAL_IMAGE: ${{ steps.names.outputs.local }}
+        run: |
+          if [ "$PUSH" = "true" ]; then
+            bash .github/scripts/images-record-digest.sh "$IMAGE" "$PLATFORM" "$DIGEST" platform-digests >/dev/null
+            reference="$(bash .github/scripts/images-pull-digest.sh "$REGISTRY" "$IMAGE" "$DIGEST" "$PLATFORM")"
+          else
+            reference="$LOCAL_IMAGE"
+          fi
+          echo "reference=${reference}" >>"$GITHUB_OUTPUT"
+          echo "Tested image: \`${reference}\`" >>"$GITHUB_STEP_SUMMARY"
+      - name: labels of the image
+        env:
+          REFERENCE: ${{ steps.target.outputs.reference }}
+        run: bash .github/scripts/images-check-labels.sh "$REFERENCE"
+      - name: tests of the image
+        if: hashFiles(format('{0}/{1}/test.sh', inputs.images_dir, matrix.image)) != ''
+        shell: bash
+        env:
+          IMAGES_DIR: ${{ inputs.images_dir }}
+          IMAGE: ${{ matrix.image }}
+          REFERENCE: ${{ steps.target.outputs.reference }}
+          PLATFORM: ${{ matrix.platform }}
+          RESULTS_FILE: ${{ runner.temp }}/test-results.txt
+        run: bash "${IMAGES_DIR}/${IMAGE}/test.sh" "$REFERENCE" "$PLATFORM"
+      - name: results of the tests in the summary
+        if: always() && hashFiles(format('{0}/{1}/test.sh', inputs.images_dir, matrix.image)) != ''
+        env:
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+          RESULTS_FILE: ${{ runner.temp }}/test-results.txt
+        run: |
+          {
+            echo "### Tests of ${IMAGE} on ${PLATFORM}"
+            echo
+            echo '```'
+            if [ -f "$RESULTS_FILE" ]; then cut -c1-700 "$RESULTS_FILE"; fi
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: inputs.push
+        with:
+          name: platform-digest-${{ steps.names.outputs.scope }}
+          path: platform-digests/
+          if-no-files-found: error
+
+  manifest:
+    name: manifest list ${{ matrix.image }}
+    needs: [plan, build]
+    if: inputs.push && needs.plan.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: platform-digest-${{ matrix.image }}-*
+          path: platform-digests
+          merge-multiple: true
+      - name: manifest list of the two tested digests
+        env:
+          IMAGE: ${{ matrix.image }}
+          REGISTRY: ${{ needs.plan.outputs.registry }}
+          TAG: ${{ inputs.tag }}
+        run: bash .github/scripts/images-merge.sh "$IMAGE" "$REGISTRY" "$TAG" platform-digests refs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ref-${{ matrix.image }}
+          path: refs/${{ matrix.image }}.ref
+          if-no-files-found: error
+
+  digests:
+    name: digests
+    needs: [plan, manifest]
+    runs-on: ubuntu-latest
+    outputs:
+      digests: ${{ steps.collect.outputs.digests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ref-*
+          path: collected
+          merge-multiple: true
+      - name: collect
+        id: collect
+        run: |
+          json="$(bash .github/scripts/images-collect-digests.sh collected)"
+          echo "digests=${json}" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Pushed images"
+            echo
+            echo '```json'
+            echo "${json}"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"

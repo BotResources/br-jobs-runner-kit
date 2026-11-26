@@ -1,0 +1,114 @@
+name: images
+
+on:
+  pull_request:
+    paths:
+      - "images/**"
+      - ".github/fixtures/images/**"
+      - ".dockerignore"
+      - ".github/workflows/images.yml"
+      - ".github/workflows/images-build.yml"
+      - ".github/scripts/images-*.sh"
+      - ".github/scripts/test-images-*.sh"
+      - ".github/scripts/test-tools-image*.sh"
+  push:
+    branches: [main]
+    paths:
+      - "images/**"
+      - ".github/fixtures/images/**"
+      - ".dockerignore"
+      - ".github/workflows/images.yml"
+      - ".github/workflows/images-build.yml"
+      - ".github/scripts/images-*.sh"
+      - ".github/scripts/test-images-*.sh"
+      - ".github/scripts/test-tools-image*.sh"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image name (a folder of images/ with a Dockerfile); empty builds all
+        type: string
+        default: ""
+      push:
+        description: Push the images to ghcr.io
+        type: boolean
+        default: false
+
+concurrency:
+  group: images.yml-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: plan images
+    runs-on: ubuntu-latest
+    outputs:
+      push: ${{ steps.plan.outputs.push }}
+      tag: ${{ steps.plan.outputs.tag }}
+      revision: ${{ steps.plan.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: policy tests
+        run: bash .github/scripts/test-images-plan.sh
+      - name: tests of the gates
+        run: bash .github/scripts/test-images-gates.sh
+      - name: order of the jobs of images-build.yml
+        run: bash .github/scripts/images-check-gates.sh .github/workflows/images-build.yml
+      - name: decide the push and the tag
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REF: ${{ github.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTOR: ${{ github.actor }}
+          PUSH_INPUT: ${{ inputs.push }}
+        run: |
+          bash .github/scripts/images-plan.sh >plan.txt
+          grep -E '^(push|tag|revision)=' plan.txt >>"$GITHUB_OUTPUT"
+          {
+            echo "### Push policy"
+            echo
+            sed 's/^/- /' plan.txt
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: images
+    needs: plan
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images-build.yml
+    with:
+      image: ${{ inputs.image }}
+      push: ${{ needs.plan.outputs.push == 'true' }}
+      tag: ${{ needs.plan.outputs.tag }}
+      ref: ${{ needs.plan.outputs.revision }}
+
+  fixture:
+    name: fixture images
+    if: github.event_name == 'pull_request'
+    needs: plan
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images-build.yml
+    with:
+      images_dir: .github/fixtures/images
+      push: false
+      ref: ${{ needs.plan.outputs.revision }}
+
+  fixture-output:
+    name: fixture output
+    needs: fixture
+    runs-on: ubuntu-latest
+    steps:
+      - name: the output of a run that pushed nothing is an empty object
+        env:
+          DIGESTS: ${{ needs.fixture.outputs.digests }}
+        run: test "$DIGESTS" = '{}'
