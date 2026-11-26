@@ -1,3 +1,4 @@
+mod cold;
 mod live;
 mod marks;
 mod mode;
@@ -5,6 +6,7 @@ mod patch;
 mod release;
 mod start;
 
+pub use cold::cold_pod_manifest;
 pub use live::{LivePolicy, LiveVerdict, judge_live_pod};
 pub use marks::PodMarks;
 pub use mode::{WebAccessMismatch, check_web_access};

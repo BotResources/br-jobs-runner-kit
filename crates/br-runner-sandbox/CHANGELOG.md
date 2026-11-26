@@ -16,3 +16,5 @@ First release.
 - The cluster boundary (`Cluster` and its views, `ClusterError`) and its implementation on `kube` (`KubeCluster`).
 - The exec layer of `Env` (`run`, `read`, `write`, `list`, `kill`), the bsdtar argument lists and `ExecError`.
 - The save flow, the restore flow, the seed write and the read of the store view of a key (`Env::save`, `restore`, `write_seed`, `load_manifest`, `read_store_view`).
+- The adapter `Sandbox`: the implementation of the sandbox port, with the open flow (instance first, mode check, live reuse by the time of the save, warm claim with the version check, the failing-pool check before the cold path, the cold pod from the pool template, the open timeout, restore and seed at the same time), the watch of the warm pods, release (idle-since at the release, a pod already gone is a success), `erase` of a thread, the cleanup of a dropped `open`, and `cold_pod_manifest`.
+- A `tracing` warning with the reason and the message (`ImageFailing`) or the wait (`ImageUnavailable`); the port error holds the typed cause only.

@@ -503,6 +503,7 @@ dependencies = [
  "tar",
  "thiserror",
  "tokio",
+ "tracing",
  "url",
  "uuid",
  "zstd",

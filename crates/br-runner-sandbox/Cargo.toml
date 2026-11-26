@@ -22,6 +22,7 @@ sha2 = "0.10"
 tar = { version = "0.4", default-features = false }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util", "rt", "sync", "time"] }
+tracing.workspace = true
 url = "2"
 uuid.workspace = true
 zstd = "0.13"
