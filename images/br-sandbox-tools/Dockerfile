@@ -45,7 +45,8 @@ RUN printf 'libarchive %s; musl %s; pause %s; rev %s\n' \
  && chmod 0755 /stage/bin \
  && find /stage -exec touch -h -d @1 {} + \
  && /stage/bin/bsdtar --create --format pax --numeric-owner --uid 0 --gid 0 --no-xattrs --no-acls --no-fflags \
-      --file /stage/tools.tar -C /stage --no-recursion bin bin/bsdtar bin/pause VERSION
+      --file /stage/tools.tar -C /stage --no-recursion bin bin/bsdtar bin/pause VERSION \
+ && touch -d @1 /stage/tools.tar
 
 FROM scratch
 LABEL org.opencontainers.image.title="br-sandbox-tools" \

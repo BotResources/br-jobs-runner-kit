@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+daemon_runs_platform_natively() {
+  local daemon_arch
+  daemon_arch=$(docker info --format '{{.Architecture}}')
+  case "${daemon_arch}:${PLATFORM}" in
+    x86_64:linux/amd64 | aarch64:linux/arm64 | arm64:linux/arm64) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 ORPHAN_SCRIPT='(sleep 2 & echo $! > /tmp/orphan_pid); true'
 
 orphan_state() {
@@ -27,7 +36,11 @@ test_7_pause_as_pid_1() {
   local rss
   rss=$(docker exec "$name" grep -m1 '^VmRSS:' /proc/1/status | tr -s ' ')
   detail="${detail}pid 1 ${rss}; "
-  case "$rss" in *" "[0-9]" kB"|*" "[0-9][0-9]" kB"|*" "[0-9][0-9][0-9]" kB"|*" "10[01][0-9]" kB"|*" "102[0-3]" kB") ;; *) verdict=FAIL ;; esac
+  if daemon_runs_platform_natively; then
+    case "$rss" in *" "[0-9]" kB"|*" "[0-9][0-9]" kB"|*" "[0-9][0-9][0-9]" kB"|*" "10[01][0-9]" kB"|*" "102[0-3]" kB") ;; *) verdict=FAIL ;; esac
+  else
+    detail="${detail}(emulated platform: the emulator counts in the resident memory, not judged); "
+  fi
   local t0 t1 code
   t0=$(now_ms)
   docker kill --signal TERM "$name" >/dev/null

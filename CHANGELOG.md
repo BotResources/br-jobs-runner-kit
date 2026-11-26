@@ -19,6 +19,8 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Added
 
+- Image `br-sandbox-tools` (`images/br-sandbox-tools/`): static `bsdtar` (libarchive 3.8.11) and `pause` (our own reaper) for `linux/amd64` and `linux/arm64`, one manifest list, `FROM scratch`, under 5 MB per architecture. The README of the image holds the contract (paths, argv, exit rule, init command) and the measured results of its tests (`.github/scripts/test-tools-image.sh`).
+- Workflow `.github/workflows/images.yml`: builds every `images/<name>/Dockerfile` (repo root as context, both architectures, tests per architecture before the push) to `ghcr.io/botresources/<name>`, with `contents: read` by default and `packages: write` on the push job only. The manifest list digest is in the job summary, the job output and the `workflow_call` output `digests`.
 - `br-runner-wiring-example` 0.0.0 (not published, no registry entry): an end-to-end example and tests that wire the toolkit, the jobs adapters (the harness mail port and the mark gate), the Threads adapter (`entry_stored`, the harness history) and `br-agentic-harness` over the in-process doubles. See `crates/br-runner-wiring-example/README.md`.
 - `br-runner-toolkit` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1 and `br-runner-jobs` 0.4.0 (dev-dependency); no change of the public surface. See `crates/br-runner-toolkit/CHANGELOG.md`.
 - `br-runner-as-tool` 0.3.1: re-pinned on `br-runner-jobs-client` 0.1.1; no change of the public surface. See `crates/br-runner-as-tool/CHANGELOG.md`.
