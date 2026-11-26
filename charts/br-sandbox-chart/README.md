@@ -8,16 +8,18 @@ It does not claim a pod, run a command, save or restore (the library `br-runner-
 
 | Object | Scope | Gate |
 |---|---|---|
+| Namespace `{prefix}-system`, ConfigMap `br-sandbox-config` of the system namespace | once per installation | always |
 | Namespace `{prefix}-{client}-{mode}`, ServiceAccount `sandbox` (no token, no Role), ResourceQuota `br-sandbox-quota`, LimitRange `br-sandbox-limits`, ConfigMap `br-sandbox-config` | each (client, mode) | always |
-| ReplicaSet `warm-{client}-{mode}` | each (client, mode) | always, never sets `spec.replicas` |
+| ReplicaSet `warm-{client}-{mode}` | each (client, mode) | always; it has no `spec.replicas`, so a pool starts with one replica (the ReplicaSet default) until the keeper runs |
 | NetworkPolicy `default-deny`, `egress-full` or `egress-allow` | each (client, mode) | always |
 | Namespace `{sandbox namespace}-egress`, NetworkPolicies `default-deny`, `ingress-tunnel` and `egress-proxy`, ResourceQuota `br-sandbox-egress-quota` | each (client, mode) that uses a proxy | mode `allow`; mode `full` when `credential_set` is not empty |
 | ValidatingAdmissionPolicy and binding `{prefix}-{client}-{mode}-pod` | each (client, mode) | always |
 | Role and RoleBinding `br-sandbox-runner` | each (client, mode) | always |
-| Role and RoleBinding `br-sandbox-keeper`, keeper Deployment, ServiceAccount, lease Role, ClusterRole `namespaces` read, NetworkPolicies `default-deny` and `egress-keeper` | system namespace | `keeper.enabled` |
+| Role and RoleBinding `br-sandbox-keeper` | each (client, mode), sandbox namespace | `keeper.enabled` |
+| Keeper Deployment, ServiceAccount, lease Role, ClusterRole `namespaces` read, NetworkPolicies `default-deny` and `egress-keeper` | system namespace | `keeper.enabled` |
 | ServiceAccount, ClusterRole and Role `br-sandbox-netcheck`, ConfigMap `br-sandbox-netcheck`, Job `br-sandbox-netcheck-{run_id}`, CronJob, NetworkPolicy `egress-netcheck` | system namespace and each (client, mode) | `network_check.enabled` |
 
-The system namespace is `{prefix}-system`. It does not carry `br.sandbox/managed`, so the Kyverno exclusion does not touch it.
+The system namespace is `{prefix}-system`. It carries the label `br.sandbox/system=true` and not `br.sandbox/managed`, so the Kyverno exclusion does not touch it.
 
 ## Layout: two namespaces for a mode with a proxy
 
@@ -43,7 +45,7 @@ The egress namespace does not carry `br.sandbox/managed=true`, on purpose: the a
 
 **What the egress namespace renders now.** Its Namespace, its default-deny, its two allow rules and its quota. The proxy Deployment, Service, ConfigMap and Secrets are not rendered yet: they come in a later change of this chart through the slot `br-sandbox-chart.slot.egress.objects`, which receives the root, the namespace item and the name of the egress namespace (`dict "root" . "ns" $ns "namespace" $name`). Until then no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).
 
-**Rules of the egress namespace.** `default-deny` on every pod, both directions. `ingress-tunnel`: proxy pods take traffic only from the pods `br.sandbox/role=sandbox` of the sandbox namespace of the same (client, mode) (namespace and pod selector in the same item), TCP on `egress.proxy.port`; no other port, so the reload port of the proxy is reached by no sandbox. `egress-proxy`: proxy pods reach `0.0.0.0/0` (and `::/0` with `dual_stack`) except three groups: the internal ranges (`network.internal_cidrs`), the pod and service networks, and the node, node public and load balancer addresses. The rule names no pod and no namespace, and no cluster DNS: the proxy resolves through public resolvers.
+**Rules of the egress namespace.** `default-deny` on every pod, both directions. `ingress-tunnel`: proxy pods take traffic only from the pods `br.sandbox/role=sandbox` of the sandbox namespace of the same (client, mode) (namespace and pod selector in the same item), TCP on `egress.proxy.port`; no other port, so the reload port of the proxy is reached by no sandbox. `egress-proxy`: proxy pods reach `0.0.0.0/0` (and `::/0` with `dual_stack`) except three groups: the internal ranges (`network.internal_cidrs`), the pod and service networks, and the node, node public and load balancer addresses. The rule names no pod and no namespace, and no cluster DNS: no cluster DNS is reachable from the egress namespace, so the proxy of the later change must resolve names through public resolvers.
 
 ## Values
 
@@ -51,7 +53,7 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 
 | Key | Default | Meaning |
 |---|---|---|
-| `installation.namespace_prefix` | required | Prefix of every namespace, at most 22 characters (with a client name of 32 characters at most, a namespace name stays under 63). |
+| `installation.namespace_prefix` | required | Prefix of every namespace, at most 22 characters. With a client name of 32 characters at most, a sandbox namespace name stays under 63; the egress namespace of a mode with a proxy adds `-egress` (7 characters) and a name over 63 fails with `BR_SANDBOX_NAME_TOO_LONG`. |
 | `installation.system_namespace` | `{prefix}-system` | Keeper and network check. |
 | `image` | required | One registry link of the project, with a tag or a digest. The pool and the policy use it. |
 | `image_pull_policy` | computed | `Always` for a tag, `IfNotPresent` for a digest. A value overrides it. |
@@ -72,7 +74,7 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 | `store.{endpoint,bucket,region,path_style,credentials_secret}` | required | Passed to the config. `credentials_secret` names a Secret of the keeper namespace with the keys `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; the chart renders no Secret. |
 | `work.size_limit`, `home.size_limit` | `3Gi`, `512Mi` | `emptyDir` `sizeLimit` of `/work` and `/home/agent`. No other volume type exists. |
 | `pool.size.{cpu,memory,disk}.{request,limit}` | 500m/2, 1Gi/2Gi, 2Gi/5Gi | The one size key of each resource. `disk` is `ephemeral-storage`. |
-| `pool.{floor,max_sandboxes,refill_seconds,margin}` | 1, 20, 3, 2 | Read by the keeper. |
+| `pool.{floor,max_sandboxes,refill_seconds,margin}` | 1, 20, 3, 2 | Read by the keeper. The chart does not apply `floor`: it sets no replica count, so without the keeper each pool runs one pod. |
 | `pool.terminationGracePeriodSeconds`, `pool.node_selector` | `1`, `{}` | |
 | `quota.extra_pods` | `4` | Pods of the quota = `max_sandboxes` + this (network check probe pod, slack; the proxy pods count in the egress namespace). |
 | `network.{pod_cidr,service_cidr}` | required | |
@@ -80,7 +82,8 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 | `network.public_resolvers` | required if a mode is `allow` or `full` | Nameservers of the pods of mode `full`. |
 | `network.internal_cidrs` | RFC1918, 100.64/10, 169.254/16, 127/8 | |
 | `network.ipv6` | `single_stack` | `dual_stack` adds `::/0` except `fc00::/7`, `fe80::/10` and the IPv6 addresses of the lists. |
-| `network.{api_server_addresses,store_cidrs}` | required with keeper or network check; at least one | Egress of the keeper (API server, store) and the network check (API server). |
+| `network.api_server_addresses` | required with the keeper or the network check; at least one | Egress of the keeper and of the network check (API server). |
+| `network.store_cidrs` | required with the keeper only; at least one | Egress of the keeper to the store. |
 | `clients.<client>.modes.<mode>` | required | `mode` is `none`, `allow` or `full`, else `BR_SANDBOX_MODE_UNKNOWN`. A key present is a namespace. |
 | `...modes.<mode>.pool` | `{}` | Overrides any key of `pool` for this namespace. |
 | `...modes.<mode>.runner.{service_account,namespace}` | required | Subject of the runner Role. |
@@ -89,11 +92,9 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 | `egress.enabled`, `egress.proxy.port` | `false`, `8888` | `enabled: true` lets the allow lists and credential sets render. The proxy objects are a later change of this chart; `port` is the tunnel port of both namespaces. |
 | `egress.quota.pods` | `4` | Pods of the quota of an egress namespace. |
 | `keeper.{enabled,image,replicas,settings,resources}`, `keeper.lease.{duration_seconds,renew_deadline_seconds,retry_period_seconds}` | `false`, required if enabled, `2`, `{}`, 50m/64Mi and 500m/256Mi, 15/10/2 | `settings` goes untouched into the system config; the library `br-sandbox-keeper` adds its keys to the schema. |
-| `network_check.{enabled,image,targets,run_id,cron}` | `true`, required if enabled, `[]`, `""`, `""` | A new `run_id` starts a new Job. `targets` are `host:port` entries (the bus, the database). |
+| `network_check.{enabled,image,targets,run_id,cron}` | `true`, required if enabled, `[]`, `""`, `""` | A new `run_id` starts a new Job; an empty `run_id` gives the Job name suffix `initial`. `targets` are `host:port` entries (the bus, the database). |
 
-Values that changed with the two-namespace layout: `admission.proxy_controller_user` is removed (and the whole `admission` block); `egress.quota.pods` is added; `egress.enabled: true` no longer fails the render. No other key changed.
-
-Render errors: `BR_SANDBOX_MISSING_VALUE`, `BR_SANDBOX_MODE_UNKNOWN`, `BR_SANDBOX_SHARED_NAMESPACE` (two equal names: the system, sandbox and egress namespaces and the runner namespaces), `BR_SANDBOX_NAME_TOO_LONG` (a namespace name over 63 characters), `BR_SANDBOX_SAVE_AGE_INVALID`, `BR_SANDBOX_POOL_INVALID` (floor above `max_sandboxes`), `BR_SANDBOX_EGRESS_DISABLED`, `BR_SANDBOX_CREDENTIAL_SET_MODE`, `BR_SANDBOX_ALLOW_MODE` (an `allow` list in mode `none` or `full`).
+Render errors: `BR_SANDBOX_MISSING_VALUE`, `BR_SANDBOX_MODE_UNKNOWN`, `BR_SANDBOX_SHARED_NAMESPACE` (two equal names among the system, sandbox and egress namespaces, or a runner namespace equal to an egress namespace), `BR_SANDBOX_NAME_TOO_LONG` (a namespace name over 63 characters), `BR_SANDBOX_SAVE_AGE_INVALID`, `BR_SANDBOX_POOL_INVALID` (floor above `max_sandboxes`), `BR_SANDBOX_EGRESS_DISABLED`, `BR_SANDBOX_CREDENTIAL_SET_MODE`, `BR_SANDBOX_ALLOW_MODE` (an `allow` list in mode `none` or `full`), `BR_SANDBOX_QUANTITY_INVALID` (a resource quantity with an unknown suffix).
 
 Constants, not keys (a value that weakens one is a different chart): label prefix `br.sandbox`, `hostUsers: false`, seccomp `RuntimeDefault`, the seven capabilities, no service account token, no ingress, no port, Pod Security `baseline` enforced, `restricted` warn and audit.
 
@@ -136,14 +137,19 @@ One prefix, `br.sandbox`. The adapter, the keeper and the policies use exactly t
 | `br.sandbox/thread`, `br.sandbox/agent`, `br.sandbox/creds` | pod label | claim | ids |
 | `br.sandbox/clean`, `br.sandbox/claimed-at`, `br.sandbox/idle-since`, `br.sandbox/state-bytes`, `br.sandbox/state-turn`, `br.sandbox/credsets` | pod annotation | `br-runner-sandbox` | |
 | `br.sandbox/system` | pod label | chart | `keeper` or `netcheck`, in the system namespace |
+| `br.sandbox/system` | namespace label | chart | `true` on the system namespace only |
 
-The selector of the ReplicaSet is `pool=warm` and `pool-id`. The ReplicaSet has no `spec.replicas`: the keeper is the only writer (one replica until it writes).
+The selector of the ReplicaSet is `pool=warm` and `pool-id`. The ReplicaSet has no `spec.replicas`, on purpose: the keeper is the only writer of the replica count, because a value rendered by the chart would be reset at each `helm upgrade`. A pool starts with one replica (the ReplicaSet default) until the keeper runs. The `floor` value is read by the keeper; the chart does not apply it.
 
 ## The pod
 
 Agent container `agent`: the project image, command `{tools.mount_path}/bin/pause`, user `runAsUser`, env `HOME=/home/agent`, volumes `tools` (read-only), `/work`, `/home/agent`, `/skills` (read-only). Init container `tools-init` (tools image): `/sbx/bin/bsdtar -x -p --no-same-owner -f /sbx/tools.tar -C {tools.mount_path}`. All containers drop ALL and add `CHOWN, DAC_OVERRIDE, FOWNER, FSETID, SETUID, SETGID, KILL`. Volumes are `emptyDir` with a size limit (a `configMap` only for the check pod).
 
 **Seed container (contract for the library `br-runner-sandbox`).** Name `seed` (key `tools.seed_container.name`), image `br-sandbox-tools`, command `/sbx/bin/pause`, root user inside the user namespace, `readOnlyRootFilesystem`, no port, no shared process namespace, same seven capabilities. The library `br-runner-sandbox` writes the seed through `pods/exec` into this container, mount path `/skills`, program `/sbx/bin/bsdtar` (in the agent container the same program is `{tools.mount_path}/bin/bsdtar`, default `/opt/sbx/bin/bsdtar`). The agent mounts `/skills` read-only, so a non-root agent cannot change the seed. `tools.seed_container.enabled: false` removes the container; then `/skills` is writable by the agent and the seed is only the weak form. Its resources are small keys of their own: whether they count in the size of the pool is open.
+
+## Runner role
+
+The Role `br-sandbox-runner` of each sandbox namespace is the contract for the adapter. It binds the `runner.service_account` of `runner.namespace`. Rules: `pods` get, list, watch, patch, create, delete; `pods/exec` create; `replicasets` get, list, watch (the adapter reads the condition of the pool); `configmaps` get on `br-sandbox-config` only (the adapter reads the config). The keeper Role of the same namespace (with `keeper.enabled`) has `pods` get, list, watch, delete; `replicasets` get, list, watch, patch; `replicasets/status` patch; `events` create. It has no `pods` patch. No identity of the chart has a Role in an egress namespace.
 
 ## Admission policy
 
@@ -154,7 +160,7 @@ One policy and binding per (client, mode); values (size, runtime class, reposito
 - Patch rules (`BR_SANDBOX_LABELS`): a patch changes only `br.sandbox/` keys of labels and annotations; `role` and `pool-id` never change; a claimed pod never leaves `claimed`.
 - Init and seed containers are containers of the pod and follow rules 4 to 7.
 
-The cluster test proves with the runner service account that an unlabelled pod, a `role=proxy` pod and a relabel of the role are refused in a sandbox namespace. The CEL text is not compiled offline.
+The refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role, with the runner service account, in a sandbox namespace, are proved by a cluster test. That test is not part of the offline suite of this chart and has not run at this version. The CEL of the admission policy is not compiled offline, so at this version it has been neither compiled nor run on a cluster.
 
 ## Image contract
 
@@ -182,19 +188,19 @@ The network check identity reads the pod specs of the whole cluster (a cluster-w
 | `hostUsers: false` fixed | Root in the pod is a high host user; the seven capabilities hold only inside. |
 | `pause` from the tools mount | The agent image has no reaper; an orphan stayed alive after SIGTERM with `sleep infinity`. |
 | Seed in a second container | `pods/exec` cannot choose a user; a root writer is needed so that a non-root agent sees a read-only seed. |
-| No `spec.replicas` | The keeper writes it; a chart value would fight the deploy tool. |
+| No `spec.replicas` | The keeper is the only writer of the replica count; a value rendered by the chart would be reset at each `helm upgrade`. A pool starts with one replica (the ReplicaSet default) until the keeper runs; `floor` is read by the keeper, not applied by the chart. |
 | Quota = size x (`max_sandboxes` + `extra_pods`) + seed container resources x `max_sandboxes` (when `tools.seed_container.enabled`) | The refill must not be refused: each sandbox pod holds the agent and the seed container, and the extra pods hold one size each. The init container does not add: a pod counts the larger of its init containers and the sum of its containers. |
 | Selects `role`, never `pool` | A claim changes `pool`; the network path must not move. |
 | `default-deny` in the system namespace only with keeper or check | An empty chart adds no policy there. |
 | `egress-netcheck` allows all egress | The check must try to reach internal targets; the Job holds a read role, so it runs on demand. |
 | Mirror is a prefix | `{mirror}/{reference}`; a mirror that rewrites the host is done by the mirror itself. |
-| Label rule covers annotations | A runner may patch only `br.sandbox/` keys; a CNI that annotates the main pod resource would need an exception (cluster test). |
+| Label rule covers annotations | A runner may patch only `br.sandbox/` keys; a CNI that annotates the main pod resource would need an exception (to check on a cluster; no such check has run at this version). |
 
 ## Images and licences
 
 | Image | Used for | SPDX of its content |
 |---|---|---|
-| `br-sandbox-tools` | init and seed container | `bsdtar` (libarchive) BSD-2-Clause; musl MIT; `pause` of ours Apache-2.0 |
+| `br-sandbox-tools` | init and seed container | `bsdtar` (libarchive) BSD-2-Clause; musl MIT; `pause` of ours Apache-2.0; GCC runtime code statically linked GPL-3.0-or-later WITH GCC-exception-3.1 |
 | `br-sandbox-python` | test and reference agent image of this repository | Python PSF-2.0; pandas BSD-3-Clause; openpyxl MIT; python-docx MIT; python-pptx MIT; LibreOffice MPL-2.0 (its repository holds the table) |
 | `br-sandbox-keeper` | keeper | Apache-2.0 (ours) |
 | check image | check Job | chosen by the project |
@@ -208,4 +214,4 @@ The chart itself is Apache-2.0 and ships no GPL program. Kubernetes (Apache-2.0)
 
 ## Tests
 
-`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) run on a test cluster.
+`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. The cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) are not part of this suite and have not run at this version; they are to be run on a test cluster.
