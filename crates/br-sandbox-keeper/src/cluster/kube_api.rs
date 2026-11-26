@@ -144,7 +144,8 @@ impl Watch {
         match events.next().await {
             Some(Ok(WatchEvent::Added(pod) | WatchEvent::Modified(pod))) => {
                 let version = non_empty(pod.metadata.resource_version.as_ref(), version);
-                let applied = pod_facts(&pod, &self.keys).map(PodEvent::Applied);
+                let applied =
+                    pod_facts(&pod, &self.keys).map(|facts| PodEvent::Applied(Box::new(facts)));
                 (
                     applied.into_iter().collect(),
                     Phase::Watch { version, events },

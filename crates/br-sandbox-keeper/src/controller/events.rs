@@ -25,7 +25,7 @@ impl Engine {
                 self.readiness.namespace_synced(namespace);
             }
             PodEvent::Applied(pod) => {
-                let id = self.apply(pod, true, &mut touched);
+                let id = self.apply(*pod, true, &mut touched);
                 if let Some(id) = id {
                     self.judge(&id).await;
                 }

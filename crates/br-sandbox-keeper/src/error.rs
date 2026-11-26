@@ -10,6 +10,8 @@ pub enum KeeperError {
     StoreUnreachable(String),
     #[error("the bucket {0:?} is absent at start")]
     BucketAbsent(String),
+    #[error("the environment variable {name} is unusable: {reason}")]
+    Environment { name: &'static str, reason: String },
     #[error("the health address {address} cannot be bound: {reason}")]
     Listen { address: String, reason: String },
     #[error("the task {0} ended before the stop signal")]

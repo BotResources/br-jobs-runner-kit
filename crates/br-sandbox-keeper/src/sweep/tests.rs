@@ -331,3 +331,16 @@ async fn the_run_loop_sweeps_at_each_interval_and_stops_at_shutdown() {
     handle.await.unwrap();
     drop(metrics);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_manifest_that_cannot_be_fetched_is_counted_and_left_in_place() {
+    let harness = harness(true, 100);
+    let key = save_key();
+    let attempt = AttemptId::mint();
+    put_save(&harness.bucket, &key, &[attempt], attempt, NOW - 5000);
+    harness.bucket.fail_get(&manifest_key(&key));
+    harness.sweeper.sweep_once().await;
+    assert!(metric(&harness, "br_sandbox_keeper_sweep_errors_total 1"));
+    assert!(harness.bucket.writes().is_empty());
+    assert!(harness.bucket.contains(&manifest_key(&key)));
+}

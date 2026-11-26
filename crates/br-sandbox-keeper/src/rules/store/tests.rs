@@ -176,7 +176,7 @@ fn an_expired_save_is_removed_tombstone_then_manifest_then_every_part_and_the_re
     let turn = listing(&key, Some(10_000), &[(named, 10_000), (rival, 10_001)]);
     let steps = plan_turn(
         &turn,
-        &ManifestRead::Parsed(made.clone()),
+        &ManifestRead::Parsed(Box::new(made.clone())),
         at(11_061),
         &rules(),
     );
@@ -219,7 +219,15 @@ fn a_save_inside_the_margin_is_left_whole() {
     let attempt = AttemptId::mint();
     let made = manifest(&key, attempt, at(10_000));
     let turn = listing(&key, Some(10_000), &[(attempt, 10_000)]);
-    assert!(plan_turn(&turn, &ManifestRead::Parsed(made), at(11_060), &rules()).is_empty());
+    assert!(
+        plan_turn(
+            &turn,
+            &ManifestRead::Parsed(Box::new(made)),
+            at(11_060),
+            &rules()
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -228,7 +236,7 @@ fn an_attempt_that_the_manifest_does_not_name_is_an_orphan_once_its_newest_objec
     let (named, loser) = (AttemptId::mint(), AttemptId::mint());
     let made = manifest(&key, named, at(10_000));
     let turn = listing(&key, Some(10_000), &[(named, 10_000), (loser, 10_001)]);
-    let read = ManifestRead::Parsed(made);
+    let read = ManifestRead::Parsed(Box::new(made));
     assert!(plan_turn(&turn, &read, at(10_001 + 3600), &long_lived()).is_empty());
     let steps = plan_turn(&turn, &read, at(10_001 + 3601), &long_lived());
     assert_eq!(
@@ -248,7 +256,7 @@ fn the_parts_that_a_manifest_names_are_never_an_orphan() {
     assert!(
         plan_turn(
             &turn,
-            &ManifestRead::Parsed(made),
+            &ManifestRead::Parsed(Box::new(made)),
             at(10_500),
             &long_lived()
         )

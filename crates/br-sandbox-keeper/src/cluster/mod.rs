@@ -37,7 +37,7 @@ pub enum DeleteOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PodEvent {
     Snapshot(Vec<PodFacts>),
-    Applied(PodFacts),
+    Applied(Box<PodFacts>),
     Deleted { name: String },
 }
 

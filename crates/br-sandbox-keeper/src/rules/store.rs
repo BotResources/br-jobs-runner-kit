@@ -92,7 +92,7 @@ pub enum ManifestRead {
     NotNeeded,
     Absent,
     Unreadable,
-    Parsed(Manifest),
+    Parsed(Box<Manifest>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,7 +134,7 @@ pub fn read_manifest(turn: &TurnListing, bytes: &[u8]) -> ManifestRead {
     };
     match Manifest::parse(bytes) {
         Ok(manifest) if manifest_key(manifest.key()) == listed.key => {
-            ManifestRead::Parsed(manifest)
+            ManifestRead::Parsed(Box::new(manifest))
         }
         _ => ManifestRead::Unreadable,
     }

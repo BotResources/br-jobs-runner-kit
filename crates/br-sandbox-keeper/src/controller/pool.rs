@@ -123,20 +123,19 @@ impl Engine {
         self.at_max_event(pool, &id, &target, desired.above_max(pool), desired.raw)
             .await;
         let judged = judge_pool(self.pool_pods(pool, PoolState::Warm));
-        if let Some(write) = condition_write(&replica_set.conditions, &judged, now) {
-            if let Err(error) = self
+        if let Some(write) = condition_write(&replica_set.conditions, &judged, now)
+            && let Err(error) = self
                 .api
                 .apply_condition(&pool.namespace, &pool.replicaset, &write)
                 .await
-            {
-                self.action_failed(
-                    "the condition of a pool could not be written",
-                    &pool.replicaset,
-                    &error,
-                );
-                let retry_at = self.clock.now().plus(self.retry_period());
-                self.pool_wake.insert(id.clone(), retry_at);
-            }
+        {
+            self.action_failed(
+                "the condition of a pool could not be written",
+                &pool.replicaset,
+                &error,
+            );
+            let retry_at = self.clock.now().plus(self.retry_period());
+            self.pool_wake.insert(id.clone(), retry_at);
         }
         self.pending_events(pool, &id, &target).await;
     }

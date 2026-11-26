@@ -61,7 +61,9 @@ impl Bed {
     }
 
     pub async fn applied(&mut self, pod: crate::facts::PodFacts) {
-        self.engine.handle(NS, PodEvent::Applied(pod)).await;
+        self.engine
+            .handle(NS, PodEvent::Applied(Box::new(pod)))
+            .await;
     }
 
     pub async fn pass(&mut self, seconds: u64) {

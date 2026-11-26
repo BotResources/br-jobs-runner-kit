@@ -167,7 +167,10 @@ async fn the_event_warm_pods_pending_is_raised_once_for_each_pod_and_never_for_a
         .calls()
         .into_iter()
         .filter_map(|call| match call {
-            Call::Event { reason, message } if reason == "WarmPodsPending" => Some(message),
+            Call::Event {
+                reason: "WarmPodsPending",
+                message,
+            } => Some(message),
             _ => None,
         })
         .collect();

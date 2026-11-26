@@ -9,6 +9,7 @@ pub struct Readiness {
 }
 
 impl Readiness {
+    #[cfg(test)]
     pub fn new(expected_namespaces: impl IntoIterator<Item = String>) -> Self {
         let readiness = Self::starting();
         readiness.expect(expected_namespaces);

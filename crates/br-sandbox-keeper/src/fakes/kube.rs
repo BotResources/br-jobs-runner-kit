@@ -99,7 +99,10 @@ impl FakeKube {
         state
             .pods
             .insert((pod.namespace.clone(), pod.name.clone()), pod.clone());
-        state.emit(&pod.namespace.clone(), PodEvent::Applied(pod.clone()));
+        state.emit(
+            &pod.namespace.clone(),
+            PodEvent::Applied(Box::new(pod.clone())),
+        );
         pod
     }
 
@@ -113,7 +116,7 @@ impl FakeKube {
         change(pod);
         pod.resource_version = version;
         let pod = pod.clone();
-        state.emit(namespace, PodEvent::Applied(pod));
+        state.emit(namespace, PodEvent::Applied(Box::new(pod)));
     }
 
     pub fn silent_update_pod(
