@@ -2,7 +2,7 @@
 
 ## 0.5.0
 
-The adapter of the harness mail port meets the port as `br-agentic-harness-contract` 0.2.0 states it. No change of the public surface of this crate.
+The adapter of the harness mail port meets the port as `br-agentic-harness-contract` 0.2.0 states it. No source change of this crate; `MailPortAdapter` now implements the `MailPort` of `br-agentic-harness-contract` 0.2.0, so a consumer moves to that contract version together with this crate.
 
 ### Changed
 
