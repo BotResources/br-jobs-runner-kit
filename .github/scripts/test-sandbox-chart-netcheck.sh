@@ -7,14 +7,27 @@ stub_tools() {
 #!/bin/sh
 target="$3:$4"
 if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
-    req="$(cat)"
-    printf '%s %s\n' "$target" "$(printf '%s' "$req" | sed -n 1p | tr -d '\r')" >>"$STUB_DIR/connect.log"
-    case "$CONNECT_MODE" in
-        200) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;;
+    req="$(cat | tr -d '\r')"
+    printf '%s %s\n' "$target" "$(printf '%s\n' "$req" | sed -n 1p)" >>"$STUB_DIR/connect.log"
+    inner="$(printf '%s\n' "$req" | grep '^GET ' | sed -n 1p)"
+    [ -n "$inner" ] && printf '%s %s\n' "$target" "$inner" >>"$STUB_DIR/connect.log"
+    case "$3" in
+        10.43.0.51) mode="${CONNECT_MODE_FULL:-$CONNECT_MODE}" ;;
+        10.43.0.50) mode="${CONNECT_MODE_ALLOW:-$CONNECT_MODE}" ;;
+        *) mode="$CONNECT_MODE" ;;
+    esac
+    open='HTTP/1.1 200 Connection established\r\n\r\n'
+    case "$mode" in
+        200) printf "$open" ;;
         403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
         502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
         garbled) printf 'garbage\r\n' ;;
-        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;; esac ;;
+        tunnel502) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
+        tunnel502other) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 13\r\n\r\nupstream down' ;;
+        tunnel404) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n' ;;
+        tunnel200) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;;
+        tunnelgarbled) printf "$open"; [ -n "$inner" ] && printf 'garbage\r\n' ;;
+        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; esac ;;
     esac
     exit 0
 fi
@@ -81,7 +94,7 @@ netcheck_dir() {
 }
 
 run_netcheck() {
-    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
+    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 NETCHECK_TUNNEL_WAIT=0 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
 }
 
 check_network_check_script_against_stubs() {
