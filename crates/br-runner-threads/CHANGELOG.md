@@ -6,7 +6,7 @@ The adapter of the history port of the harness depends on `br-agentic-harness-co
 
 ### Changed
 
-- The dependency on `br-agentic-harness-contract` is 0.2.0 (per-crate pin, same git url and tag family as `br-agentic-contract` 0.3.0, one copy of `ThreadAccess`). The history port and the stored signal are the same as in 0.1.0, so `ThreadAccessAdapter` is still the thread access of a node and the history port of the harness, and the tests of 0.6 run unchanged.
+- The dependency on `br-agentic-harness-contract` is 0.2.0 (per-crate pin, tag `br-agentic-harness-contract/v0.2.0`, same git url as `br-agentic-contract` 0.3.0, one copy of `ThreadAccess`). The history port and the stored signal are the same as in 0.1.0, so `ThreadAccessAdapter` is still the thread access of a node and the history port of the harness, and the tests of 0.6 run unchanged.
 
 ## 0.7.0
 
