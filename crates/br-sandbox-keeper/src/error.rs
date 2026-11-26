@@ -10,6 +10,10 @@ pub enum KeeperError {
     StoreUnreachable(String),
     #[error("the bucket {0:?} is absent at start")]
     BucketAbsent(String),
+    #[error("the health address {address} cannot be bound: {reason}")]
+    Listen { address: String, reason: String },
+    #[error("the task {0} ended before the stop signal")]
+    TaskEnded(&'static str),
     #[error(
         "the namespace {namespace:?} of the pool {pool:?} does not match the managed namespace selector"
     )]

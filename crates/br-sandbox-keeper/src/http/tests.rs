@@ -20,7 +20,11 @@ async fn start(ready: bool) -> (std::net::SocketAddr, CancellationToken, Arc<Rea
     (address, shutdown, readiness)
 }
 
-async fn request(address: std::net::SocketAddr, method: &str, path: &str) -> (u16, String, String) {
+pub(crate) async fn request(
+    address: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+) -> (u16, String, String) {
     let mut stream = TcpStream::connect(address).await.unwrap();
     let text = format!("{method} {path} HTTP/1.1\r\nHost: keeper\r\nConnection: close\r\n\r\n");
     stream.write_all(text.as_bytes()).await.unwrap();

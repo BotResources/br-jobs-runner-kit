@@ -3,18 +3,28 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Readiness {
-    expected: HashSet<String>,
+    expected: Mutex<Option<HashSet<String>>>,
     synced: Mutex<HashSet<String>>,
     store_ready: AtomicBool,
 }
 
 impl Readiness {
     pub fn new(expected_namespaces: impl IntoIterator<Item = String>) -> Self {
+        let readiness = Self::starting();
+        readiness.expect(expected_namespaces);
+        readiness
+    }
+
+    pub fn starting() -> Self {
         Self {
-            expected: expected_namespaces.into_iter().collect(),
+            expected: Mutex::new(None),
             synced: Mutex::new(HashSet::new()),
             store_ready: AtomicBool::new(false),
         }
+    }
+
+    pub fn expect(&self, namespaces: impl IntoIterator<Item = String>) {
+        *self.expected.lock().unwrap() = Some(namespaces.into_iter().collect());
     }
 
     pub fn namespace_synced(&self, namespace: &str) {
@@ -26,8 +36,11 @@ impl Readiness {
     }
 
     pub fn is_ready(&self) -> bool {
+        let expected = self.expected.lock().unwrap();
         self.store_ready.load(Ordering::SeqCst)
-            && self.synced.lock().unwrap().is_superset(&self.expected)
+            && expected
+                .as_ref()
+                .is_some_and(|expected| self.synced.lock().unwrap().is_superset(expected))
     }
 }
 
@@ -47,6 +60,15 @@ mod tests {
         readiness.store_ready();
         assert!(!readiness.is_ready());
         readiness.namespace_synced("b");
+        assert!(readiness.is_ready());
+    }
+
+    #[test]
+    fn it_is_not_ready_while_the_namespaces_are_not_known() {
+        let readiness = Readiness::starting();
+        readiness.store_ready();
+        assert!(!readiness.is_ready());
+        readiness.expect([]);
         assert!(readiness.is_ready());
     }
 

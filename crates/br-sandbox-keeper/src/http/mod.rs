@@ -83,4 +83,4 @@ pub async fn serve(listener: TcpListener, state: Arc<HttpState>, shutdown: Cance
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
