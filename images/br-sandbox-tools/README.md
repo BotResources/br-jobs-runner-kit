@@ -57,7 +57,7 @@ Rules that the callers (save, restore and seeding code) must keep:
 | Thing | Why it is the way it is |
 |---|---|
 | `FROM scratch`, no shell | The sandbox needs two programs. A shell or busybox adds attack surface and GPL duties. |
-| `bsdtar` and not GNU tar | Static build with no copyleft: libarchive is BSD-2-Clause. GNU tar is GPL. |
+| `bsdtar` and not GNU tar | libarchive is BSD-2-Clause, so no product in the image is copyleft; only the GCC runtime parts of the Licences section are, under their exception. GNU tar is GPL. |
 | musl, `-all-static -no-pie` | glibc static brings LGPL duties. `-all-static` is needed: libtool drops a plain `-static`, which gives a binary with an interpreter that `scratch` does not have. `-no-pie` keeps the program free of a dynamic section, so the test "no `PT_INTERP`, no `PT_DYNAMIC`" is exact. |
 | `--without` for every codec and crypto library | The wire is raw tar; zstd runs in the runner. `libb2/bundled` in the version line is the BLAKE2 code that libarchive carries in its own source; it links nothing. |
 | Our own `pause.c` | 44 lines, one behaviour, no upstream copy and no NOTICE duty. The reaper loop runs once at start, so a child that died before the handler was set does not stay a zombie. |
@@ -77,8 +77,16 @@ Rules that the callers (save, restore and seeding code) must keep:
 | libarchive | 3.8.11 | BSD-2-Clause (some files public domain, CC0, Apache-2.0 or OpenSSL licence, see `COPYING`) | `bsdtar` statically linked; text in `/sbx/LICENSES/libarchive-COPYING` |
 | musl libc | 1.2.6 | MIT | statically linked into both programs; text in `/sbx/LICENSES/musl-COPYRIGHT` |
 | `pause.c`, Dockerfile, CI | n/a | Apache-2.0 | `/sbx/LICENSES/br-sandbox-tools-Apache-2.0` |
+| GCC runtime: `crtbeginT.o`, `crtend.o`, and on `linux/arm64` 16 members of `libgcc.a` | 15.2.0 (Alpine `gcc`) | GPL-3.0-or-later WITH GCC-exception-3.1 | statically linked, see below; no text in the image |
 
-No copyleft product. libacl (LGPL-2.1) is not built in: `--disable-acl`.
+No copyleft product is built from source: libarchive, musl and our files are permissive, and libacl (LGPL-2.1) is not built in (`--disable-acl`). The one copyleft-licensed code in the binaries is the GCC runtime library code that `gcc` 15.2.0 links into every static program. Measured on the shipped files (the build of this `Dockerfile` without the two `strip` calls gives files that are byte-identical to the shipped ones after `strip`):
+
+- Both programs on both architectures hold the GCC start-up objects `crtbeginT.o` and `crtend.o` (`frame_dummy`, `__do_global_dtors_aux`, `deregister_tm_clones`, `__EH_FRAME_BEGIN__`) and the `.comment` entry `GCC: (Alpine 15.2.0) 15.2.0`.
+- `linux/arm64`: `bsdtar` links 16 members of `libgcc.a`: the quad-precision soft-float helpers behind `long double` (`addtf3`, `subtf3`, `multf3`, `divtf3`, `eqtf2`, `getf2`, `letf2`, `extenddftf2`, `extendsftf2`, `trunctfdf2`, `trunctfsf2`, `fixtfsi`, `fixunstfsi`, `floatsitf`, `floatunsitf`, `sfp-exceptions`). `pause` links none.
+- `linux/amd64`: neither program links a member of `libgcc.a`.
+- On both architectures no `_Unwind_*` symbol is present: `libgcc_eh.a` is not linked.
+
+These parts are GPL-3.0-or-later WITH GCC-exception-3.1 (GCC Runtime Library Exception). The exception lets the object code be propagated under terms of our choice when it is built by an eligible compilation process; the `Dockerfile` runs plain `gcc` with no plug-in. We distribute that object code inside binaries under the licences of the table, and no source offer is required. To repeat the measure, link without `strip`, then compare `nm` of each program with `nm --defined-only "$(gcc -print-libgcc-file-name)"`.
 
 ## Build
 

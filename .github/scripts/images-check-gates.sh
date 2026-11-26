@@ -61,7 +61,7 @@ def job_conditions(body):
         found.append(" ".join(part.strip() for part in parts if part.strip()))
     return found
 
-status_function = re.compile(r"\b(always|cancelled|failure|success)\s*\(")
+status_function = re.compile(r"\b(always|cancelled|failure|success)\s*\(", re.IGNORECASE)
 
 for name in ("build", "manifest", "digests"):
     if name not in jobs:

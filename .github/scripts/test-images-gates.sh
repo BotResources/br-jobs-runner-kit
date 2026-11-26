@@ -55,6 +55,13 @@ condition_refused "manifest condition single-quoted with failure()" "    if: 'fa
 condition_refused "manifest condition in an expression with cancelled()" '    if: ${{ cancelled() }}'
 condition_refused "manifest condition on several plain lines with always()" $'    if: inputs.push\n      && always()'
 
+for function in Always FAILURE Cancelled SUCCESS; do
+  condition_refused "manifest condition plain with ${function}()" "    if: inputs.push && ${function}()"
+  condition_refused "manifest condition quoted with ${function}()" "    if: \"inputs.push && ${function}()\""
+  condition_refused "manifest condition folded with ${function}()" $'    if: >-\n      inputs.push &&\n      '"${function}()"
+  condition_refused "manifest condition literal with ${function}()" $'    if: |\n      inputs.push\n      && '"${function}()"
+done
+
 REPLACEMENT=$'    if: >-\n      inputs.push &&\n      needs.plan.outputs.images != \'[]\'' awk '$0 == "    if: inputs.push && needs.plan.outputs.images != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/folded-ok.yml"
 if cmp -s "$workflow" "${tmp}/folded-ok.yml"; then fail "gates: the folded condition without a status function: the mutation changed nothing"; elif bash "$here/images-check-gates.sh" "${tmp}/folded-ok.yml" >"${tmp}/out" 2>&1; then pass "gates: a folded manifest condition without a status function is accepted"; else fail "gates: a folded condition without a status function is refused: $(cat "${tmp}/out")"; fi
 
