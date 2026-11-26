@@ -49,7 +49,7 @@ fn multipart_answer(request: &Request) -> Response {
     if is_start(request) {
         return Response::body(
             200,
-            "<InitiateMultipartUploadResult><UploadId>U1</UploadId></InitiateMultipartUploadResult>",
+            "<InitiateMultipartUploadResult><UploadId>upload-one</UploadId></InitiateMultipartUploadResult>",
         );
     }
     if is_part(request) {
@@ -107,7 +107,7 @@ async fn local_http_a_streamed_upload_sends_every_chunk_as_a_part_and_finish_com
     );
     let completes: Vec<&Request> = requests.iter().filter(|r| is_complete(r)).collect();
     assert_eq!(completes.len(), 1);
-    assert_eq!(param(completes[0], "uploadId"), Some("U1"));
+    assert_eq!(param(completes[0], "uploadId"), Some("upload-one"));
     let body = String::from_utf8_lossy(&completes[0].body).into_owned();
     assert_eq!(body.matches("<Part>").count(), parts.len());
     assert!(body.contains("part-"));
@@ -147,7 +147,7 @@ async fn local_http_an_aborted_upload_sends_the_abort_request_and_never_complete
     let requests = server.requests();
     let aborts: Vec<&Request> = requests.iter().filter(|r| is_abort(r)).collect();
     assert_eq!(aborts.len(), 1);
-    assert_eq!(param(aborts[0], "uploadId"), Some("U1"));
+    assert_eq!(param(aborts[0], "uploadId"), Some("upload-one"));
     assert!(!requests.iter().any(is_complete));
 }
 

@@ -29,8 +29,8 @@ fn listing(keys: &[&str], next: Option<&str>) -> Response {
 #[tokio::test]
 async fn local_http_a_list_follows_every_page_and_returns_each_key_once_as_a_full_key() {
     let server = HttpServer::start(|request| match param(request, "continuation-token") {
-        None => listing(&["t/1/a.part", "t/1/b.part"], Some("T2")),
-        Some("T2") => listing(&["t/1/c.part"], None),
+        None => listing(&["t/1/a.part", "t/1/b.part"], Some("next-page")),
+        Some("next-page") => listing(&["t/1/c.part"], None),
         Some(_) => Response::status(400),
     })
     .await;
@@ -44,7 +44,7 @@ async fn local_http_a_list_follows_every_page_and_returns_each_key_once_as_a_ful
         assert_eq!(param(request, "list-type"), Some("2"));
         assert_eq!(param(request, "prefix"), Some("t%2F1%2F"));
     }
-    assert_eq!(param(&requests[1], "continuation-token"), Some("T2"));
+    assert_eq!(param(&requests[1], "continuation-token"), Some("next-page"));
 }
 
 #[tokio::test]
