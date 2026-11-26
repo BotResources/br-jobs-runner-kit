@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+The egress proxy. A (client, mode) that uses a proxy (mode `allow`, and mode `full` with a credential set) gets a working proxy when `egress.enabled` is true.
+
+- In each egress namespace: ConfigMaps `br-sandbox-proxy-config` and `br-sandbox-proxy-ca`, Deployment `br-sandbox-proxy` (label `br.sandbox/role=proxy`) and Service `br-sandbox-proxy` with a fixed `clusterIP` (`proxy.cluster_ip`) on `egress.proxy.port`. The pod has no ServiceAccount token, `hostUsers: false`, a numeric non-root user, `drop ALL`, a read-only root file system, seccomp `RuntimeDefault`, `dnsPolicy: None` with `network.public_resolvers`, and resource requests and limits from `egress.proxy.resources`. No Role and no RoleBinding exist in an egress namespace. The chart renders no Secret.
+- The proxy image is `egress.proxy.image.{repository,digest}`, by digest only (a tag fails the schema), with the `registry_mirror` prefix and the `pull_secrets`.
+- The proxy config is standalone: no control-plane token, no tenancy block, no telemetry endpoint, no response-retry handler, no DNS server. Tunnel listener on `egress.proxy.port`; the other listeners bind the loopback address of the pod; TLS mode `mitm` with the CA certificate from a ConfigMap and the CA key from the Secret named by `proxy.ca.key_secret`. Transforms in fixed order: `allowlist` (mode `allow`: `allow.domains` and `allow.cidrs`; mode `full` with a credential set: the pattern `*`), then `secrets`. `upstream_deny_cidrs` is the deny list of the `egress-proxy` policy plus the loopback ranges. There is no response scrub.
+- Credential set (`credential_set.{secret_ref,secrets}`): per item `placeholder`, `env_name`, `key`, `hosts`, `match_headers`, `match_query`, `match_path`, `match_body`, `require_tls` (default true), `require` (default false). The real values are files of the Secret `secret_ref`, mounted in the proxy pod only. New render errors: `BR_SANDBOX_CREDENTIAL_HOSTS_EMPTY`, `BR_SANDBOX_CREDENTIAL_PLACEHOLDER_EMPTY`, `BR_SANDBOX_CREDENTIAL_PLACEHOLDER_DUPLICATE`, `BR_SANDBOX_CREDENTIAL_ENV_DUPLICATE`, `BR_SANDBOX_CREDENTIAL_KEY_DUPLICATE`, `BR_SANDBOX_CREDENTIAL_REQUIRE_TLS`, `BR_SANDBOX_PROXY_ADDRESS_DUPLICATE`, `BR_SANDBOX_PROXY_PORT_CONFLICT`, `BR_SANDBOX_PROXY_QUOTA`. `credential_set` is now strict in the schema. `BR_SANDBOX_EGRESS_DISABLED` stays for `egress.enabled: false`.
+- Sandbox side, through the egress slots: `HTTPS_PROXY`, `HTTP_PROXY` (and lower case) set to the Service address, `NO_PROXY` empty, the placeholders as variables, the CA ConfigMap `br-sandbox-ca` in the sandbox namespace mounted read-only, and the variables of `egress.ca.env_names` pointing to it. No Secret volume and no `secretKeyRef` in a sandbox pod. The slots now receive `dict "root" . "ns" $ns`.
+- Network check: the pod targets leave out the pods labelled `br.sandbox/role=proxy`; the probe pod of a (client, mode) with a proxy sends `CONNECT` through the proxy to each target and, in mode `allow`, to `network_check.offlist_host`; the Job fails unless every answer is 403 or 502.
+- IP-literal targets: an `allow.cidrs` entry allows a target named by its address, and the render needs no name for it. The deny list still applies to the address.
+- New keys: `egress.proxy.{image,replicas,runAsUser,runAsGroup,resources,reload}`, `egress.ca.{mount_path,env_names}`, `network_check.offlist_host`, `clients.<client>.modes.<mode>.proxy.{cluster_ip,ca}`.
+- The fixture `ci/egress-values.yaml` holds a complete proxy set-up for the offline suite.
+
 ## 0.1.0
 
 First release. The chart of the sandbox: one installation per cluster, one namespace per (client, mode).

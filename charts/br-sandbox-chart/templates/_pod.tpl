@@ -40,15 +40,15 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- if $probe -}}
 {{- $image := include "br-sandbox-chart.image.mirrored" (dict "root" $root "ref" $values.network_check.image) -}}
 {{- $_ := set $spec "restartPolicy" "Never" -}}
-{{- $_ := set $spec "containers" (list (dict "name" "probe" "image" $image "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.network_check.image)) "command" (list "sh" "/netcheck/network-check.sh" "probe") "env" (list (dict "name" "NETCHECK_TARGETS" "value" "__TARGETS__")) "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" 0 "gid" 0) | fromJson) "resources" $resources "volumeMounts" (list (dict "name" "netcheck" "mountPath" "/netcheck" "readOnly" true)))) -}}
+{{- $_ := set $spec "containers" (list (dict "name" "probe" "image" $image "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.network_check.image)) "command" (list "sh" "/netcheck/network-check.sh" "probe") "env" (include "br-sandbox-chart.proxy.probe.env" (dict "root" $root "ns" $ns) | fromYamlArray) "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" 0 "gid" 0) | fromJson) "resources" $resources "volumeMounts" (list (dict "name" "netcheck" "mountPath" "/netcheck" "readOnly" true)))) -}}
 {{- $_ := set $spec "volumes" (list (dict "name" "netcheck" "configMap" (dict "name" "br-sandbox-netcheck"))) -}}
 {{- else -}}
 {{- $toolsImage := include "br-sandbox-chart.image.tools" $root -}}
 {{- $toolsRef := printf "%s@%s" $values.tools.image.repository $values.tools.image.digest -}}
 {{- $toolsPolicy := include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $toolsRef) -}}
 {{- $mounts := list (dict "name" "tools" "mountPath" $mount "readOnly" true) (dict "name" "work" "mountPath" "/work") (dict "name" "home" "mountPath" "/home/agent") (dict "name" "skills" "mountPath" "/skills" "readOnly" $seed) -}}
-{{- $mounts = concat $mounts (include "br-sandbox-chart.slot.egress.volume_mounts" $root | fromYamlArray) -}}
-{{- $env := concat (list (dict "name" "HOME" "value" "/home/agent")) (include "br-sandbox-chart.slot.egress.env" $root | fromYamlArray) -}}
+{{- $mounts = concat $mounts (include "br-sandbox-chart.slot.egress.volume_mounts" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
+{{- $env := concat (list (dict "name" "HOME" "value" "/home/agent")) (include "br-sandbox-chart.slot.egress.env" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
 {{- $agent := dict "name" "agent" "image" (include "br-sandbox-chart.image.project" $root) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.image)) "command" (list (printf "%s/bin/pause" $mount)) "env" $env "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $resources "volumeMounts" $mounts -}}
 {{- $containers := list $agent -}}
 {{- if $seed -}}
@@ -56,7 +56,7 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- end -}}
 {{- $init := dict "name" "tools-init" "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list "/sbx/bin/bsdtar" "-x" "-p" "--no-same-owner" "-f" "/sbx/tools.tar" "-C" $mount) "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $values.tools.init_resources "volumeMounts" (list (dict "name" "tools" "mountPath" $mount)) -}}
 {{- $volumes := list (dict "name" "tools" "emptyDir" (dict "sizeLimit" (toString $values.tools.size_limit))) (dict "name" "work" "emptyDir" (dict "sizeLimit" (toString $values.work.size_limit))) (dict "name" "home" "emptyDir" (dict "sizeLimit" (toString $values.home.size_limit))) (dict "name" "skills" "emptyDir" (dict "sizeLimit" (toString $values.seed.size_limit))) -}}
-{{- $volumes = concat $volumes (include "br-sandbox-chart.slot.egress.volumes" $root | fromYamlArray) -}}
+{{- $volumes = concat $volumes (include "br-sandbox-chart.slot.egress.volumes" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
 {{- $_ := set $spec "initContainers" (list $init) -}}
 {{- $_ := set $spec "containers" $containers -}}
 {{- $_ := set $spec "volumes" $volumes -}}

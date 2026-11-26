@@ -6,6 +6,17 @@ stub_tools() {
     cat >"$bin/nc" <<'STUB'
 #!/bin/sh
 target="$3:$4"
+if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
+    req="$(cat)"
+    printf '%s %s\n' "$target" "$(printf '%s' "$req" | sed -n 1p | tr -d '\r')" >>"$STUB_DIR/connect.log"
+    case "$CONNECT_MODE" in
+        200) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;;
+        403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
+        502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
+        garbled) printf 'garbage\r\n' ;;
+    esac
+    exit 0
+fi
 case "$NC_MODE" in
     all) exit 0 ;;
     none) exit 1 ;;
@@ -32,6 +43,8 @@ case "$1" in
                 exit 0
                 ;;
             pods)
+                printf '%s\n' "$*" >"$STUB_DIR/pods.args"
+                case "$*" in *"br.sandbox/role!=proxy"*) ;; *) printf '10.42.0.9:8888\n' ;; esac
                 [ "${NO_POD_PORT:-}" = 1 ] && { printf '10.42.0.5:\n:\n'; exit 0; }
                 printf '10.42.0.5:8080\n:\n'
                 exit 0
@@ -46,7 +59,9 @@ case "$1" in
     logs)
         [ "${NO_LOG:-}" = 1 ] && exit 1
         targets="$(sed -n 's/^ *value: *//p' "$STUB_DIR/pod.yaml" | head -1 | tr -d '"')"
-        NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "$NETCHECK_DIR/network-check.sh" probe
+        proxy="$(awk '/name: NETCHECK_PROXY/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        offlist="$(awk '/name: NETCHECK_OFFLIST/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "$NETCHECK_DIR/network-check.sh" probe
         exit 0
         ;;
 esac
@@ -56,16 +71,16 @@ STUB
 }
 
 netcheck_dir() {
-    local dir="$WORK/netcheckdir"
+    local source="${1:-ex_yaml}" dir="$WORK/netcheckdir-${1:-ex_yaml}"
     mkdir -p "$dir"
-    yq -r 'select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-netcheck" and .metadata.namespace == "sbx-system") | .data | to_entries | .[] | .key' "$WORK/ex_yaml.yaml" | while read -r key; do
-        yq -r "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-netcheck\" and .metadata.namespace == \"sbx-system\") | .data[\"${key}\"]" "$WORK/ex_yaml.yaml" >"$dir/$key"
+    yq -r 'select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-netcheck" and .metadata.namespace == "sbx-system") | .data | to_entries | .[] | .key' "$WORK/${source}.yaml" | while read -r key; do
+        yq -r "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-netcheck\" and .metadata.namespace == \"sbx-system\") | .data[\"${key}\"]" "$WORK/${source}.yaml" >"$dir/$key"
     done
     printf '%s' "$dir"
 }
 
 run_netcheck() {
-    NETCHECK_DIR="$(netcheck_dir)" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "$CHART/files/network-check.sh" discover
+    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
 }
 
 check_network_check_script_against_stubs() {

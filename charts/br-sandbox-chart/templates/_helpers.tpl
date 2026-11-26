@@ -20,7 +20,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
 {{- $egress = include "br-sandbox-chart.egress.namespace" $name -}}
 {{- end -}}
-{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) -}}
+{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) "credential_set" ($modeValues.credential_set | default dict) "proxy" ($modeValues.proxy | default dict) -}}
 {{- $out = append $out $item -}}
 {{- end -}}
 {{- end -}}

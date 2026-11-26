@@ -35,6 +35,7 @@
 {{- $system := default (printf "%s-system" $prefix) .Values.installation.system_namespace -}}
 {{- $seen := dict $system "system" -}}
 {{- $egressNames := dict -}}
+{{- $ips := dict -}}
 {{- $needsResolvers := false -}}
 {{- range $client, $clientValues := .Values.clients -}}
 {{- if not (hasKey $clientValues "modes") -}}
@@ -68,6 +69,7 @@
 {{- if and $root.Values.egress.enabled (eq $mode "none") (get $modeValues "credential_set" | default dict | len) -}}
 {{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{client=%s,mode=%s}" $client $mode) -}}
 {{- end -}}
+{{- include "br-sandbox-chart.validate.credentials" (dict "client" $client "mode" $mode "values" $modeValues) -}}
 {{- $name := printf "%s-%s-%s" $prefix $client $mode -}}
 {{- if hasKey $seen $name -}}
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}
@@ -86,6 +88,9 @@
 {{- end -}}
 {{- $_ := set $seen $egressName $client -}}
 {{- $_ := set $egressNames $egressName $client -}}
+{{- if $root.Values.egress.enabled -}}
+{{- include "br-sandbox-chart.validate.proxy" (dict "root" $root "client" $client "mode" $mode "values" $modeValues "ips" $ips) -}}
+{{- end -}}
 {{- end -}}
 {{- $pool := mergeOverwrite (deepCopy $root.Values.pool) (deepCopy ($modeValues.pool | default dict)) -}}
 {{- if gt ($pool.floor | int64) ($pool.max_sandboxes | int64) -}}
@@ -99,6 +104,9 @@
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=runner-of-%s,namespace=%s}" (get $egressNames $modeValues.runner.namespace) $client $modeValues.runner.namespace) -}}
 {{- end -}}
 {{- end -}}
+{{- end -}}
+{{- if gt (len $ips) 0 -}}
+{{- include "br-sandbox-chart.validate.proxy_global" $root -}}
 {{- end -}}
 {{- if $needsResolvers -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" "network.public_resolvers") -}}

@@ -78,6 +78,30 @@ egress:
   enabled: false
   proxy:
     port: 8888
+    image:
+      repository: docker.io/ironsh/iron-proxy
+      digest: sha256:973b7adf44a12ded3b58cf67af35a80a8304d82bef0fb943e6467fe4f4020573
+    replicas: 1
+    runAsUser: 65532
+    runAsGroup: 65532
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    reload:
+      listen: 127.0.0.1:9092
+      key_secret: ""
+  ca:
+    mount_path: /etc/br-sandbox-ca
+    env_names:
+      - SSL_CERT_FILE
+      - REQUESTS_CA_BUNDLE
+      - NODE_EXTRA_CA_CERTS
+      - GIT_SSL_CAINFO
+      - CURL_CA_BUNDLE
   quota:
     pods: 4
 keeper:
@@ -98,5 +122,6 @@ keeper:
 network_check:
   enabled: true
   targets: []
+  offlist_host: offlist.invalid
   run_id: ""
   cron: ""
