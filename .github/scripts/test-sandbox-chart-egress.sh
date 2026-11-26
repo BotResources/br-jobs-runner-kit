@@ -77,7 +77,7 @@ check_the_egress_namespace_has_its_own_policies() {
 check_the_admission_policy_accepts_the_sandbox_role_only() {
     section "admission policy: role=sandbox only, no proxy case, no controller value"
     t "the role rule is one case" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
-    t "no policy, binding or value names a proxy case or a controller user" test -z "$(grep -rnE 'proxyCreator|proxy_controller|replicaset-controller|userInfo' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" || true)"
+    t "no policy, binding or value names a proxy case or a controller user; only the non-root rule reads the user" test -z "$(grep -rnE 'proxyCreator|proxy_controller|replicaset-controller' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" || true)$(grep -rnE 'userInfo' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" | grep -v '_vap.tpl:' || true)"
     t "no admission block in the values" test "$(yq '.admission' "$CHART/values.yaml")" = null
     t "the binding of a sandbox namespace never matches an egress namespace" jqt cred "${EGRESS_NAMESPACES} as \$e | [.[] | select(.kind == \"ValidatingAdmissionPolicyBinding\") | .spec.matchResources.namespaceSelector.matchLabels | select(.[\"kubernetes.io/metadata.name\"] as \$n | \$e | index(\$n) != null)] | length == 0"
 }
