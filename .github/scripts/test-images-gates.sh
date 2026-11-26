@@ -33,6 +33,31 @@ mutated_refused "manifest does not need build" "'manifest' does not need the job
 mutated_refused "manifest runs after a failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: always() \&\& inputs.push"
 mutated_refused "manifest runs unless cancelled" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: \${{ !cancelled() \&\& inputs.push }}"
 mutated_refused "manifest runs on failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: failure()"
+condition_refused() {
+  local label="$1" replacement="$2"
+  REPLACEMENT="$replacement" awk '$0 == "    if: inputs.push && needs.plan.outputs.images != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/mutated.yml"
+  if cmp -s "$workflow" "${tmp}/mutated.yml"; then
+    fail "gates: ${label}: the mutation changed nothing"
+  elif bash "$here/images-check-gates.sh" "${tmp}/mutated.yml" >"${tmp}/out" 2>&1; then
+    fail "gates: ${label}: accepted"
+  elif grep -q "'manifest' has a status function" "${tmp}/out"; then
+    pass "gates: ${label}"
+  else
+    fail "gates: ${label}: refused without a status function message: $(cat "${tmp}/out")"
+  fi
+}
+
+condition_refused "manifest condition folded with always()" $'    if: >-\n      inputs.push &&\n      always()'
+condition_refused "manifest condition literal with failure()" $'    if: |\n      inputs.push\n      && failure()'
+condition_refused "manifest condition folded, function on the last line" $'    if: >\n      inputs.push && needs.plan.outputs.images != \'[]\'\n      && !cancelled()'
+condition_refused "manifest condition quoted with always()" '    if: "always()"'
+condition_refused "manifest condition single-quoted with failure()" "    if: 'failure() && inputs.push'"
+condition_refused "manifest condition in an expression with cancelled()" '    if: ${{ cancelled() }}'
+condition_refused "manifest condition on several plain lines with always()" $'    if: inputs.push\n      && always()'
+
+REPLACEMENT=$'    if: >-\n      inputs.push &&\n      needs.plan.outputs.images != \'[]\'' awk '$0 == "    if: inputs.push && needs.plan.outputs.images != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/folded-ok.yml"
+if cmp -s "$workflow" "${tmp}/folded-ok.yml"; then fail "gates: the folded condition without a status function: the mutation changed nothing"; elif bash "$here/images-check-gates.sh" "${tmp}/folded-ok.yml" >"${tmp}/out" 2>&1; then pass "gates: a folded manifest condition without a status function is accepted"; else fail "gates: a folded condition without a status function is refused: $(cat "${tmp}/out")"; fi
+
 mutated_refused "digests does not need manifest" "'digests' does not need the job 'manifest'" "needs: \[plan, manifest\]" "needs: [plan]"
 mutated_refused "a job continues on error" "sets continue-on-error" "fail-fast: false" "continue-on-error: true"
 

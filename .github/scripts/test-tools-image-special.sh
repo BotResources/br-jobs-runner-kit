@@ -33,7 +33,7 @@ fi
 $B $RESTORE_FLAGS -C /data/sp13r </data/sp13.tar 2>/tmp/e2; rc=$?
 eq "restore as root with the 7 capabilities: exit 1 for the device node" "$rc" 1
 has "restore: the message names the device node" "$(cat /tmp/e2)" "work/dev"
-has "restore: the device node is refused for lack of permission" "$(cat /tmp/e2)" "Operation not permitted"
+has "restore: the device node is refused for lack of permission" "$(cat /tmp/e2)" "Can'\''t create '\''work/dev'\'': Operation not permitted"
 eq "restore: the other entries are written" "$(find /data/sp13r -mindepth 1 | LC_ALL=C sort | tr "\n" " ")" "/data/sp13r/work /data/sp13r/work/fifo /data/sp13r/work/plain.txt /data/sp13r/work/sparse "
 eq "restore: the fifo is a fifo" "$([ -p /data/sp13r/work/fifo ] && echo yes)" yes
 eq "restore: the regular file" "$(cat /data/sp13r/work/plain.txt)" plain

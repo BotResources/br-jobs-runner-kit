@@ -48,7 +48,18 @@ def needs_of(body):
     return []
 
 def job_conditions(body):
-    return [line for line in body if re.match(r"^    if:", line)]
+    found = []
+    for index, line in enumerate(body):
+        match = re.match(r"^    if:(.*)$", line)
+        if not match:
+            continue
+        parts = [match.group(1)]
+        for follow in body[index + 1:]:
+            if follow.strip() and not re.match(r"^     ", follow):
+                break
+            parts.append(follow)
+        found.append(" ".join(part.strip() for part in parts if part.strip()))
+    return found
 
 status_function = re.compile(r"\b(always|cancelled|failure|success)\s*\(")
 
