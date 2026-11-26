@@ -1,5 +1,3 @@
-use br_agentic_harness_contract::{FreshReason, StartKind};
-
 const MANIFEST: &str = include_str!("../Cargo.toml");
 const LOCK: &str = include_str!("../../../Cargo.lock");
 
@@ -15,9 +13,22 @@ fn the_crate_depends_on_the_harness_contract_0_2_0() {
 }
 
 #[test]
-fn the_harness_contract_that_the_crate_is_built_with_is_the_0_2_0_one() {
-    let start = StartKind::Fresh(FreshReason::NoSaveEver);
-    assert!(matches!(start, StartKind::Fresh(FreshReason::NoSaveEver)));
+fn the_lock_resolves_the_harness_contract_0_2_0_for_the_crate() {
+    let header = format!(
+        "name = \"{}\"\nversion = \"{}\"\n",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    let package = LOCK
+        .split("[[package]]\n")
+        .find(|package| package.starts_with(&header))
+        .expect("the lock entry of the crate");
+    assert!(
+        package
+            .lines()
+            .any(|line| line == " \"br-agentic-harness-contract 0.2.0\","),
+        "{package}"
+    );
 }
 
 #[test]

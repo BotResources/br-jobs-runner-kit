@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 A crate that names the types of a sibling in its public API must reach that sibling through the same git url and the same tag string, or the types are two copies: the pins above are the ones this crate is built with.
 
-This crate is on `br-agentic-contract` 0.3.0 and `br-agentic-harness-contract` 0.2.0; the crates of the kit that share its types (`br-runner-jobs`, `br-runner-toolkit`, `br-runner-as-tool`) are on the same versions, so that one copy of `ThreadRef` and one copy of the harness contract are in the dependency graph: move this crate together with them.
+This crate is on `br-agentic-contract` 0.3.0 and `br-agentic-harness-contract` 0.2.0. `br-runner-jobs` 0.5.0, this crate and `br-runner-wiring-example` resolve the harness contract 0.2.0 from the same git url and the same tag, and `ThreadRef` comes from `br-agentic-contract` 0.3.0, of which the dependency graph holds one copy: move this crate together with `br-runner-jobs`.
 
 ## Quickstart
 
