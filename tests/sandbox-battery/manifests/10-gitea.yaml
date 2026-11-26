@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${GITEA_SERVICE}
+  namespace: ${NS_TESTSVC}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: ${GITEA_SERVICE}
+          image: ${GITEA_IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - {name: GITEA__server__PROTOCOL, value: https}
+            - {name: GITEA__server__DOMAIN, value: ${GITEA_HOST}}
+            - {name: GITEA__server__ROOT_URL, value: "https://${GITEA_HOST}/"}
+            - {name: GITEA__server__HTTP_ADDR, value: 0.0.0.0}
+            - {name: GITEA__server__HTTP_PORT, value: "3000"}
+            - {name: GITEA__server__CERT_FILE, value: /tls/tls.crt}
+            - {name: GITEA__server__KEY_FILE, value: /tls/tls.key}
+            - {name: GITEA__server__DISABLE_SSH, value: "true"}
+            - {name: GITEA__server__START_SSH_SERVER, value: "false"}
+            - {name: GITEA__server__OFFLINE_MODE, value: "true"}
+            - {name: GITEA__database__DB_TYPE, value: sqlite3}
+            - {name: GITEA__database__PATH, value: /var/lib/gitea/data/gitea.db}
+            - {name: GITEA__security__INSTALL_LOCK, value: "true"}
+            - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
+            - {name: GITEA__service__REQUIRE_SIGNIN_VIEW, value: "true"}
+            - {name: GITEA__service__DEFAULT_KEEP_EMAIL_PRIVATE, value: "true"}
+            - {name: GITEA__picture__DISABLE_GRAVATAR, value: "true"}
+            - {name: GITEA__actions__ENABLED, value: "false"}
+            - {name: GITEA__cron_0X2E_update_checker__ENABLED, value: "false"}
+            - {name: GITEA__repository__DEFAULT_PRIVATE, value: private}
+            - name: GITEA__security__SECRET_KEY
+              valueFrom: {secretKeyRef: {name: gitea-secrets, key: secret-key}}
+            - name: GITEA__security__INTERNAL_TOKEN
+              valueFrom: {secretKeyRef: {name: gitea-secrets, key: internal-token}}
+          readinessProbe:
+            httpGet: {path: /api/healthz, port: 3000, scheme: HTTPS}
+            periodSeconds: 3
+            failureThreshold: 40
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 768Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/gitea}
+            - {name: conf, mountPath: /etc/gitea}
+            - {name: tls, mountPath: /tls, readOnly: true}
+      volumes:
+        - {name: data, emptyDir: {}}
+        - {name: conf, emptyDir: {}}
+        - name: tls
+          secret: {secretName: gitea-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${GITEA_SERVICE}
+  namespace: ${NS_TESTSVC}
+spec:
+  selector:
+    app: gitea
+  ports:
+    - {name: https, port: 443, targetPort: 3000}
