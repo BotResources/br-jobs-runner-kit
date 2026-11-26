@@ -51,6 +51,8 @@ use_closed() {
 
 helm_ctx() { helm --kube-context "$CTX" "$@"; }
 ns_of() { printf '%s-%s-%s\n' "$NS_PREFIX" "$1" "$2"; }
+egress_ns_of() { printf '%s%s\n' "$(ns_of "$1" "$2")" "$EGRESS_SUFFIX"; }
+pool_of() { printf '%s\n' "${1#"$NS_PREFIX"-}"; }
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time()*1000'; }
 new_id() { openssl rand -hex 4; }
 count_lines() { wc -l | tr -d ' '; }
@@ -59,18 +61,16 @@ sx() { local ns=$1 pod=$2; shift 2; k -n "$ns" exec "$pod" -c "$SANDBOX_CONTAINE
 sxi() { local ns=$1 pod=$2; shift 2; k -n "$ns" exec -i "$pod" -c "$SANDBOX_CONTAINER" -- "$@"; }
 
 warm_list() {
-  local sel="$LBL_POOL=warm"
-  if [ -n "${2:-}" ]; then sel="$sel,$LBL_POOL_ID=$2"; fi
-  k -n "$1" get pods -l "$sel" --field-selector status.phase=Running -o json |
+  k -n "$1" get pods -l "$LBL_POOL=warm,$LBL_POOL_ID=$(pool_of "$1")" --field-selector status.phase=Running -o json |
     jq -r '.items[] | select(.metadata.deletionTimestamp == null)
       | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))
       | "\(.metadata.name) \(.metadata.resourceVersion)"'
 }
 
 wait_warm() {
-  local ns=$1 want=$2 limit=$3 pool=${4:-} end
+  local ns=$1 want=$2 limit=$3 end
   end=$(($(date +%s) + limit))
-  while [ "$(warm_list "$ns" "$pool" | count_lines)" -lt "$want" ]; do
+  while [ "$(warm_list "$ns" | count_lines)" -lt "$want" ]; do
     if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
     sleep 1
   done
@@ -88,7 +88,7 @@ claim() {
       echo "$name"
       return 0
     fi
-  done < <(warm_list "$ns" "${4:-}")
+  done < <(warm_list "$ns")
   return 1
 }
 
@@ -169,9 +169,34 @@ set_secret() {
   printf '%s' "$4" | k -n "$1" create secret generic "$2" --from-file="$3=/dev/stdin" --dry-run=client -o yaml | k apply -f - > /dev/null
 }
 
+proxy_pods() {
+  k -n "$(egress_ns_of "$1" "$2")" get pods -l "$LBL_ROLE=$ROLE_PROXY" --field-selector status.phase=Running \
+    -o jsonpath='{.items[*].status.podIP}' 2> /dev/null
+}
+
+proxy_endpoint() {
+  local ip
+  ip=$(proxy_pods "$1" "$2" | cut -d' ' -f1)
+  if [ -n "$ip" ]; then printf '%s:%s\n' "$ip" "$PROXY_PORT"; fi
+}
+
+need_proxy() {
+  if [ -n "$(proxy_pods "$2" "$3")" ]; then
+    check "$1-proxy-present" pass "running pod with $LBL_ROLE=$ROLE_PROXY in $(egress_ns_of "$2" "$3")"
+  else
+    check "$1-proxy-present" fail "no running pod with $LBL_ROLE=$ROLE_PROXY in $(egress_ns_of "$2" "$3"); the checks that need a proxy are skipped"
+    return 1
+  fi
+}
+
 proxy_restart() {
-  k -n "$1" rollout restart "deploy/${PROXY_DEPLOY_PREFIX}$2" > /dev/null &&
-    k -n "$1" rollout status "deploy/${PROXY_DEPLOY_PREFIX}$2" --timeout=180s > /dev/null
+  local end
+  k -n "$1" delete pod -l "$LBL_ROLE=$ROLE_PROXY" --wait=true > /dev/null || return 1
+  end=$(($(date +%s) + 180))
+  until k -n "$1" wait --for=condition=Ready pod -l "$LBL_ROLE=$ROLE_PROXY" --timeout=5s > /dev/null 2>&1; do
+    if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
+    sleep 2
+  done
 }
 
 probe() {
@@ -183,8 +208,6 @@ probe_ctl() {
   local ns=$1 pod=$2 mode=$3 input=$4
   k -n "$ns" exec -i "$pod" -- env "PROBE_INPUT=$input" "$SANDBOX_PYTHON" - "$mode" < "$SCEN_DIR/probe.py"
 }
-
-proxy_hostport() { sx "$1" "$2" printenv HTTPS_PROXY | sed -e 's|^[a-z]*://||' -e 's|/$||'; }
 
 s3_via_toolbox() {
   k -n "$NS_TOOLS" exec -i "$TOOLBOX_POD" -- curl -sS --fail --aws-sigv4 "aws:amz:${S3_REGION:-us-east-1}:s3" \
@@ -207,11 +230,50 @@ keeper_resume() {
   if [ -n "${KEEPER_REPLICAS:-}" ]; then k -n "$KEEPER_NS" scale deploy "$KEEPER_DEPLOY" --replicas="$KEEPER_REPLICAS" > /dev/null; fi
 }
 
-pool_rs() { printf '%s%s\n' "$RS_PREFIX" "$1"; }
+pool_rs() { printf '%s%s\n' "$RS_PREFIX" "$(pool_of "$1")"; }
 
-set_pool_replicas() { k -n "$1" scale rs "$(pool_rs "$2")" --replicas="$3" > /dev/null; }
+set_pool_replicas() { k -n "$1" scale rs "$(pool_rs "$1")" --replicas="$2" > /dev/null; }
 
-pool_replicas() { k -n "$1" get rs "$(pool_rs "$2")" -o jsonpath='{.spec.replicas}'; }
+pool_replicas() { k -n "$1" get rs "$(pool_rs "$1")" -o jsonpath='{.spec.replicas}'; }
+
+chart_namespaces() {
+  { k get ns -l "$LBL_MANAGED=true" -o json; k get ns -l "$LBL_EGRESS=true" -o json; } | jq -s -c '[.[].items[].metadata.name]'
+}
+
+ns_label() { k get ns "$1" -o json | jq -r --arg label "$2" '.metadata.labels[$label] // ""'; }
+
+pod_template() {
+  local name
+  name=$(warm_list "$1" | head -1 | cut -d' ' -f1)
+  k -n "$1" get pod "$name" -o json | jq -c '
+    del(.status, .metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.ownerReferences,
+        .metadata.generateName, .metadata.managedFields, .metadata.namespace, .spec.nodeName)'
+}
+
+variant() {
+  jq -c --arg role "$LBL_ROLE" --arg seed "$SEED_CONTAINER" --arg agent "$SANDBOX_CONTAINER" --arg name "adm-$(new_id)" "$2 | .metadata.name = \$name" <<< "$1"
+}
+
+as_id() {
+  local who=$1 ns=$2
+  shift 2
+  k --as="$who" -n "$ns" "$@"
+}
+
+accepted() { "$@" > /dev/null 2>&1; }
+
+refused_with() {
+  local code=$1 out
+  shift
+  out=$("$@" 2>&1) && return 1
+  printf '%s\n' "$out" | grep -q -E "BR_SANDBOX_${code}([^A-Z_]|$)"
+}
+
+refused_forbidden() {
+  local out
+  out=$("$@" 2>&1) && return 1
+  printf '%s\n' "$out" | grep -q -i 'forbidden'
+}
 
 tree_hash() {
   sx "$1" "$2" sh -c "cd $3 && find . -type f -exec md5sum {} + | sort | md5sum | cut -d' ' -f1"

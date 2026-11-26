@@ -2,7 +2,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 
-UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s10-proxy-canary s11-platform s12-closed-cluster"
+UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s10-proxy-canary s11-platform s12-closed-cluster"
 TIMED="m-restore-stalls m-netpol-delay m-coldstart m-scale-down m-burst"
 
 mkdir -p "$BATTERY_OUT"

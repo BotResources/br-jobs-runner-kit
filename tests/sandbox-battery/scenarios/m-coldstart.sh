@@ -5,8 +5,8 @@ scenario_begin m-coldstart
 
 reps=${COLD_REPS:-10}
 ns=$(ns_of "$CLIENT_A" "$NET_NONE")
-wait_warm "$ns" 1 120 "$POOL_ID_DEFAULT" || { check m-coldstart-warm fail "no warm pod in $ns to copy the template from"; scenario_end; }
-warm_name=$(warm_list "$ns" "$POOL_ID_DEFAULT" | head -1 | cut -d' ' -f1)
+wait_warm "$ns" 1 120 || { check m-coldstart-warm fail "no warm pod in $ns to copy the template from"; scenario_end; }
+warm_name=$(warm_list "$ns" | head -1 | cut -d' ' -f1)
 template=$(k -n "$ns" get pod "$warm_name" -o json)
 big_image=$(pod_image "$ns" "$warm_name")
 tools_image=$(jq -r '.spec.initContainers[0].image' <<< "$template")

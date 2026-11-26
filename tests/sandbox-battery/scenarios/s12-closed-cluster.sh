@@ -30,11 +30,10 @@ token_hits=$(grep -c -E "$VENDOR_TOKEN_REGEX" "$rendered_file")
 verdict closed-cluster-no-control-plane-token "$token_hits mentions of the vendor control-plane token" test "$token_hits" = 0
 
 use_closed
-cleanup_extra() { keeper_resume; set_pool_replicas "$ns" "$POOL_ID_DEFAULT" "$original_replicas" 2> /dev/null; }
+cleanup_extra() { keeper_resume; set_pool_replicas "$ns" "$original_replicas" 2> /dev/null; }
 
 k get nodes > /dev/null 2>&1 || { check closed-cluster-closed-cluster fail "cluster $CTX_CLOSED not reachable"; scenario_end; }
 install_on_closed() {
-  k create namespace "$HELM_NAMESPACE" > /dev/null 2>&1
   if [ "$KC_VIA_NODE" = 1 ]; then
     helm template "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" -f "$CLOSED_VALUES_FILE" \
       --set "$VALUES_REGISTRY_MIRROR=$CLOSED_MIRROR_HOST" --set-json "$VALUES_PULL_SECRETS=[\"$CLOSED_PULL_SECRET\"]" | k apply -f - > /dev/null
@@ -49,22 +48,22 @@ check closed-cluster-closed-install pass "chart installed on $CTX_CLOSED through
 
 ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
 full_ns=$(ns_of "$CLIENT_A" "$NET_FULL")
-original_replicas=$(pool_replicas "$ns" "$POOL_ID_DEFAULT")
-wait_warm "$ns" 1 300 "$POOL_ID_DEFAULT" || { check closed-cluster-warm-pod fail "no warm pod in $ns"; scenario_end; }
-wait_warm "$full_ns" 1 300 "$POOL_ID_DEFAULT" || { check closed-cluster-warm-pod-full fail "no warm pod in $full_ns"; scenario_end; }
+original_replicas=$(pool_replicas "$ns")
+wait_warm "$ns" 1 300 || { check closed-cluster-warm-pod fail "no warm pod in $ns"; scenario_end; }
+wait_warm "$full_ns" 1 300 || { check closed-cluster-warm-pod-full fail "no warm pod in $full_ns"; scenario_end; }
 
-outside_mirror=$(k get pods -A -o json | jq -r --arg ns "$HELM_NAMESPACE" --arg mirror "$CLOSED_MIRROR_HOST/" --argjson managed "$(k get ns -l "$LBL_MANAGED=true" -o json | jq -c '[.items[].metadata.name]')" '
+outside_mirror=$(k get pods -A -o json | jq -r --arg ns "$SYSTEM_NS" --arg mirror "$CLOSED_MIRROR_HOST/" --argjson managed "$(chart_namespaces)" '
   .items[] | select(.metadata.namespace as $n | $n == $ns or ($managed | index($n)))
   | .spec.containers[], (.spec.initContainers[]?) | .image | select(startswith($mirror) | not)' | count_lines)
 verdict closed-cluster-running-images-via-mirror "$outside_mirror running images outside the mirror" test "$outside_mirror" = 0
 
-claim_to internet_pod "$full_ns" "closed-cluster-$(new_id)" agent-a "$POOL_ID_DEFAULT"
+claim_to internet_pod "$full_ns" "closed-cluster-$(new_id)" agent-a
 routed=$(probe "$full_ns" "$internet_pod" tcp '[{"host":"1.1.1.1","port":443},{"host":"8.8.8.8","port":443}]' | jq -s '[.[] | select(.open)] | length')
 verdict closed-cluster-no-route-to-internet "$routed public targets reached from a mode full sandbox" test "$routed" = 0
 
 thread="closed-cluster-$(new_id)"
 started=$(now_ms)
-claim_to pod "$ns" "$thread" agent-a "$POOL_ID_DEFAULT"
+claim_to pod "$ns" "$thread" agent-a
 sx "$ns" "$pod" true
 record closed-cluster-open-ms "$(($(now_ms) - started))" ms
 sx "$ns" "$pod" sh -c 'mkdir -p /work/tree && i=0 && while [ $i -lt 200 ]; do echo "data-$i" > "/work/tree/f$i"; i=$((i + 1)); done && head -c 5000000 /dev/urandom > /work/tree/big.bin'
@@ -76,7 +75,7 @@ verdict closed-cluster-save "state tar uploaded to the store" s3_put "closed-clu
 release_pod "$ns" "$pod"
 k -n "$ns" wait --for=delete "pod/$pod" --timeout=60s > /dev/null 2>&1
 
-claim_to restored "$ns" "$thread" agent-a "$POOL_ID_DEFAULT"
+claim_to restored "$ns" "$thread" agent-a
 s3_get "closed-cluster/$thread/state.tar" "$state_file"
 sxi "$ns" "$restored" "$AGENT_BSDTAR" -x -p --numeric-owner -f - -C /work < "$state_file"
 after=$(tree_hash "$ns" "$restored" /work/tree)
@@ -84,17 +83,19 @@ verdict closed-cluster-restore "tree hash before $before, after $after" test "$b
 s3_delete "closed-cluster/$thread/state.tar" > /dev/null
 rm -f "$state_file"
 
-proxy=$(proxy_hostport "$ns" "$restored")
-statuses=$(probe "$ns" "$restored" connect "[{\"proxy\":\"$proxy\",\"target\":\"$TEST_HOST_GIT:443\"},{\"proxy\":\"$proxy\",\"target\":\"example.com:443\"}]" | jq -r '.status' | tr '\n' ' ')
-verdict closed-cluster-allow-mode "listed site and unlisted site answer: $statuses" test "$statuses" = "200 403 "
-
-vendor_log_hits=$(k -n "$ns" logs -l "$LBL_ROLE=$ROLE_PROXY" --tail=-1 | grep -c -i -E "$VENDOR_HOST_REGEX")
-verdict closed-cluster-proxy-no-vendor-call "$vendor_log_hits vendor hosts in the proxy logs" test "$vendor_log_hits" = 0
-token_env=$(k -n "$ns" get deploy -o json | jq '[.items[].spec.template.spec.containers[].env[]?.name | select(test("IRON_PROXY_TOKEN"))] | length')
-verdict closed-cluster-proxy-token-unset "$token_env proxy Deployments set the control-plane token" test "$token_env" = 0
+if need_proxy closed-cluster "$CLIENT_A" "$NET_ALLOW"; then
+  eg=$(egress_ns_of "$CLIENT_A" "$NET_ALLOW")
+  proxy=$(proxy_endpoint "$CLIENT_A" "$NET_ALLOW")
+  statuses=$(probe "$ns" "$restored" connect "[{\"proxy\":\"$proxy\",\"target\":\"$TEST_HOST_GIT:443\"},{\"proxy\":\"$proxy\",\"target\":\"example.com:443\"}]" | jq -r '.status' | tr '\n' ' ')
+  verdict closed-cluster-allow-mode "listed site and unlisted site answer: $statuses" test "$statuses" = "200 403 "
+  vendor_log_hits=$(k -n "$eg" logs -l "$LBL_ROLE=$ROLE_PROXY" --tail=-1 | grep -c -i -E "$VENDOR_HOST_REGEX")
+  verdict closed-cluster-proxy-no-vendor-call "$vendor_log_hits vendor hosts in the proxy logs" test "$vendor_log_hits" = 0
+  token_env=$(k -n "$eg" get deploy -o json | jq '[.items[].spec.template.spec.containers[].env[]?.name | select(test("IRON_PROXY_TOKEN"))] | length')
+  verdict closed-cluster-proxy-token-unset "$token_env proxy Deployments set the control-plane token" test "$token_env" = 0
+fi
 
 keeper_pause
-set_pool_replicas "$ns" "$POOL_ID_DEFAULT" $((original_replicas + 2))
-verdict closed-cluster-scale "pool grows by two warm pods" wait_warm "$ns" $((original_replicas + 2)) 180 "$POOL_ID_DEFAULT"
+set_pool_replicas "$ns" $((original_replicas + 2))
+verdict closed-cluster-scale "pool grows by two warm pods" wait_warm "$ns" $((original_replicas + 2)) 180
 
 scenario_end

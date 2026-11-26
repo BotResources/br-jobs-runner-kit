@@ -4,14 +4,13 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin m-burst
 
 ns=$(ns_of "$CLIENT_A" "$NET_NONE")
-pool=$POOL_ID_DEFAULT
 sizes=${BURST_SIZES:-"5 10 20 40"}
 original_replicas=
 largest_held=0
 largest_passing=0
 
 cleanup_extra() {
-  if [ -n "$original_replicas" ]; then set_pool_replicas "$ns" "$pool" "$original_replicas"; fi
+  if [ -n "$original_replicas" ]; then set_pool_replicas "$ns" "$original_replicas"; fi
   keeper_resume
 }
 
@@ -28,17 +27,17 @@ burst() {
   while read -r name rv; do
     index=$((index + 1))
     one_claim "$name" "$rv" "$thread" "$index" "$report" &
-  done < <(warm_list "$ns" "$pool" | head -n "$size")
+  done < <(warm_list "$ns" | head -n "$size")
   wait
 }
 
 lock_timed
 keeper_pause
-original_replicas=$(pool_replicas "$ns" "$pool")
+original_replicas=$(pool_replicas "$ns")
 
 for size in $sizes; do
-  set_pool_replicas "$ns" "$pool" "$size"
-  if ! wait_warm "$ns" "$size" 240 "$pool"; then
+  set_pool_replicas "$ns" "$size"
+  if ! wait_warm "$ns" "$size" 240; then
     record "m-burst-$size-held" 0 "not held: fewer than $size warm pods after 240 s"
     break
   fi
@@ -55,7 +54,7 @@ for size in $sizes; do
   record "m-burst-$size-slowest" "$(awk '{print $2}' "$report" | max_of)" ms
   refill_started=$(now_ms)
   k -n "$ns" delete pod -l "$LBL_THREAD=$thread" --wait=false --grace-period=1 > /dev/null 2>&1
-  if wait_warm "$ns" "$size" 240 "$pool"; then record "m-burst-$size-refill" "$(($(now_ms) - refill_started))" ms; fi
+  if wait_warm "$ns" "$size" 240; then record "m-burst-$size-refill" "$(($(now_ms) - refill_started))" ms; fi
   if [ "$answered" = "$size" ] && [ $((within * 100)) -ge $((size * 95)) ]; then
     largest_passing=$size
     record "m-burst-$size-passed" 1 "$within of $size within 500 ms"

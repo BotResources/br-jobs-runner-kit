@@ -86,19 +86,21 @@ for name in open_from_start open_from_return close_from_start close_from_return;
 done
 
 ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
-wait_warm "$ns" "$reps" 180 "$POOL_ID_DEFAULT" || check m-netpol-claim-warm fail "fewer than $reps warm pods in $ns"
 failures=0
-while read -r name rv && [ "$reps" -gt 0 ]; do
-  proxy=$(proxy_hostport "$ns" "$name")
-  stream_to_file "$ns" "$name" "${proxy%:*}" "${proxy#*:}" 5
-  sleep 2
-  claim_one "$ns" "$name" "$rv" "gap-$(new_id)" agent-a
-  wait "$STREAM_PID" 2> /dev/null
-  failures=$((failures + $(awk '$2 == 0' "$stream" | count_lines)))
-  track_pod "$ns" "$name"
-  reps=$((reps - 1))
-done < <(warm_list "$ns" "$POOL_ID_DEFAULT")
-record m-netpol-claim-proxy-probe-failures "$failures" "failed probes at 20 ms across the claims"
-check m-netpol-delay-ran pass "gate delays and claim gap recorded"
+if need_proxy m-netpol "$CLIENT_A" "$NET_ALLOW"; then
+  wait_warm "$ns" "$reps" 180 || check m-netpol-claim-warm fail "fewer than $reps warm pods in $ns"
+  while read -r name rv && [ "$reps" -gt 0 ]; do
+    proxy=$(proxy_endpoint "$CLIENT_A" "$NET_ALLOW")
+    stream_to_file "$ns" "$name" "${proxy%:*}" "${proxy#*:}" 5
+    sleep 2
+    claim_one "$ns" "$name" "$rv" "gap-$(new_id)" agent-a
+    wait "$STREAM_PID" 2> /dev/null
+    failures=$((failures + $(awk '$2 == 0' "$stream" | count_lines)))
+    track_pod "$ns" "$name"
+    reps=$((reps - 1))
+  done < <(warm_list "$ns")
+  record m-netpol-claim-proxy-probe-failures "$failures" "failed probes at 20 ms across the claims"
+  check m-netpol-delay-ran pass "gate delays and claim gap recorded"
+fi
 
 scenario_end

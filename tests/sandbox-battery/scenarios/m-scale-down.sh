@@ -4,13 +4,12 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin m-scale-down
 
 ns=$(ns_of "$CLIENT_A" "$NET_NONE")
-pool=$POOL_ID_DEFAULT
 turn_seconds=${TURN_SECONDS:-25}
 out="$BATTERY_OUT/scale-down-$(new_id)"
 original_replicas=
 
 cleanup_extra() {
-  if [ -n "$original_replicas" ]; then set_pool_replicas "$ns" "$pool" "$original_replicas"; fi
+  if [ -n "$original_replicas" ]; then set_pool_replicas "$ns" "$original_replicas"; fi
   keeper_resume
 }
 
@@ -19,19 +18,19 @@ run_turn() {
 }
 
 keeper_pause
-original_replicas=$(pool_replicas "$ns" "$pool")
-set_pool_replicas "$ns" "$pool" 3
-wait_warm "$ns" 3 180 "$pool" || { check scale-down-warm-pods fail "fewer than three warm pods in $ns"; scenario_end; }
-claim_to pod_zero "$ns" "scale-down-$(new_id)" agent-a "$pool"
-claim_to pod_five "$ns" "scale-down-$(new_id)" agent-b "$pool"
+original_replicas=$(pool_replicas "$ns")
+set_pool_replicas "$ns" 3
+wait_warm "$ns" 3 180 || { check scale-down-warm-pods fail "fewer than three warm pods in $ns"; scenario_end; }
+claim_to pod_zero "$ns" "scale-down-$(new_id)" agent-a
+claim_to pod_five "$ns" "scale-down-$(new_id)" agent-b
 
 run_turn "$pod_zero" 0
 run_turn "$pod_five" 5
 sleep 3
-set_pool_replicas "$ns" "$pool" 0
+set_pool_replicas "$ns" 0
 sleep 5
 
-warm_now=$(warm_list "$ns" "$pool" | count_lines)
+warm_now=$(warm_list "$ns" | count_lines)
 verdict scale-down-warm-pods-removed "warm pods after the scale to 0: $warm_now" test "$warm_now" = 0
 for pod in "$pod_zero" "$pod_five"; do
   verdict "scale-down-claimed-pod-running-$pod" "phase during the scale-down" \

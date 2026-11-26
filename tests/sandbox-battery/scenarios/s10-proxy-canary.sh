@@ -3,7 +3,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 scenario_begin s10-proxy-canary
 
-ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
+ns=$(ns_of "$CLIENT_CANARY" "$NET_ALLOW")
+eg=$(egress_ns_of "$CLIENT_CANARY" "$NET_ALLOW")
 canary="brcanary-$(openssl rand -hex 16)"
 echo_name="canary-echo"
 CAPTURE_NAME=
@@ -99,17 +100,20 @@ scan_pcap() { SCAN_CANARY=$canary SCAN_KEYLINE="PRIVATE KEY-----" python3 "$HERE
 field_sum() { awk -v field="$1" '{for (i = 1; i <= NF; i++) if ($i ~ "^" field "=") {split($i, a, "="); sum += a[2]}} END {print sum + 0}'; }
 
 start_echo_endpoint || { check canary-echo-endpoint fail "echo endpoint did not start"; scenario_end; }
-set_secret "$ns" "$CANARY_SECRET_NAME" "$CANARY_SECRET_KEY" "$canary"
-proxy_restart "$ns" "$CANARY_SET" || { check canary-proxy-restart fail "proxy of set $CANARY_SET did not roll out"; scenario_end; }
+set_secret "$eg" "$CANARY_SECRET_NAME" "$CANARY_SECRET_KEY" "$canary"
+need_proxy canary "$CLIENT_CANARY" "$NET_ALLOW" || scenario_end
+proxy_restart "$eg" || { check canary-proxy-restart fail "proxy pods of $eg did not come back Ready"; scenario_end; }
 
-wait_warm "$ns" 1 180 "$POOL_ID_CANARY" || { check canary-warm-pod fail "no warm pod of pool $POOL_ID_CANARY in $ns"; scenario_end; }
-claim_to pod "$ns" "canary-$(new_id)" agent-a "$POOL_ID_CANARY" || { check canary-claim fail "claim refused"; scenario_end; }
+wait_warm "$ns" 1 180 || { check canary-warm-pod fail "no warm pod in $ns"; scenario_end; }
+claim_to pod "$ns" "canary-$(new_id)" agent-a || { check canary-claim fail "claim refused"; scenario_end; }
 sxi "$ns" "$pod" sh -c 'cat > /tmp/canary-call.py' < "$HERE/canary-call.py"
 
+verdict canary-secret-not-in-sandbox-namespace "Secret $CANARY_SECRET_NAME is in $eg and not in $ns" \
+  test -z "$(k -n "$ns" get secret "$CANARY_SECRET_NAME" -o name 2> /dev/null)" -a -n "$(k -n "$eg" get secret "$CANARY_SECRET_NAME" -o name)"
 verdict canary-sandbox-holds-placeholder-only "env $CANARY_PLACEHOLDER_ENV is not the canary" \
   test "$(sx "$ns" "$pod" printenv "$CANARY_PLACEHOLDER_ENV")" != "$canary"
 
-proxy=$(proxy_hostport "$ns" "$pod")
+proxy=$(proxy_endpoint "$CLIENT_CANARY" "$NET_ALLOW")
 denied=$(probe "$ns" "$pod" connect "[{\"proxy\":\"$proxy\",\"target\":\"example.com:443\"}]" | jq -r '.status')
 verdict canary-proxy-obeys-allow-mode "CONNECT to an unlisted name answers $denied" test "$denied" = 403
 
@@ -136,7 +140,7 @@ printf '%s\n' "$scan_report"
 pcap_report=$(scan_pcap "$BATTERY_OUT/canary-phase2.pcap")
 echo_hits=$(printf '%s\n' "$scan_report" "$pcap_report" | field_sum value_hits)
 record canary-echo-hits "$echo_hits" hits
-check canary-echo-not-met fail "remote service sends the value back: $echo_hits hits in the sandbox; not met, measured"
+check canary-echo-not-met fail "the proxy has no response scrub; the remote service sends the value back: $echo_hits hits in the sandbox; not met, measured"
 holder_stop
 
 sx "$ns" "$pod" sh -c "echo $canary > /tmp/canary-planted"

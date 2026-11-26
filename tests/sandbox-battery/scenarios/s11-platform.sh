@@ -3,16 +3,18 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 scenario_begin s11-platform
 
-ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
+ns=$(ns_of "$CLIENT_PLATFORM" "$NET_ALLOW")
+eg=$(egress_ns_of "$CLIENT_PLATFORM" "$NET_ALLOW")
 branch="battery-$(new_id)"
 
 if [ -z "${GIT_TOKEN:-}" ]; then check platform-creds fail "creds.env has no GIT_TOKEN"; scenario_end; fi
-set_secret "$ns" "$PLATFORM_SECRET_NAME" "$PLATFORM_GIT_SECRET_KEY" "$GIT_TOKEN"
-k -n "$ns" patch secret "$PLATFORM_SECRET_NAME" --type merge -p "{\"data\":{\"$PLATFORM_PKG_SECRET_KEY\":\"$(printf '%s' "$PKG_TOKEN" | base64 | tr -d '\n')\"}}" > /dev/null
-proxy_restart "$ns" "$PLATFORM_SET" || { check platform-proxy-restart fail "proxy of set $PLATFORM_SET did not roll out"; scenario_end; }
+set_secret "$eg" "$PLATFORM_SECRET_NAME" "$PLATFORM_GIT_SECRET_KEY" "$GIT_TOKEN"
+k -n "$eg" patch secret "$PLATFORM_SECRET_NAME" --type merge -p "{\"data\":{\"$PLATFORM_PKG_SECRET_KEY\":\"$(printf '%s' "$PKG_TOKEN" | base64 | tr -d '\n')\"}}" > /dev/null
+need_proxy platform "$CLIENT_PLATFORM" "$NET_ALLOW" || scenario_end
+proxy_restart "$eg" || { check platform-proxy-restart fail "proxy pods of $eg did not come back Ready"; scenario_end; }
 
-wait_warm "$ns" 1 180 "$POOL_ID_PLATFORM" || { check platform-warm-pod fail "no warm pod of pool $POOL_ID_PLATFORM in $ns"; scenario_end; }
-claim_to pod "$ns" "platform-$(new_id)" agent-a "$POOL_ID_PLATFORM" || { check platform-claim fail "claim refused"; scenario_end; }
+wait_warm "$ns" 1 180 || { check platform-warm-pod fail "no warm pod in $ns"; scenario_end; }
+claim_to pod "$ns" "platform-$(new_id)" agent-a || { check platform-claim fail "claim refused"; scenario_end; }
 
 flow_log=$(with_timeout 1500 sxi "$ns" "$pod" env \
   "GIT_HOST=$TEST_HOST_GIT" "PKG_HOST=$TEST_HOST_PKG" "REPO=$PLATFORM_REPO" "BRANCH=$branch" \

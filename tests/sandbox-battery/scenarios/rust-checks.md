@@ -8,7 +8,7 @@ Common rules for all tests below:
 - The start time runs from the call of `open` to the moment when the first `run` of `true` returns exit code 0.
 - `save`, `restore`, `read`, `write` and `list` execs run as the non-root agent user, not as root. The extract uses `bsdtar --same-owner --numeric-owner -p`. A non-root user cannot `chown` to another user id, so the files of a restored tree have the user id and group id of the agent. Every test below creates its files as the agent user; where a check names user ids (tree equal after restore), the tree uses the agent ids only. Write this limit in the evidence.
 - Seeds, states and trees are made from a fixed seed of a pseudo-random generator, so a failed run can be repeated with the same bytes.
-- Names of the store keys, of the labels and of the chart values come from the README of the chart and `names-chart.env`.
+- Names of the store keys, of the labels and of the chart values come from the README of the chart and `names-chart.env`. Chart facts the checks rely on: one pool for each (client, mode), pool id `{client}-{mode}`, ReplicaSet `warm-{client}-{mode}`; containers `agent` and `seed`, init container `tools-init`; the seed is written into the container `seed` at `/skills` with `/sbx/bin/bsdtar`; the keeper is the only writer of the replica count and reads `pool.floor`, the chart applies no floor; the keeper reads `warm_max_age_seconds`; the proxy pods and the credential Secret are in the egress namespace `{sandbox namespace}-egress`, where no identity of the chart has a right.
 
 ## Fresh start and restored start (with seed copy-in)
 
@@ -19,7 +19,7 @@ Data to prepare:
 - Stress seed: 500 files, 50 MB (stress run).
 - States of 10, 30, 50 and 100 MB: a turn that writes one random file of the size plus 50 files of 1 KB under `/work`, then `save`. Save each state once, keep its turn id.
 
-Given: warm floor at least 3 for the pool; `idle_ttl` as the chart default; seed S in the request.
+Given: warm floor at least 3 for the pool (`pool.floor`, set for the namespace in `clients.<client>.modes.<mode>.pool`; the keeper applies it); `idle_ttl` as the chart default; seed S in the request.
 When (fresh): 20 times in a row, `open` with `parent = None` and seed S, `run true`, `release` (no save), wait until the warm count is back to its floor.
 Then (fresh): record median, p95 and slowest in ms. Pass: at least 19 of 20 within 500 ms. An earlier prototype gave 155 ms median, 196 ms slowest.
 When (stress seed): the same 20 times with the stress seed. Record the numbers. No pass limit (the check says "limit reported, not 500 ms").
@@ -51,7 +51,7 @@ Pass: all three cases give the last successful save and H1 (case 3b: the turn of
 
 Check text: each save is a whole independent image; test with x = 60 s: the store deletes the object, no runner call; restore of save 3 after save 1 is deleted gives the full file system; x of 0 or less is rejected.
 
-Given: chart value for x set to 60 (one value, rendered to the keeper and the adapter); the test process stops after the saves (no adapter call after that).
+Given: chart value `save.ttl_seconds` set to 60 (one value, rendered to the keeper and the adapter); the test process stops after the saves (no adapter call after that).
 When: save turns k1, k2, k3 in sequence; k1 writes `/work/only-in-1`, k2 writes `/work/only-in-2`, k3 writes `/work/only-in-3`; tree hashes H1, H2, H3. Wait. Poll the store every 5 s.
 Then: the manifest and the parts of k1 are gone within `x + skew_margin + sweep_interval` (default 60 + 60 + 60 s); record the real delay; a tombstone exists for k1. A restore of k3 after the deletion of k1 gives hash H3 and all three marker files (so k3 is a whole image, not a delta). Record the object sizes of k1, k2, k3 (a delta would be smaller).
 When: stop the keeper (scale to 0) and wait past x for k2. Then: `open` with `parent = k2` returns `Fresh(SaveExpired{..})` (read-side expiry); the store may still hold the object.
@@ -98,7 +98,7 @@ Scenarios (each one is one test; the result is compared with the enum value, not
 5. `RestoreFailed{turn}`: overwrite one part with random bytes; `open` gives `Fresh(RestoreFailed{turn})` and the pod is deleted. Also with one part deleted.
 6. `StoreUnavailable`: stop the store container; `open` with a parent gives `Ok(Fresh(StoreUnavailable))`, not `Err`; the tests of the missing-save check still pass after the store is back.
 7. Rollback: `parent = k1` gives `Restored{k1}` (see "Go back with `parent`"). Thread delete: `erase_thread(client, thread)` then `open` with the parent gives `Fresh(NoSaveEver)`; the prefixes `saves/`, `records/` and `tombstones/` of the thread are empty.
-8. Record lifetime: with the keeper configured for a short tombstone lifetime (a value in seconds in the test configuration; if the chart has days only, state "not tested" and name the value), a save that expired earlier than the lifetime gives `SaveExpired`, and after the lifetime gives `NoSaveEver`.
+8. Record lifetime: with the keeper configured for a short tombstone lifetime (the chart has `save.tombstone_ttl_days`, days only, so this case is "not tested" through the chart; name the value), a save that expired earlier than the lifetime gives `SaveExpired`, and after the lifetime gives `NoSaveEver`.
 Then: the five results `NoSaveEver`, `SaveExpired`, `SaveFailed`, `RestoreFailed`, `StoreUnavailable` are pairwise different values. Pass: each scenario returns its own value.
 
 ## The images
@@ -111,7 +111,7 @@ Then: both runs pass; the diff of the repo and of the program between the two ru
 
 ### New push under the same tag
 
-Given: a local registry that the node can pull from (the set-up does not make one: the test set-up adds it, or the test starts the registry container on the Docker network of the cluster); image `reg/test:moving` v1 with the file `/etc/image-version` = 1; chart value `image` = that tag; `warm_max_age_seconds` set to 120 for the test (`names-chart.env`: `WARM_MAX_AGE_VALUE_KEY`); `imagePullPolicy: Always`.
+Given: a local registry that the node can pull from (the set-up does not make one: the test set-up adds it, or the test starts the registry container on the Docker network of the cluster); image `reg/test:moving` v1 with the file `/etc/image-version` = 1; chart value `image` = that tag; `warm_max_age_seconds` set to 120 for the test (`names-chart.env`: `WARM_MAX_AGE_VALUE_KEY`; the chart default is 1800); `imagePullPolicy: Always`.
 When: confirm `read /etc/image-version` is 1 from a new box; push v2 (same tag, content 2); note the push time. Every 5 s open a box, read the file, release.
 Then: the first box that reads 2 comes within `warm_max_age_seconds` of the push time. Pass: delay at most the value (record the delay and the value). Also check that a warm pod is used one time only (a claimed pod never goes back to the pool) and that the image id of the new warm pods differs from the old one.
 
@@ -135,4 +135,4 @@ Then: all cases pass unchanged. A case that cannot run against a real sandbox (i
 
 ## Full flow through the adapter (second pass)
 
-The script `s12-closed-cluster.sh` proves the flow on the closed cluster with `kubectl` and `bsdtar`. When the adapter exists, run the same flow once through the adapter on `sbx-build-closed`: `open`, `run`, `save`, `release`, `open` with the parent (restore), a call in mode `allow` through the proxy, a scale of the pool. Pass: every step passes with no route to the internet; the proxy logs hold no vendor host.
+The script `s12-closed-cluster.sh` proves the flow on the closed cluster with `kubectl` and `bsdtar`. When the adapter exists, run the same flow once through the adapter on `sbx-build-closed`: `open`, `run`, `save`, `release`, `open` with the parent (restore), a call in mode `allow` through the proxy (the proxy objects come with a later change of the chart; until then this step cannot run), a scale of the pool. Pass: every step passes with no route to the internet; the proxy logs hold no vendor host.

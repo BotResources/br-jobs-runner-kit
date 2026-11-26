@@ -21,8 +21,8 @@ PY
 }
 
 ns=$(ns_of "$CLIENT_A" "$NET_NONE")
-wait_warm "$ns" 1 120 "$POOL_ID_DEFAULT" || { check seed-warm-pod fail "no warm pod in $ns"; scenario_end; }
-claim_to pod "$ns" "seed-$(new_id)" agent-a "$POOL_ID_DEFAULT" || { check seed-claim fail "claim refused"; scenario_end; }
+wait_warm "$ns" 1 120 || { check seed-warm-pod fail "no warm pod in $ns"; scenario_end; }
+claim_to pod "$ns" "seed-$(new_id)" agent-a || { check seed-claim fail "claim refused"; scenario_end; }
 
 verdict seed-container-exists "container $SEED_CONTAINER in the pod" \
   test -n "$(k -n "$ns" get pod "$pod" -o json | jq -r --arg c "$SEED_CONTAINER" '.spec.containers[] | select(.name == $c) | .name')"
