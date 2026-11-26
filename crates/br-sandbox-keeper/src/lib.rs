@@ -11,6 +11,7 @@ mod leader;
 mod metrics;
 mod readiness;
 mod rules;
+mod sweep;
 #[cfg(test)]
 mod testing;
 mod time;

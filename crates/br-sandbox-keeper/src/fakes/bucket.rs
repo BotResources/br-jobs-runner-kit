@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use br_runner_sandbox::Timestamp;
 use bytes::Bytes;
@@ -14,6 +15,7 @@ pub struct FakeBucket {
     failing_deletes: Mutex<HashSet<String>>,
     failing_gets: Mutex<HashSet<String>>,
     check_error: Mutex<Option<BucketError>>,
+    failing_list: AtomicBool,
     list_calls: Mutex<Vec<(String, Option<String>, usize)>>,
 }
 
@@ -60,6 +62,10 @@ impl FakeBucket {
         self.failing_gets.lock().unwrap().insert(key.to_owned());
     }
 
+    pub fn fail_list(&self) {
+        self.failing_list.store(true, Ordering::SeqCst);
+    }
+
     pub fn fail_check(&self, error: BucketError) {
         *self.check_error.lock().unwrap() = Some(error);
     }
@@ -95,6 +101,9 @@ impl Bucket for FakeBucket {
                 after.map(str::to_owned),
                 limit,
             ));
+            if self.failing_list.load(Ordering::SeqCst) {
+                return Err(BucketError::Call("scripted list failure".to_owned()));
+            }
             let objects = self.objects.lock().unwrap();
             Ok(objects
                 .iter()
