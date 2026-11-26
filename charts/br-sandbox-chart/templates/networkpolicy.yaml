@@ -1,0 +1,145 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- if $ns.egress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-{{ $ns.mode }}
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/role: sandbox
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns.egress }}
+          podSelector:
+            matchLabels:
+              br.sandbox/role: proxy
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.egress.proxy.port | int64 }}
+{{- else if eq $ns.mode "full" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-full
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/role: sandbox
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "4") | fromJsonArray | toYaml | nindent 14 }}
+    {{- if eq $.Values.network.ipv6 "dual_stack" }}
+    - to:
+        - ipBlock:
+            cidr: ::/0
+            except:
+              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "6") | fromJsonArray | toYaml | nindent 14 }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- $system := include "br-sandbox-chart.system_namespace" . }}
+{{- if or .Values.keeper.enabled .Values.network_check.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- end }}
+{{- if .Values.keeper.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-keeper
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/system: keeper
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        {{- range .Values.network.api_server_addresses }}
+        - ipBlock:
+            cidr: {{ include "br-sandbox-chart.cidr.normalize" . }}
+        {{- end }}
+    - to:
+        {{- range .Values.network.store_cidrs }}
+        - ipBlock:
+            cidr: {{ include "br-sandbox-chart.cidr.normalize" . }}
+        {{- end }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
+{{- if .Values.network_check.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-netcheck
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      br.sandbox/system: netcheck
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+{{- end }}

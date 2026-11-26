@@ -1,0 +1,22 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: warm-{{ $ns.client }}-{{ $ns.mode }}
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+    br.sandbox/pool-id: {{ $ns.poolId | quote }}
+spec:
+  selector:
+    matchLabels:
+      br.sandbox/pool: warm
+      br.sandbox/pool-id: {{ $ns.poolId | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "br-sandbox-chart.pod.labels" (dict "ns" $ns "pool" "warm") | nindent 8 }}
+    spec:
+      {{- include "br-sandbox-chart.pod.spec" (dict "root" $ "ns" $ns) | nindent 6 }}
+{{- end }}

@@ -1,0 +1,102 @@
+installation:
+  system_namespace: ""
+image_pull_policy: ""
+registry_mirror: ""
+pull_secrets: []
+tools:
+  mount_path: /opt/sbx
+  size_limit: 64Mi
+  init_resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+      ephemeral-storage: 8Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+      ephemeral-storage: 64Mi
+  seed_container:
+    enabled: true
+    name: seed
+    resources:
+      requests:
+        cpu: 10m
+        memory: 8Mi
+        ephemeral-storage: 8Mi
+      limits:
+        cpu: 100m
+        memory: 32Mi
+        ephemeral-storage: 32Mi
+seed:
+  size_limit: 256Mi
+runtimeClassName: ""
+runAsUser: 10001
+runAsGroup: 10001
+restore_timeout_seconds: 30
+idle_ttl: 120
+idle_keep_min_state_bytes: 10000000
+warm_max_age_seconds: 1800
+save:
+  paths:
+    - /work
+    - /home/agent
+  tombstone_ttl_days: 365
+work:
+  size_limit: 3Gi
+home:
+  size_limit: 512Mi
+pool:
+  size:
+    cpu:
+      request: 500m
+      limit: "2"
+    memory:
+      request: 1Gi
+      limit: 2Gi
+    disk:
+      request: 2Gi
+      limit: 5Gi
+  floor: 1
+  max_sandboxes: 20
+  refill_seconds: 3
+  margin: 2
+  terminationGracePeriodSeconds: 1
+  node_selector: {}
+quota:
+  extra_pods: 4
+network:
+  internal_cidrs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 100.64.0.0/10
+    - 169.254.0.0/16
+    - 127.0.0.0/8
+  ipv6: single_stack
+clients: {}
+egress:
+  enabled: false
+  proxy:
+    port: 8888
+  quota:
+    pods: 4
+keeper:
+  enabled: false
+  replicas: 2
+  settings: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  lease:
+    duration_seconds: 15
+    renew_deadline_seconds: 10
+    retry_period_seconds: 2
+network_check:
+  enabled: true
+  targets: []
+  run_id: ""
+  cron: ""

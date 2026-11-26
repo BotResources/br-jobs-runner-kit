@@ -1,0 +1,213 @@
+{{- $system := include "br-sandbox-chart.system_namespace" . }}
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: br-sandbox-runner
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "patch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["br-sandbox-config"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: br-sandbox-runner
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: br-sandbox-runner
+subjects:
+  - kind: ServiceAccount
+    name: {{ $ns.runner.service_account }}
+    namespace: {{ $ns.runner.namespace }}
+{{- if $.Values.keeper.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: br-sandbox-keeper
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: br-sandbox-keeper
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: br-sandbox-keeper
+subjects:
+  - kind: ServiceAccount
+    name: br-sandbox-keeper
+    namespace: {{ $system }}
+{{- end }}
+{{- if $.Values.network_check.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: br-sandbox-netcheck
+subjects:
+  - kind: ServiceAccount
+    name: br-sandbox-netcheck
+    namespace: {{ $system }}
+{{- end }}
+{{- end }}
+{{- if .Values.keeper.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: br-sandbox-keeper
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: br-sandbox-keeper-lease
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: br-sandbox-keeper-lease
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: br-sandbox-keeper-lease
+subjects:
+  - kind: ServiceAccount
+    name: br-sandbox-keeper
+    namespace: {{ $system }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $system }}-keeper-namespaces
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $system }}-keeper-namespaces
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $system }}-keeper-namespaces
+subjects:
+  - kind: ServiceAccount
+    name: br-sandbox-keeper
+    namespace: {{ $system }}
+{{- end }}
+{{- if .Values.network_check.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: br-sandbox-netcheck
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $system }}-netcheck
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "services", "endpoints", "pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $system }}-netcheck
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $system }}-netcheck
+subjects:
+  - kind: ServiceAccount
+    name: br-sandbox-netcheck
+    namespace: {{ $system }}
+{{- end }}

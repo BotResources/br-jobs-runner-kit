@@ -1,0 +1,45 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- $name := printf "%s-pod" $ns.name }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    - name: role
+      expression: {{ "(has(object.metadata.labels) && 'br.sandbox/role' in object.metadata.labels) ? object.metadata.labels['br.sandbox/role'] : ''" | include "br-sandbox-chart.json_string" }}
+    - name: oldRole
+      expression: {{ "(has(oldObject.metadata.labels) && 'br.sandbox/role' in oldObject.metadata.labels) ? oldObject.metadata.labels['br.sandbox/role'] : ''" | include "br-sandbox-chart.json_string" }}
+    - name: containers
+      expression: {{ "object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers : [])" | include "br-sandbox-chart.json_string" }}
+  validations:
+    {{- range $rule := include "br-sandbox-chart.vap.rules" (dict "root" $ "ns" $ns) | fromJsonArray }}
+    - expression: {{ $rule.expression | include "br-sandbox-chart.json_string" }}
+      message: {{ printf "%s: %s" $rule.code $rule.message | include "br-sandbox-chart.json_string" }}
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        br.sandbox/managed: "true"
+        kubernetes.io/metadata.name: {{ $ns.name }}
+{{- end }}

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "charts/br-runner-toolkit-chart/Chart.yaml"
+      - "charts/br-sandbox-chart/Chart.yaml"
   workflow_dispatch:
 
 permissions:
@@ -16,14 +17,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CHART_NAME: br-runner-toolkit-chart
-  CHART_DIR: charts/br-runner-toolkit-chart
   OCI_REPO: oci://ghcr.io/botresources/charts
 
 jobs:
   release:
-    name: Package and push the br-runner-toolkit-chart library chart
+    name: Package and push ${{ matrix.chart }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: [br-runner-toolkit-chart, br-sandbox-chart]
+    env:
+      CHART_NAME: ${{ matrix.chart }}
+      CHART_DIR: charts/${{ matrix.chart }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

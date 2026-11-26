@@ -1,0 +1,29 @@
+{{- if .Values.keeper.enabled }}
+{{- $system := include "br-sandbox-chart.system_namespace" . }}
+{{- $pullSecrets := include "br-sandbox-chart.pull_secrets" . | fromJsonArray }}
+{{- $secret := .Values.store.credentials_secret }}
+{{- $container := dict "name" "keeper" "image" (include "br-sandbox-chart.image.mirrored" (dict "root" . "ref" .Values.keeper.image)) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" . "ref" .Values.keeper.image)) "env" (list (dict "name" "BR_SANDBOX_CONFIG" "value" "/etc/br-sandbox/config.yaml") (dict "name" "AWS_ACCESS_KEY_ID" "valueFrom" (dict "secretKeyRef" (dict "name" $secret "key" "AWS_ACCESS_KEY_ID"))) (dict "name" "AWS_SECRET_ACCESS_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" $secret "key" "AWS_SECRET_ACCESS_KEY")))) "securityContext" (include "br-sandbox-chart.system.security" . | fromJson) "resources" .Values.keeper.resources "volumeMounts" (list (dict "name" "config" "mountPath" "/etc/br-sandbox" "readOnly" true) (dict "name" "tmp" "mountPath" "/tmp")) }}
+{{- $podSpec := dict "serviceAccountName" "br-sandbox-keeper" "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) "containers" (list $container) "volumes" (list (dict "name" "config" "configMap" (dict "name" "br-sandbox-config")) (dict "name" "tmp" "emptyDir" (dict))) }}
+{{- if $pullSecrets }}
+{{- $_ := set $podSpec "imagePullSecrets" $pullSecrets }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: br-sandbox-keeper
+  namespace: {{ $system }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.keeper.replicas | int64 }}
+  selector:
+    matchLabels:
+      br.sandbox/system: keeper
+  template:
+    metadata:
+      labels:
+        br.sandbox/system: keeper
+    spec:
+      {{- toYaml $podSpec | nindent 6 }}
+{{- end }}
