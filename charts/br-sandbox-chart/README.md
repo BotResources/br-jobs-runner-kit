@@ -20,7 +20,7 @@ The system namespace is `{prefix}-system`. It does not carry `br.sandbox/managed
 
 ## Values
 
-Required keys have no default: a missing key stops the render with `BR_SANDBOX_MISSING_VALUE{key=...}`. Keys are snake_case; keys that are Kubernetes fields keep the Kubernetes name (`runtimeClassName`, `runAsUser`, `runAsGroup`, `terminationGracePeriodSeconds`, `imagePullSecrets` names, resource maps). `values.schema.json` has `additionalProperties: false` on every block: a key outside its place fails the render. All durations are in seconds. This table is the contract for the units `egress` and `keeper`.
+Required keys have no default: a missing key stops the render with `BR_SANDBOX_MISSING_VALUE{key=...}`. Keys are snake_case; keys that are Kubernetes fields keep the Kubernetes name (`runtimeClassName`, `runAsUser`, `runAsGroup`, `terminationGracePeriodSeconds`, `imagePullSecrets` names, resource maps). `values.schema.json` has `additionalProperties: false` on every block with fixed keys: a key outside its place fails the render. Maps keyed by a name are checked entry by entry (`clients`, `clients.<client>.modes`, `pool.node_selector` with string values). Two objects take any key: `keeper.settings` and `clients.<client>.modes.<mode>.credential_set`. All durations are in seconds. This table is the contract for the units `egress` and `keeper`.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -58,8 +58,8 @@ Required keys have no default: a missing key stops the render with `BR_SANDBOX_M
 | `clients.<client>.modes.<mode>` | required | `mode` is `none`, `allow` or `full`, else `BR_SANDBOX_MODE_UNKNOWN`. A key present is a namespace. |
 | `...modes.<mode>.pool` | `{}` | Overrides any key of `pool` for this namespace. |
 | `...modes.<mode>.runner.{service_account,namespace}` | required | Subject of the runner Role. |
-| `...modes.<mode>.allow.{domains,cidrs}` | `[]` | For mode `allow`; consumed by the egress proxy of a later change of this chart. |
-| `...modes.<mode>.credential_set` | `{}` | SLOT, filled by a later change of this chart; one set per namespace. |
+| `...modes.<mode>.allow.{domains,cidrs}` | `[]` | For mode `allow`; consumed by the egress proxy of a later change of this chart. A non-empty list fails the render with `BR_SANDBOX_EGRESS_DISABLED` while `egress.enabled` is false. |
+| `...modes.<mode>.credential_set` | `{}` | SLOT, filled by a later change of this chart; one set per namespace. A non-empty value fails the render with `BR_SANDBOX_EGRESS_DISABLED` while `egress.enabled` is false. |
 | `egress.enabled`, `egress.proxy.port` | `false`, `8888` | SLOT. `enabled: true` fails the render (`BR_SANDBOX_SLOT_EMPTY`) until a later change of this chart fills its slots. |
 | `keeper.{enabled,image,replicas,settings,resources}`, `keeper.lease.{duration_seconds,renew_deadline_seconds,retry_period_seconds}` | `false`, required if enabled, `2`, `{}`, 50m/64Mi and 500m/256Mi, 15/10/2 | `settings` goes untouched into the system config; the library `br-sandbox-keeper` adds its keys to the schema. |
 | `network_check.{enabled,image,targets,run_id,cron}` | `true`, required if enabled, `[]`, `""`, `""` | A new `run_id` starts a new Job. `targets` are `host:port` entries (the bus, the database). |
@@ -170,7 +170,7 @@ The chart itself is Apache-2.0 and ships no GPL program. Kubernetes (Apache-2.0)
 
 ## Needs of the cluster (not done by the chart)
 
-`kubelet` in `/etc/subuid` and `/etc/subgid` on each node; the Kyverno exclusion for namespaces with `br.sandbox/managed=true` (without it mode `none` is not possible); the bucket with its lifecycle rule; the sealed Secret of `store.credentials_secret`. Policy objects need Kubernetes 1.30 or later (ValidatingAdmissionPolicy v1).
+`kubelet` in `/etc/subuid` and `/etc/subgid` on each node; the Kyverno exclusion for namespaces with `br.sandbox/managed=true` (without it mode `none` is not possible); the bucket with its lifecycle rule; the sealed Secret of `store.credentials_secret`. Each Secret named in `pull_secrets` in every sandbox namespace and in the system namespace (an image pull reads the Secret of the namespace of the pod; the chart renders no Secret). Policy objects need Kubernetes 1.30 or later (ValidatingAdmissionPolicy v1).
 
 ## Tests
 

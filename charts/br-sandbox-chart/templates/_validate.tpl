@@ -52,6 +52,15 @@
 {{- range $path := list "service_account" "namespace" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" (printf "clients.%s.modes.%s.runner.%s" $client $mode $path)) -}}
 {{- end -}}
+{{- if not $root.Values.egress.enabled -}}
+{{- $allow := get $modeValues "allow" | default dict -}}
+{{- if or (get $allow "domains" | default list | len) (get $allow "cidrs" | default list | len) -}}
+{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=allow}" $client $mode) -}}
+{{- end -}}
+{{- if get $modeValues "credential_set" | default dict | len -}}
+{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=credential_set}" $client $mode) -}}
+{{- end -}}
+{{- end -}}
 {{- $name := printf "%s-%s-%s" $prefix $client $mode -}}
 {{- if hasKey $seen $name -}}
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}

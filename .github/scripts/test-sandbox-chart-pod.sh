@@ -70,3 +70,11 @@ check_slots_render_nothing() {
     t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "ReplicaSet", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
     t "egress.enabled true fails until a later change of this chart fills its slots" test "$(helm template t "$CHART" -f "$EXAMPLE" --set egress.enabled=true 2>&1 | grep -c 'BR_SANDBOX_SLOT_EMPTY')" -ge 1
 }
+
+check_egress_values_fail_while_egress_is_disabled() {
+    section "a credential set or an allow list fails the render while egress is disabled"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowdomains '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowcidrs '.clients.alpha.modes.allow.allow.cidrs = ["192.0.2.0/24"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset '.clients.beta.modes.none.credential_set = {"git": "set-a"}')"
+    t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []} | .clients.beta.modes.none.credential_set = {}')"
+}

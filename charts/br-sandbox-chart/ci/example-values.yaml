@@ -47,11 +47,6 @@ clients:
         runner:
           service_account: runner
           namespace: runners
-        allow:
-          domains:
-            - git.example.test
-          cidrs:
-            - 192.0.2.0/24
       full:
         runner:
           service_account: runner
