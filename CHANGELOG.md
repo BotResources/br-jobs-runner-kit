@@ -17,7 +17,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Changed
 
-- `images/br-sandbox-tools/README.md`: the licence table no longer says that no copyleft code is present. It lists the GCC runtime code that `gcc` 15.2.0 links into the static programs (start-up objects on both architectures; 16 `libgcc.a` members in `bsdtar` on `linux/arm64`, none on `linux/amd64`) under GPL-3.0-or-later WITH GCC-exception-3.1, with the measure. The image is unchanged.
+- `images/br-sandbox-tools/README.md`: the licence table no longer says that no copyleft code is present. It lists the GCC runtime code that `gcc` 15.2.0 links into the static programs (start-up objects on both architectures; 16 `libgcc.a` members in `bsdtar` on `linux/arm64`, none on `linux/amd64`) under GPL-3.0-or-later WITH GCC-exception-3.1, with the measure. The `licenses` label of the image lists the GCC runtime exception.
 
 - `br-runner-as-tool` 0.3.2: the error flag of a failed SYNC child ends with `Cause: <reason code>: <diagnostic text>` (see `crates/br-runner-as-tool/CHANGELOG.md`). `Cargo.lock` records its new version.
 

@@ -52,7 +52,7 @@ RUN printf 'libarchive %s; musl %s; pause %s; rev %s\n' \
 
 FROM scratch
 LABEL org.opencontainers.image.title="br-sandbox-tools" \
-      org.opencontainers.image.licenses="Apache-2.0 AND BSD-2-Clause AND MIT"
+      org.opencontainers.image.licenses="Apache-2.0 AND BSD-2-Clause AND MIT AND GPL-3.0-or-later WITH GCC-exception-3.1"
 COPY --from=build /stage/bin/bsdtar /stage/bin/pause /sbx/bin/
 COPY --from=build /stage/tools.tar /stage/VERSION /sbx/
 COPY --from=build /stage/licenses/ /sbx/LICENSES/
