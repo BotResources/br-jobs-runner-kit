@@ -6,7 +6,7 @@ repository="${REPOSITORY:?}"
 sha="${SHA:?}"
 head_sha="${HEAD_SHA:-$sha}"
 ref="${REF:-}"
-head_repository="${HEAD_REPOSITORY:-$repository}"
+head_repository="${HEAD_REPOSITORY:-}"
 pr_number="${PR_NUMBER:-}"
 actor="${ACTOR:-}"
 push_input="${PUSH_INPUT:-}"
@@ -21,7 +21,9 @@ case "$event" in
     fi
     ;;
   pull_request)
-    if [ "$head_repository" != "$repository" ]; then
+    if [ -z "$head_repository" ]; then
+      reason="pull request whose head repository is unknown"
+    elif [ "$head_repository" != "$repository" ]; then
       reason="pull request from a fork"
     elif [ "$actor" = "dependabot[bot]" ]; then
       reason="pull request of Dependabot (read-only token)"

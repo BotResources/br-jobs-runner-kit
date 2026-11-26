@@ -58,6 +58,13 @@ refuses "inputs: push without a tag" "tag is required" bash "$here/images-check-
 refuses "inputs: a tag with a space" "not a valid image tag" bash "$here/images-check-inputs.sh" true "a b"
 refuses "inputs: a tag that starts with a dash" "not a valid image tag" bash "$here/images-check-inputs.sh" true "-x"
 refuses "inputs: a tag of 129 characters" "not a valid image tag" bash "$here/images-check-inputs.sh" true "$(head -c 129 /dev/zero | tr '\0' a)"
+succeeds "inputs: images_dir images" bash "$here/images-check-inputs.sh" false "" images
+succeeds "inputs: images_dir of the fixtures, no push" bash "$here/images-check-inputs.sh" false "" .github/fixtures/images
+for bad in "" /abs/images ../images images/.. images/../x ./images images/./x images/ "a b" 'a;b' 'a$(b)'; do
+  refuses "inputs: images_dir '${bad}'" "is not a relative path" bash "$here/images-check-inputs.sh" false "" "$bad"
+done
+refuses "inputs: push with the folder of the fixtures" "only the folder images can be pushed" bash "$here/images-check-inputs.sh" true sha-1234567 .github/fixtures/images
+refuses "inputs: push with another folder" "only the folder images can be pushed" bash "$here/images-check-inputs.sh" true sha-1234567 other
 refuses "inputs: push that is not a boolean" "true or false" bash "$here/images-check-inputs.sh" maybe x
 
 good="sha256:$(head -c 64 /dev/zero | tr '\0' a)"

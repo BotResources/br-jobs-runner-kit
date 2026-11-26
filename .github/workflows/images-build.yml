@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: ""
+      images_dir:
+        description: Folder that holds the image folders, relative to the root of the repository, with no '..'; only the folder images can be pushed
+        type: string
+        required: false
+        default: images
       push:
         description: Push the tested images to ghcr.io
         type: boolean
@@ -24,8 +29,8 @@ on:
         default: ""
     outputs:
       digests:
-        description: JSON object, image name to registry reference with the manifest list digest; empty when push is false
-        value: ${{ jobs.digests.outputs.digests }}
+        description: JSON object, image name to registry reference with the manifest list digest; {} when nothing was pushed
+        value: ${{ jobs.digests.outputs.digests || '{}' }}
 
 permissions:
   contents: read
@@ -48,11 +53,13 @@ jobs:
         env:
           PUSH: ${{ inputs.push }}
           TAG: ${{ inputs.tag }}
-        run: bash .github/scripts/images-check-inputs.sh "$PUSH" "$TAG"
+          IMAGES_DIR: ${{ inputs.images_dir }}
+        run: bash .github/scripts/images-check-inputs.sh "$PUSH" "$TAG" "$IMAGES_DIR"
       - name: discover images
         id: discover
         env:
           IMAGE_INPUT: ${{ inputs.image }}
+          IMAGES_ROOT: ${{ inputs.images_dir }}
         run: echo "images=$(bash .github/scripts/images-discover.sh "$IMAGE_INPUT")" >>"$GITHUB_OUTPUT"
       - name: revision
         id: revision
@@ -65,6 +72,7 @@ jobs:
       - name: summary
         env:
           IMAGES: ${{ steps.discover.outputs.images }}
+          IMAGES_DIR: ${{ inputs.images_dir }}
           REVISION: ${{ steps.revision.outputs.revision }}
           PUSH: ${{ inputs.push }}
           TAG: ${{ inputs.tag }}
@@ -72,7 +80,7 @@ jobs:
           {
             echo "### Image plan"
             echo
-            echo "- images: \`${IMAGES}\`"
+            echo "- images: \`${IMAGES}\` in \`${IMAGES_DIR}\`"
             echo "- revision: \`${REVISION}\`"
             echo "- push: \`${PUSH}\`"
             echo "- tag: \`${TAG}\`"
@@ -116,7 +124,7 @@ jobs:
         id: build
         with:
           context: .
-          file: images/${{ matrix.image }}/Dockerfile
+          file: ${{ inputs.images_dir }}/${{ matrix.image }}/Dockerfile
           platforms: ${{ matrix.platform }}
           load: ${{ !inputs.push }}
           outputs: ${{ inputs.push && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', needs.plan.outputs.registry, matrix.image) || '' }}
@@ -154,16 +162,17 @@ jobs:
           REFERENCE: ${{ steps.target.outputs.reference }}
         run: bash .github/scripts/images-check-labels.sh "$REFERENCE"
       - name: tests of the image
-        if: hashFiles(format('images/{0}/test.sh', matrix.image)) != ''
+        if: hashFiles(format('{0}/{1}/test.sh', inputs.images_dir, matrix.image)) != ''
         shell: bash
         env:
+          IMAGES_DIR: ${{ inputs.images_dir }}
           IMAGE: ${{ matrix.image }}
           REFERENCE: ${{ steps.target.outputs.reference }}
           PLATFORM: ${{ matrix.platform }}
           RESULTS_FILE: ${{ runner.temp }}/test-results.txt
-        run: bash "images/${IMAGE}/test.sh" "$REFERENCE" "$PLATFORM"
+        run: bash "${IMAGES_DIR}/${IMAGE}/test.sh" "$REFERENCE" "$PLATFORM"
       - name: results of the tests in the summary
-        if: always() && hashFiles(format('images/{0}/test.sh', matrix.image)) != ''
+        if: always() && hashFiles(format('{0}/{1}/test.sh', inputs.images_dir, matrix.image)) != ''
         env:
           IMAGE: ${{ matrix.image }}
           PLATFORM: ${{ matrix.platform }}
