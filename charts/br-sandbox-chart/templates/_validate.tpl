@@ -69,7 +69,7 @@
 {{- if and $root.Values.egress.enabled (eq $mode "none") (get $modeValues "credential_set" | default dict | len) -}}
 {{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{client=%s,mode=%s}" $client $mode) -}}
 {{- end -}}
-{{- include "br-sandbox-chart.validate.credentials" (dict "client" $client "mode" $mode "values" $modeValues) -}}
+{{- include "br-sandbox-chart.validate.credentials" (dict "root" $root "client" $client "mode" $mode "values" $modeValues) -}}
 {{- $name := printf "%s-%s-%s" $prefix $client $mode -}}
 {{- if hasKey $seen $name -}}
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}

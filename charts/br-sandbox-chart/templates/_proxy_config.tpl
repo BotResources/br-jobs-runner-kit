@@ -14,6 +14,14 @@
 /etc/iron-proxy/config
 {{- end -}}
 
+{{- define "br-sandbox-chart.proxy.management.listen" -}}
+127.0.0.1:9092
+{{- end -}}
+
+{{- define "br-sandbox-chart.proxy.mount.trust" -}}
+/etc/iron-proxy/trust
+{{- end -}}
+
 {{- define "br-sandbox-chart.proxy.deny_cidrs" -}}
 {{- $out := include "br-sandbox-chart.cidr.except" (dict "root" .root "family" "4") | fromJsonArray -}}
 {{- if eq .root.Values.network.ipv6 "dual_stack" -}}
@@ -70,7 +78,7 @@
   "proxy" (dict "http_listen" "127.0.0.1:8080" "https_listen" "127.0.0.1:8443" "tunnel_listen" (printf "0.0.0.0:%d" ($proxy.port | int64)) "upstream_deny_cidrs" (include "br-sandbox-chart.proxy.deny_cidrs" (dict "root" $root) | fromJsonArray))
   "tls" (dict "mode" "mitm" "ca_cert" (printf "%s/ca.crt" (include "br-sandbox-chart.proxy.mount.ca" .)) "ca_key" (printf "%s/ca.key" (include "br-sandbox-chart.proxy.mount.ca_key" .)))
   "transforms" $transforms
-  "management" (dict "listen" $proxy.reload.listen "api_key_env" "IRON_MANAGEMENT_API_KEY")
+  "management" (dict "listen" (include "br-sandbox-chart.proxy.management.listen" .) "api_key_env" "IRON_MANAGEMENT_API_KEY")
   "metrics" (dict "listen" "127.0.0.1:9090")
   "log" (dict "level" "info") -}}
 {{- toYaml $config -}}

@@ -11,6 +11,7 @@ source "$HERE/test-sandbox-chart-rbac.sh"
 source "$HERE/test-sandbox-chart-egress.sh"
 source "$HERE/test-sandbox-chart-proxy.sh"
 source "$HERE/test-sandbox-chart-proxy-config.sh"
+source "$HERE/test-sandbox-chart-proxy-guards.sh"
 source "$HERE/test-sandbox-chart-docs.sh"
 source "$HERE/test-sandbox-chart-netcheck.sh"
 source "$HERE/test-sandbox-chart-netcheck-proxy.sh"
@@ -24,6 +25,7 @@ render_yaml mirror_yaml -f "$EXAMPLE" -f "$MIRROR_VALUES"
 render_egress_fixtures
 render_proxy_fixtures
 render_proxy_config_fixtures
+render_proxy_guard_fixtures
 
 for check in $(declare -F | sed -n 's/^declare -f \(check_.*\)$/\1/p'); do
     "$check"

@@ -92,7 +92,6 @@ egress:
         cpu: "1"
         memory: 512Mi
     reload:
-      listen: 127.0.0.1:9092
       key_secret: ""
   ca:
     mount_path: /etc/br-sandbox-ca

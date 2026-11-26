@@ -50,6 +50,9 @@ spec:
     metadata:
       labels:
         br.sandbox/role: proxy
+      annotations:
+        br.sandbox/proxy-config-sha256: {{ include "br-sandbox-chart.proxy.config" . | sha256sum | quote }}
+        br.sandbox/proxy-ca-sha256: {{ .ns.proxy.ca.certificate | trim | sha256sum | quote }}
     spec:
       {{- include "br-sandbox-chart.proxy.pod" . | nindent 6 }}
 ---

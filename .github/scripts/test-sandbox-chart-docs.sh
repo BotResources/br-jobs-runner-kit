@@ -15,7 +15,7 @@ check_licences_in_the_readme() {
 check_README_holds_the_contract() {
     section "README contract"
     local phrase
-    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Targets named by an IP literal.**' 'the render needs no name for it' 'in every sandbox namespace and in the system namespace'; do
+    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Targets named by an IP literal.**' 'the render needs no name for it' 'TLS to an IP literal does not work' '**Targets named by a name.**' 'a DNS that answers its names' '**Limit.**' 'a response body that echoed the `Authorization` header carried the real value to the client' 'in every sandbox namespace and in the system namespace'; do
         t "the README holds: ${phrase}" grep -qF -- "$phrase" "$README"
     done
     local slot
@@ -37,6 +37,7 @@ check_no_scrub_claim() {
     local hits
     hits="$(cd "$CHART" && grep -rniE 'scrub' . | grep -viE 'no scrub|no response scrub|claims a scrub|claim a scrub' || true)"
     t "every mention of a scrub denies it" test -z "$hits"
+    t "the credential section holds the Limit sentence after the Credentials paragraph and before the Rotation paragraph" test "$(awk '/^\*\*Credentials\.\*\*/{c=NR} /^\*\*Limit\.\*\*/{l=NR} /^\*\*Rotation and config changes\.\*\*/{r=NR} END{print (c > 0 && l > c && r > l)}' "$README")" = 1
     t "the README says a bound host that sends a value back shows it to the sandbox" grep -qF 'A bound host that sends a credential value back shows it to the sandbox (no scrub exists; the proxy has no response scrub)' "$README"
 }
 
@@ -53,9 +54,11 @@ check_file_hygiene() {
 }
 
 check_lint_strict_on_every_fixture() {
-    section "helm lint --strict on the three fixtures"
+    section "helm lint --strict on the four fixtures"
     t "example" helm lint --strict "$CHART" -f "$EXAMPLE"
     t "example and mirror" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$MIRROR_VALUES"
     t "example and keeper" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$KEEPER_VALUES"
+    t "example and egress" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$EGRESS_VALUES"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper egress; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }

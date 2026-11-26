@@ -38,6 +38,12 @@ check_network_check_connect_probes_of_the_proxy_path() {
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=silent 2>&1)" || rc=$?
     t "a proxy that does not answer fails the job" test "$rc" -ne 0
+    rc=0
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=offlist 2>&1)" || rc=$?
+    t "positive control: a proxy that refuses the off-list host and passes the targets fails the job" test "$rc" -ne 0
+    t "positive control: the off-list probe is reported as refused" grep -q '"target":"offlist.invalid:443","kind":"connect","expected":"refused","observed":"refused"' <<<"$out"
+    t "positive control: every target probe is reported as reached, so a proxy that passes a target is seen" test "$(grep -c '"kind":"connect","expected":"refused","observed":"reached"' <<<"$out")" -eq 20
+    t "the README says the probe has no positive control and the cluster tests check that a listed host is reached" grep -qF 'The probe has no positive control: a proxy that refuses everything (a broken allow list) also passes the off-list check, so that a listed host is reached is checked by the cluster tests' "$README"
     t "the example render has no CONNECT probe" test "$(run_netcheck env NC_MODE=all PROBE_MODE=none 2>&1 | grep -c '"kind":"connect"')" -eq 0
     t "the pod list excludes the proxy pods by selector" grep -q 'br.sandbox/role!=proxy' "$WORK/netcheckstub/pods.args"
     t "a proxy pod port is not a target when the selector is applied" test "$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 2>&1 | grep -c '"target":"10.42.0.9:8888"')" -eq 0

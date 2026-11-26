@@ -40,6 +40,7 @@ check_the_ca_certificate_stays_in_the_sandbox_namespace() {
     t "the CA certificate ConfigMap of the sandbox namespace holds the value of the mode and no key" jqt cred '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-ca")] | map({(.metadata.namespace): .data}) | add | keys == ["sbx-alpha-allow", "sbx-alpha-full"] and (.["sbx-alpha-allow"]["ca.crt"] | test("ZmFrZS1jYS1hbGxvdw")) and (.["sbx-alpha-full"]["ca.crt"] | test("ZmFrZS1jYS1mdWxs")) and ([.[] | .["ca.crt"] | test("PRIVATE")] | any | not)'
     t "the egress namespaces hold the Namespace, the policies, the quota, two ConfigMaps, the Deployment and the Service" jqt cred "${EGRESS_NAMESPACES} as \$e | [.[] | select((.metadata.namespace as \$n | \$e | index(\$n) != null) or (.kind == \"Namespace\" and (.metadata.name as \$n | \$e | index(\$n) != null))) | .kind] | unique == [\"ConfigMap\", \"Deployment\", \"Namespace\", \"NetworkPolicy\", \"ResourceQuota\", \"Service\"]"
     t "the README places the CA certificate in the sandbox namespace" grep -qF 'The CA certificate (not secret) stays in the sandbox namespace' "$README"
+    t "the README places the CA key only in the Secret of the egress namespace" grep -qF 'The CA key exists only in the Secret of the egress namespace' "$README"
 }
 
 check_the_sandbox_policy_reaches_only_the_proxy_pods_of_the_egress_namespace() {
@@ -140,6 +141,7 @@ check_the_proxy_pod_exists_only_when_egress_is_enabled_and_only_in_an_egress_nam
         t "render ${name}: no Deployment, Service or Pod lives in a sandbox, system or mode-none namespace but the keeper's" jqt "$name" "${EGRESS_NAMESPACES} as \$e | [.[] | select((.kind == \"Deployment\" or .kind == \"Pod\" or .kind == \"Service\") and (.metadata.namespace as \$n | \$e | index(\$n) == null))] | length == 0"
     done
     t "the README says the proxy Deployment lives in the egress namespace and never in a sandbox namespace" grep -qF 'A proxy Deployment lives in an egress namespace and never in a sandbox namespace.' "$README"
+    t "the README says that with egress disabled no proxy pod exists and a sandbox of a mode with a proxy has no egress (fail closed)" grep -qF 'With `egress.enabled: false` no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).' "$README"
 }
 
 check_the_credential_secrets_live_in_the_egress_namespace() {

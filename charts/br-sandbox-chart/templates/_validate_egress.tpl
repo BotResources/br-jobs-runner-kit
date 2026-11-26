@@ -4,9 +4,18 @@
 {{- $placeholders := dict -}}
 {{- $envs := dict -}}
 {{- $keys := dict -}}
+{{- $reserved := concat (list "HOME" "HTTPS_PROXY" "HTTP_PROXY" "https_proxy" "http_proxy" "NO_PROXY" "no_proxy") .root.Values.egress.ca.env_names -}}
 {{- range $index, $item := get $set "secrets" | default list -}}
 {{- if eq (len $item.hosts) 0 -}}
 {{- fail (printf "BR_SANDBOX_CREDENTIAL_HOSTS_EMPTY{%s,item=%d}" $where $index) -}}
+{{- end -}}
+{{- range $host := $item.hosts -}}
+{{- if or (eq (trim $host) "*") (hasSuffix "/0" $host) -}}
+{{- fail (printf "BR_SANDBOX_CREDENTIAL_HOST_WILDCARD{%s,item=%d,host=%s}" $where $index $host) -}}
+{{- end -}}
+{{- end -}}
+{{- if has $item.env_name $reserved -}}
+{{- fail (printf "BR_SANDBOX_CREDENTIAL_ENV_RESERVED{%s,item=%d,env_name=%s}" $where $index $item.env_name) -}}
 {{- end -}}
 {{- if eq $item.placeholder "" -}}
 {{- fail (printf "BR_SANDBOX_CREDENTIAL_PLACEHOLDER_EMPTY{%s,item=%d}" $where $index) -}}
@@ -49,8 +58,7 @@
 {{- define "br-sandbox-chart.validate.proxy_global" -}}
 {{- $proxy := .Values.egress.proxy -}}
 {{- include "br-sandbox-chart.require" (dict "root" . "path" "egress.proxy.reload.key_secret") -}}
-{{- $reload := last (splitList ":" $proxy.reload.listen) -}}
-{{- if has (toString ($proxy.port | int64)) (list "8080" "8443" "9090" $reload) -}}
+{{- if has (toString ($proxy.port | int64)) (list "8080" "8443" "9090" "9092") -}}
 {{- fail (printf "BR_SANDBOX_PROXY_PORT_CONFLICT{port=%d}" ($proxy.port | int64)) -}}
 {{- end -}}
 {{- if gt (add ($proxy.replicas | int64) 1) (.Values.egress.quota.pods | int64) -}}

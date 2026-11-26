@@ -59,7 +59,7 @@ check_network_check_except_lists_hold_every_internal_range() {
 
 check_no_project_value_in_the_chart() {
     section "no host, registry or client name outside the fixtures"
-    local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local|docker\.io)$'
+    local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local)$'
     local found
     local default_repository='^      repository: docker\.io/ironsh/iron-proxy$'
     found="$(cd "$CHART" && hosts_of Chart.yaml README.md CHANGELOG.md values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"

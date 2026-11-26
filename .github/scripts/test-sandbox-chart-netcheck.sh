@@ -14,6 +14,7 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
         403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
         502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
         garbled) printf 'garbage\r\n' ;;
+        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;; esac ;;
     esac
     exit 0
 fi

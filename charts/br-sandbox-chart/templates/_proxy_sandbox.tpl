@@ -1,9 +1,5 @@
 {{- define "br-sandbox-chart.proxy.url" -}}
-{{- $address := .ns.proxy.cluster_ip -}}
-{{- if contains ":" $address -}}
-{{- $address = printf "[%s]" $address -}}
-{{- end -}}
-{{- printf "http://%s:%d" $address (.root.Values.egress.proxy.port | int64) -}}
+{{- printf "http://%s:%d" .ns.proxy.cluster_ip (.root.Values.egress.proxy.port | int64) -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.proxy.sandbox.active" -}}
