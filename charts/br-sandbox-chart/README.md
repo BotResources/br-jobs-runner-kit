@@ -168,6 +168,8 @@ The cluster test proves with the runner service account that an unlabelled pod, 
 
 The Job `br-sandbox-netcheck-{run_id}` (and an optional CronJob) lists the nodes, services and pods through the API, builds targets (the `targets` values, a ClusterIP, a pod IP, each node address on 10250 and 6443, the API service, the cluster DNS service, a `.svc.cluster.local` name), and probes from the Job pod (the control) and from a probe pod of each namespace. The probe pod is made from the pool pod template (no token, root inside the user namespace). One JSON object per probe: `{net, mode, target, kind, expected, observed, control}`; `observed` is `refused`, `reached` or `no_result`; `control` is `ok` or `control_unavailable`. The Job fails on any `reached`, any `control_unavailable`, a missing result, a node address that is not in the three node lists, or a target class with no target. The classes are `targets` (at least one entry of `network_check.targets`), `node_kubelet`, `node_api`, `api_service`, `dns_service`, `cluster_name` and `pod` (a pod IP with a declared container port); a missing class is one object with `kind` `target_class` and `observed` `missing`. The CONNECT probes through the proxy come with the egress proxy of a later change of this chart.
 
+The network check identity reads the pod specs of the whole cluster (a cluster-wide `get` and `list` on `pods`, `nodes`, `services` and `endpoints`) to pick its targets; its rights to create and delete pods and to read pod logs are bound in the sandbox namespaces only.
+
 ## Why
 
 | Thing | Why it is the way it is |
