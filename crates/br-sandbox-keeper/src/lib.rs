@@ -1,6 +1,7 @@
 mod bucket;
 mod cluster;
 mod config;
+mod controller;
 mod convert;
 mod error;
 mod facts;

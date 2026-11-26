@@ -132,6 +132,25 @@ impl FakeKube {
         pod.resource_version = version;
     }
 
+    pub fn pods_in(&self, namespace: &str) -> Vec<PodFacts> {
+        self.state
+            .lock()
+            .unwrap()
+            .pods
+            .iter()
+            .filter(|((ns, _), _)| ns == namespace)
+            .map(|(_, pod)| pod.clone())
+            .collect()
+    }
+
+    pub fn forget_pod(&self, namespace: &str, name: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .pods
+            .remove(&(namespace.to_owned(), name.to_owned()));
+    }
+
     pub fn pod(&self, namespace: &str, name: &str) -> Option<PodFacts> {
         self.state
             .lock()
