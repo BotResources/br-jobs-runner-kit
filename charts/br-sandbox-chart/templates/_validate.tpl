@@ -59,6 +59,12 @@
 {{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=credential_set}" $client $mode) -}}
 {{- end -}}
 {{- end -}}
+{{- if and $root.Values.egress.enabled (ne $mode "allow") -}}
+{{- $listed := get $modeValues "allow" | default dict -}}
+{{- if or (get $listed "domains" | default list | len) (get $listed "cidrs" | default list | len) -}}
+{{- fail (printf "BR_SANDBOX_ALLOW_MODE{client=%s,mode=%s}" $client $mode) -}}
+{{- end -}}
+{{- end -}}
 {{- if and $root.Values.egress.enabled (eq $mode "none") (get $modeValues "credential_set" | default dict | len) -}}
 {{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{client=%s,mode=%s}" $client $mode) -}}
 {{- end -}}

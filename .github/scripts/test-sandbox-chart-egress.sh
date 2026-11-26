@@ -118,3 +118,46 @@ check_the_egress_namespace_name_is_a_helper_with_a_bound() {
     t "an egress name of 63 characters is accepted" jqt fits "${EGRESS_NAMESPACES} == [\"${fits}\"] and (\"${fits}\" | length) == 63"
     fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=system,client_b=alpha,namespace=sbx-alpha-allow-egress}" -f "$(vals clash '.installation.system_namespace = "sbx-alpha-allow-egress"')"
 }
+
+check_the_network_check_identity_reads_pod_specs_cluster_wide() {
+    section "network check identity: cluster-wide read of pods, nodes, services and endpoints, stated in the README"
+    t "the netcheck ClusterRole holds get and list on pods, nodes, services and endpoints, nothing else" jqt keeper '[.[] | select(.kind == "ClusterRole" and .metadata.name == "sbx-system-netcheck") | .rules] == [[{"apiGroups": [""], "resources": ["nodes", "services", "endpoints", "pods"], "verbs": ["get", "list"]}]]'
+    t "a ClusterRoleBinding gives that ClusterRole to the netcheck ServiceAccount only" jqt keeper '[.[] | select(.kind == "ClusterRoleBinding" and .roleRef.name == "sbx-system-netcheck") | .subjects] == [[{"kind": "ServiceAccount", "name": "br-sandbox-netcheck", "namespace": "sbx-system"}]]'
+    t "the README says the network check identity reads the pod specs of the whole cluster" grep -qF 'The network check identity reads the pod specs of the whole cluster (a cluster-wide `get` and `list` on `pods`, `nodes`, `services` and `endpoints`)' "$README"
+}
+
+check_no_proxy_pod_is_rendered_yet() {
+    section "no proxy pod is rendered, stated in the README"
+    local name
+    for name in cred two keeper tunnel; do
+        t "render ${name}: no workload holds the role proxy" jqt "$name" '[.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "ReplicaSet" or .kind == "Pod" or .kind == "Job" or .kind == "CronJob") | select(([.. | objects | select(has("br.sandbox/role")) | .["br.sandbox/role"]] | index("proxy")) != null)] | length == 0'
+        t "render ${name}: no Deployment or Pod lives in an egress namespace" jqt "$name" "${EGRESS_NAMESPACES} as \$e | [.[] | select((.kind == \"Deployment\" or .kind == \"Pod\") and (.metadata.namespace as \$n | \$e | index(\$n) != null))] | length == 0"
+    done
+    t "the README says no proxy pod exists yet and the sandbox has no egress" grep -qF 'Until then no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).' "$README"
+}
+
+check_the_credential_secrets_live_in_the_egress_namespace() {
+    section "no Secret in a sandbox namespace or an egress namespace, stated in the README"
+    local name
+    for name in cred two keeper; do
+        t "render ${name}: no Secret in any sandbox, egress or system namespace" jqt "$name" '[.[] | select(.kind == "Secret")] | length == 0'
+    done
+    t "the README says the credential Secret, the CA key Secret and the sealed Secrets are created in the egress namespace by the deploy tool" grep -qF 'The credential Secret, the CA key Secret and every sealed Secret of the proxy are created in the egress namespace by the deploy tool; the chart renders none.' "$README"
+}
+
+check_an_allow_list_outside_mode_allow_fails_the_render() {
+    section "an allow list in a mode other than allow fails when egress is enabled"
+    fails_with "BR_SANDBOX_ALLOW_MODE{client=alpha,mode=none}" -f "$(vals allownone '.egress.enabled = true | .clients.alpha.modes.none.allow.domains = ["git.example.test"]')"
+    fails_with "BR_SANDBOX_ALLOW_MODE{client=alpha,mode=full}" -f "$(vals allowfull '.egress.enabled = true | .clients.alpha.modes.full.allow.cidrs = ["192.0.2.0/24"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=full,key=allow}" -f "$(vals allowfulloff '.clients.alpha.modes.full.allow.cidrs = ["192.0.2.0/24"]')"
+    t "an allow list in mode allow renders when egress is enabled" render allowok -f "$(vals allowok '.egress.enabled = true | .clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
+    t "empty allow lists in mode none and full render when egress is enabled" render allowempty -f "$(vals allowempty '.egress.enabled = true | .clients.alpha.modes.none.allow = {"domains": [], "cidrs": []} | .clients.alpha.modes.full.allow = {"domains": [], "cidrs": []}')"
+    t "the README names BR_SANDBOX_ALLOW_MODE" grep -qF 'BR_SANDBOX_ALLOW_MODE' "$README"
+}
+
+check_the_cluster_default_policy_exclusion_is_stated_for_both_namespace_kinds() {
+    section "README: the cluster default network policy exclusion covers managed and egress namespaces"
+    t "the README says the cluster default network policy also acts in the egress namespace" grep -qF 'The cluster default network policy (the generated policy per namespace with allow rules for DNS, intra-namespace traffic and ingress controllers) also acts in the egress namespace' "$README"
+    t "Needs of the cluster names the exclusion for br.sandbox/egress=true namespaces" grep -qF 'and for namespaces with `br.sandbox/egress=true`' "$README"
+    t "the README no longer makes the egress exclusion conditional" test -z "$(grep -F 'If the cluster policy of the project needs an exclusion there' "$README" || true)"
+}
