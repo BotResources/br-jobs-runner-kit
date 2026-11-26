@@ -160,7 +160,7 @@ One policy and binding per (client, mode); values (size, runtime class, reposito
 - Patch rules (`BR_SANDBOX_LABELS`): a patch changes only `br.sandbox/` keys of labels and annotations; `role` and `pool-id` never change; a claimed pod never leaves `claimed`.
 - Init and seed containers are containers of the pod and follow rules 4 to 7.
 
-The refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role, with the runner service account, in a sandbox namespace, are proved by a cluster test. That test is not part of the offline suite of this chart and has not run at this version. The CEL of the admission policy is not compiled offline, so at this version it has been neither compiled nor run on a cluster.
+The refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role, with the runner service account, in a sandbox namespace, are proved by a cluster test. That test is not part of the offline suite of this chart and has not been executed at this version. The CEL of the admission policy is not compiled offline, so at this version it has been neither compiled nor run on a cluster.
 
 ## Image contract
 
@@ -194,7 +194,7 @@ The network check identity reads the pod specs of the whole cluster (a cluster-w
 | `default-deny` in the system namespace only with keeper or check | An empty chart adds no policy there. |
 | `egress-netcheck` allows all egress | The check must try to reach internal targets; the Job holds a read role, so it runs on demand. |
 | Mirror is a prefix | `{mirror}/{reference}`; a mirror that rewrites the host is done by the mirror itself. |
-| Label rule covers annotations | A runner may patch only `br.sandbox/` keys; a CNI that annotates the main pod resource would need an exception (to check on a cluster; no such check has run at this version). |
+| Label rule covers annotations | A runner may patch only `br.sandbox/` keys; a CNI that annotates the main pod resource would need an exception (to check on a cluster; no such check has been executed at this version). |
 
 ## Images and licences
 
@@ -214,4 +214,4 @@ The chart itself is Apache-2.0 and ships no GPL program. Kubernetes (Apache-2.0)
 
 ## Tests
 
-`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. The cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) are not part of this suite and have not run at this version; they are to be run on a test cluster.
+`bash .github/scripts/test-sandbox-chart.sh` (offline: `helm template`, `yq`, `jq`) proves the checks that need no cluster. The cluster-test rows (the CEL compiles and refuses each bad pod, the three tests per mode, the namespace-to-namespace test, the userns, the label-to-policy delay) are not part of this suite and have not run at this version; they are to be executed on a test cluster.
