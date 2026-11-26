@@ -213,7 +213,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck --severity=warning .github/scripts/*.sh
+      - run: shellcheck --severity=warning .github/scripts/*.sh charts/br-sandbox-chart/files/*.sh
 
   release-tooling:
     name: release-line law and registry wiring tests
@@ -270,7 +270,20 @@ jobs:
         with:
           fetch-depth: 0
       - name: the chart version moves forward when the chart changes
-        run: bash .github/scripts/check-chart-version.sh
+        run: |
+          set -euo pipefail
+          bash .github/scripts/check-chart-version.sh charts/br-runner-toolkit-chart
+          bash .github/scripts/check-chart-version.sh charts/br-sandbox-chart
+      - name: helm lint the sandbox chart on every fixture
+        run: |
+          set -euo pipefail
+          chart=charts/br-sandbox-chart
+          helm lint --strict "$chart" -f "$chart/ci/example-values.yaml"
+          for overlay in mirror keeper; do
+            helm lint --strict "$chart" -f "$chart/ci/example-values.yaml" -f "$chart/ci/${overlay}-values.yaml"
+          done
+      - name: the sandbox chart offline tests
+        run: bash .github/scripts/test-sandbox-chart.sh
       - name: helm lint the library chart
         run: helm lint charts/br-runner-toolkit-chart --set runner_version=1.0.0,max_concurrent_runs=4,ack_wait=30000,drain_timeout=0,cancel_grace=0,claim_wait=10000,outcome_wait=10000,retry_wait=1000
       - name: helm dependency build the fixtures

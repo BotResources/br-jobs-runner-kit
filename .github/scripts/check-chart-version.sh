@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-chart_dir="charts/br-runner-toolkit-chart"
+chart_dir="${1:?usage: check-chart-version.sh <chart directory>}"
 chart_yaml="${chart_dir}/Chart.yaml"
 
 chart_version() {
