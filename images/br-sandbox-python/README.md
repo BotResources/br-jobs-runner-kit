@@ -47,6 +47,6 @@ With a read-only root filesystem, LibreOffice needs a writable `/tmp` (an `empty
 | `ENV HOME=/home/agent` | The uid has no passwd entry; LibreOffice and Python need a writable `$HOME` for a fresh profile |
 | LibreOffice profile set to `/home/agent/.libreoffice` in `bootstraprc` | With no passwd entry the default profile path is `$HOME/.config/libreoffice/4`, and LibreOffice does not create `$HOME/.config`: it exits with "User installation could not be completed". The new path needs only `$HOME` to exist, also when `/home/agent` is an empty volume |
 | `--no-install-recommends` | Keeps the image small; no X11, no Java |
-| `procps` | The N1 test steps call `ps` |
-| `setuptools` | The N1 "local wheel" step needs it; python 3.12 slim does not ship it |
+| `procps` | Process-listing test steps call `ps` |
+| `setuptools` | The local-wheel install test step needs it; python 3.12 slim does not ship it |
 | No `bsdtar`, no agent code | The sandbox brings `bsdtar` from `br-sandbox-tools`; the image does not depend on any tar |
