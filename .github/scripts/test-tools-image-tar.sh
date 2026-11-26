@@ -58,7 +58,7 @@ cat /data/create.err /data/extract.err | head -n 5
 '
 
 test_3_n15_round_trip() {
-  run_scripted_test 3 "N15 round trip: 1000 files, 50 MB file, symlinks, empty dirs, modes, uid/gid, mtime" \
+  run_scripted_test 3 "tree round trip: 1000 files, 50 MB file, symlinks, empty dirs, modes, uid/gid, mtime" \
     "$TREE_SCRIPT" $SEVEN_CAPS
   EXTRACT_RC=$(sed -n 's/^EXTRACT_RC=//p' "${WORK_DIR}/last_output")
   EXTRACT_STDERR_BYTES=$(sed -n 's/^EXTRACT_STDERR_BYTES=//p' "${WORK_DIR}/last_output")
@@ -87,7 +87,7 @@ PY
   local flags_off=("${flags_default[@]}" --no-xattrs --no-acls --no-fflags)
   local out
   out=$(probe_run -i $SEVEN_CAPS "$PROBE_IMAGE" bash -c 'mkdir -p /o && /opt/sbx/bin/bsdtar "$@" -C /o; echo "rc=$?"' _ "${flags_default[@]}" <"$tar_file" 2>&1)
-  record INFO 4b "open fault 4: security.* and user.* xattr, default flags, 7 caps" "$(tr '\n' ' ' <<<"$out")"
+  record INFO 4b "security.* and user.* xattr, default flags, 7 caps" "$(tr '\n' ' ' <<<"$out")"
   out=$(probe_run -i $SEVEN_CAPS "$PROBE_IMAGE" bash -c 'mkdir -p /o && /opt/sbx/bin/bsdtar "$@" -C /o; echo "rc=$?"' _ "${flags_off[@]}" <"$tar_file" 2>&1)
   if [[ "$out" == *"rc=0"* ]] && [ "$(wc -l <<<"$out")" -eq 1 ]; then
     record PASS 4c "xattr entries with --no-xattrs --no-acls --no-fflags: exit 0, no warning" "$(tr '\n' ' ' <<<"$out")"
@@ -96,7 +96,7 @@ PY
   fi
   out=$(probe_run -i --security-opt seccomp=unconfined --security-opt apparmor=unconfined $SEVEN_CAPS --cap-add SYS_ADMIN --cap-add SETFCAP "$PROBE_IMAGE" \
     unshare --user --map-root-user bash -c 'mkdir -p /tmp/o; /opt/sbx/bin/bsdtar "$@" -C /tmp/o; echo "rc=$?"; ls -ln /tmp/o/w 2>&1' _ "${flags_off[@]}" <"$tar_file" 2>&1)
-  record INFO 4d "open fault 4: chown to an id unmapped in the user namespace (unshare --map-root-user, uid 1000 in the tar)" "$(tr '\n' ' ' <<<"$out")"
+  record INFO 4d "chown to an id unmapped in the user namespace (unshare --map-root-user, uid 1000 in the tar)" "$(tr '\n' ' ' <<<"$out")"
 }
 
 test_5_end_of_input() {
@@ -126,7 +126,7 @@ echo "INFO: complete tar without the end-of-archive blocks, pipe closed: exit=$r
 : | $B -x -f - -C /data/out 2>/data/e5; rc=$?
 echo "INFO: empty input: exit=$rc stderr=$(head -c 200 /data/e5 | tr "\n" " ")"
 '
-  run_scripted_test 5 "open fault 2: bsdtar -x -f - end of input; truncated tar" "$script" $SEVEN_CAPS
+  run_scripted_test 5 "bsdtar -x -f - end of input; truncated tar" "$script" $SEVEN_CAPS
 }
 
 test_6_names() {
@@ -154,7 +154,7 @@ trial "create hdrcharset=BINARY, locale C" "--options hdrcharset=BINARY" "" LC_A
 trial "create hdrcharset=BINARY, locale C.UTF-8" "--options hdrcharset=BINARY" "" LC_ALL=C.UTF-8 || echo "FAIL: BINARY on create, locale C.UTF-8"
 trial "hdrcharset=BINARY on create and extract, locale C" "--options hdrcharset=BINARY" "--options hdrcharset=BINARY" LC_ALL=C; echo "INFO: binary_on_extract_clean=$?"
 '
-  run_scripted_test 6 "open fault 5: raw-byte and Unicode names survive create then extract in the static musl build" "$script" $SEVEN_CAPS
+  run_scripted_test 6 "raw-byte and Unicode names survive create then extract in the static musl build" "$script" $SEVEN_CAPS
 }
 
 test_8_special_entries() {
