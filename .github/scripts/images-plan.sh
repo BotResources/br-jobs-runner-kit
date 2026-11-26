@@ -30,20 +30,19 @@ case "$event" in
       reason="pull request from this repository"
     fi
     ;;
-  workflow_dispatch | workflow_call)
+  workflow_dispatch)
     if [ "$push_input" = "true" ]; then
       push=true
-      reason="${event} with push=true"
+      reason="dispatch with push=true"
     else
-      reason="${event} without push=true"
+      reason="dispatch without push=true"
     fi
     ;;
+  *)
+    echo "::error::images.yml does not run on the event '${event}'" >&2
+    exit 1
+    ;;
 esac
-
-if [ "$push_input" = "false" ]; then
-  push=false
-  reason="push input is false"
-fi
 
 short="${head_sha:0:7}"
 if [ "$event" = "pull_request" ]; then
@@ -52,11 +51,7 @@ else
   tag="sha-${short}"
 fi
 
-owner="${repository%%/*}"
-registry="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<<"$owner")"
-
 echo "push=${push}"
 echo "tag=${tag}"
 echo "revision=${head_sha}"
-echo "registry=${registry}"
 echo "reason=${reason}"
