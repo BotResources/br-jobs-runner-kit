@@ -69,6 +69,7 @@ def passes($vap; $pod):
       and ((.securityContext.capabilities.add // []) - $caps == [])
       and (.securityContext.allowPrivilegeEscalation == false)
       and ((.securityContext.privileged // false) | not)
+      and ((.securityContext.seccompProfile.type // "RuntimeDefault") == "RuntimeDefault")
       and (has("ports") | not)
       and ((.env // []) | all(.valueFrom.secretKeyRef == null))
       and (.image as $i | $repos | any(. as $r | ($i | startswith($r + ":")) or ($i | startswith($r + "@"))))
@@ -95,6 +96,39 @@ check_VAP_model_of_the_pods() {
     t "the model refuses a limit above the size" test "$(model_result sbx-alpha-none '.spec.containers[0].resources.limits.memory = "3Gi"')" = false
     t "the model refuses a secret volume" test "$(model_result sbx-alpha-none '.spec.volumes += [{"name": "s", "secret": {"secretName": "x"}}]')" = false
     t "the model refuses a secretKeyRef" test "$(model_result sbx-alpha-none '.spec.containers[0].env += [{"name": "A", "valueFrom": {"secretKeyRef": {"name": "x", "key": "y"}}}]')" = false
+    t "the model refuses a container with seccomp Unconfined" test "$(model_result sbx-alpha-none '.spec.containers[0].securityContext.seccompProfile = {"type": "Unconfined"}')" = false
+    t "the model refuses a container with a Localhost seccomp profile" test "$(model_result sbx-alpha-none '.spec.containers[1].securityContext.seccompProfile = {"type": "Localhost", "localhostProfile": "p.json"}')" = false
+    t "the model refuses an init container with seccomp Unconfined" test "$(model_result sbx-alpha-none '.spec.initContainers[0].securityContext.seccompProfile = {"type": "Unconfined"}')" = false
+    t "the model accepts a container with seccomp RuntimeDefault" test "$(model_result sbx-alpha-none '.spec.containers[0].securityContext.seccompProfile = {"type": "RuntimeDefault"}')" = true
     t "the model refuses hostUsers true" test "$(model_result sbx-alpha-none '.spec.hostUsers = true')" = false
     t "the model refuses a seed container without the drop list" test "$(model_result sbx-alpha-none 'del(.spec.containers[1].securityContext.capabilities.drop)')" = false
+}
+
+EXPECTED="$SCRIPTS/test-sandbox-chart-policy-expected.json"
+
+expression_of() {
+    jq -r --arg ns "$1" --arg code "$2" '.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == ($ns + "-pod")) | .spec.validations[] | select(.message | startswith($code + ":")) | .expression' "$WORK/ex.json"
+}
+
+expected_of() {
+    jq -r --arg ns "$1" --arg code "$2" '.[$ns][$code]' "$EXPECTED"
+}
+
+expression_is_exactly() {
+    [[ "$(expression_of "$1" "$2")" == "$(expected_of "$1" "$2")" ]]
+}
+
+check_VAP_every_expression_is_the_exact_text() {
+    section "VAP expressions: each full CEL text equals the expected text"
+    local code
+    for code in $CODES; do
+        t "the expression of ${code} equals the expected text" expression_is_exactly sbx-alpha-none "$code"
+    done
+    t "the policy holds exactly the twelve rules and no other" jqt ex "[${VAP} | select(.metadata.name == \"sbx-alpha-none-pod\") | [.spec.validations[].message | split(\":\")[0]] | . == (\"${CODES}\" | split(\" \"))] | all"
+    t "the size rule of a pool with another size equals the expected text" expression_is_exactly sbx-alpha-full BR_SANDBOX_RESOURCES
+    t "the image rule of the allow namespace equals the expected text" expression_is_exactly sbx-alpha-allow BR_SANDBOX_IMAGE
+    t "a pod with neither role is refused: the role rule is the two cases and no third" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
+    t "the user-namespace rule has no alternative before the guard and the clause" expression_is_exactly sbx-alpha-none BR_SANDBOX_USERNS_REQUIRED
+    t "no expression holds a literal true or false operand of || or &&" jqt ex "[${VAP} | .spec.validations[].expression | select(test(\"(^|[(]|[|][|] |&& )(true|false) ([|][|]|&&)|([|][|]|&&) (true|false)([) ]|$)\"))] | length == 0"
+    t "every isolation rule starts with the guard that exempts only role=proxy pods" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|LABELS)\")) | .expression | startswith(\"variables.role != 'sandbox' || \") and (. | split(\"variables.role != 'sandbox' || \") | length == 2)] | all"
 }
