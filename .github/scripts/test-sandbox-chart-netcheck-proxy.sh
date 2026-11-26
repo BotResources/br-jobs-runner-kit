@@ -26,7 +26,10 @@ check_network_check_connect_probes_of_the_proxy_path() {
     t "the allow namespace also CONNECTs to the off-list host" grep -q '^10.43.0.50:8888 CONNECT offlist.invalid:443 ' "$WORK/netcheckstub/connect.log"
     t "the full namespace does not CONNECT to the off-list host" test "$(grep -c '^10.43.0.51:8888 CONNECT offlist.invalid' "$WORK/netcheckstub/connect.log")" -eq 0
     t "the off-list host is reported as a connect object in mode allow" grep -q '"mode":"allow","target":"offlist.invalid:443","kind":"connect"' <<<"$out"
-    t "a 502 answer counts as refused" test "$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=502 2>&1 | grep -c '"kind":"connect".*"observed":"refused"')" -eq 21
+    rc=0
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=502 2>&1)" || rc=$?
+    t "a 502 answer at the CONNECT is no_result for every probe and never refused" test "$(grep -c '"kind":"connect".*"observed":"no_result"' <<<"$out")" -eq 21 -a "$(grep -c '"kind":"connect".*"observed":"refused"' <<<"$out")" -eq 0
+    t "a 502 answer at the CONNECT fails the job" test "$rc" -ne 0
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=tunnel200 2>&1)" || rc=$?
     t "a tunnel opened with 200 whose request inside the tunnel answers 200 fails the job" test "$rc" -ne 0
@@ -76,10 +79,10 @@ check_network_check_connect_verdicts_of_each_mode() {
     stub_tools "$WORK/netcheckbin"
     local proxy_mode stub
     for proxy_mode in allow full; do
-        for stub in 403 502; do assert_connect_verdict "$proxy_mode" "$stub" refused 403; done
+        assert_connect_verdict "$proxy_mode" 403 refused 403
         assert_connect_verdict "$proxy_mode" tunnel502 unanswered 403
         for stub in tunnel200 tunnel404 tunnel502other; do assert_connect_verdict "$proxy_mode" "$stub" reached 403; done
-        for stub in 200 tunnelgarbled garbled silent; do assert_connect_verdict "$proxy_mode" "$stub" no_result 403; done
+        for stub in 200 502 tunnelgarbled garbled silent; do assert_connect_verdict "$proxy_mode" "$stub" no_result 403; done
     done
     local out
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnel502 2>&1)" || true
@@ -93,7 +96,18 @@ check_network_check_connect_verdicts_of_each_mode() {
     t "the README says the CONNECT verdict is read from the request inside the tunnel when the CONNECT answers 200" grep -qF 'sends a plain HTTP request `GET /` inside the tunnel on the same connection' "$README"
     t "the README says unanswered is a 502 with the body bad gateway inside the tunnel and is accepted in mode full only" grep -qF 'is `unanswered` when the request inside the tunnel gets an answer 502 with the body `bad gateway`' "$README"
     t "the README says what unanswered does not prove" grep -qF 'It does not prove that the deny list refused the target' "$README"
-    t "the README says the proof that the deny list refused is the audit log of the proxy" grep -qF 'is the audit log of the proxy, read in the deploy test, not this probe' "$README"
+    t "the README says the proof that the deny list refused is the audit log of the proxy" grep -qF 'The evidence that the deny list refused an address is the audit log of the proxy: an entry with `action` `error` and the error text `denied by upstream_deny_cidrs`. Nothing in this chart reads that log; an operator reads it.' "$README"
+    t "the README says what a pass means in mode full and names the targets it cannot cover" grep -qF 'a pass of the probes through the proxy is no evidence about the deny list of the proxy or about the network policy of the proxy namespace for a target that does not answer plain HTTP. The Job cannot cover that way: the message bus, the database, the DNS service, the kubelet and the cluster API server when they do not answer plain HTTP, and any non-HTTP pod port.' "$README"
+    t "the README says what the Job proves" grep -qF 'What this Job proves is the direct TCP probes of the sandbox pod and the network policy of the sandbox namespace.' "$README"
+    t "the README gives no refusal-as-control claim and no deploy test" test "$(grep -cE 'its own control|deploy test' "$README")" -eq 0
+    t "the README says unanswered has no control of its own and refused keeps its meaning" grep -qF 'A `refused` verdict (403 at the `CONNECT`, mode `allow`) is sent by the proxy only. An `unanswered` verdict has no control of its own.' "$README"
+    t "the README says a CONNECT answer other than 200 and 403 is no_result, a 502 included" grep -qF 'a `CONNECT` answer other than 200 and 403 (a 502 at the `CONNECT` included' "$README"
+    t "the README names the expected word of a connect line in each mode" grep -qF '`expected` is `refused` in mode `allow`, and `refused_or_unanswered` in mode `full` (the Job accepts `refused` and `unanswered` there)' "$README"
+    t "the CHANGELOG says a CONNECT answer other than 200 and 403 is no_result" grep -qF 'a CONNECT answer other than 200 and 403, a 502 included, is `no_result`' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG names the targets that the probes through the proxy cannot cover in mode full" grep -qF 'the message bus, the database, the DNS service, the kubelet and the cluster API server when they do not answer plain HTTP, and any non-HTTP pod port' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says an operator reads the audit log" grep -qF 'nothing in this chart reads that log, an operator reads it' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG names the expected word of a connect line" grep -qF 'is `refused` in mode `allow` and `refused_or_unanswered` in mode `full`' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG names no deploy test" test "$(grep -c 'deploy test' "$CHART/CHANGELOG.md")" -eq 0
     t "the README says that mode full answers 200 at the CONNECT for a deny-listed target" grep -qF 'the proxy answers the `CONNECT` with 200 for any target, a target of the deny list included' "$README"
     t "the CHANGELOG names the verdict unanswered" grep -qF '`unanswered` when the request inside the tunnel gets 502 with the body `bad gateway`' "$CHART/CHANGELOG.md"
     t "the CHANGELOG says the same" grep -qF 'when the CONNECT answers 200 the probe sends a plain HTTP request inside the tunnel' "$CHART/CHANGELOG.md"

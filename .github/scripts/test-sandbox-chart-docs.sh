@@ -64,7 +64,7 @@ check_lint_strict_on_every_fixture() {
 }
 
 check_the_check_image_lists_every_tool_the_script_calls() {
-    section "the check image section names every program that the network check script calls"
+    section "the check image section names each program of a fixed list of candidate names that the network check script calls"
     local paragraph tool in_script
     paragraph="$(grep '^\*\*The check image\.\*\*' "$README")"
     for tool in kubectl nc cat sed tr mktemp awk grep sleep head tail cut sort uniq wc date curl wget find xargs tee dirname basename tac rev expr env timeout jq yq base64 od ls rm mv cp touch tar; do
@@ -76,6 +76,8 @@ check_the_check_image_lists_every_tool_the_script_calls() {
             t "the script does not call ${tool} and the check image section does not name it" test "$(grep -cF "\`${tool}\`" <<<"$paragraph")" -eq 0
         fi
     done
+    t "the section says the list is the programs called at this version, that a fixed list of candidate names is checked, and that no full parse is done" grep -qF 'the programs that the script calls at this version, besides the builtins of `sh`. A test checks the script against a fixed list of candidate program names; it does not parse every command of the script.' <<<"$paragraph"
+    t "the section does not claim that the script calls no other program" test "$(grep -c 'no other program' <<<"$paragraph")" -eq 0
     t "the section says the probe reads the reply until the proxy closes" grep -qF 'keeps reading the reply until the proxy closes the connection' <<<"$paragraph"
     t "the section says -w is an idle timeout" grep -qF '`-w` is an idle timeout' <<<"$paragraph"
     t "the section says nc exits when the proxy closes" grep -qF 'it exits when the proxy closes the connection' <<<"$paragraph"

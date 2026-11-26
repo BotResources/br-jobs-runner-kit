@@ -28,7 +28,7 @@ connect_state() {
   } | nc -w 3 "${NETCHECK_PROXY%:*}" "${NETCHECK_PROXY##*:}" 2>/dev/null | tr -d '\r') || reply=""
   first=$(printf '%s\n' "$reply" | sed -n 1p)
   case "$first" in
-    "HTTP/"*" 403 "* | "HTTP/"*" 502 "*) printf 'refused' ;;
+    "HTTP/"*" 403 "*) printf 'refused' ;;
     "HTTP/"*" 200 "*) tunnel_state "$reply" ;;
     *) printf 'no_result' ;;
   esac
