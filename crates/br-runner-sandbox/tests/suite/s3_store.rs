@@ -7,7 +7,7 @@ use crate::fakes::{HttpServer, Request, Response};
 
 const SECRET: &str = "wJalrSECRETEXAMPLE";
 
-fn store_for(address: &str, extra: serde_json::Value) -> S3Store {
+pub fn store_for(address: &str, extra: serde_json::Value) -> S3Store {
     let mut settings = json!({"store_endpoint": address, "store_path_style": true});
     if let (Some(base), Some(extra)) = (settings.as_object_mut(), extra.as_object()) {
         base.extend(extra.clone());
