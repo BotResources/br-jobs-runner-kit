@@ -62,3 +62,22 @@ check_lint_strict_on_every_fixture() {
     t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper egress; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
+
+check_the_check_image_lists_every_tool_the_script_calls() {
+    section "the check image section names every program that the network check script calls"
+    local paragraph tool in_script
+    paragraph="$(grep '^\*\*The check image\.\*\*' "$README")"
+    for tool in kubectl nc cat sed tr mktemp awk grep sleep head tail cut sort uniq wc date curl wget find xargs tee dirname basename tac rev expr env timeout jq yq base64 od ls rm mv cp touch tar; do
+        in_script=no
+        if grep -qE "(^|[^A-Za-z_./-])${tool}([^A-Za-z_./-]|\$)" "$CHART/files/network-check.sh"; then in_script=yes; fi
+        if [[ "$in_script" == yes ]]; then
+            t "the script calls ${tool} and the check image section names it" grep -qF "\`${tool}\`" <<<"$paragraph"
+        else
+            t "the script does not call ${tool} and the check image section does not name it" test "$(grep -cF "\`${tool}\`" <<<"$paragraph")" -eq 0
+        fi
+    done
+    t "the section says the probe reads the reply until the proxy closes" grep -qF 'keeps reading the reply until the proxy closes the connection' <<<"$paragraph"
+    t "the section says -w is an idle timeout" grep -qF '`-w` is an idle timeout' <<<"$paragraph"
+    t "the section says nc exits when the proxy closes" grep -qF 'it exits when the proxy closes the connection' <<<"$paragraph"
+    t "the section names the one build exercised and says no other was" grep -qF 'One build was exercised, a BSD `nc`; no other build' <<<"$paragraph"
+}

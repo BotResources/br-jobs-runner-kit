@@ -10,6 +10,7 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     req="$(cat | tr -d '\r')"
     printf '%s %s\n' "$target" "$(printf '%s\n' "$req" | sed -n 1p)" >>"$STUB_DIR/connect.log"
     inner="$(printf '%s\n' "$req" | grep '^GET ' | sed -n 1p)"
+    ct="$(printf '%s\n' "$req" | sed -n 1p | cut -d' ' -f2)"
     [ -n "$inner" ] && printf '%s %s\n' "$target" "$inner" >>"$STUB_DIR/connect.log"
     case "$3" in
         10.43.0.51) mode="${CONNECT_MODE_FULL:-$CONNECT_MODE}" ;;
@@ -27,6 +28,7 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
         tunnel404) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n' ;;
         tunnel200) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;;
         tunnelgarbled) printf "$open"; [ -n "$inner" ] && printf 'garbage\r\n' ;;
+        bytarget) printf "$open"; if [ -n "$inner" ]; then case "$ct" in *:8080) printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; *) printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;; esac; fi ;;
         offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; esac ;;
     esac
     exit 0

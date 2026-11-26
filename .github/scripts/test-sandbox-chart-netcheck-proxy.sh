@@ -30,15 +30,15 @@ check_network_check_connect_probes_of_the_proxy_path() {
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=tunnel200 2>&1)" || rc=$?
     t "a tunnel opened with 200 whose request inside the tunnel answers 200 fails the job" test "$rc" -ne 0
-    t "that answer is reported as reached for every probe" test "$(grep -c '"kind":"connect","expected":"refused","observed":"reached"' <<<"$out")" -eq 21
+    t "that answer is reported as reached for every probe" test "$(grep -c '"kind":"connect","expected":"[a-z_]*","observed":"reached"' <<<"$out")" -eq 21
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=200 2>&1)" || rc=$?
     t "a CONNECT answered 200 with no answer to the request inside the tunnel fails the job" test "$rc" -ne 0
-    t "a CONNECT answered 200 with no answer to the request inside the tunnel is reported as no_result and never as refused" test "$(grep -c '"kind":"connect","expected":"refused","observed":"no_result"' <<<"$out")" -eq 21
+    t "a CONNECT answered 200 with no answer to the request inside the tunnel is reported as no_result and never as refused" test "$(grep -c '"kind":"connect","expected":"[a-z_]*","observed":"no_result"' <<<"$out")" -eq 21
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=garbled 2>&1)" || rc=$?
     t "an answer that is not an HTTP status fails the job" test "$rc" -ne 0
-    t "an answer that is not an HTTP status is reported as no_result" grep -q '"kind":"connect","expected":"refused","observed":"no_result"' <<<"$out"
+    t "an answer that is not an HTTP status is reported as no_result" grep -q '"kind":"connect","expected":"[a-z_]*","observed":"no_result"' <<<"$out"
     rc=0
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=silent 2>&1)" || rc=$?
     t "a proxy that does not answer fails the job" test "$rc" -ne 0
@@ -46,7 +46,7 @@ check_network_check_connect_probes_of_the_proxy_path() {
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=offlist 2>&1)" || rc=$?
     t "positive control: a proxy that refuses the off-list host and passes the targets fails the job" test "$rc" -ne 0
     t "positive control: the off-list probe is reported as refused" grep -q '"target":"offlist.invalid:443","kind":"connect","expected":"refused","observed":"refused"' <<<"$out"
-    t "positive control: every target probe is reported as reached, so a proxy that passes a target is seen" test "$(grep -c '"kind":"connect","expected":"refused","observed":"reached"' <<<"$out")" -eq 20
+    t "positive control: every target probe is reported as reached, so a proxy that passes a target is seen" test "$(grep -c '"kind":"connect","expected":"[a-z_]*","observed":"reached"' <<<"$out")" -eq 20
     t "the README says the probe has no positive control and the cluster tests check that a listed host is reached" grep -qF 'The probe has no positive control: a proxy that refuses everything (a broken allow list) also passes the off-list check, so that a listed host is reached is checked by the cluster tests' "$README"
     t "the example render has no CONNECT probe" test "$(run_netcheck env NC_MODE=all PROBE_MODE=none 2>&1 | grep -c '"kind":"connect"')" -eq 0
     t "the pod list excludes the proxy pods by selector" grep -q 'br.sandbox/role!=proxy' "$WORK/netcheckstub/pods.args"
@@ -62,7 +62,8 @@ assert_connect_verdict() {
     if [[ "$proxy_mode" == allow ]]; then allow_stub="$stub"; want=11; else full_stub="$stub"; fi
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_ALLOW="$allow_stub" CONNECT_MODE_FULL="$full_stub" 2>&1)" || rc=$?
     t "mode ${proxy_mode}, stub ${stub}: every probe of the mode is ${verdict}" test "$(grep -c "\"mode\":\"${proxy_mode}\".*\"kind\":\"connect\".*\"observed\":\"${verdict}\"" <<<"$out")" -eq "$want"
-    if [[ "$verdict" == refused ]]; then
+    t "mode ${proxy_mode}, stub ${stub}: the JSON line carries the word ${verdict}" grep -q "\"mode\":\"${proxy_mode}\",\"target\":\"[^\"]*\",\"kind\":\"connect\",\"expected\":\"[a-z_]*\",\"observed\":\"${verdict}\",\"control\":\"not_applicable\"" <<<"$out"
+    if [[ "$verdict" == refused || ( "$verdict" == unanswered && "$proxy_mode" == full ) ]]; then
         t "mode ${proxy_mode}, stub ${stub}: the job passes" test "$rc" -eq 0
     else
         t "mode ${proxy_mode}, stub ${stub}: the job fails" test "$rc" -ne 0
@@ -75,19 +76,39 @@ check_network_check_connect_verdicts_of_each_mode() {
     stub_tools "$WORK/netcheckbin"
     local proxy_mode stub
     for proxy_mode in allow full; do
-        for stub in 403 502 tunnel502; do assert_connect_verdict "$proxy_mode" "$stub" refused 403; done
+        for stub in 403 502; do assert_connect_verdict "$proxy_mode" "$stub" refused 403; done
+        assert_connect_verdict "$proxy_mode" tunnel502 unanswered 403
         for stub in tunnel200 tunnel404 tunnel502other; do assert_connect_verdict "$proxy_mode" "$stub" reached 403; done
         for stub in 200 tunnelgarbled garbled silent; do assert_connect_verdict "$proxy_mode" "$stub" no_result 403; done
     done
     local out
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnel502 2>&1)" || true
-    t "mode full, deny-listed targets: a CONNECT answered 200 then a request answered 502 with the body bad gateway is refused" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"refused"' <<<"$out")" -eq 10
+    t "mode full: a CONNECT answered 200 then a request answered 502 with the body bad gateway is unanswered and never refused" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"unanswered"' <<<"$out")" -eq 10 -a "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"refused"' <<<"$out")" -eq 0
+    t "mode full: the expected word of a probe is refused_or_unanswered" test "$(grep -c '"mode":"full","target":"[^"]*","kind":"connect","expected":"refused_or_unanswered"' <<<"$out")" -eq 10
+    t "mode allow: the expected word of a probe is refused" test "$(grep -c '"mode":"allow","target":"[^"]*","kind":"connect","expected":"refused"' <<<"$out")" -eq 11
     t "mode allow, off-list host: a CONNECT answered 403 is refused" grep -q '"mode":"allow","target":"offlist.invalid:443","kind":"connect","expected":"refused","observed":"refused"' <<<"$out"
     t "a request GET / is sent after each CONNECT on the same connection" test "$(grep -c '^10.43.0.5[01]:8888 GET / HTTP/1.1$' "$WORK/netcheckstub/connect.log")" -eq "$(grep -c '^10.43.0.5[01]:8888 CONNECT ' "$WORK/netcheckstub/connect.log")"
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=offlist 2>&1)" || true
     t "positive control: a proxy that passes a target with a 200 answer inside the tunnel is seen as reached in mode full" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"reached"' <<<"$out")" -eq 10
     t "the README says the CONNECT verdict is read from the request inside the tunnel when the CONNECT answers 200" grep -qF 'sends a plain HTTP request `GET /` inside the tunnel on the same connection' "$README"
-    t "the README says refused is a 403 or 502 at the CONNECT or a 502 with the body bad gateway inside the tunnel" grep -qF 'an answer 502 with the body `bad gateway`' "$README"
+    t "the README says unanswered is a 502 with the body bad gateway inside the tunnel and is accepted in mode full only" grep -qF 'is `unanswered` when the request inside the tunnel gets an answer 502 with the body `bad gateway`' "$README"
+    t "the README says what unanswered does not prove" grep -qF 'It does not prove that the deny list refused the target' "$README"
+    t "the README says the proof that the deny list refused is the audit log of the proxy" grep -qF 'is the audit log of the proxy, read in the deploy test, not this probe' "$README"
     t "the README says that mode full answers 200 at the CONNECT for a deny-listed target" grep -qF 'the proxy answers the `CONNECT` with 200 for any target, a target of the deny list included' "$README"
+    t "the CHANGELOG names the verdict unanswered" grep -qF '`unanswered` when the request inside the tunnel gets 502 with the body `bad gateway`' "$CHART/CHANGELOG.md"
     t "the CHANGELOG says the same" grep -qF 'when the CONNECT answers 200 the probe sends a plain HTTP request inside the tunnel' "$CHART/CHANGELOG.md"
+}
+
+check_network_check_unanswered_targets_by_port() {
+    section "the network check: the plain request inside the tunnel for each port of the probe targets"
+    mkdir -p "$WORK/netcheckstub"
+    stub_tools "$WORK/netcheckbin"
+    local out port rc=0
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=bytarget 2>&1)" || rc=$?
+    for port in 443 6443 10250 53; do
+        t "mode full, port ${port}: a 502 with the body bad gateway inside the tunnel is unanswered" test "$(grep -c "\"mode\":\"full\",\"target\":\"[^\"]*:${port}\",\"kind\":\"connect\",\"expected\":\"refused_or_unanswered\",\"observed\":\"unanswered\"" <<<"$out")" -ge 1
+        t "mode full, port ${port}: the plain GET is sent through the tunnel to the target" grep -q "^10.43.0.51:8888 CONNECT [^ ]*:${port} HTTP/1.1$" "$WORK/netcheckstub/connect.log"
+    done
+    t "mode full: a target that answers 200 inside the tunnel is reached while the others stay unanswered" grep -q '"mode":"full","target":"10.42.0.5:8080","kind":"connect","expected":"refused_or_unanswered","observed":"reached"' <<<"$out"
+    t "the job fails when one target is reached" test "$rc" -ne 0
 }

@@ -10,7 +10,7 @@ tunnel_state() {
   case "$status" in
     "HTTP/"*" 502" | "HTTP/"*" 502 "*)
       if printf '%s\n' "$inner" | grep -qx 'bad gateway'; then
-        printf 'refused'
+        printf 'unanswered'
       else
         printf 'reached'
       fi
@@ -152,10 +152,15 @@ report() {
 }
 
 report_connect_line() {
-  printf '{"net":"%s","mode":"%s","target":"%s","kind":"connect","expected":"refused","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3" "$4"
-  if [ "$4" != refused ]; then
-    printf '1\n' >>"$work/failures"
+  expected=refused
+  if [ "$2" = full ]; then
+    expected=refused_or_unanswered
   fi
+  printf '{"net":"%s","mode":"%s","target":"%s","kind":"connect","expected":"%s","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3" "$expected" "$4"
+  case "$2:$4" in
+    *:refused | full:unanswered) ;;
+    *) printf '1\n' >>"$work/failures" ;;
+  esac
 }
 
 report_connect() {
