@@ -15,7 +15,7 @@ Test and reference image of the sandbox. Each project defines its own image; thi
 
 ## Contract
 
-The image satisfies the sandbox image contract (T20): `/bin/sh`, `cat` and `find`, for the architecture of the nodes. It holds no agent code and has no `USER` instruction. It works as any numeric non-root uid with no passwd entry (T13).
+The image satisfies the sandbox image contract: `/bin/sh`, `cat` and `find`, for the architecture of the nodes. It holds no agent code and has no `USER` instruction. It works as any numeric non-root uid with no passwd entry.
 
 ## Build and test
 
