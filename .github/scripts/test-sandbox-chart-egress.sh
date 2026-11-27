@@ -9,6 +9,7 @@ render_egress_fixtures() {
     render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
     render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
     render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
+    render keeperegress -f "$EXAMPLE" -f "$KEEPER_VALUES" -f "$EGRESS_VALUES"
 }
 
 policy_json() {
@@ -28,7 +29,11 @@ check_no_identity_of_the_chart_has_a_right_in_the_egress_namespace() {
 
 check_no_cluster_wide_right_on_secrets_and_pods_beyond_the_network_check_read() {
     section "cluster-wide rights: none on secrets, none on pods but the read of the network check"
-    t "no ClusterRole rule names secrets or a wildcard resource" jqt keeper '[.[] | select(.kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
+    local render
+    for render in keeper cred keeperegress; do
+        t "in the ${render} render no ClusterRole rule names secrets or a wildcard resource" jqt "$render" '[.[] | select(.kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
+    done
+    t "the keeperegress render holds the keeper and the proxy Deployments, so the checks above read both" jqt keeperegress '[.[] | select(.kind == "Deployment") | .metadata.name] | index("br-sandbox-proxy") != null and (map(select(test("keeper"))) | length) > 0'
     t "the only cluster-wide pod right is get and list in the network check ClusterRole" jqt keeper '[.[] | select(.kind == "ClusterRole") | select(any(.rules[]; .resources | any(. == "pods" or startswith("pods/")))) | {name: .metadata.name, rules: [.rules[] | select(.resources | any(. == "pods" or startswith("pods/")))]}] == [{"name": "sbx-system-netcheck", "rules": [{"apiGroups": [""], "resources": ["nodes", "services", "endpoints", "pods"], "verbs": ["get", "list"]}]}]'
     t "every ClusterRoleBinding names a ClusterRole of the render and a ServiceAccount" jqt keeper '[.[] | select(.kind == "ClusterRole") | .metadata.name] as $c | [.[] | select(.kind == "ClusterRoleBinding") | select((.roleRef.name as $r | $c | index($r) != null) and (.subjects | all(.kind == "ServiceAccount")) | not)] | length == 0'
     t "every RoleBinding names a Role of the render, never a ClusterRole" jqt keeper '[.[] | select(.kind == "RoleBinding") | select(.roleRef.kind != "Role")] | length == 0'
