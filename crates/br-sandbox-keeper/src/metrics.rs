@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::sync::Mutex;
 
-pub const POD_DELETE_REASONS: [&str; 4] = ["warm_max_age", "idle", "stuck", "failed"];
+pub const POD_DELETE_REASONS: [&str; 5] = ["warm_max_age", "idle", "stuck", "failed", "rollout"];
 
 #[derive(Default)]
 struct PoolGauges {
@@ -95,6 +95,10 @@ impl Metrics {
 
     pub fn set_claims_per_second(&self, pool: &str, rate: f64) {
         self.with_pool(pool, |gauges| gauges.claims_per_second = rate);
+    }
+
+    pub fn forget_pool(&self, pool: &str) {
+        self.lock().pools.remove(pool);
     }
 
     pub fn set_idle_pods(&self, count: usize) {

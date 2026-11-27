@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use br_sandbox_keeper::KeeperConfig;
+use br_sandbox_keeper::{ConfigError, KeeperConfig};
 use serde_json::Value;
 
 mod common;
@@ -30,6 +30,47 @@ fn enables_the_keeper(overlay: &Path) -> bool {
 
 fn keeper_overlay() -> PathBuf {
     chart().join("ci/operator-values.yaml")
+}
+
+fn fixture_of_chart_0_4() -> Value {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/chart-0.4-keeper-document.json");
+    let text = std::fs::read_to_string(path).expect("the fixture of the chart 0.4 document");
+    serde_json::from_str(&text).expect("the fixture is JSON")
+}
+
+#[test]
+fn the_keeper_0_2_loads_a_document_of_the_shape_that_the_chart_0_4_renders() {
+    let document = fixture_of_chart_0_4();
+    assert!(document.get("pools").is_none());
+    let config = KeeperConfig::from_json(&document.to_string())
+        .unwrap_or_else(|error| panic!("the keeper refuses the fixture: {error}"));
+    assert_eq!(config.agent_container, "agent");
+    assert_eq!(config.managed_namespace_selector, "br.sandbox/managed=true");
+    assert_eq!(config.store.bucket, "saves");
+    assert_eq!(config.save_ttl, Duration::from_secs(60));
+    assert_eq!(config.warm_max_age, Duration::from_secs(1800));
+    assert_eq!(config.lease.duration, Duration::from_secs(15));
+    assert_eq!(config.idle_ttl, Duration::from_secs(120));
+    assert_eq!(config.idle_keep_min_state_bytes, 10_000_000);
+    assert_eq!(config.listen_address.to_string(), "0.0.0.0:8080");
+}
+
+#[test]
+fn the_keeper_0_2_refuses_a_document_of_the_chart_0_4_shape_that_holds_the_pools() {
+    let mut document = fixture_of_chart_0_4();
+    document["pools"] = Value::Array(Vec::new());
+    assert_eq!(
+        KeeperConfig::from_json(&document.to_string()),
+        Err(ConfigError::PoolsAreResources)
+    );
+}
+
+#[test]
+fn the_document_that_the_chart_renders_equals_the_fixture_of_the_chart_0_4() {
+    let document: Value = serde_json::from_str(&keeper_document(&rendered(&keeper_overlay(), &[])))
+        .expect("the keeper document is JSON");
+    assert_eq!(document, fixture_of_chart_0_4());
 }
 
 #[test]

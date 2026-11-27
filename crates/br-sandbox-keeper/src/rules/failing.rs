@@ -117,16 +117,20 @@ pub struct ConditionWrite {
     pub last_transition_time: Timestamp,
 }
 
+pub fn failing_status(judged: &PoolJudgement) -> &'static str {
+    if judged.failing {
+        STATUS_TRUE
+    } else {
+        STATUS_FALSE
+    }
+}
+
 pub fn condition_write(
     current: &[ConditionFacts],
     judged: &PoolJudgement,
     now: Timestamp,
 ) -> Option<ConditionWrite> {
-    let status = if judged.failing {
-        STATUS_TRUE
-    } else {
-        STATUS_FALSE
-    };
+    let status = failing_status(judged);
     let existing = current
         .iter()
         .find(|condition| condition.kind == CONDITION_WARM_PODS_FAILING);

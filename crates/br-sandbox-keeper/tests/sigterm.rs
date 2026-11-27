@@ -23,6 +23,16 @@ fn reply(method: &str, target: &str) -> (u16, &'static str, String) {
         let pods = json!({"apiVersion": "v1", "kind": "PodList",
             "metadata": {"resourceVersion": "1"}, "items": []});
         (200, "application/json", pods.to_string())
+    } else if path.ends_with("/validatingadmissionpolicybindings") {
+        let bindings = json!({"apiVersion": "admissionregistration.k8s.io/v1",
+            "kind": "ValidatingAdmissionPolicyBindingList",
+            "metadata": {"resourceVersion": "1"}, "items": []});
+        (200, "application/json", bindings.to_string())
+    } else if path.ends_with("/sandboxpools") {
+        let pools = json!({"apiVersion": "sandbox.botresources.ai/v1alpha1",
+            "kind": "SandboxPoolList",
+            "metadata": {"resourceVersion": "1"}, "items": []});
+        (200, "application/json", pools.to_string())
     } else if path.contains("/leases") && method == "POST" {
         let lease = json!({"apiVersion": "coordination.k8s.io/v1", "kind": "Lease",
             "metadata": {"name": "br-sandbox-keeper", "namespace": "sys"}});
@@ -47,7 +57,7 @@ fn answer(mut stream: TcpStream) {
     let mut request_line = text.lines().next().unwrap_or_default().split(' ');
     let method = request_line.next().unwrap_or_default();
     let target = request_line.next().unwrap_or_default();
-    if method == "GET" && target.contains("/pods?") && target.contains("watch=true") {
+    if method == "GET" && target.contains("watch=true") {
         let opened = "HTTP/1.1 200 X\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n";
         if stream.write_all(opened.as_bytes()).is_ok() {
             thread::sleep(Duration::from_secs(3600));
@@ -155,8 +165,7 @@ fn the_binary_that_serves_ends_with_code_0_on_sigterm() {
             "lease_namespace": "sys",
             "save_ttl_seconds": 1000,
             "skew_margin_seconds": 60,
-            "pools": [{"id": "p", "namespace": "sbx", "replicaset": "warm-p",
-                "min_replicas": 1, "max_replicas": 20}]
+            "agent_container": "agent"
         })
         .to_string(),
     );

@@ -11,8 +11,6 @@ pub enum ConfigError {
     Negative { key: String },
     #[error("the key {key} is not valid: {reason}")]
     Invalid { key: String, reason: String },
-    #[error("the pool {pool} has min_replicas above max_replicas")]
-    MinAboveMax { pool: String },
     #[error("rate_bucket_seconds is above rate_window_seconds")]
     BucketAboveWindow,
     #[error("scale_down_step must be at least 1")]
@@ -23,15 +21,6 @@ pub enum ConfigError {
     LeaseOrder,
     #[error("the time zone {0:?} is not a known name")]
     UnknownTimezone(String),
-    #[error("the window {index} of the floors of the pool {pool} ends no later than it begins")]
-    WindowEndsNoLater { pool: String, index: usize },
-    #[error("two pools have the id {0:?}")]
-    DuplicatePoolId(String),
-    #[error("two pools have the replica set {replicaset:?} in the namespace {namespace:?}")]
-    DuplicateReplicaSet {
-        namespace: String,
-        replicaset: String,
-    },
-    #[error("the keeper has no pool")]
-    NoPools,
+    #[error("the key pools is not a key of the keeper: pools are SandboxPool resources")]
+    PoolsAreResources,
 }

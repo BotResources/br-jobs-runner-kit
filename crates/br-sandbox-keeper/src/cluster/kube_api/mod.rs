@@ -1,8 +1,8 @@
-use std::time::UNIX_EPOCH;
+use std::sync::Arc;
 
-use br_runner_sandbox::{PodKeys, Timestamp};
+use br_runner_sandbox::PodKeys;
 use futures::StreamExt;
-use futures::stream::{self, BoxStream};
+use futures::stream::BoxStream;
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::coordination::v1::Lease;
 use k8s_openapi::api::core::v1::{Event, EventSource, Namespace, ObjectReference, Pod};
@@ -14,8 +14,8 @@ use kube::api::{
 use kube::{Api, Client, Config};
 use serde_json::json;
 
-use crate::convert::{pod_facts, replica_set_facts};
-use crate::facts::{PodFacts, PodVersion, ReplicaSetFacts};
+use crate::convert::pod_facts;
+use crate::facts::{PodFacts, PodVersion};
 use crate::rules::ConditionWrite;
 
 use super::{
@@ -31,21 +31,16 @@ pub struct KubeCluster {
 
 fn call_error(error: kube::Error) -> ApiError {
     match &error {
+        kube::Error::Api(status) if status.is_forbidden() => {
+            ApiError::Forbidden(status.message.clone())
+        }
         kube::Error::Api(status) if status.is_not_found() => ApiError::NotFound,
         kube::Error::Api(status) if status.is_conflict() => ApiError::Conflict,
         _ => ApiError::Call(error.to_string()),
     }
 }
 
-pub(super) fn instant(time: Timestamp) -> jiff::Timestamp {
-    let millis = time
-        .to_system_time()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| {
-            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
-        });
-    jiff::Timestamp::from_millisecond(millis).unwrap_or(jiff::Timestamp::UNIX_EPOCH)
-}
+pub(super) use crate::convert::instant;
 
 impl KubeCluster {
     pub fn new(client: Client, keys: PodKeys) -> Self {
@@ -63,10 +58,11 @@ impl KubeCluster {
 }
 
 mod lease;
+mod pool;
 mod watch;
 
 use lease::{lease_facts, lease_object};
-use watch::{Phase, Watch, pod_selector};
+use watch::{pod_selector, watch_stream};
 
 impl crate::sealed::Sealed for KubeCluster {}
 
@@ -88,17 +84,15 @@ impl KubeApi for KubeCluster {
 
     fn watch_pods(&self, namespace: &str) -> BoxStream<'static, PodEvent> {
         let selector = pod_selector(&self.keys);
-        let watch = Watch {
-            api: Api::namespaced(self.client.clone(), namespace),
-            list: ListParams::default().labels(&selector),
-            watch: WatchParams::default().labels(&selector),
-            keys: self.keys.clone(),
-        };
-        stream::unfold((watch, Phase::List), |(watch, phase)| async move {
-            let (events, phase) = watch.step(phase).await;
-            Some((stream::iter(events), (watch, phase)))
-        })
-        .flatten()
+        let keys = self.keys.clone();
+        watch_stream(
+            Api::<Pod>::namespaced(self.client.clone(), namespace),
+            ListParams::default().labels(&selector),
+            WatchParams::default().labels(&selector),
+            "pod",
+            Arc::new(move |pod: &Pod| pod_facts(pod, &keys)),
+        )
+        .map(PodEvent::from)
         .boxed()
     }
 
@@ -133,18 +127,6 @@ impl KubeApi for KubeCluster {
                     other => Err(other),
                 },
             }
-        })
-    }
-
-    fn get_replica_set<'a>(
-        &'a self,
-        namespace: &'a str,
-        name: &'a str,
-    ) -> ApiFuture<'a, Option<ReplicaSetFacts>> {
-        Box::pin(async move {
-            let api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), namespace);
-            let found = api.get_opt(name).await.map_err(call_error)?;
-            Ok(found.as_ref().map(replica_set_facts))
         })
     }
 

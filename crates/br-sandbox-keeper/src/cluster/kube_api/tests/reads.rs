@@ -58,26 +58,6 @@ async fn a_pod_is_read_by_name_and_a_pod_without_the_pool_label_is_not_ours() {
 }
 
 #[tokio::test]
-async fn a_replica_set_is_read_by_name() {
-    let wire = Wire::ok(replica_set_json());
-    let found = wire
-        .cluster()
-        .get_replica_set("sbx", "warm-p")
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!((found.uid.as_str(), found.replicas), ("rs-uid", Some(3)));
-    let seen = wire.only();
-    assert_eq!(seen.method, "GET");
-    assert_eq!(seen.path, "/apis/apps/v1/namespaces/sbx/replicasets/warm-p");
-    let gone = Wire::answering(StatusCode::NOT_FOUND, not_found());
-    assert_eq!(
-        gone.cluster().get_replica_set("sbx", "warm-p").await,
-        Ok(None)
-    );
-}
-
-#[tokio::test]
 async fn the_pods_are_listed_then_watched_from_the_version_of_the_list_with_the_pool_selector() {
     let wire = Wire::routed(|seen| {
         if seen.query.contains("watch=true") {

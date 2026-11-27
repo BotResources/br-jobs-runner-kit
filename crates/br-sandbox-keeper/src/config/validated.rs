@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
@@ -9,8 +8,10 @@ use url::Url;
 
 use super::error::ConfigError;
 use super::input::KeeperConfigInput;
-use super::numbers::{Zero, seconds, small, text};
-use super::pool::PoolConfig;
+use super::numbers::{Zero, count, seconds, small, text};
+
+const DEFAULT_IDLE_TTL_SECONDS: u64 = 120;
+const DEFAULT_IDLE_KEEP_MIN_STATE_BYTES: u64 = 10_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -54,7 +55,9 @@ pub struct KeeperConfig {
     pub scale_down_step_interval: Duration,
     pub lease: LeaseSettings,
     pub timezone: TimeZone,
-    pub pools: Vec<PoolConfig>,
+    pub idle_ttl: Duration,
+    pub idle_keep_min_state_bytes: u64,
+    pub agent_container: String,
 }
 
 fn store_endpoint(text: &str) -> Result<Url, ConfigError> {
@@ -73,32 +76,6 @@ fn store_endpoint(text: &str) -> Result<Url, ConfigError> {
     }
 }
 
-fn pools(input: KeeperConfigInput) -> Result<Vec<PoolConfig>, ConfigError> {
-    let inputs = super::numbers::required("pools", input.pools)?;
-    if inputs.is_empty() {
-        return Err(ConfigError::NoPools);
-    }
-    let pools = inputs
-        .into_iter()
-        .enumerate()
-        .map(|(index, pool)| PoolConfig::from_input(index, pool))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut ids = HashSet::new();
-    let mut sets = HashSet::new();
-    for pool in &pools {
-        if !ids.insert(pool.id.clone()) {
-            return Err(ConfigError::DuplicatePoolId(pool.id.clone()));
-        }
-        if !sets.insert((pool.namespace.clone(), pool.replicaset.clone())) {
-            return Err(ConfigError::DuplicateReplicaSet {
-                namespace: pool.namespace.clone(),
-                replicaset: pool.replicaset.clone(),
-            });
-        }
-    }
-    Ok(pools)
-}
-
 impl KeeperConfig {
     pub fn from_json(document: &str) -> Result<Self, ConfigError> {
         let input: KeeperConfigInput = serde_json::from_str(document)
@@ -109,18 +86,15 @@ impl KeeperConfig {
     pub fn pod_keys(&self) -> PodKeys {
         PodKeys::new(self.label_prefix.clone())
     }
-
-    pub fn pool(&self, namespace: &str, id: &str) -> Option<&PoolConfig> {
-        self.pools
-            .iter()
-            .find(|pool| pool.namespace == namespace && pool.id == id)
-    }
 }
 
 impl TryFrom<KeeperConfigInput> for KeeperConfig {
     type Error = ConfigError;
 
     fn try_from(input: KeeperConfigInput) -> Result<Self, ConfigError> {
+        if input.pools.is_some() {
+            return Err(ConfigError::PoolsAreResources);
+        }
         let label_prefix = match input.label_prefix.clone() {
             Some(prefix) => LabelPrefix::new(prefix).map_err(|error| ConfigError::Invalid {
                 key: "label_prefix".to_owned(),
@@ -271,7 +245,19 @@ impl TryFrom<KeeperConfigInput> for KeeperConfig {
                 Some(10),
                 Zero::Forbidden,
             )?,
-            pools: pools(input)?,
+            idle_ttl: seconds(
+                "idle_ttl_seconds",
+                input.idle_ttl_seconds,
+                Some(DEFAULT_IDLE_TTL_SECONDS),
+                Zero::Allowed,
+            )?,
+            idle_keep_min_state_bytes: count(
+                "idle_keep_min_state_bytes",
+                input.idle_keep_min_state_bytes,
+                Some(DEFAULT_IDLE_KEEP_MIN_STATE_BYTES),
+                Zero::Allowed,
+            )?,
+            agent_container: text("agent_container", input.agent_container.clone())?,
             label_prefix,
             managed_namespace_selector,
             store,

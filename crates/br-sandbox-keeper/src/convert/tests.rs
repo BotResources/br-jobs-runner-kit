@@ -144,3 +144,70 @@ fn a_replica_set_gives_its_replicas_and_its_conditions() {
         Some(Timestamp::parse("2026-01-01T00:00:00Z").unwrap())
     );
 }
+
+fn warm_pod(annotations: serde_json::Value, conditions: serde_json::Value) -> Pod {
+    pod(json!({
+        "metadata": {
+            "name": "w", "creationTimestamp": "2026-01-01T00:00:00Z",
+            "labels": {"br.sandbox/pool": "warm"},
+            "annotations": annotations
+        },
+        "status": {"phase": "Pending", "conditions": conditions}
+    }))
+}
+
+#[test]
+fn the_template_hash_annotation_is_read_through_the_label_prefix() {
+    let hashed = warm_pod(json!({"br.sandbox/template-hash": "abc123"}), json!([]));
+    let facts = pod_facts(&hashed, &PodKeys::default()).unwrap();
+    assert_eq!(facts.template_hash, Mark::Value("abc123".to_owned()));
+    let other = PodKeys::new(br_runner_sandbox::LabelPrefix::new("acme.sbx").unwrap());
+    let mut relabelled = warm_pod(json!({"acme.sbx/template-hash": "zzz"}), json!([]));
+    relabelled
+        .metadata
+        .labels
+        .as_mut()
+        .unwrap()
+        .insert("acme.sbx/pool".to_owned(), "warm".to_owned());
+    assert_eq!(
+        pod_facts(&relabelled, &other).unwrap().template_hash,
+        Mark::Value("zzz".to_owned())
+    );
+}
+
+#[test]
+fn a_missing_template_hash_is_absent_and_an_empty_one_is_unreadable() {
+    let bare = warm_pod(json!({}), json!([]));
+    assert_eq!(
+        pod_facts(&bare, &PodKeys::default()).unwrap().template_hash,
+        Mark::Absent
+    );
+    let empty = warm_pod(json!({"br.sandbox/template-hash": ""}), json!([]));
+    assert_eq!(
+        pod_facts(&empty, &PodKeys::default())
+            .unwrap()
+            .template_hash,
+        Mark::Unreadable
+    );
+}
+
+#[test]
+fn a_pod_is_unschedulable_when_pod_scheduled_is_false_with_the_reason_unschedulable() {
+    let held = warm_pod(
+        json!({}),
+        json!([{"type": "PodScheduled", "status": "False", "reason": "Unschedulable"}]),
+    );
+    assert!(pod_facts(&held, &PodKeys::default()).unwrap().unschedulable);
+    for conditions in [
+        json!([]),
+        json!([{"type": "PodScheduled", "status": "True"}]),
+        json!([{"type": "PodScheduled", "status": "False", "reason": "SchedulingGated"}]),
+        json!([{"type": "Ready", "status": "False", "reason": "Unschedulable"}]),
+    ] {
+        let pod = warm_pod(json!({}), conditions.clone());
+        assert!(
+            !pod_facts(&pod, &PodKeys::default()).unwrap().unschedulable,
+            "{conditions}"
+        );
+    }
+}

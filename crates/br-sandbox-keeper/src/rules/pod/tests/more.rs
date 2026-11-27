@@ -140,3 +140,108 @@ fn each_reason_has_the_label_of_the_metric() {
     .to_vec();
     assert_eq!(labels, ["warm_max_age", "idle", "stuck", "failed"]);
 }
+
+fn held(name: &str, created: u64) -> PodFacts {
+    PodFacts {
+        phase: Phase::Pending,
+        ready: false,
+        unschedulable: true,
+        ..warm(name, created)
+    }
+}
+
+fn selected(pod: &PodFacts, now: u64) -> Judgment {
+    judge_pod(pod, &rules(), None, true, at(now))
+}
+
+#[test]
+fn a_warm_pod_that_a_rollout_step_selects_is_deleted_at_once_for_the_reason_rollout() {
+    let pod = warm("w", 1000);
+    assert_eq!(
+        selected(&pod, 1001),
+        Judgment {
+            action: Action::Delete(DeleteReason::Rollout),
+            recheck_at: None
+        }
+    );
+    assert_eq!(DeleteReason::Rollout.label(), "rollout");
+    assert_eq!(judge(&pod, 1001).action, Action::Keep);
+}
+
+#[test]
+fn a_selected_pod_in_a_row_above_the_rollout_row_is_judged_by_that_row() {
+    let failed = PodFacts {
+        phase: Phase::Failed,
+        ..warm("f", 0)
+    };
+    let judged = judge_pod(&failed, &rules(), Some(at(100)), true, at(101));
+    assert_eq!(judged.action, Action::Keep);
+    let gone = PodFacts {
+        deleting: true,
+        ..warm("g", 0)
+    };
+    assert_eq!(selected(&gone, 1).action, Action::Keep);
+}
+
+#[test]
+fn a_claimed_pod_is_never_a_rollout_pod_even_when_the_step_selects_it() {
+    let pod = claimed("c", false, 1000);
+    assert_eq!(selected(&pod, 1500).action, Action::Keep);
+}
+
+#[test]
+fn a_warm_pod_that_cannot_be_scheduled_is_held_and_never_deleted_for_age() {
+    let pod = held("h", 1000);
+    for now in [1001, 2799, 2800, 9000, 1_000_000] {
+        assert!(
+            !matches!(judge(&pod, now).action, Action::Delete(_)),
+            "{now}"
+        );
+    }
+}
+
+#[test]
+fn a_held_pod_gets_the_pending_alarm_after_the_pending_time_and_no_deadline_is_waited_for() {
+    let pod = held("h", 1000);
+    let early = judge(&pod, 1059);
+    assert_eq!(early.action, Action::Keep);
+    assert_eq!(early.recheck_at, Some(at(1060)));
+    let late = judge(&pod, 1060);
+    assert_eq!(late.action, Action::PendingAlarm);
+    assert_eq!(late.recheck_at, None);
+    assert_eq!(judge(&pod, 99_999).action, Action::PendingAlarm);
+}
+
+#[test]
+fn a_held_pod_is_taken_by_a_rollout_step_like_any_not_ready_stale_pod() {
+    assert_eq!(
+        selected(&held("h", 1000), 1010).action,
+        Action::Delete(DeleteReason::Rollout)
+    );
+}
+
+#[test]
+fn the_unschedulable_mark_holds_only_a_pod_that_is_pending() {
+    let running = PodFacts {
+        phase: Phase::Running,
+        unschedulable: true,
+        ..warm("w", 1000)
+    };
+    assert_eq!(
+        judge(&running, 2800).action,
+        Action::Delete(DeleteReason::WarmMaxAge)
+    );
+}
+
+#[test]
+fn a_pending_pod_that_can_be_scheduled_and_is_not_failing_is_deleted_at_the_maximum_age() {
+    let pod = PodFacts {
+        unschedulable: false,
+        ..held("p", 1000)
+    };
+    assert_eq!(judge(&pod, 1060).action, Action::PendingAlarm);
+    assert_eq!(
+        judge(&pod, 2800).action,
+        Action::Delete(DeleteReason::WarmMaxAge)
+    );
+}

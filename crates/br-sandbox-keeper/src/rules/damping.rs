@@ -94,11 +94,20 @@ mod tests {
         }
     }
 
-    fn run(mut current: u32, desired: u32, until_second: u64) -> (u32, Option<u64>) {
+    fn run(current: u32, desired: u32, until_second: u64) -> (u32, Option<u64>) {
+        run_with(&rules(), current, desired, until_second)
+    }
+
+    fn run_with(
+        rules: &ScaleDownRules,
+        mut current: u32,
+        desired: u32,
+        until_second: u64,
+    ) -> (u32, Option<u64>) {
         let mut state = ScaleState::default();
         let mut reached = None;
         for second in 0..=until_second {
-            let damped = damp(state, current, desired, at(1000 + second), &rules());
+            let damped = damp(state, current, desired, at(1000 + second), rules);
             state = damped.state;
             current = damped.replicas;
             if current == desired && reached.is_none() {
@@ -162,6 +171,25 @@ mod tests {
         assert_eq!(reached, Some(300));
         let (current, _) = run(95, 0, 299);
         assert_eq!(current, 5);
+    }
+
+    #[test]
+    fn the_default_configuration_takes_a_floor_of_95_to_0_within_300_seconds() {
+        let config = crate::testing::config();
+        let defaults = ScaleDownRules::new(
+            config.scale_down_cooldown,
+            config.scale_down_step,
+            config.scale_down_step_interval,
+        );
+        assert_eq!(
+            (defaults.cooldown, defaults.step, defaults.interval),
+            (Duration::from_secs(120), 5, Duration::from_secs(10))
+        );
+        let (current, reached) = run_with(&defaults, 95, 0, 300);
+        assert_eq!(current, 0);
+        assert!(reached.is_some_and(|second| second <= 300));
+        let (current, _) = run_with(&defaults, 95, 0, 299);
+        assert_ne!(current, 0);
     }
 
     #[test]
