@@ -37,6 +37,6 @@ class Handler(BaseHTTPRequestHandler):
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain("/tls/tls.crt", "/tls/tls.key")
-server = ThreadingHTTPServer(("0.0.0.0", 8443), Handler)
+server = ThreadingHTTPServer(("0.0.0.0", 443), Handler)
 server.socket = context.wrap_socket(server.socket, server_side=True)
 server.serve_forever()

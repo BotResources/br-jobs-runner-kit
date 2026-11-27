@@ -36,8 +36,12 @@ tunnel_targets() {
 }
 
 tunnel_json() {
-  k get pods -A -l "$LBL_ROLE=$ROLE_PROXY" -o json | jq -c --arg port "$PROXY_PORT" \
-    '[.items[] | select(.status.podIP != null) | {net: (.metadata.namespace | sub("-egress$"; "")), target: "\(.status.podIP):\($port)"}]'
+  {
+    k get pods -A -l "$LBL_ROLE=$ROLE_PROXY" -o json | jq -c --arg port "$PROXY_PORT" \
+      '.items[] | select(.status.podIP != null) | {net: (.metadata.namespace | sub("-egress$"; "")), target: "\(.status.podIP):\($port)"}'
+    k get svc -A -l "app.kubernetes.io/part-of=br-sandbox" -o json | jq -c --arg name "$PROXY_SERVICE" \
+      '.items[] | select(.metadata.name == $name) | {net: (.metadata.namespace | sub("-egress$"; "")), target: "\(.spec.clusterIP):\(.spec.ports[0].port)"}'
+  } | jq -s -c .
 }
 
 default_ns=$(ns_of "$CLIENT_A" "$NET_NONE")
@@ -79,7 +83,10 @@ if [ "$have_proxy" = 1 ]; then
   tunnel_open=$(probe "$allow_ns" "$allow_pod" tcp "$tunnel" | open_count)
   verdict network-modes-allow-tunnel-port-answers "$tunnel_open of $(jq 'length' <<< "$tunnel") proxy tunnel ports answer from the sandbox" \
     test "$tunnel_open" = "$(jq 'length' <<< "$tunnel")"
-  others=$(for ip in $proxy_ips; do for port in $PROXY_RELOAD_PORT 80 443 8080 9090; do printf '{"host":"%s","port":%s}\n' "$ip" "$port"; done; done | jq -s -c .)
+  cluster_tunnel=$(tunnel_targets "$(proxy_cluster_ip "$CLIENT_A" "$NET_ALLOW")")
+  verdict network-modes-allow-cluster-ip-tunnel-answers "tunnel port at the ClusterIP in HTTPS_PROXY answers: $(probe "$allow_ns" "$allow_pod" tcp "$cluster_tunnel" | open_count)" \
+    test "$(probe "$allow_ns" "$allow_pod" tcp "$cluster_tunnel" | open_count)" = 1
+  others=$(for ip in $proxy_ips; do for port in $PROXY_LOOPBACK_PORTS 80 443; do printf '{"host":"%s","port":%s}\n' "$ip" "$port"; done; done | jq -s -c .)
   other_open=$(probe "$allow_ns" "$allow_pod" tcp "$others" | open_count)
   verdict network-modes-allow-other-proxy-ports-closed "$other_open of $(jq 'length' <<< "$others") other proxy ports answer" test "$other_open" = 0
 
@@ -95,21 +102,40 @@ if [ "$have_proxy" = 1 ]; then
     {proxy: $p, target: "169.254.169.254:80", allowed: false}]')
   connect_report=$(probe "$allow_ns" "$allow_pod" connect "$connects")
   wrong=$(jq -s '[.[] | select(if .allowed then .status != 200 else (.status != 403 and .status != 502) end)] | length' <<< "$connect_report")
-  verdict network-modes-allow-only-listed-site "listed site 200, every other target 403 or 502; wrong answers: $wrong" test "$wrong" = 0
+  verdict network-modes-allow-only-listed-site "listed site 200, every other target 403 or 502; wrong answers: $wrong; internal_cidrs=$(internal_cidrs_value)" test "$wrong" = 0
 fi
 
-job_state() { k -n "$SYSTEM_NS" get job "$1" -o jsonpath='{.status.succeeded}{.status.failed}' 2> /dev/null; }
+job_succeeded() { k -n "$SYSTEM_NS" get job "$1" -o jsonpath='{.status.succeeded}' 2> /dev/null; }
+job_failed() { k -n "$SYSTEM_NS" get job "$1" -o jsonpath='{.status.failed}' 2> /dev/null; }
+
+release_claimed() {
+  local entry end
+  for entry in "${TRACKED_PODS[@]:-}"; do
+    if [ -n "$entry" ]; then release_pod ${entry}; fi
+  done
+  end=$(($(date +%s) + 120))
+  for entry in "${TRACKED_PODS[@]:-}"; do
+    if [ -z "$entry" ]; then continue; fi
+    until ! k -n "${entry% *}" get pod "${entry#* }" > /dev/null 2>&1; do
+      if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
+      sleep 1
+    done
+  done
+  TRACKED_PODS=()
+}
 
 run_check_job() {
   local run end
+  release_claimed || return 1
   run=$(date +%s)
   CHECK_JOB="$NETCHECK_JOB_PREFIX$run"
-  helm_ctx upgrade "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" --reuse-values --set "$VALUES_NETWORK_CHECK_RUNID=$run" > /dev/null || return 1
+  helm_ctx upgrade "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" --reuse-values --set-string "$VALUES_NETWORK_CHECK_RUNID=$run" > /dev/null || return 1
   end=$(($(date +%s) + 600))
-  until [ -n "$(job_state "$CHECK_JOB")" ]; do
+  until [ -n "$(job_succeeded "$CHECK_JOB")$(job_failed "$CHECK_JOB")" ]; do
     if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
     sleep 3
   done
+  [ "$(job_succeeded "$CHECK_JOB")" = 1 ]
 }
 
 if run_check_job; then
@@ -121,10 +147,12 @@ if run_check_job; then
   unavailable=$(jq '[.[] | select(.control == "control_unavailable")] | length' <<< "$report")
   record network-modes-job-probes "$(jq 'length' <<< "$report")" probes
   record network-modes-job-tunnel-probes-reached "$tunnel_seen" probes
-  verdict network-modes-job-all-probes-as-expected "mismatched $mismatched (the tunnel port of an own proxy is not counted), control_unavailable $unavailable" \
-    test "$mismatched" = 0 -a "$unavailable" = 0
+  probe_count=$(jq 'length' <<< "$report")
+  detail=$(jq -c '[.[] | select(.observed != .expected or .control == "control_unavailable") | "\(.net) \(.kind) \(.target) \(.observed) \(.control)"] | .[0:12]' <<< "$report")
+  verdict network-modes-job-all-probes-as-expected "mismatched $mismatched (the tunnel port of an own proxy is not counted), control_unavailable $unavailable, tunnel probes reached $tunnel_seen; first rows: $detail; internal_cidrs=$(internal_cidrs_value)" \
+    test "$mismatched" = 0 -a "$unavailable" = 0 -a "$probe_count" -gt 0
 else
-  check network-modes-job-all-probes-as-expected fail "check job did not finish"
+  check network-modes-job-all-probes-as-expected fail "check job $CHECK_JOB did not succeed: succeeded=$(job_succeeded "$CHECK_JOB") failed=$(job_failed "$CHECK_JOB")"
 fi
 
 scenario_end

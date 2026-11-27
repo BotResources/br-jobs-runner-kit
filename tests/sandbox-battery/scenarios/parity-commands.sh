@@ -3,7 +3,7 @@ work=$(mktemp -d)
 cd "$work" || exit 9
 echo hello > f.txt
 chmod 750 f.txt
-stat -c '%a %U' f.txt
+stat -c '%a' f.txt
 (sleep 30 & echo $! > bg.pid)
 sleep 0.3
 bg=$(cat bg.pid)

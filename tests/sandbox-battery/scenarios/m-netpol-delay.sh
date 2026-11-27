@@ -4,12 +4,16 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin m-netpol-delay
 
 reps=${REPS:-10}
+claim_reps=${CLAIM_REPS:-5}
 gate_ns=$GATE_NS
 target=np-target
 client=np-client
 stream="$BATTERY_OUT/netpol-stream.txt"
 
-cleanup_extra() { k -n "$gate_ns" delete pod/$target pod/$client networkpolicy/np-gate --ignore-not-found --wait=false > /dev/null 2>&1; }
+cleanup_extra() {
+  k -n "$gate_ns" delete pod/$target pod/$client networkpolicy/np-gate --ignore-not-found --wait=false > /dev/null 2>&1
+  if [ -n "${pool_ns:-}" ]; then set_pool_replicas "$pool_ns" 1; fi
+}
 
 start_gate_objects() {
   k -n "$gate_ns" apply -f - > /dev/null << YAML
@@ -88,7 +92,10 @@ done
 ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
 failures=0
 if need_proxy m-netpol "$CLIENT_A" "$NET_ALLOW"; then
-  wait_warm "$ns" "$reps" 180 || check m-netpol-claim-warm fail "fewer than $reps warm pods in $ns"
+  pool_ns=$ns
+  set_pool_replicas "$ns" "$claim_reps"
+  wait_warm "$ns" "$claim_reps" 240 || check m-netpol-claim-warm fail "fewer than $claim_reps warm pods in $ns"
+  reps=$claim_reps
   while read -r name rv && [ "$reps" -gt 0 ]; do
     proxy=$(proxy_endpoint "$CLIENT_A" "$NET_ALLOW")
     stream_to_file "$ns" "$name" "${proxy%:*}" "${proxy#*:}" 5

@@ -16,6 +16,7 @@ proxy_restart "$eg" || { check platform-proxy-restart fail "proxy pods of $eg di
 wait_warm "$ns" 1 180 || { check platform-warm-pod fail "no warm pod in $ns"; scenario_end; }
 claim_to pod "$ns" "platform-$(new_id)" agent-a || { check platform-claim fail "claim refused"; scenario_end; }
 
+dns_window_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 flow_log=$(with_timeout 1500 sxi "$ns" "$pod" env \
   "GIT_HOST=$TEST_HOST_GIT" "PKG_HOST=$TEST_HOST_PKG" "REPO=$PLATFORM_REPO" "BRANCH=$branch" \
   "GIT_PH_NAME=$PLATFORM_GIT_PLACEHOLDER_ENV" "PKG_PH_NAME=$PLATFORM_PKG_PLACEHOLDER_ENV" \
@@ -34,8 +35,15 @@ verdict platform-build "cargo build ended with exit code 0" test -n "$(stage_ms 
 verdict platform-push "branch $branch pushed" test -n "$(stage_ms push)"
 verdict platform-flow-exit-code "flow exit code $flow_rc" test "$flow_rc" = 0
 
-remote_branches=$(k -n "$TESTSVC_NS" exec "$GITEA_DEPLOY" -- git -c safe.directory='*' --git-dir="$GITEA_REPO_ROOT/$PLATFORM_REPO.git" branch --list "$branch" 2> /dev/null)
+remote_branches=$(docker exec "$GITEA_CONTAINER" git -c safe.directory='*' --git-dir="$GITEA_REPO_ROOT/$PLATFORM_REPO.git" branch --list "$branch" 2> /dev/null)
 verdict platform-branch-on-server "branch listed by the server: $remote_branches" test -n "$remote_branches"
+
+dns_queries=$(docker logs --since "$dns_window_start" "$EXTRA_DNS_CONTAINER" 2>&1 | awk '$2 == "Q" {print $4}' | sort | uniq -c)
+printf '%s\n' "$dns_queries" > "$EVIDENCE/platform-resolver-queries.txt"
+foreign=$(printf '%s\n' "$dns_queries" | awk -v dom="$TEST_DOMAIN" 'NF == 2 && $2 !~ ("(^|[.])" dom "$") {print $2}' | sort -u | tr '\n' ' ')
+verdict platform-resolver-saw-queries "resolver of the proxy pods logged $(printf '%s\n' "$dns_queries" | awk '{sum += $1} END {print sum + 0}') queries during the flow: $(printf '%s' "$dns_queries" | tr '\n' ';')" \
+  test "$(printf '%s\n' "$dns_queries" | awk '{sum += $1} END {print sum + 0}')" -gt 0
+verdict platform-resolver-only-test-names "queries naming a host that is not a test name (under $TEST_DOMAIN): [${foreign}]" test -z "$foreign"
 
 scan_token() {
   sxi "$ns" "$pod" env "SCAN_CANARY=$1" "$SANDBOX_PYTHON" - scan < "$HERE/canary-scan.py" | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^value_hits=/) {split($i, a, "="); sum += a[2]}} END {print sum + 0}'

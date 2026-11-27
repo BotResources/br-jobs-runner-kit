@@ -20,6 +20,7 @@ cd "$BRANCH"
 export "CARGO_REGISTRIES_${REG_UPPER}_INDEX=sparse+https://$PKG_HOST/api/packages/$owner/cargo/"
 export "CARGO_REGISTRIES_${REG_UPPER}_TOKEN=Bearer $pkg_placeholder"
 export CARGO_REGISTRY_GLOBAL_CREDENTIAL_PROVIDERS=cargo:token
+export CARGO_HTTP_CAINFO=$SSL_CERT_FILE
 cargo fetch > fetch.log 2>&1 || { tail -20 fetch.log; exit 20; }
 stage_done packages
 cargo build > build.log 2>&1 || { tail -20 build.log; exit 21; }

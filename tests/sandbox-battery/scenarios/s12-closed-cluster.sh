@@ -35,10 +35,10 @@ cleanup_extra() { keeper_resume; set_pool_replicas "$ns" "$original_replicas" 2>
 k get nodes > /dev/null 2>&1 || { check closed-cluster-closed-cluster fail "cluster $CTX_CLOSED not reachable"; scenario_end; }
 install_on_closed() {
   if [ "$KC_VIA_NODE" = 1 ]; then
-    helm template "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" -f "$CLOSED_VALUES_FILE" \
+    helm template "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" -f "$CLOSED_BASE_VALUES_FILE" -f "$CLOSED_VALUES_FILE" \
       --set "$VALUES_REGISTRY_MIRROR=$CLOSED_MIRROR_HOST" --set-json "$VALUES_PULL_SECRETS=[\"$CLOSED_PULL_SECRET\"]" | k apply -f - > /dev/null
   else
-    helm_ctx upgrade --install "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" -f "$CLOSED_VALUES_FILE" \
+    helm_ctx upgrade --install "$HELM_RELEASE" "$CHART_DIR" -n "$HELM_NAMESPACE" -f "$CLOSED_BASE_VALUES_FILE" -f "$CLOSED_VALUES_FILE" \
       --set "$VALUES_REGISTRY_MIRROR=$CLOSED_MIRROR_HOST" --set-json "$VALUES_PULL_SECRETS=[\"$CLOSED_PULL_SECRET\"]" --wait --timeout 600s > /dev/null
   fi
 }

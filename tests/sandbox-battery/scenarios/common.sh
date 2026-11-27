@@ -7,7 +7,6 @@ if [ -f "$CREDS_ENV" ]; then
   . "$CREDS_ENV"
   set +a
 fi
-: "${CHART_DIR:=$(cd "$SCEN_DIR/../../.." && pwd)/charts/br-sandbox-chart}"
 map_creds() {
   GIT_TOKEN=${GITEA_TOKEN:-${GIT_TOKEN:-}}
   PKG_TOKEN=${GITEA_TOKEN:-${PKG_TOKEN:-}}
@@ -93,11 +92,11 @@ claim() {
 }
 
 claim_to() {
-  local var=$1 pod
+  local var=$1 claimed_name
   shift
-  pod=$(claim "$@") || return 1
-  TRACKED_PODS+=("$1 $pod")
-  printf -v "$var" '%s' "$pod"
+  claimed_name=$(claim "$@") || return 1
+  TRACKED_PODS+=("$1 $claimed_name")
+  printf -v "$var" '%s' "$claimed_name"
 }
 
 track_pod() { TRACKED_PODS+=("$1 $2"); }
@@ -124,9 +123,11 @@ verdict() {
 with_timeout() {
   local secs=$1 pid guard rc
   shift
-  "$@" &
+  exec 4<&0
+  "$@" <&4 &
   pid=$!
-  (sleep "$secs"; kill "$pid" 2> /dev/null) &
+  exec 4<&-
+  (sleep "$secs"; kill "$pid" 2> /dev/null) > /dev/null 2>&1 &
   guard=$!
   wait "$pid"
   rc=$?
@@ -174,10 +175,26 @@ proxy_pods() {
     -o jsonpath='{.items[*].status.podIP}' 2> /dev/null
 }
 
+proxy_cluster_ip() { k -n "$(egress_ns_of "$1" "$2")" get svc "$PROXY_SERVICE" -o jsonpath='{.spec.clusterIP}' 2> /dev/null; }
+
 proxy_endpoint() {
   local ip
-  ip=$(proxy_pods "$1" "$2" | cut -d' ' -f1)
+  ip=$(proxy_cluster_ip "$1" "$2")
   if [ -n "$ip" ]; then printf '%s:%s\n' "$ip" "$PROXY_PORT"; fi
+}
+
+internal_cidrs_value() { helm_ctx get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json | jq -r '.network.internal_cidrs | join(",")'; }
+
+conn_docker() { docker logs "$1" 2>&1 | grep -c ' CONN ' || true; }
+conn_pod() { k -n "$NS_TESTSVC" logs "$1" 2> /dev/null | grep -c ' CONN ' || true; }
+
+root_pod_to() {
+  local var=$1 ns=$2 template created
+  template=$(pod_template "$ns") || return 1
+  created=$(as_id "$NETCHECK_ID" "$ns" create -o jsonpath='{.metadata.name}' -f - <<< "$(variant "$template" '.metadata.labels["br.sandbox/pool"] = "battery" | .spec.containers |= map(if .name == $agent then .securityContext.runAsUser = 0 | .securityContext.runAsGroup = 0 | .securityContext.runAsNonRoot = false else . end)')") || return 1
+  TRACKED_PODS+=("$ns $created")
+  k -n "$ns" wait --for=condition=Ready "pod/$created" --timeout=120s > /dev/null || return 1
+  printf -v "$var" '%s' "$created"
 }
 
 need_proxy() {
@@ -197,6 +214,11 @@ proxy_restart() {
     if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
     sleep 2
   done
+  until [ -n "$(k -n "$1" get endpoints "$PROXY_SERVICE" -o jsonpath='{.subsets[*].addresses[*].ip}' 2> /dev/null)" ]; do
+    if [ "$(date +%s)" -ge "$end" ]; then return 1; fi
+    sleep 1
+  done
+  sleep "${PROXY_RESTART_SETTLE_SECONDS:-8}"
 }
 
 probe() {

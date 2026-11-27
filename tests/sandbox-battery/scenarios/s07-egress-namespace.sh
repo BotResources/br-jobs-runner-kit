@@ -46,6 +46,8 @@ ports_json() {
 
 open_ports() { jq -s -c '[.[] | select(.open) | .port] | sort'; }
 
+open_at() { probe "$1" "$2" tcp "[{\"host\":\"$3\",\"port\":$4}]" | open_ports; }
+
 identity_checks() {
   local label=$1 who=$2 eg=$3 verb resource sub
   verdict "egress-$label-identity-known" "impersonated user is $who" \
@@ -68,6 +70,10 @@ LIST
 attempt_checks() {
   local label=$1 who=$2 eg=$3 bare
   bare=$(pod_template "$ns_a")
+  verdict "egress-$label-exec-real-proxy-refused" "exec into the proxy pod $real_proxy in $eg" \
+    refused_forbidden k --as="$who" -n "$eg" exec "$real_proxy" -- true
+  verdict "egress-$label-get-ca-key-refused" "read of $PROXY_CA_KEY_SECRET in $eg" \
+    refused_forbidden k --as="$who" -n "$eg" get secret "$PROXY_CA_KEY_SECRET"
   verdict "egress-$label-exec-refused" "exec into $STANDIN_POD in $eg" \
     refused_forbidden k --as="$who" -n "$eg" exec "$STANDIN_POD" -- true
   verdict "egress-$label-create-pod-refused" "create of a pod in $eg" \
@@ -101,6 +107,8 @@ wait_warm "$ns_a" 1 120 || { check egress-warm-pod fail "no warm pod in $ns_a"; 
 verdict egress-namespace-admits-proxy-role-pod "pod $STANDIN_POD with $LBL_ROLE=$ROLE_PROXY is created in $eg_a" create_standin
 k -n "$eg_a" wait --for=condition=Ready pod/$STANDIN_POD --timeout=180s > /dev/null || { check egress-standin-ready fail "stand-in not ready in $eg_a"; scenario_end; }
 standin_ip=$(k -n "$eg_a" get pod $STANDIN_POD -o jsonpath='{.status.podIP}')
+real_proxy=$(k -n "$eg_a" get pods -l "$LBL_ROLE=$ROLE_PROXY" -o jsonpath='{.items[?(@.metadata.name!="'"$STANDIN_POD"'")].metadata.name}' | cut -d' ' -f1)
+cluster_ip=$(k -n "$eg_a" get svc "$PROXY_SERVICE" -o jsonpath='{.spec.clusterIP}')
 ports=$(ports_json "$standin_ip")
 want=$(printf '%s\n' $STANDIN_PORTS | jq -s -c 'sort')
 verdict egress-standin-listens-on-every-port "positive control inside the pod: open ports $(probe_ctl "$eg_a" $STANDIN_POD tcp "$(ports_json 127.0.0.1)" | open_ports)" \
@@ -114,11 +122,20 @@ claim_to pod_a "$ns_a" "egress-$(new_id)" agent-a
 verdict egress-tunnel-port-only "open ports of the proxy from the sandbox of the same client and mode: $(probe "$ns_a" "$pod_a" tcp "$ports" | open_ports)" \
   test "$(probe "$ns_a" "$pod_a" tcp "$ports" | open_ports)" = "[$PROXY_PORT]"
 
+cluster_open=$(open_at "$ns_a" "$pod_a" "$cluster_ip" "$PROXY_PORT")
+verdict egress-cluster-ip-tunnel-port-answers "tunnel port of $PROXY_SERVICE at its ClusterIP $cluster_ip from the sandbox pod: $cluster_open" \
+  test "$cluster_open" = "[$PROXY_PORT]"
+verdict egress-sandbox-env-points-to-cluster-ip "HTTPS_PROXY of the sandbox pod is http://$cluster_ip:$PROXY_PORT" \
+  test "$(sx "$ns_a" "$pod_a" printenv HTTPS_PROXY)" = "http://$cluster_ip:$PROXY_PORT"
+
 for other in "$CLIENT_B:$NET_ALLOW" "$CLIENT_A:$NET_NONE" "$CLIENT_A:$NET_FULL"; do
   IFS=: read -r client net <<< "$other"
   other_ns=$(ns_of "$client" "$net")
   wait_warm "$other_ns" 1 120 || { check "egress-$other_ns-warm-pod" fail "no warm pod in $other_ns"; continue; }
   claim_to other_pod "$other_ns" "egress-$(new_id)" agent-b
+  other_cluster_open=$(open_at "$other_ns" "$other_pod" "$cluster_ip" "$PROXY_PORT")
+  verdict "egress-$other_ns-no-cluster-ip-tunnel" "tunnel port at ClusterIP $cluster_ip from $other_ns: $other_cluster_open" \
+    test "$other_cluster_open" = "[]"
   verdict "egress-$other_ns-no-port" "open ports of $eg_a from $other_ns: $(probe "$other_ns" "$other_pod" tcp "$ports" | open_ports)" \
     test "$(probe "$other_ns" "$other_pod" tcp "$ports" | open_ports)" = "[]"
 done

@@ -2,8 +2,8 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 
-UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s10-proxy-canary s11-platform s12-closed-cluster"
-TIMED="m-restore-stalls m-netpol-delay m-coldstart m-scale-down m-burst"
+UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s08-internal-targets s10-proxy-canary s11-platform s12-closed-cluster s13-pivot-barriers s14-fresh-pod-race s15-keeper-ready"
+TIMED="m-restore-stalls m-netpol-delay m-window m-coldstart m-scale-down m-burst"
 
 mkdir -p "$BATTERY_OUT"
 SCENARIO_TALLY="$BATTERY_OUT/tally-$(date +%Y%m%d-%H%M%S).tsv"

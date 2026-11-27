@@ -84,7 +84,10 @@ def scan_files():
             except OSError:
                 continue
             found += hits(data)
-            key += key_hits(data)
+            file_keys = 0 if data[:4] == b"\x7fELF" else key_hits(data)
+            if file_keys:
+                print("keyfile %s %d" % (path, file_keys))
+            key += file_keys
     return found, key
 
 

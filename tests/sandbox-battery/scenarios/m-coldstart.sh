@@ -35,7 +35,10 @@ cold_start() {
   name=$(jq -r '.metadata.name' <<< "$json")
   started=$(now_ms)
   k -n "$ns" create -f - <<< "$json" > /dev/null || return 1
-  k -n "$ns" wait --for=condition=Ready "pod/$name" --timeout=180s > /dev/null || return 1
+  if ! k -n "$ns" wait --for=condition=Ready "pod/$name" --timeout=180s > /dev/null; then
+    k -n "$ns" delete pod "$name" --wait=true --grace-period=1 > /dev/null 2>&1
+    return 1
+  fi
   ready=$(now_ms)
   case $1 in
     big-*) sx "$ns" "$name" true > /dev/null 2>&1 ;;
@@ -55,21 +58,37 @@ pull_time() {
   echo $(($(now_ms) - started))
 }
 
+pullable() {
+  case ${1%%/*} in
+    *.* | *:* | localhost) [ "$1" != "${1%%/*}" ] ;;
+    *) return 1 ;;
+  esac
+}
+
 lock_timed
 for image in "$big_image" "$tools_image"; do
   size=$(docker exec "$NODE" crictl inspecti "$image" 2> /dev/null | jq -r '.status.size // empty')
   label=$([ "$image" = "$big_image" ] && echo big || echo small)
   record "m-coldstart-image-$label-size" "${size:-0}" bytes
-  record "m-coldstart-image-$label-pull" "$(pull_time "$image")" ms
+  if pullable "$image"; then
+    record "m-coldstart-image-$label-pull" "$(pull_time "$image")" ms
+  else
+    record "m-coldstart-image-$label-pull" "not measured" "image loaded into the node, no registry to pull from"
+  fi
 done
 
 variants="big-init big-plain small-init small-plain"
 results="$BATTERY_OUT/coldstart-$(date +%Y%m%d-%H%M%S).txt"
 : > "$results"
+failed=0
 for rep in $(seq 1 "$reps"); do
   for variant in $variants; do
-    read -r ready_ms exec_ms <<< "$(cold_start "$variant")"
-    echo "$variant $ready_ms $exec_ms" >> "$results"
+    if line=$(cold_start "$variant"); then
+      read -r ready_ms exec_ms <<< "$line"
+      echo "$variant $ready_ms $exec_ms" >> "$results"
+    else
+      failed=$((failed + 1))
+    fi
   done
 done
 for variant in $variants; do
@@ -77,6 +96,6 @@ for variant in $variants; do
   record "m-coldstart-$variant-ready-max" "$(awk -v v="$variant" '$1 == v {print $2}' "$results" | max_of)" ms
   record "m-coldstart-$variant-first-exec-median" "$(awk -v v="$variant" '$1 == v {print $3}' "$results" | median_of)" ms
 done
-check m-coldstart-ran pass "$reps repetitions of four variants, results $results"
+verdict m-coldstart-ran "$((reps * 4 - failed)) of $((reps * 4)) cold starts measured, results $results" test "$failed" = 0
 
 scenario_end

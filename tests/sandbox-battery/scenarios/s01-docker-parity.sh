@@ -27,7 +27,7 @@ fi
 verdict docker-parity-pid1-is-pause "comm of pid 1: $(sx "$ns" "$pod" cat /proc/1/comm)" \
   test "$(sx "$ns" "$pod" cat /proc/1/comm)" = pause
 
-sx "$ns" "$pod" sh -c '(sleep 300 & echo $! > /tmp/docker-parity-orphan.pid)'
+sx "$ns" "$pod" sh -c '(sleep 300 > /dev/null 2>&1 & echo $! > /tmp/docker-parity-orphan.pid)'
 orphan_state=$(sx "$ns" "$pod" sh -c 'pid=$(cat /tmp/docker-parity-orphan.pid); kill -TERM "$pid"; sleep 1; if kill -0 "$pid" 2> /dev/null; then echo alive; else echo gone; fi')
 verdict docker-parity-no-orphan-after-sigterm "orphan after SIGTERM: $orphan_state" test "$orphan_state" = gone
 
