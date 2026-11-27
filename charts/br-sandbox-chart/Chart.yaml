@@ -2,8 +2,8 @@ apiVersion: v2
 name: br-sandbox-chart
 description: Namespaces, quotas, admission policy, network policies, warm pools, roles, keeper and network check of the sandbox. One installation per cluster; every project value is a key of values.yaml.
 type: application
-version: 0.2.1
-appVersion: "0.2.1"
+version: 0.2.4
+appVersion: "0.2.4"
 home: https://github.com/BotResources/br-jobs-runner-kit
 sources:
   - https://github.com/BotResources/br-jobs-runner-kit

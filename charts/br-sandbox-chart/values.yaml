@@ -119,5 +119,6 @@ network_check:
   enabled: true
   targets: []
   offlist_host: offlist.invalid
+  enforcement_wait_seconds: 60
   run_id: ""
   cron: ""

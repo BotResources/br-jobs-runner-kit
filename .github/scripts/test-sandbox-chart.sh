@@ -17,6 +17,7 @@ source "$HERE/test-sandbox-chart-proxy-guards.sh"
 source "$HERE/test-sandbox-chart-docs.sh"
 source "$HERE/test-sandbox-chart-netcheck.sh"
 source "$HERE/test-sandbox-chart-netcheck-proxy.sh"
+source "$HERE/test-sandbox-chart-netcheck-window.sh"
 
 render ex -f "$EXAMPLE"
 render mirror -f "$EXAMPLE" -f "$MIRROR_VALUES"

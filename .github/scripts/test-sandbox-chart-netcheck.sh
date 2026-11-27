@@ -26,6 +26,11 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     esac
     exit 0
 fi
+printf '%s\n' "$target" >>"$STUB_DIR/nc.calls"
+if [ -n "${NC_LATE_K:-}" ]; then
+    printf x >>"$STUB_DIR/nc.late"
+    [ "$(($(wc -c <"$STUB_DIR/nc.late")))" -le "$NC_LATE_K" ] && exit 0 || exit 1
+fi
 case "$NC_MODE" in
     all) exit 0 ;;
     none) exit 1 ;;
@@ -62,6 +67,8 @@ case "$1" in
         ;;
     create)
         cat >"$STUB_DIR/pod.yaml"
+        printf '1000\n' >"$STUB_DIR/clock"
+        : >"$STUB_DIR/nc.late"
         exit 0
         ;;
     wait | delete) exit 0 ;;
@@ -70,13 +77,23 @@ case "$1" in
         targets="$(sed -n 's/^ *value: *//p' "$STUB_DIR/pod.yaml" | head -1 | tr -d '"')"
         proxy="$(awk '/name: NETCHECK_PROXY/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
         offlist="$(awk '/name: NETCHECK_OFFLIST/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
-        NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "$NETCHECK_DIR/network-check.sh" probe
+        wait="$(awk '/name: NETCHECK_ENFORCEMENT_WAIT/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        NETCHECK_ENFORCEMENT_WAIT="$wait" NC_LATE_K="$PROBE_LATE_K" NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "${NETCHECK_PROBE_SCRIPT:-$NETCHECK_DIR/network-check.sh}" probe
         exit 0
         ;;
 esac
 exit 1
 STUB
-    chmod +x "$bin/nc" "$bin/kubectl"
+    cat >"$bin/sleep" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$1" >>"$STUB_DIR/sleep.log"
+printf '%s\n' "$(($(cat "$STUB_DIR/clock") + $1))" >"$STUB_DIR/clock"
+STUB
+    cat >"$bin/date" <<'STUB'
+#!/bin/sh
+cat "$STUB_DIR/clock"
+STUB
+    chmod +x "$bin/nc" "$bin/kubectl" "$bin/sleep" "$bin/date"
 }
 
 netcheck_dir() {
@@ -88,8 +105,16 @@ netcheck_dir() {
     printf '%s' "$dir"
 }
 
+reset_netcheck_stub() {
+    mkdir -p "$WORK/netcheckstub"
+    : >"$WORK/netcheckstub/sleep.log"
+    : >"$WORK/netcheckstub/nc.calls"
+    printf '1000\n' >"$WORK/netcheckstub/clock"
+}
+
 run_netcheck() {
-    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
+    reset_netcheck_stub
+    NETCHECK_ENFORCEMENT_WAIT="$(yq -r 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name == "NETCHECK_ENFORCEMENT_WAIT") | .value' "$WORK/${NETCHECK_SOURCE:-ex_yaml}.yaml")" NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
 }
 
 check_network_check_script_against_stubs() {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4
+
+Fix: the network check waited for no enforcement. On a cluster with flannel and the kube-router network policy controller, the policy started some seconds after a fresh probe pod: a probe at once reached 2 of 2 targets, the same probe 30 seconds later reached 0, so the Job failed although the policy worked.
+
+- A direct TCP probe of the probe pod is tried again every second until it is refused, for at most `network_check.enforcement_wait_seconds` (new key, integer at least 1, default 60), counted from the start of the probe script in the pod. Still reached at the limit: the probe is `reached` and the Job fails. The positive controls and the `CONNECT` probes are not tried again.
+- The `tcp` result object has two new fields: `refused_after_seconds` (the seconds from the start of the probe script to the first refusal, or the text `not refused`) and `limit_seconds`. No field was removed or renamed.
+- The Job waits for each probe pod for 180 seconds plus the limit, and its `activeDeadlineSeconds` (also in the CronJob) is 1800 plus the limit for each sandbox namespace (it was 1800).
+- The check image needs `sleep` and `date` besides the programs of 0.2.0.
+- A window exists in which a fresh pod reaches internal targets; the chart does not close it, the Job reports its length. Measured with flannel and kube-router only; not reproduced by the offline suite.
+
 ## 0.2.1
 
 Text and tests only. No rendered object changes: the render of the example values and of each overlay (mirror, keeper, egress) is the same as in 0.2.0.

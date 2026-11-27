@@ -3,6 +3,7 @@ set -eu
 
 dir="${NETCHECK_DIR:-/netcheck}"
 wait_seconds="${NETCHECK_WAIT_SECONDS:-180}"
+enforcement_wait="${NETCHECK_ENFORCEMENT_WAIT:-60}"
 
 status_code() {
   printf '%s\n' "$1" | sed -n 1p | awk '$1 ~ /^HTTP\/[0-9]/ && $2 ~ /^[0-9][0-9][0-9]$/ {printf "%s", $2}'
@@ -17,13 +18,24 @@ connect_state() {
   esac
 }
 
-probe() {
-  for target in $NETCHECK_TARGETS; do
-    if nc -w 2 "${target%:*}" "${target##*:}" </dev/null >/dev/null 2>&1; then
-      printf '%s reached\n' "$target"
-    else
-      printf '%s refused\n' "$target"
+until_refused() {
+  while :; do
+    if ! nc -w 2 "${1%:*}" "${1##*:}" </dev/null >/dev/null 2>&1; then
+      printf '%s refused %s\n' "$1" "$(($(date +%s) - started))"
+      return 0
     fi
+    if [ "$(($(date +%s) - started))" -ge "$enforcement_wait" ]; then
+      printf '%s reached\n' "$1"
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+probe() {
+  started=$(date +%s)
+  for target in $NETCHECK_TARGETS; do
+    until_refused "$target"
   done
   if [ -n "${NETCHECK_PROXY:-}" ]; then
     for target in $NETCHECK_TARGETS ${NETCHECK_OFFLIST:-}; do
@@ -117,7 +129,7 @@ control() {
 
 run_probe() {
   sed "s|__TARGETS__|$(tr '\n' ' ' <"$work/targets")|" "$dir/probe-$1.yaml" | kubectl create -f - >/dev/null
-  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/br-sandbox-netcheck-probe -n "$1" --timeout="${wait_seconds}s" >/dev/null || true
+  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/br-sandbox-netcheck-probe -n "$1" --timeout="$((wait_seconds + enforcement_wait))s" >/dev/null || true
   kubectl logs pod/br-sandbox-netcheck-probe -n "$1" >"$work/log-$1" || : >"$work/log-$1"
   kubectl delete pod/br-sandbox-netcheck-probe -n "$1" --wait=false >/dev/null || true
 }
@@ -127,7 +139,19 @@ report() {
     [ -n "$target" ] || continue
     seen=$(observed "$target" "$work/log-$1")
     state=$(observed "$target" "$work/control")
-    printf '{"net":"%s","mode":"%s","target":"%s","kind":"tcp","expected":"refused","observed":"%s","control":"%s"}\n' "$1" "$2" "$target" "$seen" "$state"
+    after='"not refused"'
+    case "$seen" in
+      "refused "*)
+        case "${seen#refused }" in
+          '' | *[!0-9]*) seen=no_result ;;
+          *)
+            after="${seen#refused }"
+            seen=refused
+            ;;
+        esac
+        ;;
+    esac
+    printf '{"net":"%s","mode":"%s","target":"%s","kind":"tcp","expected":"refused","observed":"%s","control":"%s","refused_after_seconds":%s,"limit_seconds":%s}\n' "$1" "$2" "$target" "$seen" "$state" "$after" "$enforcement_wait"
     if [ "$seen" != refused ] || [ "$state" != ok ]; then
       printf '1\n' >>"$work/failures"
     fi
