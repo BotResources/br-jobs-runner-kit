@@ -1,0 +1,12 @@
+stamper:
+  enabled: true
+grants:
+  writers:
+    - system:serviceaccount:kyverno:kyverno-background-controller
+namespaces:
+  - name: sbx-alpha-none
+    mode: none
+  - name: sbx-alpha-full
+    mode: full
+  - name: sbx-beta-none
+    mode: none

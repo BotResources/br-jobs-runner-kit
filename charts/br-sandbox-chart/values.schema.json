@@ -254,6 +254,7 @@
       }
     },
     "crds": {"type": "object", "additionalProperties": false, "properties": {"install": {"type": "boolean"}}},
+    "stamper": {"type": "object", "additionalProperties": false, "properties": {"enabled": {"type": "boolean"}, "identity": {"type": "string", "pattern": "^system:serviceaccount:[^:,\\s]+:[^:,\\s]+$"}}},
     "keeper": {}, "operator": {
       "type": "object",
       "additionalProperties": false,

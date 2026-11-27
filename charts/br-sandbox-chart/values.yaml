@@ -106,6 +106,9 @@ egress:
     pods: 4
 crds:
   install: false
+stamper:
+  enabled: false
+  identity: system:serviceaccount:kyverno:kyverno-background-controller
 operator:
   enabled: false
   replicas: 2

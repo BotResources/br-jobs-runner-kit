@@ -42,6 +42,9 @@
 {{- if and .Values.network_check.enabled (not .Values.operator.enabled) -}}
 {{- fail "BR_SANDBOX_OPERATOR_PART_REQUIRED{key=network_check}" -}}
 {{- end -}}
+{{- if and .Values.stamper.enabled (not .Values.operator.enabled) -}}
+{{- fail "BR_SANDBOX_OPERATOR_PART_REQUIRED{key=stamper}" -}}
+{{- end -}}
 {{- if hasKey .Values.operator.settings "pools" -}}
 {{- fail "BR_SANDBOX_OPERATOR_SETTING_REMOVED{key=pools}" -}}
 {{- end -}}
@@ -73,6 +76,9 @@
 {{- end -}}
 {{- end -}}
 {{- include "br-sandbox-chart.validate.scopes" . -}}
+{{- if .Values.stamper.enabled -}}
+{{- include "br-sandbox-chart.validate.stamper" . -}}
+{{- end -}}
 {{- $prefix := .Values.installation.namespace_prefix -}}
 {{- $system := default (printf "%s-system" $prefix) .Values.installation.system_namespace -}}
 {{- $seen := dict $system "system" -}}

@@ -1,0 +1,5 @@
+{{- if .Values.stamper.enabled }}
+{{- $_ := include "br-sandbox-chart.validate" . }}
+---
+{{ include "br-sandbox-chart.stamper.policy" . }}
+{{- end }}
