@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+Text and tests only. No rendered object changes: the render of the example values and of each overlay (mirror, keeper, egress) is the same as in 0.2.0.
+
+- README, targets named by an IP literal: the paragraph no longer advises narrowing `network.internal_cidrs` for a test server. It states that one value feeds both the `egress-proxy` policy and the deny list of the proxy, so a range taken out of it is taken out of what that value contributes to both lists; whether the range is then open depends on the other lists that the chart builds, and the proxy list always holds the loopback ranges, so the rendered lists are to be read; and that the change is for a test cluster only.
+- README, "Not proved offline": the suite does not prove that the proxy refuses a name that resolves to an internal address, and a change of the DNS answer between the check of the address and the dial is a property of the proxy product, not measured here; the refusals of the runner and keeper identity by the real API server in an egress namespace are left to a cluster test; the probes of the proxy pod come from the node and the chart does not test that the network plugin lets them in (if it does not, the proxy does not become Ready and the mode has no egress); the item "the Secret file modes" is narrowed to the modes in a running pod, because the render value is now tested.
+- README, the proxy address: the refusal of an address outside `network.service_cidr` by the API server is marked as documented behaviour of Kubernetes, not measured here, and the README says that the chart does not check the range.
+- Tests: render tests of `defaultMode` and of the `items` list of the CA key volume and of the credential volume of the proxy pod; the tests "no Role grants secrets" and "no ClusterRole rule names secrets" also check the renders with egress; phrase tests for the new README text.
+
 ## 0.2.0
 
 The egress proxy. A (client, mode) that uses a proxy (mode `allow`, and mode `full` with a credential set) renders the proxy when `egress.enabled` is true.
