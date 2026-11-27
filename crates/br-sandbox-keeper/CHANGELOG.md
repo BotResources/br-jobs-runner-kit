@@ -4,7 +4,7 @@
 
 Keeper 0.2 does not work with chart 0.3.x or earlier: it refuses the `pools` configuration at start. Chart 0.3.x needs keeper 0.1.x.
 
-Known limits: in the virtual-host style of the store (`store_path_style` false, the default) the keeper and the adapter `br-runner-sandbox` build the object key with a double slash. This is a known defect, tracked, and fixed in both crates together; use `store_path_style` true. The README lists the other limits under "Not guaranteed".
+Known limits: in the virtual-host style of the store (`store_path_style` false, the default) the keeper and the adapter `br-runner-sandbox` build the object key with a double slash. This is a known defect. The keeper does not promise a fix; a fix, when it comes, goes out in both crates together and never in one alone. Use `store_path_style` true. The README lists the other limits under "Not guaranteed".
 
 ### Added
 
