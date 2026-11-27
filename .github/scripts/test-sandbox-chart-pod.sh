@@ -51,7 +51,7 @@ check_PSS_namespace_labels() {
     section "PSS baseline is enforced, restricted warns and audits"
     t "every managed namespace carries the Pod Security labels and the managed label" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.labels | select(.["pod-security.kubernetes.io/enforce"] == "baseline" and .["pod-security.kubernetes.io/warn"] == "restricted" and .["pod-security.kubernetes.io/audit"] == "restricted" and (.["br.sandbox/mode"] | IN("none", "allow", "full")) and .["br.sandbox/client"] != null)] | length == 4'
     t "the system namespace is not managed, so no exclusion applies to it" jqt ex '.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system") | .metadata.labels | has("br.sandbox/managed") | not'
-    t "the sandbox service account has no token and no Role" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox" and .automountServiceAccountToken == false)] | length == 4'
+    t "the sandbox service account of each managed namespace has no token" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox" and .automountServiceAccountToken == false)] | length == 4'
 }
 
 check_label_contract() {
@@ -78,4 +78,11 @@ check_egress_values_fail_while_egress_is_disabled() {
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowcidrs '.clients.alpha.modes.allow.allow.cidrs = ["192.0.2.0/24"]')"
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset '.clients.beta.modes.none.credential_set = {"git": "set-a"}')"
     t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []} | .clients.beta.modes.none.credential_set = {}')"
+}
+
+check_node_selector_reaches_the_pool() {
+    section "pool.node_selector reaches the pod of the pool"
+    t "without a node selector the pod has none" jqt ex "${SANDBOX_PODS} | all(.spec | has(\"nodeSelector\") | not)"
+    render selector -f "$EXAMPLE" --set pool.node_selector.prepared=userns
+    t "a node selector reaches every pool of the render" jqt selector "${SANDBOX_PODS} | all(.spec.nodeSelector == {\"prepared\": \"userns\"})"
 }
