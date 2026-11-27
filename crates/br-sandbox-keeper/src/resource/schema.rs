@@ -107,10 +107,13 @@ pub(super) fn spec_schema() -> JSONSchemaProps {
                 "!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",
                 "minReplicas is above maxReplicas",
             ),
-            rule("has(self.image) && self.image != ''", "image is empty"),
             rule(
-                "!has(oldSelf.image) || self.image == oldSelf.image || self.image != ''",
-                "image cannot change to empty",
+                r"has(self.image) && self.image.matches('\\S')",
+                "image is empty or white space only",
+            ),
+            rule(
+                r"!has(oldSelf.image) || self.image == oldSelf.image || self.image.matches('\\S')",
+                "image cannot change to empty or white space only",
             ),
             rule(
                 "!has(self.floors) || self.floors.all(f, !has(f.from) || !has(f.to) || f.from != f.to)",

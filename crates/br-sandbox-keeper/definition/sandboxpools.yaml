@@ -92,10 +92,10 @@ spec:
             x-kubernetes-validations:
             - message: minReplicas is above maxReplicas
               rule: "!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas"
-            - message: image is empty
-              rule: has(self.image) && self.image != ''
-            - message: image cannot change to empty
-              rule: "!has(oldSelf.image) || self.image == oldSelf.image || self.image != ''"
+            - message: image is empty or white space only
+              rule: has(self.image) && self.image.matches('\\S')
+            - message: image cannot change to empty or white space only
+              rule: "!has(oldSelf.image) || self.image == oldSelf.image || self.image.matches('\\\\S')"
             - message: a floor has from equal to to
               rule: "!has(self.floors) || self.floors.all(f, !has(f.from) || !has(f.to) || f.from != f.to)"
           status:

@@ -44,3 +44,31 @@ fn the_checked_in_definition_file_holds_the_mark_and_the_bounds() {
     assert!(text.contains("maxItems: 16"));
     assert_eq!(text.matches("maxLength: 64").count(), 2);
 }
+
+#[test]
+fn the_rules_of_the_checked_in_definition_file_are_the_rules_of_the_schema() {
+    let checked_in: CustomResourceDefinition = serde_saphyr::from_str(&checked_in_text()).unwrap();
+    let rules = |definition: &CustomResourceDefinition| -> Vec<(String, Option<String>)> {
+        definition.spec.versions[0]
+            .schema
+            .clone()
+            .unwrap()
+            .open_api_v3_schema
+            .unwrap()
+            .properties
+            .unwrap()["spec"]
+            .x_kubernetes_validations
+            .clone()
+            .unwrap()
+            .into_iter()
+            .map(|rule| (rule.rule, rule.message))
+            .collect()
+    };
+    let from_file = rules(&checked_in);
+    assert_eq!(from_file, rules(&definition()));
+    assert!(from_file.contains(&(
+        r"has(self.image) && self.image.matches('\\S')".to_owned(),
+        Some("image is empty or white space only".to_owned())
+    )));
+    assert!(checked_in_text().contains(r"self.image.matches('\\S')"));
+}

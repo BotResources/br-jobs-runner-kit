@@ -94,7 +94,7 @@ fn the_floors_are_bounded_at_sixteen_windows_and_sixty_four_characters() {
 }
 
 #[test]
-fn the_definition_holds_the_four_proved_rules_and_no_other() {
+fn the_definition_holds_the_four_rules_and_no_other() {
     let root = definition().spec.versions[0]
         .schema
         .clone()
@@ -117,10 +117,13 @@ fn the_definition_holds_the_four_proved_rules_and_no_other() {
             "!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",
             "minReplicas is above maxReplicas",
         ),
-        ("has(self.image) && self.image != ''", "image is empty"),
         (
-            "!has(oldSelf.image) || self.image == oldSelf.image || self.image != ''",
-            "image cannot change to empty",
+            r"has(self.image) && self.image.matches('\\S')",
+            "image is empty or white space only",
+        ),
+        (
+            r"!has(oldSelf.image) || self.image == oldSelf.image || self.image.matches('\\S')",
+            "image cannot change to empty or white space only",
         ),
         (
             "!has(self.floors) || self.floors.all(f, !has(f.from) || !has(f.to) || f.from != f.to)",
@@ -182,4 +185,23 @@ fn the_size_quantities_are_strings() {
             assert_eq!(level.type_.as_deref(), Some("string"), "{resource} {bound}");
         }
     }
+}
+
+#[test]
+fn the_image_rule_refuses_an_empty_or_white_space_only_image() {
+    let spec = spec_schema();
+    let rules: Vec<(&str, &str)> = spec
+        .x_kubernetes_validations
+        .iter()
+        .flatten()
+        .filter(|rule| rule.rule.contains("image"))
+        .map(|rule| (rule.rule.as_str(), rule.message.as_deref().unwrap_or("")))
+        .collect();
+    assert_eq!(rules.len(), 2);
+    for (text, message) in rules {
+        assert!(text.contains(r"self.image.matches('\\S')"), "{text}");
+        assert!(!text.contains("!= ''"), "{text}");
+        assert!(message.contains("empty or white space only"), "{message}");
+    }
+    assert_eq!(at_path(&spec, &["image"]).max_length, None);
 }
