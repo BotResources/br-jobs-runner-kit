@@ -97,3 +97,29 @@ check_network_check_readme_says_what_the_elapsed_time_measures() {
     t "the README names the three programs of the precondition rows, in order" grep -qF 'runs `command -v` for `nc`, `sleep` and `date`, in that order, and for the first one that is not found prints one `precondition` object (`target` the name of the program, `observed` `missing`)' "$README"
     t "the CHANGELOG names the three programs of the precondition rows" grep -qF 'a missing `nc`, `sleep` or `date` (the first one missing, in that order; `target` is its name)' "$CHART/CHANGELOG.md"
 }
+
+nc_calls_of() {
+    awk -v role="$1" -v host="${3%:*}" -v port="${3##*:}" '$1 == role && $(NF - 1) == host && $NF == port { $1 = ""; print }' "$2" | sort -u
+}
+
+check_network_check_job_and_probe_pods_make_the_same_nc_call() {
+    section "the network check: the control of the Job pod and the probe of a probe pod call nc with the same arguments"
+    stub_tools "$WORK/netcheckbin"
+    render_yaml samecall_yaml -f "$EXAMPLE" --set network_check.enforcement_wait_seconds=3
+    local first control probe args="$WORK/netcheckstub/nc.args"
+    first="$(sed -n 1p "$(netcheck_dir samecall_yaml)/extra-targets")"
+    NETCHECK_SOURCE=samecall_yaml run_netcheck env NC_MODE=all PROBE_MODE=none >/dev/null 2>&1 || true
+    control="$(nc_calls_of control "$args" "$first")"
+    probe="$(nc_calls_of probe "$args" "$first")"
+    t "the control and the probe each call nc for the first target" test -n "$control" -a -n "$probe"
+    t "the control makes one form of call and the probe makes one form of call" test "$(grep -c . <<<"$control")" -eq 1 -a "$(grep -c . <<<"$probe")" -eq 1
+    t "the control call is nc -w 2 with the host and the port, and the probe call is the same" test "$control" = " -w 2 ${first%:*} ${first##*:}" -a "$probe" = "$control"
+    sed '/^control() {$/,/^}$/s/nc -w 2 /nc -w 7 /' "$CHART/files/network-check.sh" >"$WORK/network-check-control-w7.sh"
+    t "mutation: the script with another wait in the control call differs from the chart script" test "$(cmp -s "$WORK/network-check-control-w7.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
+    NETCHECK_SCRIPT="$WORK/network-check-control-w7.sh" NETCHECK_SOURCE=samecall_yaml run_netcheck env NC_MODE=all PROBE_MODE=none >/dev/null 2>&1 || true
+    t "mutation: with another wait in the control call the control call is not the probe call" test "$(nc_calls_of control "$args" "$first")" = " -w 7 ${first%:*} ${first##*:}" -a "$(nc_calls_of probe "$args" "$first")" = "$probe"
+    sed '/^until_refused() {$/,/^}$/s/nc -w 2 /nc -w 7 /' "$CHART/files/network-check.sh" >"$WORK/network-check-probe-w7.sh"
+    t "mutation: the script with another wait in the probe call differs from the chart script" test "$(cmp -s "$WORK/network-check-probe-w7.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
+    NETCHECK_PROBE_SCRIPT="$WORK/network-check-probe-w7.sh" NETCHECK_SOURCE=samecall_yaml run_netcheck env NC_MODE=all PROBE_MODE=none >/dev/null 2>&1 || true
+    t "mutation: with another wait in the probe call the probe call is not the control call" test "$(nc_calls_of probe "$args" "$first")" = " -w 7 ${first%:*} ${first##*:}" -a "$(nc_calls_of control "$args" "$first")" = "$control"
+}

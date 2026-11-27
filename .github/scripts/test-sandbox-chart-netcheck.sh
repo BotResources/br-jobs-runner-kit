@@ -28,6 +28,7 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     exit 0
 fi
 printf '%s\n' "$target" >>"$STUB_DIR/nc.calls"
+printf '%s %s\n' "${NC_ROLE:-control}" "$*" >>"$STUB_DIR/nc.args"
 if [ "$(($(wc -l <"$STUB_DIR/nc.calls")))" -gt 2000 ]; then
     printf 'nc stub: more than 2000 calls, the script does not wait\n' >"$STUB_DIR/runaway"
     kill "$PPID"
@@ -92,7 +93,7 @@ case "$1" in
         proxy="$(awk '/name: NETCHECK_PROXY/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
         offlist="$(awk '/name: NETCHECK_OFFLIST/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
         wait="$(awk '/name: NETCHECK_ENFORCEMENT_WAIT/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
-        NETCHECK_ENFORCEMENT_WAIT="$wait" NC_LATE_K="$PROBE_LATE_K" NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "${NETCHECK_PROBE_SCRIPT:-$NETCHECK_DIR/network-check.sh}" probe
+        NC_ROLE=probe NETCHECK_ENFORCEMENT_WAIT="$wait" NC_LATE_K="$PROBE_LATE_K" NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "${NETCHECK_PROBE_SCRIPT:-$NETCHECK_DIR/network-check.sh}" probe
         exit 0
         ;;
 esac
@@ -123,6 +124,7 @@ reset_netcheck_stub() {
     mkdir -p "$WORK/netcheckstub"
     : >"$WORK/netcheckstub/sleep.log"
     : >"$WORK/netcheckstub/nc.calls"
+    : >"$WORK/netcheckstub/nc.args"
     : >"$WORK/netcheckstub/wait.args"
     : >"$WORK/netcheckstub/runaway"
     printf '1000\n' >"$WORK/netcheckstub/clock"

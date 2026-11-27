@@ -71,6 +71,35 @@ check_network_check_preconditions_fail_before_any_probe() {
     fails_with "/network_check/enforcement_wait_seconds': maximum: got" -f "$EXAMPLE" --set network_check.enforcement_wait_seconds=1000000000
 }
 
+first_missing_row() {
+    local out
+    out="$(run_netcheck env PATH="$1" NC_MODE=all PROBE_MODE=none 2>&1)" || true
+    grep -o '"kind":"precondition"' <<<"$out" >/dev/null && sed -n 's/.*"target":"\([a-z_]*\)","kind":"precondition".*/\1/p' <<<"$out"
+}
+
+check_network_check_the_precondition_row_names_the_first_missing_program_in_order() {
+    section "the network check: with two programs missing, the precondition row names the first one in the order nc, sleep, date"
+    stub_tools "$WORK/netcheckbin"
+    local pair first second kept dir
+    for pair in nc:sleep:date nc:date:sleep sleep:date:nc; do
+        first="${pair%%:*}"
+        second="$(cut -d: -f2 <<<"$pair")"
+        kept="${pair##*:}"
+        dir="$WORK/netcheckno-${first}-${second}"
+        mkdir -p "$dir"
+        ln -sf "$(command -v sh)" "$dir/sh"
+        ln -sf "$WORK/netcheckbin/$kept" "$dir/$kept"
+        t "no ${first} and no ${second}: the row names ${first}" test "$(first_missing_row "$dir")" = "$first"
+    done
+    awk '/command -v sleep /{held=$0; next} {print} /command -v date /{print held}' "$CHART/files/network-check.sh" >"$WORK/network-check-date-before-sleep.sh"
+    awk '/command -v nc /{held=$0; next} {print} /command -v sleep /{print held}' "$CHART/files/network-check.sh" >"$WORK/network-check-sleep-before-nc.sh"
+    t "mutation: the script that checks date before sleep differs from the chart script" test "$(cmp -s "$WORK/network-check-date-before-sleep.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
+    t "mutation: the script that checks sleep before nc differs from the chart script" test "$(cmp -s "$WORK/network-check-sleep-before-nc.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
+    t "mutation: with date checked before sleep, no sleep and no date gives the row of date" test "$(NETCHECK_SCRIPT="$WORK/network-check-date-before-sleep.sh" first_missing_row "$WORK/netcheckno-sleep-date")" = date
+    t "mutation: with sleep checked before nc, no nc and no sleep gives the row of sleep" test "$(NETCHECK_SCRIPT="$WORK/network-check-sleep-before-nc.sh" first_missing_row "$WORK/netcheckno-nc-sleep")" = sleep
+    t "a probe pod with no nc and no sleep gives the row of nc" test "$(NETCHECK_ENFORCEMENT_WAIT=3 NETCHECK_TARGETS=10.0.0.1:80 NC_MODE=none PATH="$WORK/netcheckno-nc-sleep" STUB_DIR="$WORK/netcheckstub" sh "$CHART/files/network-check.sh" probe 2>&1 | grep -c '"target":"nc","kind":"precondition"')" -eq 1
+}
+
 check_network_check_readme_says_what_refused_means() {
     section "the README: what refused means, the shared check image, the steady state"
     t "the README says refused is any non-zero exit of nc and a drop is read as refused on purpose" grep -qF 'What `refused` means: `nc` exited with any non-zero status. That covers a reset, the timeout of a dropped probe (a drop is read as a refusal on purpose: the policy stops the traffic), a name that does not resolve and an `nc` that fails for another reason.' "$README"
