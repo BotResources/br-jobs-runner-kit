@@ -64,11 +64,13 @@ fi
 verdict closed-cluster-render-holds-pod-templates "$templates pod templates in the render" positive "$templates"
 verdict closed-cluster-pull-secrets-everywhere "$unpulled of $templates pod templates without imagePullSecrets" counted_zero "$unpulled" "$templates"
 
-host_value="([[:alnum:]-]+\\.)*($VENDOR_HOST_REGEX)(:[0-9]+)?"
-quote="[\"']"
-host_end="($quote|/|[[:space:]]|\$)"
-vendor_pattern="(^|[^[:alnum:]._/:@-])$host_value/|://([^/\"' ]*[.@])?($VENDOR_HOST_REGEX)([:/\"' ]|\$)|(^[[:space:]]*-|[:=])[[:space:]]*$quote?$host_value$host_end|$quote$host_value$quote"
+vendor_host_start="(^|[^[:alnum:]./-]|://)"
+vendor_host_token="([[:alnum:]-]+\\.)*($VENDOR_HOST_REGEX)"
+vendor_host_stop="([^[:alnum:].-]|\\.([^[:alnum:]-]|\$)|\$)"
+vendor_pattern="$vendor_host_start$vendor_host_token$vendor_host_stop"
 vendor_sample_hits() { printf '%s\n' "$1" | grep -c -i -E "$vendor_pattern"; }
+vendor_found() { test "$(vendor_sample_hits "$1")" = 1; }
+vendor_skipped() { test "$(vendor_sample_hits "$1")" = 0; }
 verdict closed-cluster-vendor-search-finds-image-host "an image reference with a vendor host in the host position is found" \
   test "$(vendor_sample_hits 'image: "ghcr.io/example/tool:1"')" = 1
 verdict closed-cluster-vendor-search-finds-url-host "a URL with a vendor host is found" \
@@ -89,6 +91,16 @@ verdict closed-cluster-vendor-search-skips-mirror-path-in-value "a vendor host a
   test "$(vendor_sample_hits "value: \"$CLOSED_MIRROR_HOST/ghcr.io/example\"")$(vendor_sample_hits "registry: $CLOSED_MIRROR_HOST/ghcr.io")" = 00
 verdict closed-cluster-vendor-search-skips-mirror-host "the mirror host alone is not found" \
   test "$(vendor_sample_hits "registry: $CLOSED_MIRROR_HOST")" = 0
+verdict closed-cluster-vendor-search-finds-comma-list "vendor hosts in a comma list are found" vendor_found 'value: ghcr.io,quay.io'
+verdict closed-cluster-vendor-search-finds-flow-list "a vendor host in a flow list is found" vendor_found '[ghcr.io]'
+verdict closed-cluster-vendor-search-finds-host-alone "a vendor host alone on a line is found" vendor_found 'ghcr.io'
+verdict closed-cluster-vendor-search-finds-trailing-semicolon "a vendor host followed by a semicolon is found" vendor_found 'ghcr.io;'
+verdict closed-cluster-vendor-search-finds-quoted-port "a quoted vendor host with a port is found" vendor_found '"ghcr.io:443"'
+verdict closed-cluster-vendor-search-finds-dash-item "a vendor host after a dash is found" vendor_found '- ghcr.io'
+verdict closed-cluster-vendor-search-finds-image-with-tag "an image whose first segment is a vendor host is found" vendor_found 'image: ghcr.io/org/img:1'
+verdict closed-cluster-vendor-search-finds-url-with-path "a URL with a vendor host and a path is found" vendor_found 'https://ghcr.io/v2/'
+verdict closed-cluster-vendor-search-skips-mirror-path-of-plain-host "a vendor host after a plain mirror host is not found" vendor_skipped 'mirror.example/quay.io/x:1'
+verdict closed-cluster-vendor-search-skips-mirror-path-with-port-and-digest "a vendor host after a mirror host with a port is not found" vendor_skipped 'mirror.example:5000/ghcr.io/x@sha256:abc'
 vendor_hits=$(grep -c -i -E "$vendor_pattern" "$rendered_file")
 record closed-cluster-vendor-host-hits "$vendor_hits" hits
 verdict closed-cluster-no-vendor-host-rendered "$vendor_hits vendor or upstream registry hosts in the rendered objects" test "$vendor_hits" = 0
