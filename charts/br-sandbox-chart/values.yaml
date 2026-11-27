@@ -103,6 +103,7 @@ egress:
 keeper:
   enabled: false
   replicas: 2
+  port: 8080
   settings: {}
   resources:
     requests:

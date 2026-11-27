@@ -8,6 +8,14 @@ app.kubernetes.io/part-of: br-sandbox
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
+{{- define "br-sandbox-chart.label_prefix" -}}
+br.sandbox
+{{- end -}}
+
+{{- define "br-sandbox-chart.replicaset_name" -}}
+{{- printf "warm-%s-%s" .client .mode -}}
+{{- end -}}
+
 {{- define "br-sandbox-chart.namespaces" -}}
 {{- include "br-sandbox-chart.validate" . -}}
 {{- $root := . -}}
@@ -150,7 +158,7 @@ Always
 {{- define "br-sandbox-chart.config.common" -}}
 {{- $values := .Values -}}
 {{- toYaml (dict
-  "label_prefix" "br.sandbox"
+  "label_prefix" (include "br-sandbox-chart.label_prefix" .)
   "tools" (dict "mount_path" $values.tools.mount_path "bsdtar_path" (printf "%s/bin/bsdtar" $values.tools.mount_path) "seed_container" (dict "enabled" $values.tools.seed_container.enabled "name" $values.tools.seed_container.name) "seed_root" "/skills" "seed_container_bsdtar_path" "/sbx/bin/bsdtar")
   "restore_timeout_seconds" $values.restore_timeout_seconds
   "idle_ttl" $values.idle_ttl
@@ -169,25 +177,12 @@ Always
   "mode" $ns.mode
   "namespace" $ns.name
   "pool_id" $ns.poolId
-  "replicaset" (printf "warm-%s-%s" $ns.client $ns.mode)
+  "replicaset" (include "br-sandbox-chart.replicaset_name" $ns)
   "floor" $ns.pool.floor
   "max_sandboxes" $ns.pool.max_sandboxes
   "refill_seconds" $ns.pool.refill_seconds
   "margin" $ns.pool.margin
   "size" $ns.pool.size) -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.system" -}}
-{{- $config := include "br-sandbox-chart.config.common" . | fromYaml -}}
-{{- $pools := list -}}
-{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray -}}
-{{- $pools = append $pools (include "br-sandbox-chart.config.pool" (dict "ns" $ns) | fromYaml) -}}
-{{- end -}}
-{{- $_ := set $config "system_namespace" (include "br-sandbox-chart.system_namespace" .) -}}
-{{- $_ := set $config "lease" .Values.keeper.lease -}}
-{{- $_ := set $config "settings" .Values.keeper.settings -}}
-{{- $_ := set $config "pools" $pools -}}
-{{- toYaml $config -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.config.namespace" -}}

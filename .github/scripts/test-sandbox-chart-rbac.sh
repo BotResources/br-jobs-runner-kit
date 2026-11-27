@@ -31,7 +31,6 @@ check_keeper_rights() {
     t "the keeper Deployment has two replicas, a restricted security context and no token mount of sandbox" jqt keeper '.[] | select(.kind == "Deployment") | .spec.replicas == 2 and .spec.template.spec.containers[0].securityContext.runAsNonRoot == true'
     t "the keeper image is mirrored like every image" jqt mirror '.[] | select(.kind == "Deployment") | .spec.template.spec.containers[0].image | startswith("mirror.example.test/")'
     t "keeper.enabled needs an image" test "$(helm template t "$CHART" -f "$EXAMPLE" --set keeper.enabled=true 2>&1 | grep -c 'BR_SANDBOX_MISSING_VALUE{key=keeper.image}')" -ge 1
-    t "the keeper settings reach the system config" test "$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-config") | .data["config.yaml"] | from_yaml | .settings.scale_down_cooldown_seconds' "$WORK/keeper_yaml.yaml")" = 120
     t "the keeper egress policy names the API server and the store" jqt keeper '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-keeper") | [.spec.egress[].to[].ipBlock.cidr | select(. != null)] | sort == ["10.0.0.11/32", "10.0.1.0/24"]'
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.store_cidrs}" -f "$KEEPER_VALUES" -f "$(vals nostore 'del(.network.store_cidrs)')"
 }
@@ -42,7 +41,7 @@ check_config_contract() {
     config="$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "br-sandbox-config") | .data["config.yaml"]' "$WORK/ex_yaml.yaml")"
     printf '%s' "$config" >"$WORK/config.yaml"
     t "the config holds the keys of the contract" test "$(yq '[.restore_timeout_seconds, .idle_ttl, .idle_keep_min_state_bytes, .warm_max_age_seconds, .save.ttl_seconds, .save.paths[0], .tools.seed_container.name, .tools.bsdtar_path, .label_prefix, .pool.replicaset, .store.bucket] | join(",")' "$WORK/config.yaml")" = "30,120,10000000,1800,60,/work,seed,/opt/sbx/bin/bsdtar,br.sandbox,warm-alpha-none,saves"
-    t "the save age is one value for the keeper and br-runner-sandbox" test "$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-config") | .data["config.yaml"] | from_yaml | .save.ttl_seconds' "$WORK/ex_yaml.yaml")" = 60
+    t "the save age is one value for the keeper and br-runner-sandbox" test "$(jq -r '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .save_ttl_seconds' "$WORK/keeper.json")" = "$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "br-sandbox-config") | .data["config.yaml"] | from_yaml | .save.ttl_seconds' "$WORK/keeper_yaml.yaml")"
     fails_with "BR_SANDBOX_SAVE_AGE_INVALID" -f "$(vals zero '.save.ttl_seconds = 0')"
     fails_with "BR_SANDBOX_SAVE_AGE_INVALID" -f "$(vals neg '.save.ttl_seconds = -5')"
     local key

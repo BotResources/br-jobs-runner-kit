@@ -1,0 +1,150 @@
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use br_sandbox_keeper::KeeperConfig;
+use serde_json::Value;
+
+mod common;
+
+use common::{chart, keeper_document, rendered, template};
+
+fn overlays() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(chart().join("ci"))
+        .expect("the chart has a ci folder")
+        .map(|entry| entry.expect("a readable entry").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with("-values.yaml") && name != "example-values.yaml")
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+fn enables_the_keeper(overlay: &Path) -> bool {
+    let text = std::fs::read_to_string(overlay).expect("a readable values file");
+    let values: Value = serde_saphyr::from_str(&text).expect("a YAML values file");
+    values["keeper"]["enabled"] == true
+}
+
+fn keeper_overlay() -> PathBuf {
+    chart().join("ci/keeper-values.yaml")
+}
+
+#[test]
+fn every_values_file_that_enables_the_keeper_renders_a_document_the_keeper_loads() {
+    let enabling: Vec<PathBuf> = overlays()
+        .into_iter()
+        .filter(|overlay| enables_the_keeper(overlay))
+        .collect();
+    assert!(
+        !enabling.is_empty(),
+        "no values file of the chart CI enables the keeper"
+    );
+    for overlay in enabling {
+        let objects = rendered(&overlay, &[]);
+        let config = KeeperConfig::from_json(&keeper_document(&objects)).unwrap_or_else(|error| {
+            panic!(
+                "{}: the keeper refuses the document: {error}",
+                overlay.display()
+            )
+        });
+        let warm_pools = objects
+            .iter()
+            .filter(|object| object["kind"] == "ReplicaSet")
+            .count();
+        assert!(
+            warm_pools >= 2,
+            "{}: the fixture has fewer than two pools",
+            overlay.display()
+        );
+        assert_eq!(config.pools.len(), warm_pools, "{}", overlay.display());
+        assert!(!config.store.bucket.is_empty(), "{}", overlay.display());
+    }
+}
+
+#[test]
+fn the_document_carries_the_pool_the_store_the_lease_and_the_settings_of_the_values() {
+    let objects = rendered(&keeper_overlay(), &[]);
+    let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
+
+    let pool = config
+        .pool("sbx-alpha-full", "alpha-full")
+        .expect("the pool of the namespace and the id");
+    assert_eq!(pool.replicaset, "warm-alpha-full");
+    assert_eq!(pool.min_replicas, 1);
+    assert_eq!(pool.max_replicas, 10);
+    assert_eq!(pool.refill, Duration::from_secs(3));
+    assert_eq!(pool.margin, 2);
+    assert_eq!(pool.idle_ttl, Duration::from_secs(120));
+    assert_eq!(pool.idle_keep_min_state_bytes, 10_000_000);
+    assert_eq!(
+        config
+            .pool("sbx-alpha-none", "alpha-none")
+            .map(|pool| pool.max_replicas),
+        Some(20)
+    );
+
+    assert_eq!(
+        config.store.endpoint.as_str(),
+        "https://store.example.test/"
+    );
+    assert_eq!(config.store.region, "example-1");
+    assert!(config.store.path_style);
+    assert_eq!(config.save_ttl, Duration::from_secs(60));
+    assert_eq!(config.tombstone_ttl, Duration::from_secs(365 * 86_400));
+    assert_eq!(config.warm_max_age, Duration::from_secs(1800));
+    assert_eq!(config.lease.duration, Duration::from_secs(15));
+    assert_eq!(config.lease.renew_deadline, Duration::from_secs(10));
+    assert_eq!(config.lease.retry_period, Duration::from_secs(2));
+    assert_eq!(config.lease.namespace, None);
+    assert_eq!(config.listen_address.to_string(), "0.0.0.0:8080");
+    assert_eq!(config.managed_namespace_selector, "br.sandbox/managed=true");
+    assert_eq!(config.scale_down_cooldown, Duration::from_secs(120));
+}
+
+#[test]
+fn the_port_of_the_value_is_the_listen_address_and_the_container_port() {
+    let objects = rendered(&keeper_overlay(), &["--set", "keeper.port=9100"]);
+    let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
+    assert_eq!(config.listen_address.to_string(), "0.0.0.0:9100");
+    let deployment = objects
+        .iter()
+        .find(|object| {
+            object["kind"] == "Deployment" && object["metadata"]["name"] == "br-sandbox-keeper"
+        })
+        .expect("the keeper Deployment");
+    let container = &deployment["spec"]["template"]["spec"]["containers"][0];
+    assert_eq!(container["ports"][0]["containerPort"], 9100);
+    assert_eq!(container["livenessProbe"]["httpGet"]["path"], "/livez");
+    assert_eq!(container["readinessProbe"]["httpGet"]["path"], "/readyz");
+}
+
+#[test]
+fn a_settings_key_that_the_chart_computes_fails_the_render() {
+    for key in [
+        "save_ttl_seconds",
+        "store_bucket",
+        "pools",
+        "listen_address",
+        "lease_duration_seconds",
+    ] {
+        let setting = format!("keeper.settings.{key}=1");
+        let output = template(&keeper_overlay(), &["--set", &setting]);
+        let errors = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{key}: the render passed");
+        assert!(
+            errors.contains(&format!("BR_SANDBOX_KEEPER_SETTING_COMPUTED{{key={key}}}")),
+            "{key}: {errors}"
+        );
+    }
+}
+
+#[test]
+fn a_settings_key_that_the_keeper_does_not_know_reaches_the_keeper_and_fails_there() {
+    let objects = rendered(&keeper_overlay(), &["--set", "keeper.settings.not_a_key=1"]);
+    let error = KeeperConfig::from_json(&keeper_document(&objects))
+        .expect_err("the keeper refuses an unknown key");
+    assert!(error.to_string().contains("not_a_key"), "{error}");
+}
