@@ -25,7 +25,7 @@ Known limits: in the virtual-host style of the store (`store_path_style` false, 
 - The label `pool` of `br_sandbox_keeper_pool_desired`, `_pool_warm_ready` and `_claims_per_second` is the name of the namespace, one series for each namespace that has a resource.
 - `/readyz` answers 503 with the reason in the body while the definition of the resource is absent, and a cluster with no managed namespace or no resource is ready.
 
-- The condition `Ready` has the reason `WarmPodsReady` when it is `True`, that is when the number of Ready warm pods is at least the minimum of the pool (the intent gives `True` no reason); its message gives that count and the minimum.
+- The condition `Ready` has the reason `WarmPodsReady` when it is `True`, that is when the number of Ready warm pods is at least the minimum of the pool (the intent gives `True` no reason).
 - The message of the condition `Ready` names a refused write of a ReplicaSet or a refused delete of a pod when the write of the status is allowed. `pool::Observation` has the field `refused` and the method `refused` that sets it; `Observation::new` is unchanged.
 
 ### Changed
