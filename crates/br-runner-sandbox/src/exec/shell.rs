@@ -9,7 +9,7 @@ use crate::error::Error;
 use super::argv;
 use super::error::ExecError;
 use super::list::parse_find_output;
-use super::session::{bounded, collect, succeed};
+use super::session::bounded;
 use super::write_archive::file_archive;
 
 impl Env {
@@ -28,9 +28,12 @@ impl Env {
     async fn run_foreground(&self, pod: &str, command: &Command) -> Result<RunOutcome, Error> {
         let request = self.agent_request(pod, argv::run_foreground(command.as_str()), false);
         let io = self.cluster.exec(request).await?;
-        let output =
-            bounded::<_, ExecError>("run", self.config.exec_timeout(), collect("run", io, None))
-                .await?;
+        let output = bounded::<_, Error>(
+            "run",
+            self.config.exec_timeout(),
+            self.collect_in_pod("run", pod, io, None),
+        )
+        .await?;
         Ok(RunOutcome::Finished(CommandResult {
             exit_code: output.code,
             stdout: output.stdout,
@@ -41,7 +44,7 @@ impl Env {
     async fn run_background(&self, pod: &str, command: &Command) -> Result<RunOutcome, Error> {
         let request = self.agent_request(pod, argv::run_background(command.as_str()), false);
         let io = self.cluster.exec(request).await?;
-        let output = succeed("run", io, None).await?;
+        let output = self.succeed_in_pod("run", pod, io, None).await?;
         let text = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         match text.parse::<u32>() {
             Ok(process) if process > 0 => {
@@ -56,7 +59,7 @@ impl Env {
             .cluster
             .exec(self.agent_request(pod, argv::read(path), false))
             .await?;
-        let output = collect("read", io, None).await?;
+        let output = self.collect_in_pod("read", pod, io, None).await?;
         if output.code == 0 {
             Ok(output.stdout)
         } else {
@@ -71,7 +74,8 @@ impl Env {
         let archive = file_archive(path, content, self.clock.now())?;
         let request = self.agent_request(pod, argv::tar_write(self.config.tools_path()), true);
         let io = self.cluster.exec(request).await?;
-        succeed("write", io, Some(Bytes::from(archive))).await?;
+        self.succeed_in_pod("write", pod, io, Some(Bytes::from(archive)))
+            .await?;
         Ok(())
     }
 
@@ -80,7 +84,7 @@ impl Env {
             .cluster
             .exec(self.agent_request(pod, argv::list(under), false))
             .await?;
-        let output = collect("list", io, None).await?;
+        let output = self.collect_in_pod("list", pod, io, None).await?;
         parse_find_output(output.code, &output.stdout).map_err(Error::from)
     }
 
@@ -97,7 +101,7 @@ impl Env {
             .cluster
             .exec(self.agent_request(pod, argv::kill(number), false))
             .await?;
-        succeed("kill", io, None).await?;
+        self.succeed_in_pod("kill", pod, io, None).await?;
         Ok(())
     }
 }
