@@ -13,6 +13,7 @@ source "$HERE/test-sandbox-chart-runner-role.sh"
 source "$HERE/test-sandbox-chart-runner-role-docs.sh"
 source "$HERE/test-sandbox-chart-operator-parts.sh"
 source "$HERE/test-sandbox-chart-scopes.sh"
+source "$HERE/test-sandbox-chart-operator-rights.sh"
 source "$HERE/test-sandbox-chart-keeper-config.sh"
 source "$HERE/test-sandbox-chart-adapter-config.sh"
 source "$HERE/test-sandbox-chart-adapter-names.sh"
@@ -34,6 +35,7 @@ source "$HERE/test-sandbox-chart-netcheck-reading.sh"
 source "$HERE/test-sandbox-chart-netcheck-contract.sh"
 
 render ex -f "$EXAMPLE"
+render fence -f "$EXAMPLE"
 render mirror -f "$EXAMPLE" -f "$MIRROR_VALUES"
 render keeper -f "$EXAMPLE" -f "$OPERATOR_VALUES"
 render nondefault -f "$EXAMPLE" -f "$NONDEFAULT_VALUES"
@@ -42,6 +44,7 @@ render_yaml ex_yaml -f "$EXAMPLE"
 render_yaml keeper_yaml -f "$EXAMPLE" -f "$OPERATOR_VALUES"
 render_yaml mirror_yaml -f "$EXAMPLE" -f "$MIRROR_VALUES"
 render_egress_fixtures
+render_rights_fixtures
 render_proxy_fixtures
 render_proxy_config_fixtures
 render_proxy_guard_fixtures

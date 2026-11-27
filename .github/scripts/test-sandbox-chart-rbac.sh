@@ -10,11 +10,22 @@ role_rules() {
     jqv "$2" "$(role_filter "$1") | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")"
 }
 
+CLUSTER_ROLE='.[] | select(.kind == "ClusterRole" and .metadata.name == "%s")'
+
+cluster_role_filter() {
+    printf '%s' "${CLUSTER_ROLE//%s/$1}"
+}
+
+cluster_role_rules() {
+    jqv "$2" "$(cluster_role_filter "$1") | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")"
+}
+
 check_runner_role_and_binding() {
-    section "runner Role: pods, exec, replicasets read, the config"
-    t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(role_rules br-sandbox-runner ex)" = "configmaps:get pods/exec:create,get pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
-    t "the runner Role names the ConfigMap it reads" jqt ex "$(role_filter br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
-    t "the runner binding names the service account of the values" jqt ex '.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner" and .metadata.namespace == "sbx-beta-none") | .subjects == [{"kind": "ServiceAccount", "name": "runner", "namespace": "runners"}]'
+    section "runner ClusterRole: pods, exec, replicasets read, the config"
+    t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(cluster_role_rules br-sandbox-runner keeper)" = "configmaps:get pods/exec:create,get pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
+    t "the runner ClusterRole names the ConfigMap it reads" jqt keeper "$(cluster_role_filter br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
+    t "the runner binding names the service account of the scope" jqt ex '.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner" and .metadata.namespace == "sbx-beta-none") | .subjects == [{"kind": "ServiceAccount", "name": "runner", "namespace": "runners"}]'
+    t "the runner binding names the ClusterRole, and the render holds no Role of the runner" jqt keeper '([.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner") | .roleRef.kind] | unique == ["ClusterRole"]) and ([.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-runner")] | length == 0)'
     local render
     for render in keeper cred keeperegress; do
         t "in the ${render} render no Role grants secrets" jqt "$render" '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
@@ -24,10 +35,10 @@ check_runner_role_and_binding() {
 
 check_keeper_rights() {
     section "keeper rights"
-    t "the keeper Role has pods without patch, replicasets with patch, status patch, events create" test "$(jq -r "$(role_filter br-sandbox-keeper) | .rules | map(.resources[0] + \":\" + (.verbs | sort | join(\",\"))) | sort | join(\" \")" "$WORK/keeper.json")" = "events:create pods:delete,get,list,watch replicasets/status:patch replicasets:get,list,patch,watch"
-    t "the keeper reads namespaces cluster-wide, nothing more cluster-wide" jqt keeper '[.[] | select(.kind == "ClusterRole" and (.metadata.name | endswith("keeper-namespaces"))) | .rules] == [[{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list", "watch"]}]]'
+    t "the controller ClusterRole has pods without patch, replicasets with patch and create, status patch, events create" test "$(cluster_role_rules br-sandbox-controller keeper)" = "configmaps:get events:create networkpolicies:get,list,watch pods:delete,get,list,watch replicasets/status:patch replicasets:create,delete,get,list,patch,watch resourcequotas:get,list,watch sandboxpools/status:patch sandboxpools:get,list,watch"
+    t "the keeper reads namespaces and the admission policy bindings cluster-wide, nothing more cluster-wide" jqt keeper '[.[] | select(.kind == "ClusterRole" and (.metadata.name | endswith("keeper-namespaces"))) | .rules] == [[{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list", "watch"]}, {"apiGroups": ["admissionregistration.k8s.io"], "resources": ["validatingadmissionpolicybindings"], "verbs": ["get", "list", "watch"]}]]'
     t "the keeper holds leases in its own namespace" jqt keeper '.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-keeper-lease" and .metadata.namespace == "sbx-system") | .rules == [{"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["get", "create", "update"]}]'
-    t "without the keeper no keeper object is rendered" jqt ex '[.[] | select((.metadata.name // "") | test("keeper"))] | length == 0'
+    t "without the operator no keeper Deployment, account, document, role or cluster binding is rendered" jqt fence '[.[] | select((.kind | IN("Deployment", "ServiceAccount", "ConfigMap", "Role", "ClusterRole", "ClusterRoleBinding")) and ((.metadata.name // "") | test("keeper")))] | length == 0'
     t "the keeper Deployment has two replicas, a restricted security context and no token mount of sandbox" jqt keeper '.[] | select(.kind == "Deployment") | .spec.replicas == 2 and .spec.template.spec.containers[0].securityContext.runAsNonRoot == true'
     t "the keeper image is mirrored like every image" jqt mirror '.[] | select(.kind == "Deployment") | .spec.template.spec.containers[0].image | startswith("mirror.example.test/")'
     t "operator.enabled needs an image" test "$(helm template t "$CHART" -f "$EXAMPLE" --set operator.enabled=true 2>&1 | grep -c 'BR_SANDBOX_MISSING_VALUE{key=operator.image}')" -ge 1
