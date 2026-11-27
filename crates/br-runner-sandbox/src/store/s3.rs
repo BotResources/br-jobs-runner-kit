@@ -5,6 +5,7 @@ use object_store::path::Path;
 use object_store::{
     Error as BackendError, ObjectStore as Backend, ObjectStoreExt, PutMode, PutPayload,
 };
+use url::Url;
 
 use crate::config::StoreSettings;
 
@@ -33,12 +34,16 @@ fn path(key: &str) -> Result<Path, StoreError> {
     Path::parse(key).map_err(|_| StoreError::Key(key.to_owned()))
 }
 
+fn endpoint_text(endpoint: &Url) -> &str {
+    endpoint.as_str().trim_end_matches('/')
+}
+
 impl S3Store {
     pub fn new(settings: &StoreSettings) -> Result<Self, StoreError> {
         crate::tls::ensure_crypto_provider();
         let credentials = settings.credentials();
         let backend = AmazonS3Builder::new()
-            .with_endpoint(settings.endpoint().as_str())
+            .with_endpoint(endpoint_text(settings.endpoint()))
             .with_bucket_name(settings.bucket())
             .with_region(settings.region())
             .with_access_key_id(credentials.access_key_id())

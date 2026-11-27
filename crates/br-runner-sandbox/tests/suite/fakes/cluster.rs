@@ -123,6 +123,8 @@ struct State {
     execs: Vec<Arc<ExecRecord>>,
     patches: Vec<(String, Value)>,
     fail_patch: bool,
+    fail_get: bool,
+    gets: usize,
 }
 
 #[derive(Clone, Default)]
@@ -145,6 +147,24 @@ impl FakeCluster {
 
     pub fn push_script(&self, script: Script) {
         self.lock().scripts.push_back(script);
+    }
+
+    pub fn remove_pod(&self, name: &str) {
+        self.lock().pods.remove(name);
+    }
+
+    pub fn mark_deleting(&self, name: &str) {
+        if let Some(pod) = self.lock().pods.get_mut(name) {
+            pod.deleting = true;
+        }
+    }
+
+    pub fn fail_gets(&self) {
+        self.lock().fail_get = true;
+    }
+
+    pub fn pod_reads(&self) -> usize {
+        self.lock().gets
     }
 
     pub fn fail_patches(&self) {
@@ -186,7 +206,16 @@ impl Cluster for FakeCluster {
     }
 
     fn get_pod<'a>(&'a self, name: &'a str) -> ClusterFuture<'a, Option<PodView>> {
-        Box::pin(async move { Ok(self.lock().pods.get(name).cloned()) })
+        Box::pin(async move {
+            let mut state = self.lock();
+            state.gets += 1;
+            if state.fail_get {
+                return Err(ClusterError::Call(
+                    "the fake cluster refuses pod reads".to_owned(),
+                ));
+            }
+            Ok(state.pods.get(name).cloned())
+        })
     }
 
     fn patch_pod<'a>(&'a self, name: &'a str, patch: &'a Value) -> ClusterFuture<'a, PodView> {

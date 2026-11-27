@@ -5,7 +5,7 @@ The adapter library of the sandbox port of `br-agentic-harness-contract`: a pod 
 ## Install
 
 ```toml
-br-runner-sandbox = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-sandbox", tag = "br-runner-sandbox/v0.1.1", version = "0.1.1" }
+br-runner-sandbox = { git = "https://github.com/BotResources/br-jobs-runner-kit", package = "br-runner-sandbox", tag = "br-runner-sandbox/v0.1.2", version = "0.1.2" }
 br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.2.0", version = "0.2.0" }
 ```
 
@@ -44,6 +44,8 @@ The harness drives the order of open, save and release through the `RunLifecycle
 - Live reuse of a kept pod also needs the pod to be Ready and not in deletion, in addition to the conditions on its annotations.
 - `kill` takes a `ProcessId` that is a positive decimal number (no sign, no leading zero, within the range of `u32`). Any other text is a port refusal, with no exec. A process that has already ended is not an error.
 - Every `bsdtar` call carries `--no-xattrs --no-acls --no-fflags`, and the save adds `--options hdrcharset=BINARY`. Extended attributes, ACLs and file flags are not saved, not restored and not written by a seed or by `write`.
+- When the status of an exec of `run`, `read`, `write`, `list` or `kill` is 128 or more, the adapter reads the pod once. A pod that is not found or that is being deleted is a port fault (`ClusterError::Gone`), and a read of the pod that fails is a port fault (`ClusterError::Call`); in a live pod the status is kept (a command that ends with 137 is an exit code). A status below 128 reads no pod. `save` needs no such read: any status other than 0 of its `bsdtar` is a port fault.
+- The store endpoint is used without its trailing slash. With `store_path_style` false the endpoint is the virtual-host address of the bucket and the key follows one slash; with `store_path_style` true the bucket and the key follow it.
 - A store endpoint with the scheme `http` is accepted. The S3 credentials (the access key id, and the signature made with the secret key) then travel on that transport with no TLS. Whether that is allowed is the choice of the caller and of its network.
 
 ## Not guaranteed
@@ -123,6 +125,7 @@ The adapter does not write any of the following. Another component does, and the
 | The S3 delete is one request per key | Some S3-compatible stores have no multi-object delete. A delete of a key that is not there is a success. |
 | The part is checked by its stored size after the upload | The store has no checksum the adapter can trust on every compatible store, so the size is read back and compared with the size counted while streaming. |
 | The manifest is written last, with a conditional create | The manifest is the commit mark. A conflict is `AlreadySaved` and the part stays for the component that manages the pool. |
+| The pod is read only when the exec status is 128 or more | A deleted pod ends the exec stream with the status of the killed process, 137 or 143, which is also what a live `kill -9` gives. A status below 128 cannot come from a signal, so those calls read nothing; the one read that decides is made after the status and before the status is used. |
 | The stderr of an exec is never put in an error or a log | A command can print a secret. The foreground `run` returns the stderr to the harness as part of the result of the command. The other calls (`read`, `write`, `list`, `kill`) hold it in memory in the output of the exec and drop it with the output, and the `bsdtar` calls of save and restore drain it and drop it so that the process does not block. No error and no log holds it. |
 | `reqwest` is a dependency with no code of its own | It carries the `rustls-no-provider` feature of the TLS that the S3 client uses. |
 | The restore skips the entry of each scope root with an anchored `--exclude` | The mount roots of the pod belong to another owner than the agent user, and `bsdtar` run by the agent user exits with 1 when it sets the time of a directory that it does not own. The exit code is never read as a success: the entry is not applied, so the call ends with 0. The pattern is anchored at both ends and the pattern characters of a path are escaped, so only the entry of the root is skipped and the content under it is restored. |

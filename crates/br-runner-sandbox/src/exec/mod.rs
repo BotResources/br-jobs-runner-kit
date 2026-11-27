@@ -1,3 +1,4 @@
+mod alive;
 pub mod argv;
 mod error;
 mod list;
