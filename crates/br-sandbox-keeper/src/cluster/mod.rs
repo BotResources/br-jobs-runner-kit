@@ -1,4 +1,11 @@
+#[cfg(test)]
+pub(crate) mod fixtures;
 mod kube_api;
+mod observe;
+mod pool_api;
+mod view;
+mod views;
+mod writer;
 
 use std::time::Duration;
 
@@ -10,6 +17,11 @@ use crate::facts::{PodFacts, PodVersion, ReplicaSetFacts};
 use crate::rules::ConditionWrite;
 
 pub use kube_api::KubeCluster;
+pub use observe::{FenceInputs, FenceObservation, Observer, ReplicaSetRead};
+pub use pool_api::{CreateOutcome, PoolApi};
+pub use view::{Read, View, ViewEvent};
+pub use views::Views;
+pub use writer::{Change, PoolWriter, WriteError};
 
 pub const FIELD_MANAGER: &str = "br-sandbox-keeper";
 pub const EVENT_POOL_AT_MAX: &str = "PoolAtMax";
@@ -22,6 +34,8 @@ pub enum ApiError {
     NotFound,
     #[error("the object was changed by another writer")]
     Conflict,
+    #[error("the API server refused the call: {0}")]
+    Forbidden(String),
     #[error("the Kubernetes call failed: {0}")]
     Call(String),
 }

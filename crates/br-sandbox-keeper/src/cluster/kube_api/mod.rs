@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use br_runner_sandbox::PodKeys;
 use futures::StreamExt;
-use futures::stream::{self, BoxStream};
+use futures::stream::BoxStream;
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::coordination::v1::Lease;
 use k8s_openapi::api::core::v1::{Event, EventSource, Namespace, ObjectReference, Pod};
@@ -29,6 +31,9 @@ pub struct KubeCluster {
 
 fn call_error(error: kube::Error) -> ApiError {
     match &error {
+        kube::Error::Api(status) if status.is_forbidden() => {
+            ApiError::Forbidden(status.message.clone())
+        }
         kube::Error::Api(status) if status.is_not_found() => ApiError::NotFound,
         kube::Error::Api(status) if status.is_conflict() => ApiError::Conflict,
         _ => ApiError::Call(error.to_string()),
@@ -53,10 +58,11 @@ impl KubeCluster {
 }
 
 mod lease;
+mod pool;
 mod watch;
 
 use lease::{lease_facts, lease_object};
-use watch::{Phase, Watch, pod_selector};
+use watch::{pod_selector, watch_stream};
 
 impl crate::sealed::Sealed for KubeCluster {}
 
@@ -78,17 +84,15 @@ impl KubeApi for KubeCluster {
 
     fn watch_pods(&self, namespace: &str) -> BoxStream<'static, PodEvent> {
         let selector = pod_selector(&self.keys);
-        let watch = Watch {
-            api: Api::namespaced(self.client.clone(), namespace),
-            list: ListParams::default().labels(&selector),
-            watch: WatchParams::default().labels(&selector),
-            keys: self.keys.clone(),
-        };
-        stream::unfold((watch, Phase::List), |(watch, phase)| async move {
-            let (events, phase) = watch.step(phase).await;
-            Some((stream::iter(events), (watch, phase)))
-        })
-        .flatten()
+        let keys = self.keys.clone();
+        watch_stream(
+            Api::<Pod>::namespaced(self.client.clone(), namespace),
+            ListParams::default().labels(&selector),
+            WatchParams::default().labels(&selector),
+            "pod",
+            Arc::new(move |pod: &Pod| pod_facts(pod, &keys)),
+        )
+        .map(PodEvent::from)
         .boxed()
     }
 

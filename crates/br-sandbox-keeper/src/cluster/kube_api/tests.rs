@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+mod pool_wire;
+mod pool_writes;
 mod reads;
 mod rights;
 mod stub;

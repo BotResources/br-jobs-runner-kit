@@ -6,10 +6,12 @@ use crate::cluster::{
     ApiError, ApiFuture, DeleteOutcome, EventTarget, KubeApi, LeaseFacts, LeaseWrite, PodEvent,
     PoolEvent,
 };
+use crate::convert::replica_set_facts;
 use crate::facts::{ConditionFacts, PodFacts, PodVersion, ReplicaSetFacts};
 use crate::rules::ConditionWrite;
 
-use super::{Call, FakeKube, failure};
+use super::state::condition_of;
+use super::{Call, FakeKube};
 
 impl crate::sealed::Sealed for FakeKube {}
 
@@ -24,6 +26,7 @@ impl KubeApi for FakeKube {
     fn watch_pods(&self, namespace: &str) -> BoxStream<'static, PodEvent> {
         let (sender, receiver) = mpsc::unbounded_channel();
         let mut state = self.state.lock().unwrap();
+        state.reads.push("watch_pods");
         let snapshot: Vec<PodFacts> = state
             .pods
             .iter()
@@ -58,8 +61,8 @@ impl KubeApi for FakeKube {
                 uid: version.uid.clone(),
                 resource_version: version.resource_version.clone(),
             });
-            if state.failing.contains("delete_pod") {
-                return Err(failure("delete_pod"));
+            if let Some(error) = state.refusal("delete_pod") {
+                return Err(error);
             }
             let key = (namespace.to_owned(), name.to_owned());
             match state.pods.get(&key) {
@@ -92,12 +95,9 @@ impl KubeApi for FakeKube {
         Box::pin(async move {
             self.check("get_replica_set")?;
             Ok(self
-                .state
-                .lock()
-                .unwrap()
-                .replica_sets
-                .get(&(namespace.to_owned(), name.to_owned()))
-                .cloned())
+                .raw_replica_set(namespace, name)
+                .as_ref()
+                .map(replica_set_facts))
         })
     }
 
@@ -113,14 +113,14 @@ impl KubeApi for FakeKube {
                 name: name.to_owned(),
                 replicas,
             });
-            if state.failing.contains("apply_replicas") {
-                return Err(failure("apply_replicas"));
+            if let Some(error) = state.refusal("apply_replicas") {
+                return Err(error);
             }
             if let Some(set) = state
                 .replica_sets
                 .get_mut(&(namespace.to_owned(), name.to_owned()))
             {
-                set.replicas = Some(replicas);
+                set.spec.get_or_insert_with(Default::default).replicas = Some(replicas);
             }
             Ok(())
         })
@@ -140,22 +140,26 @@ impl KubeApi for FakeKube {
                 reason: write.reason.to_owned(),
                 message: write.message.clone(),
             });
-            if state.failing.contains("apply_condition") {
-                return Err(failure("apply_condition"));
+            if let Some(error) = state.refusal("apply_condition") {
+                return Err(error);
             }
             if let Some(set) = state
                 .replica_sets
                 .get_mut(&(namespace.to_owned(), name.to_owned()))
             {
-                set.conditions
-                    .retain(|condition| condition.kind != "WarmPodsFailing");
-                set.conditions.push(ConditionFacts {
+                let conditions = set
+                    .status
+                    .get_or_insert_with(Default::default)
+                    .conditions
+                    .get_or_insert_with(Vec::new);
+                conditions.retain(|condition| condition.type_ != "WarmPodsFailing");
+                conditions.push(condition_of(&ConditionFacts {
                     kind: "WarmPodsFailing".to_owned(),
                     status: write.status.to_owned(),
                     reason: Some(write.reason.to_owned()),
                     message: Some(write.message.clone()),
                     last_transition_time: Some(write.last_transition_time),
-                });
+                }));
             }
             Ok(())
         })
@@ -174,8 +178,8 @@ impl KubeApi for FakeKube {
                 reason: event.reason(),
                 message: message.to_owned(),
             });
-            if state.failing.contains("create_event") {
-                return Err(failure("create_event"));
+            if let Some(error) = state.refusal("create_event") {
+                return Err(error);
             }
             Ok(())
         })
@@ -205,8 +209,8 @@ impl KubeApi for FakeKube {
             state.calls.push(Call::LeaseCreate {
                 holder: write.holder.clone(),
             });
-            if state.failing.contains("create_lease") {
-                return Err(failure("create_lease"));
+            if let Some(error) = state.refusal("create_lease") {
+                return Err(error);
             }
             if state.lease.is_some() {
                 return Err(ApiError::Conflict);
@@ -231,8 +235,8 @@ impl KubeApi for FakeKube {
                 holder: write.holder.clone(),
                 resource_version: resource_version.to_owned(),
             });
-            if state.failing.contains("update_lease") {
-                return Err(failure("update_lease"));
+            if let Some(error) = state.refusal("update_lease") {
+                return Err(error);
             }
             if state.conflicting_leases > 0 {
                 state.conflicting_leases -= 1;

@@ -2,7 +2,9 @@ mod canonical;
 mod duplicate;
 mod fence;
 mod names;
+mod ownership;
 mod quantity;
+mod replicaset;
 mod selector;
 mod settings;
 mod status;
@@ -16,6 +18,8 @@ pub use names::{
     ADMISSION_BINDING_NAME, POD_TEMPLATE_KEY, QUOTA_NAME, REPLICASET_PREFIX, pool_id,
     replicaset_name, template_hash_key,
 };
+pub use ownership::{Owner, OwnershipFault, check_ownership, owner_reference};
+pub use replicaset::replica_set_body;
 pub use selector::{Selector, SelectorError};
 pub use settings::{FloorWindow, PoolSettings, PoolSize, ResourceBounds};
 pub use status::{

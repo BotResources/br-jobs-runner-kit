@@ -13,6 +13,9 @@
 - `rules::plan_rollout`, `RolloutPlan`, `RolloutState`, `Wait`, `failing_status`; the delete reason `DeleteReason::Rollout` and the metric reason `rollout`; `PodFacts` carries `template_hash` and `unschedulable`.
 - Configuration keys `idle_ttl_seconds`, `idle_keep_min_state_bytes` (for the whole keeper) and `agent_container` (required, no default).
 
+- `cluster`: the cluster I/O layer. The sealed trait `PoolApi` (a supertrait of `KubeApi`) with the watches of namespaces, bindings and `SandboxPool` resources, the readers of the quota, the network policies, the template ConfigMap and the ReplicaSet, and the writes that the rights table grants (create a ReplicaSet, apply `spec.template`, delete a ReplicaSet with the uid precondition, patch `sandboxpools/status`); `CreateOutcome`; `ViewEvent`, `View` and `Read`; `Views` (the views with a synced flag and their driver); `Observer`, `FenceInputs`, `FenceObservation` and `ReplicaSetRead`; `PoolWriter`, `WriteError` and `Change`; `ApiError::Forbidden` for a 403.
+- `pool`: `Owner`, `OwnershipFault`, `check_ownership`, `owner_reference` and `replica_set_body` (the pure ownership check and the body of the pool ReplicaSet).
+
 ### Changed
 
 - The key `pools` is removed from the configuration; a document that holds it is a start fault (`ConfigError::PoolsAreResources`). The pool types of the configuration (`pools`, `PoolInput`, `FloorInput`) and the errors that belonged to them are removed.
@@ -22,6 +25,7 @@
 
 ### Tests
 
+- The cluster I/O layer is tested on the fakes (views and their synced flag, the readers, the writers, the ownership check, the refused call) and on a stub API server (the path, the verb, the selector, the body and the content type of each call, and the rights test over the scope of each call).
 - The pure rules above are covered by unit tests, one for each sentence of the intent that they touch (spec validation, template check and hash, fence verdict, duplicate rule, sizing, rollout plan, pod expiry by state, status conditions and write rate). The tests of the removed pool configuration are replaced by tests of the `pools` fault and of the new keys; the chart 0.3 tests now hold that the keeper refuses its document.
 - The checked-in definition file equals the generated definition; each level of the type has the keys of its schema; the preserve mark, the bounds and the four rules are held; no other rule is present.
 - The spec is read strictly at each level, with the defaults of the table, and a bad spec does not fail the object that holds it.
@@ -29,7 +33,7 @@
 
 ### Documentation
 
-- README: "The resource `SandboxPool`" and "Rights table", and the two new rows of the public surface. This version does not yet read a resource, a ConfigMap or a network policy, and does not call the new rights: the pure rules of `pool` are not yet wired into the controller.
+- README: "The resource `SandboxPool`", "Rights table" and "Cluster I/O layer", and the two new rows of the public surface. The pure rules of `pool` and the cluster I/O layer are not yet wired into the controller: the next piece does the reconcile loop.
 
 ## 0.1.1
 
