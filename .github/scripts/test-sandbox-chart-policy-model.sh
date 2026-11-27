@@ -53,6 +53,7 @@ def failing($vap; $r; $params):
            or (($create | not) and unguarded_params($resE))
            or (($create or (guarded($resE) | not)) and ($params != null) and ($all | any(. as $c | $c.name == $agent and ($ob | any(. as $o | ($params.spec.size[$o.size][$o.bound] // null) as $limit | ($limit != null) and (under($c; $o.kind; $o.res; ($limit | qty)) | not))))))
          ) then "BR_SANDBOX_RESOURCES" else empty end),
+      (if $sandbox and $create and ($params != null) and (($params.spec // null) == null) and ($resE | contains("params.")) and (($resE | contains("!has(params.spec) ||")) | not) then "EVALUATION_ERROR" else empty end),
       (if $sandbox and ($account != null) and (($pod.spec.serviceAccountName // null) != $account) then "BR_SANDBOX_SERVICE_ACCOUNT" else empty end),
       (if $sandbox and ($ephE | contains("ephemeralContainers.size() == 0")) and ((($pod.spec.ephemeralContainers // []) | length) > 0) then "BR_SANDBOX_EPHEMERAL_CONTAINERS" else empty end),
       (if $sandbox and ($create | not) and ($frozen | any(. as $f | ($pod.spec[$f]) != ($r.old.spec[$f]))) then "BR_SANDBOX_IMMUTABLE" else empty end)

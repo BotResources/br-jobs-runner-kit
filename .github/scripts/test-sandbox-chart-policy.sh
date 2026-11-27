@@ -26,7 +26,7 @@ check_VAP_every_rule_exists() {
     t "rule 4 lists the seven capabilities" has_rule_text BR_SANDBOX_CAPABILITY "['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'SETUID', 'SETGID', 'KILL']"
     t "rule 5 requires seccomp RuntimeDefault and no privilege" has_rule_text BR_SANDBOX_PRIVILEGE "seccompProfile.type == 'RuntimeDefault'"
     t "rule 6 inlines limits.size as the platform maximum" has_rule_text BR_SANDBOX_RESOURCES "quantity('500m')"
-    t "rule 6 bounds the agent container by the size of the pool" has_rule_text BR_SANDBOX_RESOURCES "c.name != 'agent' || ((!has(params.spec.size) || !has(params.spec.size.cpu)"
+    t "rule 6 bounds the agent container by the size of the pool" has_rule_text BR_SANDBOX_RESOURCES "c.name != 'agent' || !has(params.spec) || ((!has(params.spec.size) || !has(params.spec.size.cpu)"
     t "rule 7 inlines the allowed repositories of the other containers" has_rule_text BR_SANDBOX_IMAGE "'registry.example.test/tools/br-sandbox-tools'"
     t "rule 7 compares the agent image to the image of the pool" has_rule_text BR_SANDBOX_IMAGE "c.name == 'agent' ? (has(params.spec) && has(params.spec.image) && c.image == params.spec.image)"
     t "rule 8 requires no token and the chart runtime class" has_rule_text BR_SANDBOX_TOKEN_OR_RUNTIME "object.spec.runtimeClassName : '') == \"\""

@@ -144,3 +144,14 @@ check_no_role_of_any_render_writes_an_admission_binding() {
         t "render ${name}: no Role and no ClusterRole holds a write verb on admission policies or bindings, so neither the runner nor the keeper can remove a binding" test "$(jqv "$name" "$WRITES_ADMISSION_BINDINGS")" = 0
     done
 }
+
+check_a_pool_with_no_spec_is_judged_without_a_runtime_error() {
+    section "pod policy model: a SandboxPool with no spec reaches the size rule behind a guard"
+    local bare
+    bare="$(jq -nc --arg ns "$NS" '{metadata: {namespace: $ns, name: "pool"}}')"
+    t "the size rule guards the spec of the pool before it reads the size" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_RESOURCES:\")) | .expression | select(contains(\"c.name != 'agent' || !has(params.spec) || \"))] | length == 1"
+    t "a pool with no spec admits no agent: the image rule refuses it and the size rule raises no error" test "$(created ex "$NS" . "[${bare}]")" = BR_SANDBOX_IMAGE
+    jq 'map(if .kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod" then .spec.validations |= map(if (.message | startswith("BR_SANDBOX_RESOURCES:")) then .expression |= sub("!has\\(params\\.spec\\) \\|\\| "; "") else . end) else . end)' "$WORK/ex.json" > "$WORK/ex_nospecguard.json"
+    t "a size rule with no guard on the spec raises an evaluation error on a pool with no spec, so the model reads the guard" test "$(created ex_nospecguard "$NS" . "[${bare}]")" = BR_SANDBOX_IMAGE,EVALUATION_ERROR
+    t "a size rule with no guard on the spec is not an error on a pool that has a spec" test "$(created ex_nospecguard "$NS")" = admit
+}
