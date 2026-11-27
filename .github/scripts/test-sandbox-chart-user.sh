@@ -127,7 +127,7 @@ check_non_root_rule_text() {
     t "the rule reads the two container lists and not the ephemeral containers" expression_holds_not ex 'ephemeralContainers'
     t "the pods of the chart set runAsNonRoot true on the agent and the init container, not on the root containers" jqt ex "${SANDBOX_PODS} | all(.spec | (.containers[0].securityContext.runAsNonRoot == true) and (.initContainers[0].securityContext.runAsNonRoot == true) and (.containers[1:] | all(.securityContext.runAsUser == 0 and (.securityContext | has(\"runAsNonRoot\") | not))))"
     t "the probe pods run as uid 0, which is why the check identity is an exception" test "$(probe_pod ex sbx-alpha-none | jq -c '.spec.containers[0].securityContext | [.runAsUser, has("runAsNonRoot")]')" = '[0,false]'
-    t "the policy watches the ephemeral containers subresource on update" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.matchConstraints.resourceRules[1] | select(.resources == ["pods/ephemeralcontainers"] and .operations == ["UPDATE"])] | length == 1'
+    t "the policy watches the ephemeral containers and resize subresources on update" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.matchConstraints.resourceRules[1] | select(.resources == ["pods/ephemeralcontainers", "pods/resize"] and .operations == ["UPDATE"])] | length == 1'
     render nocheck -f "$EXAMPLE" --set network_check.enabled=false
     t "without the network check the rule has no user exception" expression_holds_not nocheck 'userInfo'
     t "without the network check the pods of the chart still pass" test "$(pool_runas nocheck sbx-alpha-none '.')" = true

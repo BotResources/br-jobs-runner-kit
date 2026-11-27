@@ -21,7 +21,7 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["UPDATE"]
-        resources: ["pods/ephemeralcontainers"]
+        resources: ["pods/ephemeralcontainers", "pods/resize"]
   variables:
     - name: role
       expression: {{ "(has(object.metadata.labels) && 'br.sandbox/role' in object.metadata.labels) ? object.metadata.labels['br.sandbox/role'] : ''" | include "br-sandbox-chart.json_string" }}
@@ -74,5 +74,5 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["UPDATE"]
-        resources: ["pods", "pods/ephemeralcontainers"]
+        resources: ["pods", "pods/ephemeralcontainers", "pods/resize"]
 {{- end }}
