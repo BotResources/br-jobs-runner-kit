@@ -17,7 +17,7 @@ check_VAP_every_rule_exists() {
     for code in $CODES; do
         t "the policy has the rule ${code}" jqt ex "[${VAP} | [.spec.validations[].message | select(startswith(\"${code}:\"))] | length] == [1]"
     done
-    t "the policy denies and fails closed" jqt ex "([${VAP} | select(.spec.failurePolicy == \"Fail\")] | length == 1) and ([${BINDINGS} | select(.spec.validationActions == [\"Deny\"])] | length == 2)"
+    t "the policy denies and fails closed" jqt ex "([${VAP} | select(.spec.failurePolicy == \"Fail\")] | length == 1) and ([${BINDINGS} | select(.spec.policyName == \"br-sandbox-pod\" and .spec.validationActions == [\"Deny\"])] | length == 2)"
     t "the policy watches create and update of pods" jqt ex "[${VAP} | .spec.matchConstraints.resourceRules[0] | select(.resources == [\"pods\"] and .operations == [\"CREATE\", \"UPDATE\"])] | length == 1"
     t "rule 1 requires hostUsers false" has_rule_text BR_SANDBOX_USERNS_REQUIRED "object.spec.hostUsers == false"
     t "rule 2 refuses host namespaces and host ports" has_rule_text BR_SANDBOX_HOST_NAMESPACE "hostNetwork"

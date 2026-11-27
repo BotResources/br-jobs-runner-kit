@@ -66,6 +66,46 @@ def decide($vap; $bindings; $r):
          else ([$r.pools[] | failing($vap; $r; .)] | add // []) end)
       else failing($vap; $r; null) end] | add // [] | unique
   | if length == 0 then "admit" else join(",") end;
+
+def vexpr($vap; $name): [$vap.spec.variables[]? | select(.name == $name) | .expression] | .[0] // "";
+def skipped($e; $op): (($e | contains("request.operation != " + q + "CREATE" + q + " ||")) and ($op != "CREATE")) or (($e | contains("request.operation != " + q + "UPDATE" + q + " ||")) and ($op != "UPDATE"));
+def ns_label($x; $k): (($x.metadata.labels // {})[$k] // "");
+
+def ns_failing($vap; $r; $grants):
+  $r.obj as $o
+  | ($r.old // {metadata: {}}) as $old
+  | txt($vap; "BR_SANDBOX_MODE_UNKNOWN") as $unknownE
+  | txt($vap; "BR_SANDBOX_MODE_NOT_GRANTED") as $grantedE
+  | txt($vap; "BR_SANDBOX_LABEL_IMMUTABLE") as $immutableE
+  | txt($vap; "BR_SANDBOX_SCOPE") as $scopeE
+  | quoted_list($unknownE; "in \\[(?<l>[^\\]]*)\\]") as $modes
+  | ([$grantedE | scan("variables\\.mode == " + q + "([^" + q + "]+)" + q)] | .[0][0]) as $open
+  | (vexpr($vap; "granted") | capture("\\(" + q + "(?<p>[^" + q + "]+)" + q + " \\+ object").p) as $prefix
+  | (vexpr($vap; "writer") | capture("&& " + q + "(?<k>[a-z]+)" + q + " in params").k) as $wkey
+  | (vexpr($vap; "scopes") | capture(q + "(?<k>[a-z]+)" + q + " in params\\.data\\)").k) as $skey
+  | (vexpr($vap; "mode") | capture(q + "(?<k>[^" + q + "]+)" + q + " in object\\.metadata\\.labels\\)").k) as $modeKey
+  | (vexpr($vap; "managed") | capture(q + "(?<k>[^" + q + "]+)" + q + " in object\\.metadata\\.labels\\)").k) as $managedKey
+  | ($grants.data[$wkey] // "" | split(",")) as $writers
+  | ($grants.data[$skey] // "" | split(",")) as $scopes
+  | ($grants.data[$prefix + $o.metadata.name] // "" | split(",")) as $granted
+  | ($r.user | IN($writers[])) as $writer
+  | ns_label($o; $modeKey) as $mode
+  | [
+      (if (skipped($unknownE; $r.op) | not) and (($modes | index($mode)) == null) then "BR_SANDBOX_MODE_UNKNOWN" else empty end),
+      (if (skipped($grantedE; $r.op) | not) and ($mode != $open or ($grantedE | contains("variables.mode == " + q + $open + q) | not)) and (($grantedE | contains("variables.writer")) and $writer | not) and (($granted | index($mode)) == null) then "BR_SANDBOX_MODE_NOT_GRANTED" else empty end),
+      (if (skipped($immutableE; $r.op) | not) and ((($immutableE | contains("variables.writer")) and $writer) | not) and ((ns_label($o; $managedKey) != ns_label($old; $managedKey)) or ($mode != ns_label($old; $modeKey))) then "BR_SANDBOX_LABEL_IMMUTABLE" else empty end),
+      (if (skipped($scopeE; $r.op) | not) and (($scopes | any(. as $s | $s != "" and ($o.metadata.name == $s or ($o.metadata.name | startswith($s + "-"))))) | not) then "BR_SANDBOX_SCOPE" else empty end)
+    ] | unique;
+
+def selected($b; $r): ($b.spec.matchResources.objectSelector.matchLabels // {}) as $want
+  | all($want | to_entries[]; . as $e | ((($r.obj.metadata.labels // {})[$e.key]) == $e.value) or ((($r.old.metadata.labels // {})[$e.key]) == $e.value));
+
+def ns_decide($vap; $bindings; $r):
+  [$bindings[] | select(.spec.policyName == $vap.metadata.name)
+    | select(rule_matches($vap.spec.matchConstraints.resourceRules; $r.op; $r.res) and rule_matches(.spec.matchResources.resourceRules; $r.op; $r.res) and selected(.; $r))] as $bound
+  | [$bound[] | if ($r.grants == null) then (if .spec.paramRef.parameterNotFoundAction == "Allow" or $vap.spec.failurePolicy != "Fail" then [] else ["PARAMETER_NOT_FOUND"] end)
+      else ns_failing($vap; $r; $r.grants) end] | add // [] | unique
+  | if length == 0 then "admit" else join(",") end;
 '
 
 verdict() {
@@ -113,4 +153,20 @@ model_result() {
     local verdict
     verdict="$(created "${3:-ex}" "$1" "${2:-.}")"
     if [[ "$verdict" == admit ]]; then echo true; else echo false; fi
+}
+
+ns_verdict() {
+    local render="$1" op="$2" obj="$3" old="$4" user="$5" grants="$6"
+    jq -r --arg op "$op" --arg user "$user" --argjson obj "$obj" --argjson old "$old" --argjson grants "$grants" "${QTY}${MODEL}"'
+      (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-namespace")) as $vap
+      | [.[] | select(.kind == "ValidatingAdmissionPolicyBinding")] as $bindings
+      | ns_decide($vap; $bindings; {op: $op, res: "namespaces", obj: $obj, old: $old, user: $user, grants: $grants})' "$WORK/${render}.json"
+}
+
+grants_of() {
+    jq -c '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-grants")' "$WORK/$1.json"
+}
+
+namespace_object() {
+    jq -nc --arg name "$1" --arg managed "$2" --arg mode "$3" '{metadata: {name: $name, labels: ({"br.sandbox/managed": $managed, "br.sandbox/mode": $mode} | with_entries(select(.value != "")))}}'
 }

@@ -74,6 +74,9 @@ network:
   ipv6: single_stack
 namespaces: []
 scopes: {}
+grants:
+  writers: []
+  modes: {}
 render_namespace: false
 egress:
   enabled: false

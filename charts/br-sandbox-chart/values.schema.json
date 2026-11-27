@@ -193,6 +193,18 @@
         }
       }
     },
+    "grants": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "writers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[^,\\s]+$"}},
+        "modes": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/definitions/scope"},
+          "additionalProperties": {"type": "array", "uniqueItems": true, "items": {"enum": ["allow", "full"]}}
+        }
+      }
+    },
     "render_namespace": {"type": "boolean"},
     "egress": {
       "type": "object",

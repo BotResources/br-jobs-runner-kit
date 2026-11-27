@@ -84,7 +84,7 @@ check_the_egress_namespace_has_its_own_policies() {
 check_the_admission_policy_accepts_the_sandbox_role_only() {
     section "admission policy: role=sandbox only, no proxy case, no controller value"
     t "the role rule is one case" expression_is_exactly BR_SANDBOX_ROLE
-    t "no policy, binding or value names a proxy case or a controller user; only the non-root rule reads the user" test -z "$(grep -rnE 'proxyCreator|proxy_controller|replicaset-controller' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" || true)$(grep -rnE 'userInfo' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" | grep -v '_vap.tpl:' || true)"
+    t "no policy, binding or value names a proxy case or a controller user; only the non-root rule of the pod policy and the writer clauses of the namespace policy read the user" test -z "$(grep -rnE 'proxyCreator|proxy_controller|replicaset-controller' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" || true)$(grep -rnE 'userInfo' "$CHART/templates" "$CHART/values.yaml" "$CHART/values.schema.json" | grep -v -e '_vap.tpl:' -e '_vap_namespace.tpl:' -e 'admission-namespace.yaml:' || true)"
     t "no admission block in the values" test "$(yq '.admission' "$CHART/values.yaml")" = null
     t "the bindings select the managed label, which no egress namespace carries" jqt cred '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding") | .spec.matchResources.namespaceSelector.matchLabels] | all(. == {"br.sandbox/managed": "true"}) and ([.[] | select(.kind == "Namespace" and (.metadata.name | endswith("-egress")) and (.metadata.labels["br.sandbox/managed"] == "true"))] | length == 0)'
 }

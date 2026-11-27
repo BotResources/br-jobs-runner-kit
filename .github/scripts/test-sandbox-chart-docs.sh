@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-README="$CHART/README.md"
+README="$WORK/README-and-policies.md"
+cat "$CHART/README.md" "$CHART/POLICIES.md" > "$README"
 
 check_licences_in_the_readme() {
     section "the licence table and the licence of the chart"
