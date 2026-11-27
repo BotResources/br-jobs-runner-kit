@@ -2,6 +2,8 @@
 
 The controller of the sandbox pools of `br-runner-sandbox`. It reads the `SandboxPool` resources, makes the pool ReplicaSet `warm-{namespace}` of each one in a fenced namespace, sizes it from the rate of claims, replaces its stale warm pods by steps, deletes the pods that are old or idle or stuck or failed, writes the condition `WarmPodsFailing` on the pool ReplicaSet and the status of each resource, and deletes the saves, records and tombstones that have expired. The package has a library and a binary. The binary loads the configuration and runs the library until it gets the stop signal.
 
+**Compatibility.** Keeper 0.2 does not work with chart 0.3.x or earlier: it refuses the `pools` configuration at start. Chart 0.3.x needs keeper 0.1.x.
+
 ## Install
 
 ```toml
@@ -122,6 +124,21 @@ A claimed pod whose annotation that its rule needs is missing or unreadable is n
 ## Rights
 
 The table above is the grant. What this version calls, in each managed namespace: `pods` get, list, watch, delete; `replicasets` get, create, patch, delete; `replicasets/status` patch; `events` create; `sandboxpools` list, watch; `sandboxpools/status` patch; `configmaps` get (the one name `br-sandbox-pod-template`); `resourcequotas` get; `networkpolicies` list. In the Lease namespace: `leases` get, create, update. Cluster-wide: `namespaces` list, watch; `validatingadmissionpolicybindings` list, watch. No `pods/exec`, no `pods/patch`, no `secrets`, no right on a finalizer. A call that the API server refuses for a missing right is an action that fails: it is logged, counted in `br_sandbox_keeper_sweep_errors_total` and tried again. When the refused call is a write of a ReplicaSet (create, replicas, template, condition, delete) or a delete of a pod, and the write of the status is allowed, the message of the condition `Ready` ends with `refused by the API server:` and the name of each refused call with the reason that the API server gave; the reason of the condition does not change, and the text goes when the call is allowed again, the pod is gone or the call is no longer due. When the write of the status is refused too, nothing is written. A resource in a namespace where the keeper has no right is not reported. The keeper calls only the API server and the store. The client of the store and the client of the API server use the verifier of the system (`rustls-platform-verifier`, which reads the system root certificates), and the dependency tree has no `webpki-roots`. In a pod the configuration of the API client holds the CA certificate that the service account mounts, and `kube` verifies the API server with that certificate alone; it falls back to the system roots only when the configuration holds none. That behaviour of `kube` is the documented behaviour of the dependency, and no test of this crate checks it: the lock file proves only which TLS crates are in the dependency tree, and no test refuses a bad certificate in a handshake.
+
+## What the keeper connects to
+
+The keeper opens no connection to a sandbox, and no process of the keeper runs in a sandbox namespace. It calls only the Kubernetes API server and the store: no other service, no vendor, no telemetry, no licence endpoint.
+
+The proof is the dependency gate, the configuration type and the rights table. No test observes the network of a running keeper. A cluster can enforce the sentence with an egress policy on the namespace of the keeper.
+
+| Proof | What it holds |
+|---|---|
+| Dependency gate (`tests/dependency_gate`) | A test reads `cargo metadata` for the normal (non-dev) dependency tree of this crate only; no other crate of the repository is checked. It fails when a crate of a network class enters the tree and is not in the allowed list. The classes are data in the test: HTTP clients and transports, Kubernetes clients, object store clients, gRPC clients, telemetry and error reporting exporters, vendor SDKs, update and licence checkers, and clients of other protocols (message buses, databases, mail, DNS, SSH). The allowed list is eleven crates: `kube` and `kube-client`, `object_store` and `reqwest`, and the transport they need (`hyper`, `hyper-util`, `hyper-rustls`, `hyper-timeout`, `h2`, `tungstenite`, `tokio-tungstenite`). The direct dependencies are a closed list: adding or removing one fails the test until the list is changed on purpose. Tests of the checking code with a fake tree that holds a banned crate (fails) and a clean tree (passes) prove that the gate bites, and a test of the reader proves that dev and build edges are not followed. Limit: a class holds crate names, so a client crate that is in no class and enters below an allowed crate is not seen; the closed list of direct dependencies is the second barrier. |
+| Configuration type | The only key that names a remote endpoint is `store_endpoint`; `listen_address` is the address that the health endpoint binds. A key that the type does not know (`otlp_endpoint`, `sentry_dsn`, `proxy_url`, `update_url`, `kube_api_url` and so on) is a start fault. |
+| Rights table | The table has no right on `pods/exec`, `pods/attach`, `pods/portforward` or `pods/proxy`, none on `nodes/proxy` or `services/proxy`, and no `create` on `pods`. The keeper has no way to open a stream to a pod through the API server, and it cannot start a process in a namespace of a sandbox. |
+| Pod template | The keeper changes the image and the resources of the agent container and the template hash annotation, and nothing else of the template that the ConfigMap gives (a test on the builder of the template). |
+
+The network control of the cluster for "no connection other than the API server and the store" is the egress policy of the chart 0.4.0 (`br-sandbox-egress-keeper`, with `br-sandbox-default-deny`, in the system namespace). Limits: it is not tested on a cluster yet, and the kubelet probes under a default-deny policy depend on the network plugin. The dependency gate stays required.
 
 ## Not guaranteed
 

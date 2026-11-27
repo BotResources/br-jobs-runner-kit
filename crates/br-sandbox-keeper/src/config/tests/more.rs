@@ -117,3 +117,68 @@ fn the_keys_that_moved_to_the_resource_are_faults_in_the_document() {
         );
     }
 }
+
+fn keys_of_the_type() -> Vec<String> {
+    let Err(ConfigError::Document(text)) = load(&with("no_such_key", json!(1))) else {
+        panic!("an unknown key is accepted");
+    };
+    let listed = text.split("expected one of ").nth(1).unwrap();
+    listed
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_configuration_type_has_no_endpoint_key_other_than_the_store_endpoint() {
+    let keys = keys_of_the_type();
+    assert!(keys.iter().any(|key| key == "store_endpoint"), "{keys:?}");
+    assert!(keys.len() > 20, "{keys:?}");
+    let markers = [
+        "endpoint",
+        "url",
+        "uri",
+        "dsn",
+        "host",
+        "proxy",
+        "server",
+        "collector",
+        "telemetry",
+        "api",
+        "address",
+        "registry",
+    ];
+    let mut reaching: Vec<&str> = keys
+        .iter()
+        .map(String::as_str)
+        .filter(|key| markers.iter().any(|marker| key.contains(marker)))
+        .collect();
+    reaching.sort_unstable();
+    assert_eq!(reaching, ["listen_address", "store_endpoint"]);
+}
+
+#[test]
+fn a_key_that_would_name_another_endpoint_is_a_start_fault() {
+    for key in [
+        "kube_api_url",
+        "api_server",
+        "otlp_endpoint",
+        "telemetry_endpoint",
+        "metrics_endpoint",
+        "sentry_dsn",
+        "proxy_url",
+        "http_proxy",
+        "licence_endpoint",
+        "update_url",
+        "nats_url",
+        "registry_endpoint",
+    ] {
+        let result = load(&with(key, json!("https://other.example.test")));
+        assert!(
+            matches!(&result, Err(ConfigError::Document(text)) if text.contains(key)),
+            "{key}: {result:?}"
+        );
+    }
+}

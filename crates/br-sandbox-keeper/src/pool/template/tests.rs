@@ -266,3 +266,22 @@ fn the_resources_of_the_config_map_are_replaced_whole_by_the_size_of_the_resourc
         template_json()["spec"]["initContainers"]
     );
 }
+
+#[test]
+fn a_template_full_of_fields_comes_out_with_the_same_fields_and_nothing_added() {
+    let mut full = template_json();
+    full["spec"]["hostNetwork"] = json!(false);
+    full["spec"]["dnsPolicy"] = json!("None");
+    full["spec"]["dnsConfig"] = json!({"nameservers": ["10.0.0.2"]});
+    full["spec"]["serviceAccountName"] = json!("none");
+    full["spec"]["securityContext"] = json!({"runAsNonRoot": true});
+    full["spec"]["containers"][1]["env"] = json!([{"name": "A", "value": "1"}]);
+    full["spec"]["containers"][1]["ports"] = json!([{"containerPort": 8080}]);
+    let rendered = read(&full).unwrap().render(&settings("i:1"), &keys());
+    let mut expected = full.clone();
+    expected["spec"]["containers"][1]["image"] = json!("i:1");
+    expected["spec"]["containers"][1]["resources"] =
+        rendered.template["spec"]["containers"][1]["resources"].clone();
+    expected["metadata"]["annotations"]["br.sandbox/template-hash"] = json!(rendered.hash);
+    assert_eq!(rendered.template, expected);
+}

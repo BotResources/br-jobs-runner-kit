@@ -218,3 +218,24 @@ fn the_closed_list_of_network_policy_names_is_the_one_of_the_intent() {
         ]
     );
 }
+
+#[test]
+fn the_keeper_has_no_right_on_a_sub_resource_that_opens_a_connection_to_a_pod_or_a_node() {
+    for right in RIGHTS {
+        for connecting in [
+            "pods/exec",
+            "pods/attach",
+            "pods/portforward",
+            "pods/proxy",
+            "nodes/proxy",
+            "services/proxy",
+        ] {
+            assert_ne!(right.resource, connecting, "{right:?}");
+        }
+        let sub = right.resource.split_once('/').map(|(_, sub)| sub);
+        assert!(
+            !matches!(sub, Some("exec" | "attach" | "portforward" | "proxy")),
+            "{right:?}"
+        );
+    }
+}
