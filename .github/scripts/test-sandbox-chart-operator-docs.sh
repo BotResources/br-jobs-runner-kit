@@ -188,6 +188,7 @@ check_the_warm_age_row_states_the_held_pod() {
     t "the row marks the exception as stated by the keeper 0.2 text and not tested by this chart" grep -qF 'The exception is stated by the keeper 0.2 text and is not tested by this chart.' <<<"$row"
     t "the paragraph on a new push under one tag names the held pod" grep -qF 'except a held Pending and Unschedulable pod (row `warm_max_age_seconds`)' "$CHART/README.md"
     t "the CHANGELOG 0.4.0 holds the held pod line, marked as stated by the keeper 0.2 text and not tested" grep -qF 'is held by keeper 0.2: it has no age deadline and is not deleted at `warm_max_age_seconds` (keeper 0.1.x deleted it). Stated by the keeper 0.2 text; not tested by this chart.' <<<"$(changelog_040)"
+    t "the CHANGELOG 0.4.0 says that the definition file equals the file of keeper 0.2.0 and names the two Rust tests" grep -qF 'the file `files/sandboxpool-crd.yaml` equals, byte for byte, the definition file of keeper 0.2.0. The Rust tests `chart_definition.rs` and `chart_rights.rs` of the keeper crate' <<<"$(changelog_040)"
     t "the keeper document still carries the key warm_max_age_seconds at its default" test "$(jq -r '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .warm_max_age_seconds][0]' "$WORK/keeper.json")" = 1800
 }
 

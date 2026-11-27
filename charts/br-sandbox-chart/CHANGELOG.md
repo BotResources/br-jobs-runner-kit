@@ -15,6 +15,7 @@ Breaking minor. The chart has two parts: an operator part, installed once per cl
 - Not proved offline, and not tested on a cluster: that the CEL of the three policies compiles, that the API server takes the `SandboxPool` as the parameter of the pod policy, the grants and the fence-object control, the stamper, and the rights on the API server. The rows of the battery hold them.
 - Tests: the offline suite checks each sentence above (`test-sandbox-chart-operator-docs.sh`) and the objects, the rights, the policies and the stamper (`test-sandbox-chart-operator-parts.sh`, `-operator-rights.sh`, `-operator-template.sh`, `-operator-crd.sh`, `-pod-policy.sh`, `-namespace-policy.sh`, `-fence-policy.sh`, `-stamper.sh`, `-scopes.sh`). The lint loop of the CI covers the new fixtures.
 - A warm pod that is Pending and that the scheduler marks Unschedulable is held by keeper 0.2: it has no age deadline and is not deleted at `warm_max_age_seconds` (keeper 0.1.x deleted it). Stated by the keeper 0.2 text; not tested by this chart.
+- Keeper 0.2.0: the file `files/sandboxpool-crd.yaml` equals, byte for byte, the definition file of keeper 0.2.0. The Rust tests `chart_definition.rs` and `chart_rights.rs` of the keeper crate compare the definition, the rules of the roles of the keeper identity and the NetworkPolicy names that the chart renders with the exports of keeper 0.2.0 (the definition file, `RIGHTS`, `NETWORK_POLICY_NAMES`). The fixtures of `ci/` name the image of keeper 0.2.0 by digest.
 
 ## 0.3.0
 
