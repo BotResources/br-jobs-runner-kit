@@ -78,6 +78,16 @@ case "$1" in
         ;;
     create)
         cat >"$STUB_DIR/pod.yaml"
+        ns="$(sed -n 's/^ *namespace: *//p' "$STUB_DIR/pod.yaml" | head -1)"
+        case " ${LEFTOVER_NS:-} " in
+            *" $ns "*)
+                if [ ! -e "$STUB_DIR/deleted.$ns" ]; then
+                    printf 'Error from server (AlreadyExists): pods "br-sandbox-netcheck-probe" already exists\n' >&2
+                    exit 1
+                fi
+                ;;
+        esac
+        printf 'create %s\n' "$ns" >>"$STUB_DIR/events.log"
         printf '1000\n' >"$STUB_DIR/clock"
         : >"$STUB_DIR/nc.late"
         exit 0
@@ -86,7 +96,21 @@ case "$1" in
         printf '%s\n' "$*" >>"$STUB_DIR/wait.args"
         exit 0
         ;;
-    delete) exit 0 ;;
+    delete)
+        printf '%s\n' "$*" >>"$STUB_DIR/events.log"
+        case "$*" in
+            *--wait=true*)
+                case " ${STUCK_NS:-} " in
+                    *" $4 "*)
+                        printf 'error: timed out waiting for the condition on pods/br-sandbox-netcheck-probe\n' >&2
+                        exit 1
+                        ;;
+                esac
+                : >"$STUB_DIR/deleted.$4"
+                ;;
+        esac
+        exit 0
+        ;;
     logs)
         [ "${NO_LOG:-}" = 1 ] && exit 1
         targets="$(sed -n 's/^ *value: *//p' "$STUB_DIR/pod.yaml" | head -1 | tr -d '"')"
@@ -127,6 +151,8 @@ reset_netcheck_stub() {
     : >"$WORK/netcheckstub/nc.args"
     : >"$WORK/netcheckstub/wait.args"
     : >"$WORK/netcheckstub/runaway"
+    : >"$WORK/netcheckstub/events.log"
+    rm -f "$WORK"/netcheckstub/deleted.*
     printf '1000\n' >"$WORK/netcheckstub/clock"
 }
 

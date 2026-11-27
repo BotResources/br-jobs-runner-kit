@@ -22,14 +22,16 @@
   "idle_ttl_seconds" ($values.idle_ttl | int64)
   "idle_keep_min_state_bytes" ($values.idle_keep_min_state_bytes | int64)
   "agent_container" (include "br-sandbox-chart.agent_container" .root)
-  "seed_container" $values.tools.seed_container.name
   "tools_path" (printf "%s/bin/bsdtar" $values.tools.mount_path)
-  "seed_tools_path" (include "br-sandbox-chart.seed_tools_path" .root)
   "seed_root" (include "br-sandbox-chart.seed_root" .root)
   "store_endpoint" $values.store.endpoint
   "store_bucket" $values.store.bucket
   "store_region" $values.store.region
   "store_path_style" $values.store.path_style -}}
+{{- if $values.tools.seed_container.enabled -}}
+{{- $_ := set $document "seed_container" $values.tools.seed_container.name -}}
+{{- $_ := set $document "seed_tools_path" (include "br-sandbox-chart.seed_tools_path" .root) -}}
+{{- end -}}
 {{- $allowlist := include "br-sandbox-chart.adapter.allowlist" . | fromJsonArray -}}
 {{- if $allowlist -}}
 {{- $_ := set $document "allowlist" $allowlist -}}

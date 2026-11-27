@@ -143,6 +143,14 @@ control() {
   done <"$work/targets" >"$work/control"
 }
 
+clear_leftover_probe_pod() {
+  if ! kubectl delete pod/br-sandbox-netcheck-probe -n "$1" --ignore-not-found --wait=true --timeout=60s >/dev/null; then
+    printf '{"net":"%s","mode":"%s","target":"br-sandbox-netcheck-probe","kind":"probe_pod","expected":"absent","observed":"not_deleted","control":"not_applicable"}\n' "$1" "$2"
+    printf '1\n' >>"$work/failures"
+    return 1
+  fi
+}
+
 run_probe() {
   sed "s|__TARGETS__|$(tr '\n' ' ' <"$work/targets")|" "$dir/probe-$1.yaml" | kubectl create -f - >/dev/null
   kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/br-sandbox-netcheck-probe -n "$1" --timeout="$((wait_seconds + enforcement_wait))s" >/dev/null || true
@@ -206,6 +214,7 @@ discover() {
   control
   while read -r ns mode path; do
     [ -n "$ns" ] || continue
+    clear_leftover_probe_pod "$ns" "$mode" || continue
     run_probe "$ns"
     report "$ns" "$mode"
     if [ "$path" = proxy ]; then
