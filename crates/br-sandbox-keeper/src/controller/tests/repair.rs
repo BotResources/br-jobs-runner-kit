@@ -2,6 +2,8 @@ use serde_json::{Value, json};
 
 use crate::cluster::{FIELD_MANAGER, TEMPLATE_FIELD_MANAGER};
 
+use crate::facts::{Mark, PodFacts};
+
 use super::*;
 
 const HASH_KEY: &str = "br.sandbox/template-hash";
@@ -113,4 +115,76 @@ async fn a_repaired_pool_changes_its_replicas_and_keeps_the_whole_template() {
     assert_eq!(bed.replicas(), Some(6));
     assert_eq!(template_of(&bed), whole);
     assert_eq!(bed.template_writes(), 1);
+}
+
+const ROLLOUT_NONE: &str = "br_sandbox_keeper_pods_deleted_total{reason=\"rollout\"} 0";
+
+fn warm_pods_of(hash: &str) -> Vec<PodFacts> {
+    [("p0", true), ("p1", true), ("p2", false)]
+        .into_iter()
+        .map(|(name, ready)| PodFacts {
+            ready,
+            template_hash: Mark::Value(hash.to_owned()),
+            ..old_warm(name, 5)
+        })
+        .collect()
+}
+
+fn put_all(bed: &Bed, pods: Vec<PodFacts>) -> Vec<PodFacts> {
+    pods.into_iter().map(|pod| bed.kube.put_pod(pod)).collect()
+}
+
+fn assert_pods_untouched(bed: &Bed, pods: &[PodFacts]) {
+    assert!(bed.deletes().is_empty());
+    assert!(bed.has_metric(ROLLOUT_NONE));
+    for pod in pods {
+        assert_eq!(bed.kube.pod(NS, &pod.name).as_ref(), Some(pod));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_repair_write_on_an_unchanged_hash_replaces_no_warm_pod_and_starts_no_rollout() {
+    let (mut bed, whole) = damaged_as_the_previous_version_left_it(true).await;
+    let hash = bed.template_hash().unwrap();
+    let pods = put_all(&bed, warm_pods_of(&hash));
+    bed.pass(120).await;
+    assert_eq!(bed.template_writes(), 1);
+    assert_eq!(bed.template_hash().as_deref(), Some(hash.as_str()));
+    assert_eq!(template_of(&bed), whole);
+    assert_pods_untouched(&bed, &pods);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_repair_write_with_the_hash_lost_replaces_no_warm_pod_and_starts_no_rollout() {
+    let (mut bed, whole) = damaged_as_the_previous_version_left_it(false).await;
+    let hash = {
+        let mut probe = bare(true);
+        probe.kube.put_pool(NS, resized(1, 2));
+        probe.sync().await;
+        probe.template_hash().unwrap()
+    };
+    let pods = put_all(&bed, warm_pods_of(&hash));
+    bed.pass(120).await;
+    assert_eq!(bed.template_writes(), 1);
+    assert_eq!(bed.template_hash().as_deref(), Some(hash.as_str()));
+    assert_eq!(template_of(&bed), whole);
+    assert_pods_untouched(&bed, &pods);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_template_write_of_a_replica_set_that_the_keeper_made_replaces_no_warm_pod() {
+    let hash = {
+        let mut probe = bare(true);
+        probe.kube.put_pool(NS, main_pool());
+        probe.sync().await;
+        probe.template_hash().unwrap()
+    };
+    let mut bed = bare(true);
+    let pods = put_all(&bed, warm_pods_of(&hash));
+    bed.kube.put_pool(NS, main_pool());
+    bed.sync().await;
+    assert_eq!(bed.template_hash().as_deref(), Some(hash.as_str()));
+    bed.pass(120).await;
+    assert_eq!(bed.template_writes(), 1);
+    assert_pods_untouched(&bed, &pods);
 }
