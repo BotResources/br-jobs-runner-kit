@@ -103,6 +103,7 @@ check_the_managed_selector_is_the_label_of_the_sandbox_namespaces() {
         t "render ${name}: the system namespace is a namespace that the selector does not match" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system")] | length == 1 and all(.metadata.labels[$k] != $v)'
         t "render ${name}: every admission binding of the pod policy selects the namespaces by the same label" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding" and .spec.policyName == "br-sandbox-pod")] | length > 0 and all(.spec.matchResources.namespaceSelector.matchLabels[$k] == $v)'
         t "render ${name}: the binding of the namespace policy selects the namespaces by the same label" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding" and .spec.policyName == "br-sandbox-namespace")] | length == 1 and all(.spec.matchResources.objectSelector.matchLabels[$k] == $v)'
+        t "render ${name}: the binding of the fence policy selects the namespaces by the same label" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding" and .spec.policyName == "br-sandbox-fence")] | length == 1 and all(.spec.matchResources.namespaceSelector.matchLabels[$k] == $v)'
     done
     t "the egress render holds egress namespaces that the selector does not match" jqt egress_keeper '[.[] | select(.kind == "Namespace" and (.metadata.name | endswith("-egress")))] | length > 0'
 }

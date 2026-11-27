@@ -106,6 +106,29 @@ def ns_decide($vap; $bindings; $r):
   | [$bound[] | if ($r.grants == null) then (if .spec.paramRef.parameterNotFoundAction == "Allow" or $vap.spec.failurePolicy != "Fail" then [] else ["PARAMETER_NOT_FOUND"] end)
       else ns_failing($vap; $r; $r.grants) end] | add // [] | unique
   | if length == 0 then "admit" else join(",") end;
+
+def fence_failing($vap; $r; $grants):
+  vexpr($vap; "fenced") as $fe
+  | txt($vap; "BR_SANDBOX_FENCE") as $re
+  | ($r.res | split("/")[0]) as $kind
+  | [$fe | scan("resource == " + q + "([a-z]+)" + q + " \\? variables\\.name == " + q + "([^" + q + "]+)" + q)] as $exact
+  | [$fe | scan("resource == " + q + "([a-z]+)" + q + " \\? variables\\.name\\.startsWith\\(" + q + "([^" + q + "]+)" + q + "\\)")] as $prefix
+  | ([$exact[] | select(.[0] == $kind)] | .[0]) as $e
+  | ([$prefix[] | select(.[0] == $kind)] | .[0]) as $p
+  | (if $e != null then $r.name == $e[1] elif $p != null then ($r.name | startswith($p[1])) else true end) as $fenced
+  | ($grants.data[(vexpr($vap; "writer") | capture("&& " + q + "(?<k>[a-z]+)" + q + " in params").k)] // "" | split(",")) as $writers
+  | ((vexpr($vap; "writer") | length) > 0 and ($re | contains("variables.writer")) and ($r.user | IN($writers[]))) as $writer
+  | ([$re | scan("status\\.phase == " + q + "([^" + q + "]+)" + q)] | .[0][0]) as $phase
+  | (($phase != null) and ($r.phase == $phase)) as $exempt
+  | if $fenced and ($writer | not) and ($exempt | not) then ["BR_SANDBOX_FENCE"] else [] end;
+
+def fence_decide($vap; $bindings; $r):
+  [$bindings[] | select(.spec.policyName == $vap.metadata.name)
+    | select(rule_matches($vap.spec.matchConstraints.resourceRules; $r.op; $r.res) and rule_matches(.spec.matchResources.resourceRules; $r.op; $r.res)
+        and all((.spec.matchResources.namespaceSelector.matchLabels // {}) | to_entries[]; . as $e | ($r.nsLabels[$e.key] // null) == $e.value))] as $bound
+  | [$bound[] | if ($r.grants == null) then (if .spec.paramRef.parameterNotFoundAction == "Allow" or $vap.spec.failurePolicy != "Fail" then [] else ["PARAMETER_NOT_FOUND"] end)
+      else fence_failing($vap; $r; $r.grants) end] | add // [] | unique
+  | if length == 0 then "admit" else join(",") end;
 '
 
 verdict() {
@@ -169,4 +192,13 @@ grants_of() {
 
 namespace_object() {
     jq -nc --arg name "$1" --arg managed "$2" --arg mode "$3" '{metadata: {name: $name, labels: ({"br.sandbox/managed": $managed, "br.sandbox/mode": $mode} | with_entries(select(.value != "")))}}'
+}
+
+fence_verdict() {
+    local render="$1" op="$2" res="$3" name="$4" user="$5" grants="$6" phase="${7:-Active}" labels managed='{"br.sandbox/managed":"true"}'
+    labels="${8:-$managed}"
+    jq -r --arg op "$op" --arg res "$res" --arg name "$name" --arg user "$user" --arg phase "$phase" --argjson labels "$labels" --argjson grants "$grants" "${QTY}${MODEL}"'
+      (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-fence")) as $vap
+      | [.[] | select(.kind == "ValidatingAdmissionPolicyBinding")] as $bindings
+      | fence_decide($vap; $bindings; {op: $op, res: $res, name: $name, user: $user, grants: $grants, phase: $phase, nsLabels: $labels})' "$WORK/${render}.json"
 }

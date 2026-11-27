@@ -209,7 +209,7 @@ The runner ClusterRole holds `get` and `create` on `pods/exec`, bound in each sa
 
 ## Admission policy
 
-The cluster policies of the operator part (`br-sandbox-pod`, `br-sandbox-namespace`), their bindings, the ConfigMap `br-sandbox-grants`, the rules and their limits are described in `POLICIES.md`.
+The cluster policies of the operator part (`br-sandbox-pod`, `br-sandbox-namespace`, `br-sandbox-fence`), their bindings, the ConfigMap `br-sandbox-grants`, the rules and their limits are described in `POLICIES.md`.
 
 ## Image contract
 
