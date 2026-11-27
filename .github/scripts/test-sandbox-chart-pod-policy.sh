@@ -102,3 +102,45 @@ check_update_is_not_judged_against_the_pool() {
     t "the detector sees a binding that lost pods/resize: the same resize is then admitted" test "$(updated noresize "$NS" '(agent).resources.limits.memory = "2Gi"' "" pods/resize)" = admit
     t "the rule on frozen fields names every field judged at creation" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_IMMUTABLE:\")) | .expression | select(contains(\"containers\") and contains(\"initContainers\") and contains(\"ephemeralContainers\") and contains(\"serviceAccountName\") and contains(\"securityContext\") and contains(\"hostUsers\") and contains(\"volumes\"))] | length == 1"
 }
+
+WRITES_ADMISSION_BINDINGS='
+def writes: (.verbs // []) | any(. | IN("create", "update", "patch", "delete", "deletecollection", "escalate", "bind", "*"));
+def reaches: (.apiGroups // [] | any(. == "admissionregistration.k8s.io" or . == "*")) and (.resources // [] | any(. == "*" or . == "validatingadmissionpolicybindings" or . == "validatingadmissionpolicies"));
+[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[]? | select(reaches and writes)] | length
+'
+
+check_both_pod_bindings_render_together_in_every_fixture_with_the_operator_part() {
+    section "pod policy: the two bindings are one template, no value turns one off alone, every fixture with the operator part holds both"
+    local overlay name checked=0 holders=0
+    t "both bindings are written in the one template file admission-policy.yaml and in no other" test "$(cd "$CHART/templates" && grep -l 'name: br-sandbox-pod-update' ./* | tr -d '\n')" = ./admission-policy.yaml
+    t "that file has one condition, the operator part, and no other value gates a binding" test "$(grep -cE '\{\{-? *(if|with|range|else)' "$CHART/templates/admission-policy.yaml")" = 2 -a "$(grep -cE '\{\{-? *if \.Values\.operator\.enabled' "$CHART/templates/admission-policy.yaml")" = 1
+    t "no key of the values names a pod binding" test -z "$(grep -niE 'binding|pod-update|pod_update' "$CHART/values.yaml" "$CHART/values.schema.json" || true)"
+    for overlay in "$CHART"/ci/*-values.yaml; do
+        name="fixture_$(basename "$overlay" -values.yaml)"
+        render "$name" -f "$EXAMPLE" -f "$overlay" || { fail "the fixture ${overlay##*/} does not render"; continue; }
+        checked=$((checked + 1))
+        if jqt "$name" '[.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod")] | length == 1'; then
+            holders=$((holders + 1))
+            t "fixture ${overlay##*/}: the bindings br-sandbox-pod and br-sandbox-pod-update both render, name the policy br-sandbox-pod and select the managed label" jqt "$name" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding" and (.metadata.name | IN("br-sandbox-pod", "br-sandbox-pod-update")))] | (map(.metadata.name) | sort) == ["br-sandbox-pod", "br-sandbox-pod-update"] and all(.spec.policyName == "br-sandbox-pod" and .spec.matchResources.namespaceSelector == {"matchLabels": {"br.sandbox/managed": "true"}})'
+        else
+            t "fixture ${overlay##*/}: with no pod policy the render holds no pod binding" jqt "$name" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding" and (.metadata.name | IN("br-sandbox-pod", "br-sandbox-pod-update")))] | length == 0'
+        fi
+    done
+    t "the fixtures that render hold at least the operator, the nondefault, the egress, the platform and the example overlays" test "$checked" -ge 8
+    t "at least four overlays hold the operator part" test "$holders" -ge 4
+}
+
+check_no_role_of_any_render_writes_an_admission_binding() {
+    section "pod policy: no Role and no ClusterRole of a render can write an admission policy or a binding"
+    local probe="$WORK/binding-probe.json" verb
+    for verb in create update patch delete deletecollection '*' escalate bind; do
+        jq -nc --arg v "$verb" '[{kind: "ClusterRole", rules: [{apiGroups: ["admissionregistration.k8s.io"], resources: ["validatingadmissionpolicybindings"], verbs: [$v]}]}]' >"$probe"
+        t "the detector flags the verb ${verb} on the bindings" test "$(jq "$WRITES_ADMISSION_BINDINGS" "$probe")" = 1
+    done
+    jq -nc '[{kind: "ClusterRole", rules: [{apiGroups: ["admissionregistration.k8s.io"], resources: ["validatingadmissionpolicybindings"], verbs: ["get", "list", "watch"]}]}]' >"$probe"
+    t "the detector does not flag a read" test "$(jq "$WRITES_ADMISSION_BINDINGS" "$probe")" = 0
+    local name
+    for name in ex keeper platform egress_keeper rights_five nondefault; do
+        t "render ${name}: no Role and no ClusterRole holds a write verb on admission policies or bindings, so neither the runner nor the keeper can remove a binding" test "$(jqv "$name" "$WRITES_ADMISSION_BINDINGS")" = 0
+    done
+}
