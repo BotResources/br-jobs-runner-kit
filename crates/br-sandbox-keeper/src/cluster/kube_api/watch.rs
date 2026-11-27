@@ -52,6 +52,18 @@ fn failure<T>(what: &str, error: impl std::fmt::Display) -> ViewEvent<T> {
     }
 }
 
+fn list_failure<T>(what: &str, error: &kube::Error) -> ViewEvent<T> {
+    match error {
+        kube::Error::Api(status) if status.is_not_found() => ViewEvent::Missing {
+            reason: format!(
+                "{what}: the API server does not serve it ({})",
+                status.message
+            ),
+        },
+        other => failure(what, other),
+    }
+}
+
 impl<K, T> Watch<K, T>
 where
     K: Resource<DynamicType = ()> + Clone + DeserializeOwned + Debug + Send + 'static,
@@ -73,7 +85,7 @@ where
             Ok(list) => list,
             Err(error) => {
                 let what = format!("the {} list failed", self.what);
-                return self.pause_then_relist(failure(&what, error)).await;
+                return self.pause_then_relist(list_failure(&what, &error)).await;
             }
         };
         let version = list.metadata.resource_version.clone().unwrap_or_default();

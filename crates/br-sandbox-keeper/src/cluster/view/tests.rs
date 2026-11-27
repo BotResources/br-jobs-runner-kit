@@ -61,3 +61,29 @@ fn a_failure_unsyncs_the_view_and_names_the_reason_until_the_next_snapshot() {
     assert!(view.is_synced());
     assert_eq!(names(view.read("pods")), ["b"]);
 }
+
+#[test]
+fn a_missing_kind_unsyncs_the_view_and_marks_it_absent_until_the_next_snapshot() {
+    let mut view = view();
+    view.apply(ViewEvent::Snapshot(vec!["a".to_owned()]));
+    assert!(!view.is_absent());
+    view.apply(ViewEvent::Missing {
+        reason: "the pool resource list failed".to_owned(),
+    });
+    assert!(view.is_absent());
+    assert!(!view.is_synced());
+    assert!(
+        matches!(view.unsynced_reason("pools"), Some(reason) if reason.contains("pool resource list"))
+    );
+    view.apply(ViewEvent::Failed {
+        reason: "down".to_owned(),
+    });
+    assert!(!view.is_absent());
+    view.apply(ViewEvent::Missing {
+        reason: "gone".to_owned(),
+    });
+    view.apply(ViewEvent::Snapshot(Vec::new()));
+    assert!(!view.is_absent());
+    assert!(view.is_synced());
+    assert_eq!(view.unsynced_reason("pools"), None);
+}

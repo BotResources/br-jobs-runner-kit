@@ -20,6 +20,7 @@ pub(super) struct Feed<T> {
     items: BTreeMap<(String, String), T>,
     opened: Vec<Opened<T>>,
     opens: Vec<String>,
+    absent: BTreeMap<String, String>,
 }
 
 impl<T: Clone + Send + 'static> Feed<T> {
@@ -29,6 +30,7 @@ impl<T: Clone + Send + 'static> Feed<T> {
             items: BTreeMap::new(),
             opened: Vec::new(),
             opens: Vec::new(),
+            absent: BTreeMap::new(),
         }
     }
 
@@ -47,9 +49,13 @@ impl<T: Clone + Send + 'static> Feed<T> {
     ) -> BoxStream<'static, ViewEvent<T>> {
         let filter = filter.unwrap_or_else(|| Arc::new(|_: &T| true));
         let (sender, receiver) = mpsc::unbounded_channel();
-        sender
-            .send(ViewEvent::Snapshot(self.visible(scope, &filter)))
-            .expect("a fresh channel");
+        let first = match self.absent.get(scope) {
+            Some(reason) => ViewEvent::Missing {
+                reason: reason.clone(),
+            },
+            None => ViewEvent::Snapshot(self.visible(scope, &filter)),
+        };
+        sender.send(first).expect("a fresh channel");
         self.opens.push(scope.to_owned());
         self.opened.push(Opened {
             scope: scope.to_owned(),
@@ -60,6 +66,21 @@ impl<T: Clone + Send + 'static> Feed<T> {
             receiver.recv().await.map(|event| (event, receiver))
         })
         .boxed()
+    }
+
+    pub fn values(&self, scope: &str) -> Vec<T> {
+        self.items
+            .iter()
+            .filter(|((item_scope, _), _)| item_scope == scope)
+            .map(|(_, item)| item.clone())
+            .collect()
+    }
+
+    pub fn missing(&mut self, scope: &str, reason: &str) {
+        self.absent.insert(scope.to_owned(), reason.to_owned());
+        self.broadcast(scope, |_| ViewEvent::Missing {
+            reason: reason.to_owned(),
+        });
     }
 
     pub fn opens(&self, scope: &str) -> usize {

@@ -16,24 +16,41 @@
 - `cluster`: the cluster I/O layer. The sealed trait `PoolApi` (a supertrait of `KubeApi`) with the watches of namespaces, bindings and `SandboxPool` resources, the readers of the quota, the network policies, the template ConfigMap and the ReplicaSet, and the writes that the rights table grants (create a ReplicaSet, apply `spec.template`, delete a ReplicaSet with the uid precondition, patch `sandboxpools/status`); `CreateOutcome`; `ViewEvent`, `View` and `Read`; `Views` (the views with a synced flag and their driver); `Observer`, `FenceInputs`, `FenceObservation` and `ReplicaSetRead`; `PoolWriter`, `WriteError` and `Change`; `ApiError::Forbidden` for a 403.
 - `pool`: `Owner`, `OwnershipFault`, `check_ownership`, `owner_reference` and `replica_set_body` (the pure ownership check and the body of the pool ReplicaSet).
 
+- `controller`: the reconcile loop. The `Engine` reads `Views::notices`, keeps its own pod map (claim count, `been_ready`, `failed_since`, deadlines) and judges each managed namespace: the views-synced gate, `InvalidSpec`, the fence verdict, `DuplicatePool`, the read of the template, the creation of the ReplicaSet `warm-{namespace}` (after a read in the same pass says the name is free), the refresh of `spec.template` by its hash, the replicas only when they differ, the removal of the owned ReplicaSet when the fence is lost, the freeze on a bad edit, the rollout of stale warm pods by `scale_down_step` (`rules::plan_rollout`), the expiry of pods and the sweep for a pool that is zero, frozen or deleted, `WarmPodsFailing` on the ReplicaSet and on the resource, the events `PoolAtMax` and `WarmPodsPending`, and the status of the resource (on change, at most once in 5 seconds, with `observedAt`). A 403 on a write is logged, counted and tried again.
+- `cluster`: `Notice` and `Watched`; `Views::notices`; `Views::not_ready_reason`; `ViewEvent::Missing` (a list that answers 404); `PoolWriter::set_condition`.
+- The label `pool` of `br_sandbox_keeper_pool_desired`, `_pool_warm_ready` and `_claims_per_second` is the name of the namespace, one series for each namespace that has a resource.
+- `/readyz` answers 503 with the reason in the body while the definition of the resource is absent, and a cluster with no managed namespace or no resource is ready.
+
 ### Changed
 
 - The key `pools` is removed from the configuration; a document that holds it is a start fault (`ConfigError::PoolsAreResources`). The pool types of the configuration (`pools`, `PoolInput`, `FloorInput`) and the errors that belonged to them are removed.
 - `rules::size_pool` takes `PoolSettings`. `judge_pod` takes a flag for a pod chosen by the rollout.
 - The start no longer checks that the namespace of a configured pool is managed (`KeeperError::PoolNamespaceNotManaged` is removed).
-- The controller keeps a transitional `Engine.pools` list that the production runner leaves empty: this version does expiry and sweep only, and does not size a pool. The next piece drives the pools from the resources.
+- The keeper serves a namespace as soon as the watch of the namespaces says that it matches the selector, and drops it at once when it does not; the discovery by a periodic listing is removed.
+- `Parts::new` takes an `Arc<dyn PoolApi>`.
+- A pod belongs to a pool when its pool id is the name of its namespace; any other pod with the pool-state label expires by the same rules with the values of the keeper.
+- `/readyz` is 503 until the namespace view, the binding view and the pod view and resource view of each managed namespace have each done a first full sync; a watch that breaks later does not change it.
+- The per-pool types of the controller (`Engine.pools`, the pool target, the periodic discovery loop) are removed; they were not public.
+
+### Removed
+
+- `KubeApi::get_replica_set`, `KubeCluster::get_replica_set` and the fake that served them; the pool ReplicaSet is read through `PoolApi::read_replica_set` and `Observer::replica_set`.
 
 ### Tests
 
-- The cluster I/O layer is tested on the fakes (views and their synced flag, the readers, the writers, the ownership check, the refused call) and on a stub API server (the path, the verb, the selector, the body and the content type of each call, and the rights test over the scope of each call).
-- The pure rules above are covered by unit tests, one for each sentence of the intent that they touch (spec validation, template check and hash, fence verdict, duplicate rule, sizing, rollout plan, pod expiry by state, status conditions and write rate). The tests of the removed pool configuration are replaced by tests of the `pools` fault and of the new keys; the chart 0.3 tests now hold that the keeper refuses its document.
+- The cluster I/O layer is tested on the fakes (views and their synced flag, the readers, the writers, the ownership check, the refused call, the condition write) and on a stub API server (the path, the verb, the selector, the body and the content type of each call, and the rights test over the scope of each call).
+- The pure rules above are covered by unit tests, one for each sentence of the intent that they touch (spec validation, template check and hash, fence verdict, duplicate rule, sizing, rollout plan, pod expiry by state, status conditions and write rate). The tests of the removed pool configuration are replaced by tests of the `pools` fault and of the new keys.
+- The reconcile loop is tested on the fakes in `controller/tests`: `lifecycle` (create with the controller reference, no create before the sync or with an unsynced pod view, a create that answers "exists", template refresh by hash and by a change of the ConfigMap, a ReplicaSet that is not owned, the duplicate rule, a deleted resource, `TemplateAbsent`, `InvalidTemplate`, a follower), `fence` (each fence object lost removes the ReplicaSet and the message names it, the pool is made again when the fence is back, claimed pods stay, a follower deletes nothing), `faults` (each failed read or unsynced view writes no ReplicaSet and the status says `Unknown` with `NotObserved`; a failed create, status, event, and a 403 are counted and tried again; `PodsRefused`), `rollout` (step size and order, the wait for Ready, the stop on a failing pod of the current template, the age bound, a follower, a claimed pod), `status` (the conditions and counts, the 5-second bound, no write when the values are equal, the freeze, the kept generation when not observed), `condition`, `expiry`, `served`, `sizing`, `metrics` and `run`.
+- The run of the library on the fakes (`runner`) makes the pool of a resource and writes its status, and shows `/readyz` at 503 with the word "absent" when the definition is absent while pods still expire.
+- `/readyz` is tested on the real views: not ready before the sync, ready with zero resources, 503 and ready again for an absent definition, and ready when a watch breaks after the first sync.
+- `tests/chart_config.rs`: the keeper loads the document of the chart 0.4 (the chart 0.2.4 document of this tree, without `pools` and with `agent_container`), and refuses a document that holds `pools`.
 - The checked-in definition file equals the generated definition; each level of the type has the keys of its schema; the preserve mark, the bounds and the four rules are held; no other rule is present.
 - The spec is read strictly at each level, with the defaults of the table, and a bad spec does not fail the object that holds it.
-- The rights table equals the table of the intent row by row, and has no wildcard, no `escalate`, `bind` or `impersonate`, and no write on the objects that the keeper only reads. The rights test of the client now takes the granted set from `RIGHTS`.
+- The rights table equals the table of the intent row by row, and has no wildcard, no `escalate`, `bind` or `impersonate`, and no write on the objects that the keeper only reads. The rights test of the client takes the granted set from `RIGHTS` and drives every call, `read_replica_set` included.
 
 ### Documentation
 
-- README: "The resource `SandboxPool`", "Rights table" and "Cluster I/O layer", and the two new rows of the public surface. The pure rules of `pool` and the cluster I/O layer are not yet wired into the controller: the next piece does the reconcile loop.
+- README: the behaviour of the reconcile loop, the fence, the rollout (`Wait::CurrentPodNotReady` and `Wait::ReplacementsMissing`), the status (with `Ready=True` and the reason `WarmPodsReady`), the endpoints and the metrics; the limits that the intent lists (`v1alpha1`, the fence check, the three limits of the removal of a pool, no cap on `maxReplicas`, `disk` and `sizeLimit`, the admission policy of the chart and every resource, the proof of the owner reference, the stale warm pods, the stopped rollout, a resource with no right) and the limits of this version (a namespace that loses its label, the absent-definition check with no managed namespace, a resource view that breaks, `desiredReplicas` of an invalid spec).
 
 ## 0.1.1
 

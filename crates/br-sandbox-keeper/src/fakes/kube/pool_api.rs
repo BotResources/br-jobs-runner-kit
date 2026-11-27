@@ -103,6 +103,9 @@ impl PoolApi for FakeKube {
                 .map_err(|error| ApiError::Call(error.to_string()))?;
             let mut state = self.state.lock().unwrap();
             let key = (namespace.to_owned(), name.clone());
+            if let Some(raced) = state.race.take() {
+                state.replica_sets.insert(key.clone(), raced);
+            }
             if state.replica_sets.contains_key(&key) {
                 return Ok(CreateOutcome::Exists);
             }
@@ -188,11 +191,19 @@ impl PoolApi for FakeKube {
                     status: value.clone(),
                 },
             )?;
-            self.state
-                .lock()
-                .unwrap()
+            let mut state = self.state.lock().unwrap();
+            state
                 .statuses
                 .insert((namespace.to_owned(), name.to_owned()), value);
+            let held = state
+                .pool_feed
+                .values(namespace)
+                .into_iter()
+                .find(|pool| pool.metadata.name.as_deref() == Some(name));
+            if let Some(mut pool) = held {
+                pool.status = Some(status.clone());
+                state.pool_feed.put(namespace, pool);
+            }
             Ok(())
         })
     }

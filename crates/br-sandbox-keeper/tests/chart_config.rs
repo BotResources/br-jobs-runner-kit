@@ -34,8 +34,15 @@ fn document_of(objects: &[Value]) -> Value {
     serde_json::from_str(&keeper_document(objects)).expect("the keeper document is JSON")
 }
 
-#[test]
-fn the_keeper_0_2_refuses_the_document_of_the_chart_0_3_because_it_holds_the_pools() {
+fn document_of_chart_0_4(overlay: &Path, extra: &[&str]) -> Value {
+    let mut document = document_of(&rendered(overlay, extra));
+    let keys = document.as_object_mut().expect("the document is an object");
+    keys.remove("pools");
+    keys.insert("agent_container".to_owned(), "agent".into());
+    document
+}
+
+fn enabling_overlays() -> Vec<PathBuf> {
     let enabling: Vec<PathBuf> = overlays()
         .into_iter()
         .filter(|overlay| enables_the_keeper(overlay))
@@ -44,25 +51,28 @@ fn the_keeper_0_2_refuses_the_document_of_the_chart_0_3_because_it_holds_the_poo
         !enabling.is_empty(),
         "no values file of the chart CI enables the keeper"
     );
-    for overlay in enabling {
-        let objects = rendered(&overlay, &[]);
-        let warm_pools = objects
-            .iter()
-            .filter(|object| object["kind"] == "ReplicaSet")
-            .count();
-        assert!(
-            warm_pools >= 2,
-            "{}: the fixture has fewer than two pools",
-            overlay.display()
-        );
+    enabling
+}
+
+#[test]
+fn the_keeper_0_2_loads_the_document_of_the_chart_0_4_that_holds_no_pool() {
+    for overlay in enabling_overlays() {
+        let document = document_of_chart_0_4(&overlay, &[]);
+        assert!(document.get("pools").is_none());
+        let config = KeeperConfig::from_json(&document.to_string())
+            .unwrap_or_else(|error| panic!("{}: {error}", overlay.display()));
+        assert_eq!(config.agent_container, "agent");
+        assert_eq!(config.managed_namespace_selector, "br.sandbox/managed=true");
+    }
+}
+
+#[test]
+fn the_keeper_0_2_refuses_a_document_that_still_holds_the_pools() {
+    for overlay in enabling_overlays() {
+        let mut document = document_of_chart_0_4(&overlay, &[]);
+        document["pools"] = Value::Array(Vec::new());
         assert_eq!(
-            document_of(&objects)["pools"].as_array().map(Vec::len),
-            Some(warm_pools),
-            "{}",
-            overlay.display()
-        );
-        assert_eq!(
-            KeeperConfig::from_json(&keeper_document(&objects)),
+            KeeperConfig::from_json(&document.to_string()),
             Err(ConfigError::PoolsAreResources),
             "{}",
             overlay.display()
@@ -71,30 +81,8 @@ fn the_keeper_0_2_refuses_the_document_of_the_chart_0_3_because_it_holds_the_poo
 }
 
 #[test]
-fn the_document_of_the_chart_carries_the_pool_the_store_the_lease_and_the_settings_of_the_values() {
-    let objects = rendered(&keeper_overlay(), &[]);
-    let document = document_of(&objects);
-
-    let pools = document["pools"]
-        .as_array()
-        .expect("the pools of the chart");
-    let pool = |id: &str| {
-        pools
-            .iter()
-            .find(|pool| pool["id"] == id)
-            .unwrap_or_else(|| panic!("the pool {id}"))
-    };
-    let full = pool("alpha-full");
-    assert_eq!(full["namespace"], "sbx-alpha-full");
-    assert_eq!(full["replicaset"], "warm-alpha-full");
-    assert_eq!(full["min_replicas"], 1);
-    assert_eq!(full["max_replicas"], 10);
-    assert_eq!(full["refill_seconds"], 3);
-    assert_eq!(full["margin"], 2);
-    assert_eq!(full["idle_ttl_seconds"], 120);
-    assert_eq!(full["idle_keep_min_state_bytes"], 10_000_000);
-    assert_eq!(pool("alpha-none")["max_replicas"], 20);
-
+fn the_document_of_the_chart_carries_the_store_the_lease_and_the_settings_of_the_values() {
+    let document = document_of_chart_0_4(&keeper_overlay(), &[]);
     assert_eq!(document["store_endpoint"], "https://store.example.test");
     assert_eq!(document["store_region"], "example-1");
     assert_eq!(document["store_path_style"], true);
@@ -151,8 +139,9 @@ fn a_settings_key_that_the_chart_computes_fails_the_render() {
 
 #[test]
 fn a_settings_key_that_the_keeper_does_not_know_reaches_the_keeper_and_fails_there() {
-    let objects = rendered(&keeper_overlay(), &["--set", "keeper.settings.not_a_key=1"]);
-    let error = KeeperConfig::from_json(&keeper_document(&objects))
+    let document =
+        document_of_chart_0_4(&keeper_overlay(), &["--set", "keeper.settings.not_a_key=1"]);
+    let error = KeeperConfig::from_json(&document.to_string())
         .expect_err("the keeper refuses an unknown key");
     assert!(error.to_string().contains("not_a_key"), "{error}");
 }

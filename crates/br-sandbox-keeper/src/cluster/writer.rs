@@ -10,6 +10,7 @@ use crate::pool::{
     template_hash_key,
 };
 use crate::resource::SandboxPoolStatus;
+use crate::rules::ConditionWrite;
 
 use super::{ApiError, CreateOutcome, DeleteOutcome, PoolApi};
 
@@ -165,6 +166,23 @@ impl PoolWriter {
             .apply_template(namespace, &replicaset_name(namespace), &rendered.template)
             .await
             .map(|()| Change::Written)
+            .map_err(|error| self.failed(call, namespace, error))
+    }
+
+    pub async fn set_condition(
+        &self,
+        namespace: &str,
+        owner: &Owner,
+        write: &ConditionWrite,
+    ) -> Result<(), WriteError> {
+        let call = "apply_condition";
+        let name = replicaset_name(namespace);
+        self.owned(call, namespace, owner)
+            .await?
+            .ok_or(WriteError::Gone { call })?;
+        self.api
+            .apply_condition(namespace, &name, write)
+            .await
             .map_err(|error| self.failed(call, namespace, error))
     }
 

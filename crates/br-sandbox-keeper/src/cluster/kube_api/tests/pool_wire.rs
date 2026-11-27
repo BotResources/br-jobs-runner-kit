@@ -191,3 +191,18 @@ async fn a_refusal_of_the_api_server_is_a_typed_error() {
         Err(ApiError::Forbidden(_))
     ));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_pool_list_that_the_api_server_does_not_serve_is_a_missing_definition_and_other_failures_are_not()
+ {
+    let absent = Wire::answering(StatusCode::NOT_FOUND, status_reply(404, "NotFound"));
+    let events: Vec<ViewEvent<_>> = absent.cluster().watch_pools("sbx").take(1).collect().await;
+    assert!(matches!(&events[0], ViewEvent::Missing { reason }
+        if reason.contains("pool resource list failed") && reason.contains("does not serve")));
+    let broken = Wire::answering(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        status_reply(500, "InternalError"),
+    );
+    let events: Vec<ViewEvent<_>> = broken.cluster().watch_pools("sbx").take(1).collect().await;
+    assert!(matches!(&events[0], ViewEvent::Failed { .. }));
+}

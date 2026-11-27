@@ -6,20 +6,33 @@ use crate::cluster::{
     ApiError, ApiFuture, DeleteOutcome, EventTarget, KubeApi, LeaseFacts, LeaseWrite, PodEvent,
     PoolEvent,
 };
-use crate::convert::replica_set_facts;
-use crate::facts::{ConditionFacts, PodFacts, PodVersion, ReplicaSetFacts};
+use crate::facts::{ConditionFacts, PodFacts, PodVersion};
+use crate::pool::Selector;
 use crate::rules::ConditionWrite;
 
+use super::pool::CLUSTER;
 use super::state::condition_of;
 use super::{Call, FakeKube};
 
 impl crate::sealed::Sealed for FakeKube {}
 
 impl KubeApi for FakeKube {
-    fn managed_namespaces<'a>(&'a self, _selector: &'a str) -> ApiFuture<'a, Vec<String>> {
+    fn managed_namespaces<'a>(&'a self, selector: &'a str) -> ApiFuture<'a, Vec<String>> {
         Box::pin(async move {
             self.check("namespaces")?;
-            Ok(self.state.lock().unwrap().namespaces.clone())
+            let matching = Selector::parse(selector).ok();
+            let state = self.state.lock().unwrap();
+            Ok(state
+                .namespace_feed
+                .values(CLUSTER)
+                .into_iter()
+                .filter(|namespace| {
+                    matching.as_ref().is_some_and(|parsed| {
+                        parsed.matches(&namespace.metadata.labels.clone().unwrap_or_default())
+                    })
+                })
+                .filter_map(|namespace| namespace.metadata.name)
+                .collect())
         })
     }
 
@@ -84,20 +97,6 @@ impl KubeApi for FakeKube {
                     Ok(DeleteOutcome::Deleted)
                 }
             }
-        })
-    }
-
-    fn get_replica_set<'a>(
-        &'a self,
-        namespace: &'a str,
-        name: &'a str,
-    ) -> ApiFuture<'a, Option<ReplicaSetFacts>> {
-        Box::pin(async move {
-            self.check("get_replica_set")?;
-            Ok(self
-                .raw_replica_set(namespace, name)
-                .as_ref()
-                .map(replica_set_facts))
         })
     }
 

@@ -18,7 +18,6 @@ use super::call::Call;
 use super::feed::Feed;
 
 pub(super) struct State {
-    pub(super) namespaces: Vec<String>,
     pub(super) pods: BTreeMap<(String, String), PodFacts>,
     pub(super) senders: Vec<(String, mpsc::UnboundedSender<PodEvent>)>,
     pub(super) replica_sets: BTreeMap<(String, String), ReplicaSet>,
@@ -37,13 +36,13 @@ pub(super) struct State {
     pub(super) calls: Vec<Call>,
     pub(super) failing: HashSet<&'static str>,
     pub(super) conflicting_leases: u32,
+    pub(super) race: Option<ReplicaSet>,
 }
 
 impl Default for FakeKube {
     fn default() -> Self {
         Self {
             state: Mutex::new(State {
-                namespaces: Vec::new(),
                 pods: BTreeMap::new(),
                 senders: Vec::new(),
                 replica_sets: BTreeMap::new(),
@@ -68,6 +67,7 @@ impl Default for FakeKube {
                 calls: Vec::new(),
                 failing: HashSet::new(),
                 conflicting_leases: 0,
+                race: None,
             }),
         }
     }

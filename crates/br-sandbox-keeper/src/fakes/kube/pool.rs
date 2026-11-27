@@ -1,4 +1,5 @@
 use k8s_openapi::api::admissionregistration::v1::ValidatingAdmissionPolicyBinding;
+use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, ResourceQuota};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use serde_json::Value;
@@ -44,8 +45,17 @@ impl FakeKube {
             .remove(CLUSTER, name);
     }
 
-    pub fn put_pool(&self, namespace: &str, pool: SandboxPool) {
-        self.state.lock().unwrap().pool_feed.put(namespace, pool);
+    pub fn put_pool(&self, namespace: &str, mut pool: SandboxPool) {
+        let mut state = self.state.lock().unwrap();
+        if pool.status.is_none() {
+            pool.status = state
+                .pool_feed
+                .values(namespace)
+                .into_iter()
+                .find(|held| held.metadata.name == pool.metadata.name)
+                .and_then(|held| held.status);
+        }
+        state.pool_feed.put(namespace, pool);
     }
 
     pub fn remove_pool(&self, namespace: &str, name: &str) {
@@ -58,6 +68,18 @@ impl FakeKube {
             .unwrap()
             .templates
             .insert(namespace.to_owned(), config_map);
+    }
+
+    pub fn remove_template(&self, namespace: &str) {
+        self.state.lock().unwrap().templates.remove(namespace);
+    }
+
+    pub fn remove_quota(&self, namespace: &str) {
+        self.state.lock().unwrap().quotas.remove(namespace);
+    }
+
+    pub fn race_next_create(&self, replica_set: ReplicaSet) {
+        self.state.lock().unwrap().race = Some(replica_set);
     }
 
     pub fn put_quota(&self, namespace: &str, quota: ResourceQuota) {
@@ -90,6 +112,14 @@ impl FakeKube {
             }
             other => panic!("no watch of {other}"),
         }
+    }
+
+    pub fn remove_definition(&self, namespace: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .pool_feed
+            .missing(namespace, "the SandboxPool definition is absent");
     }
 
     pub fn resync_watch(&self, kind: &str, namespace: &str) {

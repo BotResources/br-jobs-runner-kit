@@ -42,22 +42,25 @@ async fn a_new_leader_judges_no_pool_before_the_first_sync_of_its_namespace() {
     bed.engine.wake().await;
     assert!(bed.kube.calls().is_empty());
     bed.sync().await;
-    assert!(bed.kube.calls().is_empty());
+    assert!(
+        !bed.pool_writes()
+            .iter()
+            .any(|call| matches!(call, Call::Condition { .. } | Call::Delete { .. }))
+    );
 }
 
 #[tokio::test(start_paused = true)]
 async fn a_pod_that_has_been_ready_and_then_crashes_does_not_make_the_pool_failing() {
     let mut bed = bed(true);
     bed.sync().await;
-    let ready = bed.kube.put_pod(old_warm("w0", 10));
-    bed.applied(ready.clone()).await;
+    bed.kube.put_pod(old_warm("w0", 10));
+    bed.settle().await;
     bed.kube.clear_calls();
-    bed.applied(PodFacts {
-        ready: false,
-        containers: vec![fixtures::waiting("CrashLoopBackOff")],
-        ..ready
-    })
-    .await;
+    bed.kube.update_pod(NS, "w0", |pod| {
+        pod.ready = false;
+        pod.containers = vec![fixtures::waiting("CrashLoopBackOff")];
+    });
+    bed.settle().await;
     bed.pass(30).await;
     assert!(
         !bed.kube
@@ -88,7 +91,7 @@ async fn the_idle_values_are_those_of_the_keeper_for_every_pod_in_a_pool_or_outs
     let mut document = testing::document();
     document["idle_ttl_seconds"] = 600.into();
     bed.engine.config = Arc::new(testing::config_of(&document));
-    bed.sync().await;
+    bed.add_managed(OTHER);
     let keep_big = |name: &str, pod: PodFacts| PodFacts {
         idle_since: Mark::Value(at(START)),
         state_bytes: Mark::Value(20_000_000),
@@ -111,10 +114,7 @@ async fn the_idle_values_are_those_of_the_keeper_for_every_pod_in_a_pool_or_outs
     ] {
         bed.kube.put_pod(pod);
     }
-    for namespace in [NS, OTHER] {
-        let pods = bed.kube.pods_in(namespace);
-        bed.engine.handle(namespace, PodEvent::Snapshot(pods)).await;
-    }
+    bed.sync().await;
     assert!(bed.kube.pod(OTHER, "g-small").is_none());
     for name in ["g-warm", "g-big", "g-dirty", "g-nopool"] {
         assert!(bed.kube.pod(OTHER, name).is_some(), "{name}");
@@ -134,7 +134,8 @@ async fn the_idle_values_are_those_of_the_keeper_for_every_pod_in_a_pool_or_outs
     assert!(bed.has_metric("br_sandbox_keeper_pods_deleted_total{reason=\"idle\"} 3"));
     for call in bed.kube.calls() {
         match call {
-            Call::Delete { .. } => {}
+            Call::Delete { .. } | Call::PoolStatus { .. } => {}
+            Call::ApplyTemplate { name, .. } => assert_eq!(name, RS),
             Call::Condition { name, .. } | Call::Replicas { name, .. } => assert_eq!(name, RS),
             other => panic!("a call outside the configured pool: {other:?}"),
         }

@@ -1,7 +1,6 @@
 use serde_json::{Value, json};
 
 use crate::config::KeeperConfig;
-use crate::controller::PoolTarget;
 use crate::pool::{PoolSettings, PoolSize, ResourceBounds};
 
 pub fn document() -> Value {
@@ -41,15 +40,6 @@ pub fn settings() -> PoolSettings {
         refill: std::time::Duration::from_secs(3),
         margin: 2,
         floors: Vec::new(),
-    }
-}
-
-pub fn target() -> PoolTarget {
-    PoolTarget {
-        namespace: "sbx".to_owned(),
-        id: "p".to_owned(),
-        replicaset: "warm-p".to_owned(),
-        settings: settings(),
     }
 }
 

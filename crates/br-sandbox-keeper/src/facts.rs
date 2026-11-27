@@ -203,7 +203,7 @@ pub(crate) mod fixtures {
             uid: format!("uid-{name}"),
             resource_version: "1".to_owned(),
             pool_state: PoolState::Warm,
-            pool_id: Some("p".to_owned()),
+            pool_id: Some("sbx".to_owned()),
             thread: None,
             agent: None,
             phase: Phase::Running,

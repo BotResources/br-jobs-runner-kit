@@ -36,6 +36,7 @@ pub(super) fn errors(rig: &Rig) -> bool {
         .contains("br_sandbox_keeper_sweep_errors_total 1")
 }
 
+mod condition;
 mod more;
 
 #[tokio::test]
@@ -92,7 +93,13 @@ async fn the_replicas_are_written_only_when_the_value_differs() {
             replicas: 5
         }]
     );
-    assert_eq!(rig.kube.replica_set("sbx", "warm-sbx").replicas, Some(5));
+    assert_eq!(
+        rig.kube
+            .raw_replica_set("sbx", "warm-sbx")
+            .and_then(|set| set.spec)
+            .and_then(|spec| spec.replicas),
+        Some(5)
+    );
     assert_eq!(
         rig.writer.set_replicas("sbx", &owner(), 5).await,
         Ok(Change::Unchanged)

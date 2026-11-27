@@ -5,14 +5,15 @@ use futures::StreamExt;
 use futures::stream::{BoxStream, SelectAll};
 use k8s_openapi::api::admissionregistration::v1::ValidatingAdmissionPolicyBinding;
 use k8s_openapi::api::core::v1::Namespace;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::facts::PodFacts;
 use crate::pool::ADMISSION_BINDING_NAME;
 use crate::resource::SandboxPool;
 
-use super::{PoolApi, Read, View, ViewEvent};
+use super::notice::failure_of;
+use super::{Notice, PoolApi, Read, View, ViewEvent, Watched};
 
 enum Feed {
     Namespaces(Box<ViewEvent<Namespace>>),
@@ -31,6 +32,7 @@ struct State {
 struct Shared {
     state: Mutex<State>,
     changes: watch::Sender<u64>,
+    notices: Mutex<Option<mpsc::UnboundedSender<Notice>>>,
 }
 
 #[derive(Clone)]
@@ -72,6 +74,7 @@ impl Views {
                     pools: BTreeMap::new(),
                 }),
                 changes,
+                notices: Mutex::new(None),
             }),
         }
     }
@@ -120,24 +123,36 @@ impl Views {
     }
 
     fn apply(&self, feed: Feed) {
-        {
+        let notice = {
             let mut state = self.state();
             match feed {
-                Feed::Namespaces(event) => state.namespaces.apply(*event),
-                Feed::Bindings(event) => state.bindings.apply(*event),
-                Feed::Pods(namespace, event) => {
-                    if let Some(view) = state.pods.get_mut(&namespace) {
-                        view.apply(*event);
-                    }
+                Feed::Namespaces(event) => {
+                    let failure = failure_of(&event);
+                    state.namespaces.apply(*event);
+                    Some(signals::resource(Watched::Namespaces, "", failure))
                 }
+                Feed::Bindings(event) => {
+                    let failure = failure_of(&event);
+                    state.bindings.apply(*event);
+                    Some(signals::resource(Watched::Bindings, "", failure))
+                }
+                Feed::Pods(namespace, event) => state.pods.get_mut(&namespace).map(|view| {
+                    view.apply((*event).clone());
+                    Notice::Pods { namespace, event }
+                }),
                 Feed::Pools(namespace, event) => {
-                    if let Some(view) = state.pools.get_mut(&namespace) {
+                    let failure = failure_of(&event);
+                    state.pools.get_mut(&namespace).map(|view| {
                         view.apply(*event);
-                    }
+                        signals::resource(Watched::Pools, &namespace, failure)
+                    })
                 }
             }
-        }
+        };
         self.shared.changes.send_modify(|version| *version += 1);
+        if let Some(notice) = notice {
+            self.notify(notice);
+        }
     }
 
     fn managed(&self) -> Option<BTreeSet<String>> {
@@ -230,5 +245,6 @@ impl Views {
     }
 }
 
+mod signals;
 #[cfg(test)]
 mod tests;

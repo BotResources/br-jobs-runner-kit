@@ -14,8 +14,8 @@ use kube::api::{
 use kube::{Api, Client, Config};
 use serde_json::json;
 
-use crate::convert::{pod_facts, replica_set_facts};
-use crate::facts::{PodFacts, PodVersion, ReplicaSetFacts};
+use crate::convert::pod_facts;
+use crate::facts::{PodFacts, PodVersion};
 use crate::rules::ConditionWrite;
 
 use super::{
@@ -127,18 +127,6 @@ impl KubeApi for KubeCluster {
                     other => Err(other),
                 },
             }
-        })
-    }
-
-    fn get_replica_set<'a>(
-        &'a self,
-        namespace: &'a str,
-        name: &'a str,
-    ) -> ApiFuture<'a, Option<ReplicaSetFacts>> {
-        Box::pin(async move {
-            let api: Api<ReplicaSet> = Api::namespaced(self.client.clone(), namespace);
-            let found = api.get_opt(name).await.map_err(call_error)?;
-            Ok(found.as_ref().map(replica_set_facts))
         })
     }
 

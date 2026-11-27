@@ -127,6 +127,7 @@ async fn drive_every_method(wire: &Wire) {
     let _ = cluster.watch_pools("sbx").take(1).collect::<Vec<_>>().await;
     cluster.read_template("sbx").await.unwrap();
     cluster.read_quota("sbx").await.unwrap();
+    cluster.read_replica_set("sbx", "warm-sbx").await.unwrap();
     cluster.list_network_policies("sbx").await.unwrap();
     cluster
         .create_replica_set("sbx", &json!({"metadata": {"name": "warm-sbx"}}))
@@ -154,7 +155,6 @@ async fn drive_every_method(wire: &Wire) {
         .delete_pod("sbx", "w0", &PodVersion::new("uid-w0", "7"))
         .await
         .unwrap();
-    cluster.get_replica_set("sbx", "warm-p").await.unwrap();
     cluster.apply_replicas("sbx", "warm-p", 4).await.unwrap();
     let write = ConditionWrite {
         status: "False",

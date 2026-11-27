@@ -141,7 +141,13 @@ async fn every_write_that_the_server_refuses_gives_the_refused_error() {
         );
     }
     assert!(rig.kube.pod("sbx", "w0").is_some());
-    assert_eq!(rig.kube.replica_set("sbx", "warm-sbx").replicas, Some(3));
+    assert_eq!(
+        rig.kube
+            .raw_replica_set("sbx", "warm-sbx")
+            .and_then(|set| set.spec)
+            .and_then(|spec| spec.replicas),
+        Some(3)
+    );
     rig.kube.clear_reads();
     assert!(rig.kube.reads().is_empty());
 }

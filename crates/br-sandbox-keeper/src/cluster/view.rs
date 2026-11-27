@@ -11,6 +11,7 @@ pub enum ViewEvent<T> {
     Applied(T),
     Deleted { key: String },
     Failed { reason: String },
+    Missing { reason: String },
 }
 
 impl From<PodEvent> for ViewEvent<PodFacts> {
@@ -30,7 +31,9 @@ impl From<ViewEvent<PodFacts>> for PodEvent {
             ViewEvent::Snapshot(pods) => PodEvent::Snapshot(pods),
             ViewEvent::Applied(pod) => PodEvent::Applied(Box::new(pod)),
             ViewEvent::Deleted { key } => PodEvent::Deleted { name: key },
-            ViewEvent::Failed { reason } => PodEvent::WatchFailed { reason },
+            ViewEvent::Failed { reason } | ViewEvent::Missing { reason } => {
+                PodEvent::WatchFailed { reason }
+            }
         }
     }
 }
@@ -67,7 +70,9 @@ pub struct View<T> {
     key: fn(&T) -> String,
     items: BTreeMap<String, T>,
     synced: bool,
+    seen: bool,
     failure: Option<String>,
+    absent: bool,
 }
 
 impl<T: Clone> View<T> {
@@ -76,7 +81,9 @@ impl<T: Clone> View<T> {
             key,
             items: BTreeMap::new(),
             synced: false,
+            seen: false,
             failure: None,
+            absent: false,
         }
     }
 
@@ -88,7 +95,9 @@ impl<T: Clone> View<T> {
                     .map(|item| ((self.key)(&item), item))
                     .collect();
                 self.synced = true;
+                self.seen = true;
                 self.failure = None;
+                self.absent = false;
             }
             ViewEvent::Applied(item) => {
                 self.items.insert((self.key)(&item), item);
@@ -99,8 +108,26 @@ impl<T: Clone> View<T> {
             ViewEvent::Failed { reason } => {
                 self.synced = false;
                 self.failure = Some(reason);
+                self.absent = false;
+            }
+            ViewEvent::Missing { reason } => {
+                self.synced = false;
+                self.failure = Some(reason);
+                self.absent = true;
             }
         }
+    }
+
+    pub fn is_absent(&self) -> bool {
+        self.absent
+    }
+
+    pub fn unsynced_reason(&self, what: &str) -> Option<String> {
+        (!self.synced).then(|| self.not_synced(what))
+    }
+
+    pub fn first_sync_reason(&self, what: &str) -> Option<String> {
+        (!self.seen).then(|| self.not_synced(what))
     }
 
     pub fn is_synced(&self) -> bool {

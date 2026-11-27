@@ -1,11 +1,9 @@
 use std::sync::Mutex;
 
-use k8s_openapi::api::apps::v1::{ReplicaSet, ReplicaSetSpec};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use k8s_openapi::api::apps::v1::ReplicaSet;
 
 use crate::cluster::{ApiError, LeaseFacts, LeaseWrite, PodEvent};
-use crate::convert::replica_set_facts;
-use crate::facts::{ConditionFacts, PodFacts, ReplicaSetFacts};
+use crate::facts::{ConditionFacts, PodFacts};
 
 pub use call::Call;
 use state::{State, condition_of};
@@ -15,27 +13,6 @@ pub struct FakeKube {
 }
 
 impl FakeKube {
-    pub fn set_namespaces(&self, namespaces: &[&str]) {
-        self.state.lock().unwrap().namespaces =
-            namespaces.iter().map(|ns| (*ns).to_owned()).collect();
-    }
-
-    pub fn add_replica_set(&self, namespace: &str, name: &str, replicas: Option<i32>) {
-        self.put_replica_set(ReplicaSet {
-            metadata: ObjectMeta {
-                name: Some(name.to_owned()),
-                namespace: Some(namespace.to_owned()),
-                uid: Some(format!("rs-{name}")),
-                ..ObjectMeta::default()
-            },
-            spec: Some(ReplicaSetSpec {
-                replicas,
-                ..ReplicaSetSpec::default()
-            }),
-            status: None,
-        });
-    }
-
     pub fn put_replica_set(&self, replica_set: ReplicaSet) {
         let key = (
             replica_set.metadata.namespace.clone().unwrap_or_default(),
@@ -107,15 +84,15 @@ impl FakeKube {
         pod.resource_version = version;
     }
 
-    pub fn pods_in(&self, namespace: &str) -> Vec<PodFacts> {
-        self.state
-            .lock()
-            .unwrap()
-            .pods
-            .iter()
-            .filter(|((ns, _), _)| ns == namespace)
-            .map(|(_, pod)| pod.clone())
-            .collect()
+    pub fn remove_pod(&self, namespace: &str, name: &str) {
+        let mut state = self.state.lock().unwrap();
+        state.pods.remove(&(namespace.to_owned(), name.to_owned()));
+        state.emit(
+            namespace,
+            PodEvent::Deleted {
+                name: name.to_owned(),
+            },
+        );
     }
 
     pub fn forget_pod(&self, namespace: &str, name: &str) {
@@ -133,14 +110,6 @@ impl FakeKube {
             .pods
             .get(&(namespace.to_owned(), name.to_owned()))
             .cloned()
-    }
-
-    pub fn replica_set(&self, namespace: &str, name: &str) -> ReplicaSetFacts {
-        replica_set_facts(
-            &self
-                .raw_replica_set(namespace, name)
-                .expect("a known replica set"),
-        )
     }
 
     pub fn set_replica_set_conditions(

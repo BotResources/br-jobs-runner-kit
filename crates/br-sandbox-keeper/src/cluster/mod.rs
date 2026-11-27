@@ -1,6 +1,7 @@
 #[cfg(test)]
 pub(crate) mod fixtures;
 mod kube_api;
+mod notice;
 mod observe;
 mod pool_api;
 mod view;
@@ -13,10 +14,11 @@ use br_runner_sandbox::Timestamp;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 
-use crate::facts::{PodFacts, PodVersion, ReplicaSetFacts};
+use crate::facts::{PodFacts, PodVersion};
 use crate::rules::ConditionWrite;
 
 pub use kube_api::KubeCluster;
+pub use notice::{Notice, Watched};
 pub use observe::{FenceInputs, FenceObservation, Observer, ReplicaSetRead};
 pub use pool_api::{CreateOutcome, PoolApi};
 pub use view::{Read, View, ViewEvent};
@@ -143,12 +145,6 @@ pub trait KubeApi: crate::sealed::Sealed + Send + Sync {
         name: &'a str,
         version: &'a PodVersion,
     ) -> ApiFuture<'a, DeleteOutcome>;
-
-    fn get_replica_set<'a>(
-        &'a self,
-        namespace: &'a str,
-        name: &'a str,
-    ) -> ApiFuture<'a, Option<ReplicaSetFacts>>;
 
     fn apply_replicas<'a>(
         &'a self,

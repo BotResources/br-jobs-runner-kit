@@ -45,14 +45,14 @@ fn route_of(state: &HttpState, method: &Method, path: &str) -> Response<Full<Byt
     }
     match path {
         "/livez" => reply(StatusCode::OK, TEXT, "ok\n".to_owned()),
-        "/readyz" if state.readiness.is_ready() => {
-            reply(StatusCode::OK, TEXT, "ready\n".to_owned())
-        }
-        "/readyz" => reply(
-            StatusCode::SERVICE_UNAVAILABLE,
-            TEXT,
-            "not ready\n".to_owned(),
-        ),
+        "/readyz" => match state.readiness.not_ready_reason() {
+            None => reply(StatusCode::OK, TEXT, "ready\n".to_owned()),
+            Some(reason) => reply(
+                StatusCode::SERVICE_UNAVAILABLE,
+                TEXT,
+                format!("not ready: {reason}\n"),
+            ),
+        },
         "/metrics" => reply(StatusCode::OK, PROMETHEUS, (state.metrics)()),
         _ => reply(StatusCode::NOT_FOUND, TEXT, "not found\n".to_owned()),
     }

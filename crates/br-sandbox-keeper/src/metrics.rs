@@ -97,6 +97,10 @@ impl Metrics {
         self.with_pool(pool, |gauges| gauges.claims_per_second = rate);
     }
 
+    pub fn forget_pool(&self, pool: &str) {
+        self.lock().pools.remove(pool);
+    }
+
     pub fn set_idle_pods(&self, count: usize) {
         self.lock().idle_pods = u64::try_from(count).unwrap_or(u64::MAX);
     }
