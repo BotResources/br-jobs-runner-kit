@@ -14,6 +14,7 @@ headings and is released under the tag `{library}/v{version}`.
 ### Added
 
 - Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`. No change of the crate version or of its public surface.
+- Test `crates/br-runner-sandbox/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-runner-sandbox` (already in the lock): the document that `br-sandbox-chart` renders for the adapter in each sandbox namespace is loaded through `SandboxConfigInput` and `SandboxConfig::try_from`. No change of the crate version or of its public surface.
 
 ### Fixed
 

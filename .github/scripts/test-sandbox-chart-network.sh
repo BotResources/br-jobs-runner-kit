@@ -145,7 +145,7 @@ check_pool_has_no_replicas_and_a_quota_for_it() {
     t "the quota allows max_sandboxes plus the extra pods" jqt ex '[.[] | select(.kind == "ResourceQuota" and (.metadata.namespace | endswith("-egress") | not))] | map(.spec.hard.pods | tonumber) | sort == [14, 24, 24, 24]'
     local namespace max pods
     for namespace in sbx-alpha-allow sbx-alpha-full sbx-alpha-none sbx-beta-none; do
-        max="$(yq "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-config\" and .metadata.namespace == \"${namespace}\") | .data[\"config.yaml\"] | from_yaml | .pool.max_sandboxes" "$WORK/ex_yaml.yaml")"
+        max="$(jq -r --arg ns "$namespace" '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .pools[] | select(.namespace == $ns) | .max_replicas' "$WORK/keeper.json")"
         pods="$(yq "select(.kind == \"ResourceQuota\" and .metadata.namespace == \"${namespace}\") | .spec.hard.pods" "$WORK/ex_yaml.yaml")"
         t "the quota of ${namespace} holds at least max_sandboxes pods" test "$pods" -ge "$max"
     done

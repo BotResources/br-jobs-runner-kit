@@ -34,4 +34,5 @@ ignored = ["reqwest"]
 unsafe_code = "forbid"
 
 [dev-dependencies]
+serde-saphyr = "2.2"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "test-util"] }
