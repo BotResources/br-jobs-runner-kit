@@ -3,6 +3,6 @@ pull_secrets:
   - mirror-pull
 operator:
   enabled: true
-  image: registry.example.test/keeper/br-sandbox-keeper:0.1.0
+  image: ghcr.io/botresources/br-sandbox-keeper@sha256:ce338934062a0ebf8d27ddf56b9361ec509036c80679d202623a301f23a0c244
 network_check:
   cron: "0 3 * * *"

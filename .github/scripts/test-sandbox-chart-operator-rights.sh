@@ -61,7 +61,7 @@ rights_hold() {
 }
 
 render_rights_fixtures() {
-    render rights_five -f "$(vals rightsfive '.namespaces += [{"name": "sbx-beta-a-none", "mode": "none"}, {"name": "sbx-beta-b-none", "mode": "none"}, {"name": "sbx-alpha-x-none", "mode": "none"}] | .operator.enabled = true | .operator.image = "registry.example.test/keeper/br-sandbox-keeper:0.1.0"')"
+    render rights_five -f "$(vals rightsfive '.namespaces += [{"name": "sbx-beta-a-none", "mode": "none"}, {"name": "sbx-beta-b-none", "mode": "none"}, {"name": "sbx-alpha-x-none", "mode": "none"}] | .operator.enabled = true | .operator.image = "ghcr.io/botresources/br-sandbox-keeper@sha256:ce338934062a0ebf8d27ddf56b9361ec509036c80679d202623a301f23a0c244"')"
 }
 
 check_the_controller_rights_equal_the_table() {

@@ -100,7 +100,7 @@ check_the_stamper_refuses_what_it_cannot_stamp() {
     fails_with "BR_SANDBOX_STAMPER_NOT_A_WRITER{identity=system:serviceaccount:other:kyverno}" -f "$EXAMPLE" -f "$STAMPER_VALUES" --set stamper.identity=system:serviceaccount:other:kyverno
     t "another identity listed as writer makes the render pass" render stamper_other -f "$EXAMPLE" -f "$STAMPER_VALUES" --set stamper.identity=system:serviceaccount:other:kyverno --set 'grants.writers={system:serviceaccount:other:kyverno}'
     fails_with "BR_SANDBOX_MODE_NOT_STAMPED{namespace=sbx-alpha-allow,mode=allow}" -f "$EXAMPLE" --set stamper.enabled=true --set "grants.writers={${STAMPER_IDENTITY}}"
-    fails_with "BR_SANDBOX_MODE_NOT_STAMPED{namespace=sbx-alpha-full,mode=full}" -f "$(valsx stampcred ".namespaces |= map(select(.name == \"sbx-alpha-full\")) | .stamper.enabled = true | .operator.enabled = true | .operator.image = \"registry.example.test/keeper/br-sandbox-keeper:0.1.0\" | .grants.writers = [\"${STAMPER_IDENTITY}\"]")"
+    fails_with "BR_SANDBOX_MODE_NOT_STAMPED{namespace=sbx-alpha-full,mode=full}" -f "$(valsx stampcred ".namespaces |= map(select(.name == \"sbx-alpha-full\")) | .stamper.enabled = true | .operator.enabled = true | .operator.image = \"ghcr.io/botresources/br-sandbox-keeper@sha256:ce338934062a0ebf8d27ddf56b9361ec509036c80679d202623a301f23a0c244\" | .grants.writers = [\"${STAMPER_IDENTITY}\"]")"
     fails_with "BR_SANDBOX_STAMPER_RULE_NAME_TOO_LONG{rule=br-sandbox-sbx-gamma-with-a-very-long-scope-name-" -f "$EXAMPLE" -f "$STAMPER_VALUES" --set scopes.sbx-gamma-with-a-very-long-scope-name-x.runner.service_account=r --set scopes.sbx-gamma-with-a-very-long-scope-name-x.runner.namespace=n
 }
 
