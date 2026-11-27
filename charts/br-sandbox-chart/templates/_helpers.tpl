@@ -12,6 +12,18 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 br.sandbox
 {{- end -}}
 
+{{- define "br-sandbox-chart.agent_container" -}}
+agent
+{{- end -}}
+
+{{- define "br-sandbox-chart.seed_root" -}}
+/skills
+{{- end -}}
+
+{{- define "br-sandbox-chart.seed_tools_path" -}}
+/sbx/bin/bsdtar
+{{- end -}}
+
 {{- define "br-sandbox-chart.replicaset_name" -}}
 {{- printf "warm-%s-%s" .client .mode -}}
 {{- end -}}
@@ -153,42 +165,6 @@ Always
 
 {{- define "br-sandbox-chart.json_string" -}}
 {{- . | toJson | replace "\\u0026" "&" | replace "\\u003c" "<" | replace "\\u003e" ">" -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.common" -}}
-{{- $values := .Values -}}
-{{- toYaml (dict
-  "label_prefix" (include "br-sandbox-chart.label_prefix" .)
-  "tools" (dict "mount_path" $values.tools.mount_path "bsdtar_path" (printf "%s/bin/bsdtar" $values.tools.mount_path) "seed_container" (dict "enabled" $values.tools.seed_container.enabled "name" $values.tools.seed_container.name) "seed_root" "/skills" "seed_container_bsdtar_path" "/sbx/bin/bsdtar")
-  "restore_timeout_seconds" $values.restore_timeout_seconds
-  "idle_ttl" $values.idle_ttl
-  "idle_keep_min_state_bytes" $values.idle_keep_min_state_bytes
-  "warm_max_age_seconds" $values.warm_max_age_seconds
-  "save" $values.save
-  "store" $values.store
-  "work_size_limit" (toString $values.work.size_limit)
-  "home_size_limit" (toString $values.home.size_limit)) -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.pool" -}}
-{{- $ns := .ns -}}
-{{- toYaml (dict
-  "client" $ns.client
-  "mode" $ns.mode
-  "namespace" $ns.name
-  "pool_id" $ns.poolId
-  "replicaset" (include "br-sandbox-chart.replicaset_name" $ns)
-  "floor" $ns.pool.floor
-  "max_sandboxes" $ns.pool.max_sandboxes
-  "refill_seconds" $ns.pool.refill_seconds
-  "margin" $ns.pool.margin
-  "size" $ns.pool.size) -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.namespace" -}}
-{{- $config := include "br-sandbox-chart.config.common" .root | fromYaml -}}
-{{- $_ := set $config "pool" (include "br-sandbox-chart.config.pool" (dict "ns" .ns) | fromYaml) -}}
-{{- toYaml $config -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.system.security" -}}

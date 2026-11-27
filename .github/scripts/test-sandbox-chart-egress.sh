@@ -6,7 +6,7 @@ PROXY_ONLY='{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metada
 
 render_egress_fixtures() {
     render cred -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
+    render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.allow.domains = ["git.example.test"] | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
     render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
     render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
     render keeperegress -f "$EXAMPLE" -f "$KEEPER_VALUES" -f "$EGRESS_VALUES"
@@ -166,6 +166,20 @@ check_an_allow_list_outside_mode_allow_fails_the_render() {
     t "an allow list in mode allow renders when egress is enabled" render allowok -f "$(valsx allowok '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
     t "empty allow lists in mode none and full render when egress is enabled" render allowempty -f "$(valsx allowempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []} | .clients.alpha.modes.full.allow = {"domains": [], "cidrs": []}')"
     t "the README names BR_SANDBOX_ALLOW_MODE" grep -qF 'BR_SANDBOX_ALLOW_MODE' "$README"
+}
+
+check_a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
+    section "a mode allow with no domain and no cidr fails when egress is enabled, and renders without a list when egress is disabled"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_deleted 'del(.clients.alpha.modes.allow.allow)')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_lists '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []}')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(vals allowempty_noproxy '.egress.enabled = true')"
+    t "a mode allow with domains only renders when egress is enabled" render allowdomainsonly -f "$(valsx allowdomainsonly '.clients.alpha.modes.allow.allow = {"domains": ["git.example.test"]}')"
+    t "a mode allow with cidrs only renders when egress is enabled" render allowcidrsonly -f "$(valsx allowcidrsonly '.clients.alpha.modes.allow.allow = {"cidrs": ["192.0.2.0/24"]}')"
+    t "an empty allow list in mode none and mode full is not an error when egress is enabled" render allownoneempty -f "$(valsx allownoneempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []}')"
+    t "with egress disabled a mode allow with no list renders: no list can be given there" render allowoff -f "$EXAMPLE"
+    t "the README names BR_SANDBOX_ALLOW_EMPTY and says it needs egress.enabled" grep -qF 'With `egress.enabled`, mode `allow` needs at least one domain or one cidr, else `BR_SANDBOX_ALLOW_EMPTY`.' "$README"
+    t "the CHANGELOG names BR_SANDBOX_ALLOW_EMPTY" grep -qF 'BR_SANDBOX_ALLOW_EMPTY{client=...,mode=allow}' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the render fault changes what 0.2.0 to 0.2.3 accepted" grep -qF 'This changes what 0.2.0 to 0.2.3 accepted' "$CHART/CHANGELOG.md"
 }
 
 check_the_cluster_default_policy_exclusion_is_stated_for_both_namespace_kinds() {

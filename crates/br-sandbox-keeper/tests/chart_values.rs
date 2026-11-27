@@ -69,12 +69,12 @@ fn adapter_documents(objects: &[Value]) -> Vec<(String, Value)> {
             let namespace = object["metadata"]["namespace"]
                 .as_str()
                 .expect("a namespace");
-            let document = object["data"]["config.yaml"]
+            let document = object["data"]["config.json"]
                 .as_str()
-                .expect("a config.yaml key");
+                .expect("a config.json key");
             (
                 namespace.to_owned(),
-                serde_saphyr::from_str(document).expect("the adapter document is YAML"),
+                serde_json::from_str(document).expect("the adapter document is JSON"),
             )
         })
         .collect()
@@ -186,59 +186,70 @@ fn the_typed_config_carries_the_values_of_the_overlay() {
 
 #[test]
 fn the_adapter_document_carries_the_same_values_as_the_keeper_document() {
-    let overlay = overlay();
     let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
     let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
     let adapters = adapter_documents(&objects);
     assert_eq!(adapters.len(), SANDBOX_NAMESPACES.len());
 
     for (namespace, document) in &adapters {
-        let (_, id, source) = SANDBOX_NAMESPACES
+        let (_, id, _) = SANDBOX_NAMESPACES
             .iter()
             .find(|(name, _, _)| name == namespace)
             .unwrap_or_else(|| panic!("the namespace {namespace}"));
         let pool = config
             .pool(namespace, id)
             .expect("the pool of the namespace");
-        assert_eq!(text(document, "pool.pool_id"), *id);
-        assert_eq!(text(document, "pool.replicaset"), pool.replicaset);
-        assert_eq!(number(document, "pool.floor"), u64::from(pool.min_replicas));
+        assert_eq!(text(document, "namespace"), namespace);
+        assert_eq!(text(document, "pool_id"), *id);
         assert_eq!(
-            number(document, "pool.max_sandboxes"),
-            u64::from(pool.max_replicas)
+            seconds(document, "idle_ttl_seconds"),
+            pool.idle_ttl,
+            "{namespace}"
         );
-        assert_eq!(
-            number(document, "pool.refill_seconds"),
-            pool.refill.as_secs()
-        );
-        assert_eq!(number(document, "pool.margin"), u64::from(pool.margin));
-        assert_eq!(
-            number(document, "pool.floor"),
-            number(&overlay, &format!("{source}.floor"))
-        );
-        assert_eq!(seconds(document, "idle_ttl"), pool.idle_ttl);
         assert_eq!(
             number(document, "idle_keep_min_state_bytes"),
-            pool.idle_keep_min_state_bytes
+            pool.idle_keep_min_state_bytes,
+            "{namespace}"
         );
         assert_eq!(
-            seconds(document, "warm_max_age_seconds"),
-            config.warm_max_age
-        );
-        assert_eq!(seconds(document, "save.ttl_seconds"), config.save_ttl);
-        assert_eq!(
-            Duration::from_secs(number(document, "save.tombstone_ttl_days") * 86_400),
-            config.tombstone_ttl
-        );
-        assert_eq!(text(document, "store.bucket"), config.store.bucket);
-        assert_eq!(text(document, "store.region"), config.store.region);
-        assert_eq!(
-            text(document, "store.endpoint"),
-            config.store.endpoint.as_str().trim_end_matches('/')
+            seconds(document, "save_ttl_seconds"),
+            config.save_ttl,
+            "{namespace}"
         );
         assert_eq!(
-            lookup(document, "store.path_style").as_bool(),
-            Some(config.store.path_style)
+            text(document, "store_bucket"),
+            config.store.bucket,
+            "{namespace}"
         );
+        assert_eq!(
+            text(document, "store_region"),
+            config.store.region,
+            "{namespace}"
+        );
+        assert_eq!(
+            text(document, "store_endpoint"),
+            config.store.endpoint.as_str().trim_end_matches('/'),
+            "{namespace}"
+        );
+        assert_eq!(
+            lookup(document, "store_path_style").as_bool(),
+            Some(config.store.path_style),
+            "{namespace}"
+        );
+        for absent in [
+            "floor",
+            "max_sandboxes",
+            "refill_seconds",
+            "margin",
+            "warm_max_age_seconds",
+            "tombstone_ttl_seconds",
+            "pool",
+            "save",
+        ] {
+            assert!(
+                document.get(absent).is_none(),
+                "{namespace}: the adapter document holds {absent}"
+            );
+        }
     }
 }

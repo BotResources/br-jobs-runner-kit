@@ -37,11 +37,7 @@ check_keeper_rights() {
 
 check_config_contract() {
     section "the ConfigMap read by br-runner-sandbox and the keeper"
-    local config
-    config="$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "br-sandbox-config") | .data["config.yaml"]' "$WORK/ex_yaml.yaml")"
-    printf '%s' "$config" >"$WORK/config.yaml"
-    t "the config holds the keys of the contract" test "$(yq '[.restore_timeout_seconds, .idle_ttl, .idle_keep_min_state_bytes, .warm_max_age_seconds, .save.ttl_seconds, .save.paths[0], .tools.seed_container.name, .tools.bsdtar_path, .label_prefix, .pool.replicaset, .store.bucket] | join(",")' "$WORK/config.yaml")" = "30,120,10000000,1800,60,/work,seed,/opt/sbx/bin/bsdtar,br.sandbox,warm-alpha-none,saves"
-    t "the save age is one value for the keeper and br-runner-sandbox" test "$(jq -r '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .save_ttl_seconds' "$WORK/keeper.json")" = "$(yq 'select(.kind == "ConfigMap" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "br-sandbox-config") | .data["config.yaml"] | from_yaml | .save.ttl_seconds' "$WORK/keeper_yaml.yaml")"
+    t "the save age is one value for the keeper and br-runner-sandbox" test "$(jq -r '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .save_ttl_seconds' "$WORK/keeper.json")" = "$(jq -r '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-alpha-none" and .metadata.name == "br-sandbox-config") | .data["config.json"] | fromjson | .save_ttl_seconds' "$WORK/keeper.json")"
     fails_with "BR_SANDBOX_SAVE_AGE_INVALID" -f "$(vals zero '.save.ttl_seconds = 0')"
     fails_with "BR_SANDBOX_SAVE_AGE_INVALID" -f "$(vals neg '.save.ttl_seconds = -5')"
     local key

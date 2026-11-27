@@ -20,21 +20,20 @@ keeper_json() {
 }
 
 adapter_json() {
-    jq -r --arg ns "$2" '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-config" and .metadata.namespace == $ns) | .data["config.yaml"]' "$WORK/$1.json" | yq -o=json '.' - | flat "$3"
+    jq -r --arg ns "$2" '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-config" and .metadata.namespace == $ns) | .data["config.json"]' "$WORK/$1.json" | flat "$3"
 }
 
 check_each_shared_value_reaches_both_documents_as_set() {
     section "a value that the keeper document and the adapter document both hold is one value, set away from its default"
     local row path keeper_expr adapter_expr want
     for row in \
-        '.idle_ttl@[.pools[].idle_ttl_seconds] | unique | join(",")@.idle_ttl' \
+        '.idle_ttl@[.pools[].idle_ttl_seconds] | unique | join(",")@.idle_ttl_seconds' \
         '.idle_keep_min_state_bytes@[.pools[].idle_keep_min_state_bytes] | unique | join(",")@.idle_keep_min_state_bytes' \
-        '.warm_max_age_seconds@.warm_max_age_seconds@.warm_max_age_seconds' \
-        '.save.ttl_seconds@.save_ttl_seconds@.save.ttl_seconds' \
-        '.store.endpoint@.store_endpoint@.store.endpoint' \
-        '.store.bucket@.store_bucket@.store.bucket' \
-        '.store.region@.store_region@.store.region' \
-        '.store.path_style@.store_path_style@.store.path_style'; do
+        '.save.ttl_seconds@.save_ttl_seconds@.save_ttl_seconds' \
+        '.store.endpoint@.store_endpoint@.store_endpoint' \
+        '.store.bucket@.store_bucket@.store_bucket' \
+        '.store.region@.store_region@.store_region' \
+        '.store.path_style@.store_path_style@.store_path_style'; do
         IFS='@' read -r path keeper_expr adapter_expr <<<"$row"
         want="$(overlay_value "$path")"
         t "${path}: the overlay value is not the value of the defaults or of the example" test "$want" != "$(base_value "$path")"
@@ -46,8 +45,8 @@ check_each_shared_value_reaches_both_documents_as_set() {
     done
 }
 
-check_each_pool_value_reaches_both_documents_as_set() {
-    section "a pool value is one value in the keeper pool entry and in the adapter document of the namespace, set away from its default"
+check_each_pool_value_reaches_the_keeper_pool_entry_as_set() {
+    section "a pool value reaches the keeper pool entry of its namespace, set away from its default, and no adapter document holds it"
     local row namespace source pair key keeper_key want
     for row in 'sbx-alpha-allow|.pool' 'sbx-alpha-none|.pool' 'sbx-beta-none|.pool' 'sbx-alpha-full|.clients.alpha.modes.full.pool'; do
         IFS='|' read -r namespace source <<<"$row"
@@ -58,8 +57,8 @@ check_each_pool_value_reaches_both_documents_as_set() {
             t "${namespace}: ${key} is not the default" test "$want" != "$(base_value ".pool.${key}")"
             t "${namespace}: ${key} is the value of its own pool, so a pool with an override differs from the others" test "$want" != "$(overlay_value ".pool.${key}")" -o "$source" = ".pool"
             t "${namespace}: the keeper pool entry holds ${key} as ${keeper_key}" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .${keeper_key}")" = "$want"
-            t "${namespace}: the adapter document holds ${key}" test "$(adapter_json nondefault "$namespace" ".pool.${key}")" = "$want"
         done
+        t "${namespace}: the adapter document holds no pool key, no warm age and no tombstone age" test "$(adapter_json nondefault "$namespace" '[has("floor"), has("max_sandboxes"), has("refill_seconds"), has("margin"), has("warm_max_age_seconds"), has("tombstone_ttl_seconds"), has("pool"), has("save")] | any')" = false
     done
 }
 
@@ -69,15 +68,18 @@ check_the_identity_of_each_pool_is_one_value_in_both_documents() {
     for namespace in $SANDBOX_NAMESPACES; do
         id="${namespace#sbx-}"
         t "${namespace}: the label prefix is the same" test "$(keeper_json nondefault '.label_prefix')" = "$(adapter_json nondefault "$namespace" '.label_prefix')"
-        t "${namespace}: the pool id is the same" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .id")" = "$(adapter_json nondefault "$namespace" '.pool.pool_id')"
-        t "${namespace}: the namespace is the same" test "$(keeper_json nondefault ".pools[] | select(.id == \"${id}\") | .namespace")" = "$(adapter_json nondefault "$namespace" '.pool.namespace')"
-        t "${namespace}: the ReplicaSet name is the same, and the render holds that ReplicaSet" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .replicaset")" = "$(adapter_json nondefault "$namespace" '.pool.replicaset')" -a "$(jqv nondefault "[.[] | select(.kind == \"ReplicaSet\" and .metadata.namespace == \"${namespace}\") | .metadata.name] | join(\",\")")" = "$(adapter_json nondefault "$namespace" '.pool.replicaset')"
+        t "${namespace}: the pool id is the same" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .id")" = "$(adapter_json nondefault "$namespace" '.pool_id')"
+        t "${namespace}: the namespace is the same" test "$(keeper_json nondefault ".pools[] | select(.id == \"${id}\") | .namespace")" = "$(adapter_json nondefault "$namespace" '.namespace')"
+        t "${namespace}: the ReplicaSet name of the keeper pool entry is the ReplicaSet of the render" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .replicaset")" = "$(jqv nondefault "[.[] | select(.kind == \"ReplicaSet\" and .metadata.namespace == \"${namespace}\") | .metadata.name] | join(\",\")")"
     done
 }
 
 check_the_keeper_only_values_reach_the_keeper_document_as_set() {
     section "a value that only the keeper document holds is set away from its default and reaches the document"
     local pair path key want
+    want="$(overlay_value '.warm_max_age_seconds')"
+    t ".warm_max_age_seconds is not the default" test "$want" != "$(base_value '.warm_max_age_seconds')"
+    t "the keeper document holds the warm age as set" test "$(keeper_json nondefault '.warm_max_age_seconds')" = "$want"
     for pair in .keeper.lease.duration_seconds:lease_duration_seconds .keeper.lease.renew_deadline_seconds:renew_deadline_seconds .keeper.lease.retry_period_seconds:retry_period_seconds; do
         path="${pair%%:*}"
         key="${pair##*:}"
@@ -91,7 +93,7 @@ check_the_keeper_only_values_reach_the_keeper_document_as_set() {
     want="$(overlay_value '.save.tombstone_ttl_days')"
     t ".save.tombstone_ttl_days is not the default" test "$want" != "$(base_value '.save.tombstone_ttl_days')"
     t "the tombstone age is the days of save.tombstone_ttl_days times 86400" test "$(keeper_json nondefault '.tombstone_ttl_seconds')" = "$((want * 86400))"
-    t "the adapter document holds the tombstone age in days, not in seconds" test "$(adapter_json nondefault sbx-alpha-none '.save.tombstone_ttl_days')" = "$want"
+    t "the adapter document holds no tombstone age" test "$(adapter_json nondefault sbx-alpha-none '[has("tombstone_ttl_seconds"), has("tombstone_ttl_days"), has("warm_max_age_seconds")] | any')" = false
 }
 
 check_the_managed_selector_is_the_label_of_the_sandbox_namespaces() {

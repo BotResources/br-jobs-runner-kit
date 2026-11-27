@@ -25,6 +25,7 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $gid := $values.runAsGroup -}}
 {{- $mount := $values.tools.mount_path -}}
 {{- $seed := $values.tools.seed_container.enabled -}}
+{{- $seedRoot := include "br-sandbox-chart.seed_root" $root -}}
 {{- $nameservers := list "127.0.0.1" -}}
 {{- if and (eq $ns.mode "full") (not $ns.egress) -}}
 {{- $nameservers = $values.network.public_resolvers -}}
@@ -49,15 +50,15 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $toolsImage := include "br-sandbox-chart.image.tools" $root -}}
 {{- $toolsRef := printf "%s@%s" $values.tools.image.repository $values.tools.image.digest -}}
 {{- $toolsPolicy := include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $toolsRef) -}}
-{{- $mounts := list (dict "name" "tools" "mountPath" $mount "readOnly" true) (dict "name" "work" "mountPath" "/work") (dict "name" "home" "mountPath" "/home/agent") (dict "name" "skills" "mountPath" "/skills" "readOnly" $seed) -}}
+{{- $mounts := list (dict "name" "tools" "mountPath" $mount "readOnly" true) (dict "name" "work" "mountPath" "/work") (dict "name" "home" "mountPath" "/home/agent") (dict "name" "skills" "mountPath" $seedRoot "readOnly" $seed) -}}
 {{- $mounts = concat $mounts (include "br-sandbox-chart.slot.egress.volume_mounts" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
 {{- $env := concat (list (dict "name" "HOME" "value" "/home/agent")) (include "br-sandbox-chart.slot.egress.env" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
-{{- $agent := dict "name" "agent" "image" (include "br-sandbox-chart.image.project" $root) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.image)) "command" (list (printf "%s/bin/pause" $mount)) "env" $env "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $resources "volumeMounts" $mounts -}}
+{{- $agent := dict "name" (include "br-sandbox-chart.agent_container" $root) "image" (include "br-sandbox-chart.image.project" $root) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.image)) "command" (list (printf "%s/bin/pause" $mount)) "env" $env "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $resources "volumeMounts" $mounts -}}
 {{- $containers := list $agent -}}
 {{- if $seed -}}
-{{- $containers = append $containers (dict "name" $values.tools.seed_container.name "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list "/sbx/bin/pause") "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" 0 "gid" 0 "read_only_root" true) | fromJson) "resources" $values.tools.seed_container.resources "volumeMounts" (list (dict "name" "skills" "mountPath" "/skills"))) -}}
+{{- $containers = append $containers (dict "name" $values.tools.seed_container.name "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list "/sbx/bin/pause") "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" 0 "gid" 0 "read_only_root" true) | fromJson) "resources" $values.tools.seed_container.resources "volumeMounts" (list (dict "name" "skills" "mountPath" $seedRoot))) -}}
 {{- end -}}
-{{- $init := dict "name" "tools-init" "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list "/sbx/bin/bsdtar" "-x" "-p" "--no-same-owner" "-f" "/sbx/tools.tar" "-C" $mount) "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $values.tools.init_resources "volumeMounts" (list (dict "name" "tools" "mountPath" $mount)) -}}
+{{- $init := dict "name" "tools-init" "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list (include "br-sandbox-chart.seed_tools_path" $root) "-x" "-p" "--no-same-owner" "-f" "/sbx/tools.tar" "-C" $mount) "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $values.tools.init_resources "volumeMounts" (list (dict "name" "tools" "mountPath" $mount)) -}}
 {{- $volumes := list (dict "name" "tools" "emptyDir" (dict "sizeLimit" (toString $values.tools.size_limit))) (dict "name" "work" "emptyDir" (dict "sizeLimit" (toString $values.work.size_limit))) (dict "name" "home" "emptyDir" (dict "sizeLimit" (toString $values.home.size_limit))) (dict "name" "skills" "emptyDir" (dict "sizeLimit" (toString $values.seed.size_limit))) -}}
 {{- $volumes = concat $volumes (include "br-sandbox-chart.slot.egress.volumes" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
 {{- $_ := set $spec "initContainers" (list $init) -}}
