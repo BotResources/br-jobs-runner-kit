@@ -8,30 +8,11 @@ status_code() {
   printf '%s\n' "$1" | sed -n 1p | awk '$1 ~ /^HTTP\/[0-9]/ && $2 ~ /^[0-9][0-9][0-9]$/ {printf "%s", $2}'
 }
 
-tunnel_state() {
-  inner=$(printf '%s\n' "$1" | awk '/^HTTP\//{n++} n>=2')
-  case "$(status_code "$inner")" in
-    502)
-      if printf '%s\n' "$inner" | grep -qx 'bad gateway'; then
-        printf 'unanswered'
-      else
-        printf 'reached'
-      fi
-      ;;
-    "") printf 'no_result' ;;
-    *) printf 'reached' ;;
-  esac
-}
-
 connect_state() {
-  reply=$({
-    printf 'CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' "$1" "$1"
-    sleep "${NETCHECK_TUNNEL_WAIT:-1}"
-    printf 'GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$1"
-  } | nc -w 3 "${NETCHECK_PROXY%:*}" "${NETCHECK_PROXY##*:}" 2>/dev/null | tr -d '\r') || reply=""
+  reply=$(printf 'CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' "$1" "$1" | nc -w 3 "${NETCHECK_PROXY%:*}" "${NETCHECK_PROXY##*:}" 2>/dev/null | tr -d '\r') || reply=""
   case "$(status_code "$reply")" in
-    403) printf 'refused' ;;
-    200) tunnel_state "$reply" ;;
+    403 | 502) printf 'refused' ;;
+    200) printf 'reached' ;;
     *) printf 'no_result' ;;
   esac
 }
@@ -154,15 +135,10 @@ report() {
 }
 
 report_connect_line() {
-  expected=refused
-  if [ "$2" = full ]; then
-    expected=refused_or_unanswered
+  printf '{"net":"%s","mode":"%s","target":"%s","kind":"connect","expected":"refused","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3" "$4"
+  if [ "$4" != refused ]; then
+    printf '1\n' >>"$work/failures"
   fi
-  printf '{"net":"%s","mode":"%s","target":"%s","kind":"connect","expected":"%s","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3" "$expected" "$4"
-  case "$2:$4" in
-    *:refused | full:unanswered) ;;
-    *) printf '1\n' >>"$work/failures" ;;
-  esac
 }
 
 report_connect() {

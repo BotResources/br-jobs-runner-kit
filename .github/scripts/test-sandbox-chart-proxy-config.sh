@@ -19,7 +19,7 @@ render_proxy_config_fixtures() {
     render egressdual6 -f "$EXAMPLE" -f "$EGRESS_VALUES" --set network.ipv6=dual_stack
     render cidronly -f "$(valsx cidronly '.clients.alpha.modes.allow.allow = {"cidrs": ["192.0.2.10/32"]}')"
     render cidrhost -f "$(valsx cidrhost "${SET0}.hosts = [\"192.0.2.0/24\"]")"
-    render caother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.ca.mount_path=/etc/other-ca --set 'egress.ca.env_names={SSL_CERT_FILE}'
+    render caother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set 'egress.ca.env_names={SSL_CERT_FILE}'
 }
 
 check_the_proxy_config_has_the_two_transforms_in_order_and_the_standalone_shape() {
@@ -85,7 +85,8 @@ check_the_sandbox_side_holds_the_proxy_address_the_ca_and_the_placeholders() {
     t "mode allow: the proxy address of its own mode and no placeholder" jqt cred "$(printf "$env" sbx-alpha-allow) | map({(.name): .value}) | add | .HTTPS_PROXY == \"http://10.43.0.50:8888\" and (has(\"GIT_ACCESS\") | not)"
     t "mode none and the other client have no proxy variable and no CA mount" jqt cred '[.[] | select(.kind == "ReplicaSet" and (.metadata.namespace == "sbx-alpha-none" or .metadata.namespace == "sbx-beta-none")) | .spec.template.spec | [.containers[].env[]?.name | select(test("PROXY|proxy|CA_BUNDLE|SSL_CERT|EXTRA_CA|CAINFO"))] + [.volumes[].name | select(. == "egress-ca")] | length] == [0, 0]'
     t "the CA ConfigMap is mounted read-only at the mount path and is the only added volume" jqt cred '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec | ([.volumes[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "configMap": {"name": "br-sandbox-ca"}}]) and ([.containers[0].volumeMounts[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "mountPath": "/etc/br-sandbox-ca", "readOnly": true}])'
-    t "the mount path and the CA variable names are values" jqt caother '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.containers[0] | ([.env[] | select(.value == "/etc/other-ca/ca.crt") | .name] == ["SSL_CERT_FILE"]) and ([.volumeMounts[] | select(.name == "egress-ca") | .mountPath] == ["/etc/other-ca"])'
+    t "the CA variable names are values and the mount path is the constant /etc/br-sandbox-ca" jqt caother '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.containers[0] | ([.env[] | select(.value == "/etc/br-sandbox-ca/ca.crt") | .name] == ["SSL_CERT_FILE"]) and ([.volumeMounts[] | select(.name == "egress-ca") | .mountPath] == ["/etc/br-sandbox-ca"])'
+    fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.ca.mount_path=/etc/other-ca
     t "the ConfigMap of the sandbox namespace holds the certificate and no key" jqt cred '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-ca") | .data | keys] == [["ca.crt"], ["ca.crt"]]'
     t "no sandbox env or mount refers to a Secret, the credential key files or the proxy mount paths" jqt cred "${SANDBOX_PODS} | (tostring | test(\"iron-proxy|/credentials|secretKeyRef\") | not)"
     t "the sandbox resolver is still the local address with the proxy address in the env" jqt cred '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.dnsConfig.nameservers == ["127.0.0.1"]'

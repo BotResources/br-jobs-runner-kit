@@ -233,8 +233,6 @@
               }
             },
             "replicas": {"$ref": "#/definitions/positiveInt"},
-            "runAsUser": {"type": "integer", "minimum": 1},
-            "runAsGroup": {"type": "integer", "minimum": 1},
             "resources": {"$ref": "#/definitions/resources"},
             "reload": {
               "type": "object",
@@ -253,7 +251,6 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "mount_path": {"type": "string", "pattern": "^/[A-Za-z0-9_./-]+$"},
             "env_names": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}}
           }
         },

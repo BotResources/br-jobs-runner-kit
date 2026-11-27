@@ -13,7 +13,7 @@
 {{- define "br-sandbox-chart.slot.egress.volume_mounts" -}}
 {{- $out := list -}}
 {{- if include "br-sandbox-chart.proxy.sandbox.active" . -}}
-{{- $out = append $out (dict "name" "egress-ca" "mountPath" .root.Values.egress.ca.mount_path "readOnly" true) -}}
+{{- $out = append $out (dict "name" "egress-ca" "mountPath" (include "br-sandbox-chart.proxy.mount.sandbox_ca" .) "readOnly" true) -}}
 {{- end -}}
 {{- toYaml $out -}}
 {{- end -}}

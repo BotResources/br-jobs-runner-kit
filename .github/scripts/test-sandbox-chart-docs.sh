@@ -83,3 +83,23 @@ check_the_check_image_lists_every_tool_the_script_calls() {
     t "the section says nc exits when the proxy closes" grep -qF 'it exits when the proxy closes the connection' <<<"$paragraph"
     t "the section names the one build exercised and says no other was" grep -qF 'One build was exercised, a BSD `nc`; no other build' <<<"$paragraph"
 }
+
+check_the_docs_state_what_was_and_was_not_measured() {
+    section "the README and the CHANGELOG say what was measured, what is documented behaviour of the product and what is not proved"
+    local text file
+    for file in "$README" "$CHART/CHANGELOG.md"; do
+        t "$(basename "$file") says only the arm64 image was started and the amd64 image was not" grep -qF 'amd64 image' "$file"
+        t "$(basename "$file") says the proxy is kept from its vendor by the absence of a token and a new digest needs a new capture" grep -qF 'a new digest needs a new capture' "$file"
+        t "$(basename "$file") says the binding of a placeholder to its hosts and require_tls are documented behaviour of the product" grep -qF 'documented behaviour of the proxy product' "$file"
+        t "$(basename "$file") says no git client was used" grep -qF 'no git client was used' "$file"
+    done
+    text="$(grep '^\*\*Not proved offline\.\*\*' "$README")"
+    t "the Not proved offline paragraph lists the binding of a placeholder to its hosts and require_tls" grep -qF 'that each placeholder is bound to its `hosts`, that `require_tls` keeps a bound value off plain HTTP' <<<"$text"
+    t "the README says the intended path for git and the measured form" grep -qF 'The intended path for git is HTTPS with the token as placeholder; git over ssh is not offered. The measured form is a plain HTTPS GET with a Bearer header; no git client was used.' "$README"
+    t "the README does not say that git works over HTTPS" test "$(grep -c 'Git works over HTTPS' "$README")" -eq 0
+    t "the README says the policy expressions were not executed where it says the policy refuses a Secret volume" grep -qF 'the admission policy refuses all three (the policy expressions were not executed, see Admission policy)' "$README"
+    t "the README says a tool that ignores the CA variables refuses the proxy certificate" grep -qF 'a tool that ignores those variables refuses the proxy certificate' "$README"
+    t "the CHANGELOG says the same about the CA variables" grep -qF 'a tool that ignores those variables refuses the proxy certificate' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG renders the proxy and has an upgrade note" test "$(grep -cF 'renders the proxy' "$CHART/CHANGELOG.md")" -eq 1 -a "$(grep -cF 'Upgrade from 0.1.0' "$CHART/CHANGELOG.md")" -eq 1
+    t "the CHANGELOG does not say a working proxy" test "$(grep -c 'working proxy' "$CHART/CHANGELOG.md")" -eq 0
+}

@@ -82,8 +82,6 @@ egress:
       repository: docker.io/ironsh/iron-proxy
       digest: sha256:973b7adf44a12ded3b58cf67af35a80a8304d82bef0fb943e6467fe4f4020573
     replicas: 1
-    runAsUser: 65532
-    runAsGroup: 65532
     resources:
       requests:
         cpu: 100m
@@ -94,7 +92,6 @@ egress:
     reload:
       key_secret: ""
   ca:
-    mount_path: /etc/br-sandbox-ca
     env_names:
       - SSL_CERT_FILE
       - REQUESTS_CA_BUNDLE

@@ -43,6 +43,11 @@ metadata:
     br.sandbox/role: proxy
 spec:
   replicas: {{ .root.Values.egress.proxy.replicas | int64 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       br.sandbox/role: proxy

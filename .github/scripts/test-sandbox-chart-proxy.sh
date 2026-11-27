@@ -12,7 +12,7 @@ proxy_pod() {
 render_proxy_fixtures() {
     render egressmirror -f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$MIRROR_VALUES"
     render_yaml egressmirror_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$MIRROR_VALUES"
-    render egresssized -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.replicas=2 --set egress.proxy.resources.requests.cpu=250m --set egress.proxy.runAsUser=20000 --set egress.proxy.runAsGroup=20001 --set egress.proxy.port=9999
+    render egresssized -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.replicas=2 --set egress.proxy.resources.requests.cpu=250m --set egress.proxy.port=9999
     render egressother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.image.repository=registry.example.test/other/proxy --set egress.proxy.image.digest="$OTHER_DIGEST"
     render nocred -f "$(valsx nocred 'del(.clients.alpha.modes.full.credential_set) | del(.clients.alpha.modes.full.proxy)')"
     render_yaml egress_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES"
@@ -32,6 +32,8 @@ check_the_proxy_objects_exist_in_each_egress_namespace_only() {
     t "mode full without a credential set has no proxy object" jqt nocred '[.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-proxy") | .metadata.namespace] == ["sbx-alpha-allow-egress"]'
     t "the tunnel port is a value in the Deployment and the probes" jqt egresssized "$(proxy_pod "$PROXY_ALLOW_NS") | .containers[0] | .ports[0].containerPort == 9999 and .readinessProbe.tcpSocket.port == 9999 and .livenessProbe.tcpSocket.port == 9999"
     t "the replicas and the requests are values" jqt egresssized ".[] | select(.kind == \"Deployment\" and .metadata.namespace == \"${PROXY_ALLOW_NS}\") | .spec.replicas == 2 and .spec.template.spec.containers[0].resources.requests.cpu == \"250m\""
+    t "the rollout strategy is a rolling update with a surge of one pod and no unavailable pod" jqt cred ".[] | select(.kind == \"Deployment\" and .metadata.name == \"br-sandbox-proxy\") | .spec.strategy == {\"type\": \"RollingUpdate\", \"rollingUpdate\": {\"maxSurge\": 1, \"maxUnavailable\": 0}}"
+    t "the rollout strategy stays the same with two replicas" jqt egresssized ".[] | select(.kind == \"Deployment\" and .metadata.name == \"br-sandbox-proxy\") | .spec.replicas == 2 and .spec.strategy.rollingUpdate == {\"maxSurge\": 1, \"maxUnavailable\": 0}"
     t "the default is one replica with requests 100m and 128Mi and limits 1 and 512Mi" jqt cred ".[] | select(.kind == \"Deployment\" and .metadata.namespace == \"${PROXY_ALLOW_NS}\") | .spec.replicas == 1 and .spec.template.spec.containers[0].resources == {\"requests\": {\"cpu\": \"100m\", \"memory\": \"128Mi\"}, \"limits\": {\"cpu\": \"1\", \"memory\": \"512Mi\"}}"
 }
 
@@ -46,7 +48,9 @@ check_the_proxy_pod_is_hardened_and_has_no_identity() {
         t "${namespace}: the only writable mount is a bounded emptyDir" jqt cred "$(proxy_pod "$namespace") | . as \$p | [\$p.containers[0].volumeMounts[] | select(.readOnly | not) | .name] == [\"tmp\"] and ([\$p.volumes[] | select(.name == \"tmp\") | .emptyDir.sizeLimit] == [\"16Mi\"])"
         t "${namespace}: one container, no init container, no hostPort" jqt cred "$(proxy_pod "$namespace") | (.containers | length) == 1 and (has(\"initContainers\") | not) and ([.containers[].ports[] | has(\"hostPort\")] | any | not)"
     done
-    t "the user and group of the proxy are values" jqt egresssized "$(proxy_pod "$PROXY_ALLOW_NS") | .containers[0].securityContext.runAsUser == 20000 and .containers[0].securityContext.runAsGroup == 20001 and .securityContext.fsGroup == 20001"
+    t "the user, the group and the fsGroup of the proxy are the constant 65532" jqt cred "$(proxy_pod "$PROXY_ALLOW_NS") | .containers[0].securityContext.runAsUser == 65532 and .containers[0].securityContext.runAsGroup == 65532 and .securityContext.runAsUser == 65532 and .securityContext.runAsGroup == 65532 and .securityContext.fsGroup == 65532"
+    fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.runAsUser=20000
+    fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.runAsGroup=20001
     t "no ServiceAccount, Role or RoleBinding is rendered in an egress namespace" jqt cred "${EGRESS_NAMESPACES} as \$e | [.[] | select((.kind == \"ServiceAccount\" or .kind == \"Role\" or .kind == \"RoleBinding\") and (.metadata.namespace as \$n | \$e | index(\$n) != null))] | length == 0"
 }
 

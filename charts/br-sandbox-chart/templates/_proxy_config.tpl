@@ -1,3 +1,11 @@
+{{- define "br-sandbox-chart.proxy.mount.sandbox_ca" -}}
+/etc/br-sandbox-ca
+{{- end -}}
+
+{{- define "br-sandbox-chart.proxy.run_as" -}}
+65532
+{{- end -}}
+
 {{- define "br-sandbox-chart.proxy.mount.ca" -}}
 /etc/iron-proxy/ca
 {{- end -}}

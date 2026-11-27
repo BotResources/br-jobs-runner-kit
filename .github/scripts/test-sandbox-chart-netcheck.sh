@@ -9,32 +9,20 @@ target="$3:$4"
 if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     req="$(cat | tr -d '\r')"
     printf '%s %s\n' "$target" "$(printf '%s\n' "$req" | sed -n 1p)" >>"$STUB_DIR/connect.log"
-    inner="$(printf '%s\n' "$req" | grep '^GET ' | sed -n 1p)"
-    ct="$(printf '%s\n' "$req" | sed -n 1p | cut -d' ' -f2)"
-    [ -n "$inner" ] && printf '%s %s\n' "$target" "$inner" >>"$STUB_DIR/connect.log"
     case "$3" in
-        10.43.0.51) mode="${CONNECT_MODE_FULL:-$CONNECT_MODE}" ;;
         10.43.0.50) mode="${CONNECT_MODE_ALLOW:-$CONNECT_MODE}" ;;
         *) mode="$CONNECT_MODE" ;;
     esac
-    open='HTTP/1.1 200 Connection established\r\n\r\n'
     case "$mode" in
-        200) printf "$open" ;;
+        200) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;;
         403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
         502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
+        404) printf 'HTTP/1.1 404 Not Found\r\n\r\n' ;;
         garbled) printf 'garbage\r\n' ;;
-        tunnel502) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
-        tunnel502other) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 13\r\n\r\nupstream down' ;;
-        tunnel404) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n' ;;
-        tunnel200) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;;
-        tunnelgarbled) printf "$open"; [ -n "$inner" ] && printf 'garbage\r\n' ;;
-        tunnel502target) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nServer: target-app\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
-        tunnel200x502) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 x 502 y\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
-        tunnelnocode) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 OK\r\nContent-Length: 0\r\n\r\n' ;;
-        connect200x403) printf 'HTTP/1.1 200 x 403 y\r\n\r\n'; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
+        connect200x403) printf 'HTTP/1.1 200 x 403 y\r\n\r\n' ;;
+        connect403x200) printf 'HTTP/1.1 403 x 200 y\r\n\r\n' ;;
         nocode) printf 'HTTP/1.1 OK\r\n\r\n' ;;
-        bytarget) printf "$open"; if [ -n "$inner" ]; then case "$ct" in *:8080) printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; *) printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;; esac; fi ;;
-        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; esac ;;
+        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;; esac ;;
     esac
     exit 0
 fi
@@ -101,7 +89,7 @@ netcheck_dir() {
 }
 
 run_netcheck() {
-    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 NETCHECK_TUNNEL_WAIT=0 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
+    NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
 }
 
 check_network_check_script_against_stubs() {

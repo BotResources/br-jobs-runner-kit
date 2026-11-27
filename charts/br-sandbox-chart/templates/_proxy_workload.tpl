@@ -7,8 +7,8 @@
 {{- end -}}
 
 {{- define "br-sandbox-chart.proxy.security" -}}
-{{- $proxy := .Values.egress.proxy -}}
-{{- toJson (dict "allowPrivilegeEscalation" false "privileged" false "readOnlyRootFilesystem" true "runAsNonRoot" true "runAsUser" ($proxy.runAsUser | int64) "runAsGroup" ($proxy.runAsGroup | int64) "capabilities" (dict "drop" (list "ALL")) "seccompProfile" (dict "type" "RuntimeDefault")) -}}
+{{- $id := include "br-sandbox-chart.proxy.run_as" . | int64 -}}
+{{- toJson (dict "allowPrivilegeEscalation" false "privileged" false "readOnlyRootFilesystem" true "runAsNonRoot" true "runAsUser" $id "runAsGroup" $id "capabilities" (dict "drop" (list "ALL")) "seccompProfile" (dict "type" "RuntimeDefault")) -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.proxy.trust.file" -}}
@@ -59,9 +59,10 @@
 {{- $proxy := $root.Values.egress.proxy -}}
 {{- $ref := include "br-sandbox-chart.proxy.image.ref" $root -}}
 {{- $port := $proxy.port | int64 -}}
+{{- $id := include "br-sandbox-chart.proxy.run_as" . | int64 -}}
 {{- $probe := dict "tcpSocket" (dict "port" $port) "periodSeconds" 5 -}}
 {{- $container := dict "name" "proxy" "image" (include "br-sandbox-chart.proxy.image" $root) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $ref)) "args" (list "-config" (printf "%s/proxy.yaml" (include "br-sandbox-chart.proxy.mount.config" .))) "env" (include "br-sandbox-chart.proxy.env" . | fromJsonArray) "ports" (list (dict "name" "tunnel" "containerPort" $port "protocol" "TCP")) "readinessProbe" $probe "livenessProbe" $probe "securityContext" (include "br-sandbox-chart.proxy.security" $root | fromJson) "resources" $proxy.resources "volumeMounts" (include "br-sandbox-chart.proxy.mounts" . | fromJsonArray) -}}
-{{- $spec := dict "hostUsers" false "automountServiceAccountToken" false "enableServiceLinks" false "dnsPolicy" "None" "dnsConfig" (dict "nameservers" $root.Values.network.public_resolvers) "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault") "runAsNonRoot" true "runAsUser" ($proxy.runAsUser | int64) "runAsGroup" ($proxy.runAsGroup | int64) "fsGroup" ($proxy.runAsGroup | int64)) "containers" (list $container) "volumes" (include "br-sandbox-chart.proxy.volumes" . | fromJsonArray) -}}
+{{- $spec := dict "hostUsers" false "automountServiceAccountToken" false "enableServiceLinks" false "dnsPolicy" "None" "dnsConfig" (dict "nameservers" $root.Values.network.public_resolvers) "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault") "runAsNonRoot" true "runAsUser" $id "runAsGroup" $id "fsGroup" $id) "containers" (list $container) "volumes" (include "br-sandbox-chart.proxy.volumes" . | fromJsonArray) -}}
 {{- $pullSecrets := include "br-sandbox-chart.pull_secrets" $root | fromJsonArray -}}
 {{- if $pullSecrets -}}
 {{- $_ := set $spec "imagePullSecrets" $pullSecrets -}}
