@@ -63,12 +63,14 @@ check_no_project_value_in_the_chart() {
     local found
     local default_repository='^      repository: docker\.io/ironsh/iron-proxy$|^  image: ghcr\.io/botresources/br-sandbox-check@sha256:[a-f0-9]{64}$'
     local check_image='ghcr\.io/botresources/br-sandbox-check@sha256:[a-f0-9]{64}'
-    found="$(cd "$CHART" && hosts_of Chart.yaml <(sed -E "s#${check_image}##g" README.md) POLICIES.md STAMPER.md <(sed -E "s#${check_image}##g" CHANGELOG.md) values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
+    local keeper_image='(mirror\.example\.test/)?ghcr\.io/botresources/br-sandbox-keeper@sha256:[a-f0-9]{64}'
+    local own_images="(${check_image}|${keeper_image})"
+    found="$(cd "$CHART" && hosts_of Chart.yaml <(sed -E "s#${own_images}##g" README.md) POLICIES.md STAMPER.md <(sed -E "s#${own_images}##g" CHANGELOG.md) values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
     t "no host in the chart files outside the allowed suffixes" test -z "$found"
-    t "no registry host in the chart files" test -z "$(cd "$CHART" && { sed -E "s#${check_image}##g" README.md CHANGELOG.md | grep -niE "ghcr|docker\.io|quay\.io"; grep -niE "ghcr|docker\.io|quay\.io" POLICIES.md STAMPER.md; grep -rniE "ghcr|docker\.io|quay\.io" values.schema.json templates files; grep -vE "$default_repository" values.yaml | grep -niE "ghcr|docker\.io|quay\.io"; } || true)"
+    t "no registry host in the chart files" test -z "$(cd "$CHART" && { sed -E "s#${own_images}##g" README.md CHANGELOG.md | grep -niE "ghcr|docker\.io|quay\.io"; grep -niE "ghcr|docker\.io|quay\.io" POLICIES.md STAMPER.md; grep -rniE "ghcr|docker\.io|quay\.io" values.schema.json templates files; grep -vE "$default_repository" values.yaml | grep -niE "ghcr|docker\.io|quay\.io"; } || true)"
     t "the only registry names of the values are the default repository of the proxy image and the default check image" test "$(grep -cE 'docker\.io|ghcr|quay\.io' "$CHART/values.yaml")" -eq 2
-    t "the fixtures hold only example.test hosts" test -z "$(cd "$CHART/ci" && hosts_of ./*.yaml | grep -v 'example\.test$' || true)"
-    t "the render holds no host that is not a value or a Kubernetes name" test -z "$(hosts_of "$WORK/mirror_yaml.yaml" | grep -vE "$allowed" || true)"
+    t "the fixtures hold only example.test hosts" test -z "$(cd "$CHART/ci" && hosts_of <(sed -E "s#${own_images}##g" ./*.yaml) | grep -v 'example\.test$' || true)"
+    t "the render holds no host that is not a value or a Kubernetes name" test -z "$(hosts_of <(sed -E "s#${own_images}##g" "$WORK/mirror_yaml.yaml") | grep -vE "$allowed" || true)"
 }
 
 CLOSED_NETWORK_POLICY_NAMES='["br-sandbox-default-deny", "br-sandbox-egress-allow", "br-sandbox-egress-full"]'
