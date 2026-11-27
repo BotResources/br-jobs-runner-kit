@@ -6,6 +6,15 @@ metadata:
   labels:
     app: toolbox
 spec:
+  hostAliases:
+    - ip: "${GIT_IP}"
+      hostnames: ["${GITEA_HOST}", "${REGISTRY_HOST}"]
+    - ip: "${ECHO_IP}"
+      hostnames: ["${ECHO_HOST}"]
+    - ip: "${PROBE_IP}"
+      hostnames: ["${PROBE_HOST}"]
+    - ip: "${STORE_IP}"
+      hostnames: ["${STORE_HOST}"]
   containers:
     - name: ${TOOLBOX_POD}
       image: ${GITEA_IMAGE}
@@ -31,6 +40,15 @@ metadata:
   labels:
     app: pytool
 spec:
+  hostAliases:
+    - ip: "${GIT_IP}"
+      hostnames: ["${GITEA_HOST}", "${REGISTRY_HOST}"]
+    - ip: "${ECHO_IP}"
+      hostnames: ["${ECHO_HOST}"]
+    - ip: "${PROBE_IP}"
+      hostnames: ["${PROBE_HOST}"]
+    - ip: "${STORE_IP}"
+      hostnames: ["${STORE_HOST}"]
   containers:
     - name: pytool
       image: ${PYTHON_IMAGE}

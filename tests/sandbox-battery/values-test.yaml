@@ -1,0 +1,157 @@
+installation:
+  namespace_prefix: sbx
+image: $AGENT_IMAGE
+image_pull_policy: IfNotPresent
+tools:
+  image:
+    repository: ghcr.io/botresources/br-sandbox-tools
+    digest: sha256:cebc8412d5b33139974373cf2e0a32f0994f52aef3e7c100fd26f908b7f1be79
+save:
+  ttl_seconds: 172800
+store:
+  endpoint: http://store.sbx-teststore.svc.cluster.local:8333
+  bucket: sandbox-saves
+  region: us-east-1
+  path_style: true
+  credentials_secret: store-credentials
+work:
+  size_limit: 1Gi
+home:
+  size_limit: 256Mi
+seed:
+  size_limit: 64Mi
+pool:
+  size:
+    cpu: {request: 50m, limit: "1"}
+    memory: {request: 64Mi, limit: 256Mi}
+    disk: {request: 64Mi, limit: 2Gi}
+  max_sandboxes: 3
+network:
+  pod_cidr: $POD_CIDR
+  service_cidr: $SERVICE_CIDR
+  node_addresses:
+$NODE_ADDRESSES_YAML
+  node_public_addresses: []
+  load_balancer_addresses: []
+  public_resolvers: [$RESOLVER_IP]
+  internal_cidrs:
+$INTERNAL_CIDRS_YAML
+  api_server_addresses: [$API_SERVER_CIDR]
+  store_cidrs: [$STORE_CIDR]
+network_check:
+  image: $CHECK_IMAGE
+  targets: [$NETCHECK_TARGET]
+egress:
+  enabled: true
+  proxy:
+    reload:
+      key_secret: proxy-reload
+    upstream_ca:
+      config_map: sbx-test-ca
+keeper:
+  enabled: true
+  image: $KEEPER_IMAGE
+  replicas: 1
+clients:
+  ca:
+    modes:
+      none:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+      allow:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        allow:
+          domains: [git.test.internal, registry.test.internal, echo.test.internal]
+        proxy:
+          cluster_ip: 10.43.200.11
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
+      full:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+  cb:
+    modes:
+      allow:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        allow:
+          domains: [git.test.internal]
+        proxy:
+          cluster_ip: 10.43.200.12
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
+  canary:
+    modes:
+      allow:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        allow:
+          domains: [canary.test.internal, git.test.internal]
+        credential_set:
+          secret_ref: canary-credentials
+          secrets:
+            - placeholder: placeholder-canary
+              env_name: CANARY_TOKEN
+              key: token
+              hosts: [canary.test.internal]
+        proxy:
+          cluster_ip: 10.43.200.13
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
+  platform:
+    modes:
+      allow:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        allow:
+          domains: [git.test.internal, registry.test.internal]
+        credential_set:
+          secret_ref: platform-credentials
+          secrets:
+            - placeholder: placeholder-git
+              env_name: GIT_TOKEN
+              key: git-token
+              hosts: [git.test.internal, registry.test.internal]
+            - placeholder: placeholder-pkg
+              env_name: PKG_TOKEN
+              key: pkg-token
+              hosts: [git.test.internal, registry.test.internal]
+        pool:
+          size:
+            cpu: {request: 100m, limit: "2"}
+            memory: {request: 256Mi, limit: 1Gi}
+            disk: {request: 64Mi, limit: 4Gi}
+        proxy:
+          cluster_ip: 10.43.200.14
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
+  pivot:
+    modes:
+      allow:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        allow:
+          domains: [git.test.internal, probe.test.internal, pod-target.test.internal, svc-target.test.internal, node-target.test.internal, nodefirst-target.test.internal]
+        proxy:
+          cluster_ip: 10.43.200.15
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
+      full:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
+        credential_set:
+          secret_ref: pivot-credentials
+          secrets:
+            - placeholder: placeholder-pivot
+              env_name: PIVOT_TOKEN
+              key: token
+              hosts: [echo.test.internal]
+        proxy:
+          cluster_ip: 10.43.200.16
+          ca:
+            certificate: |
+$CA_PEM_YAML
+            key_secret: proxy-ca-key
