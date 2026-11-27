@@ -22,7 +22,7 @@ pub struct Parts {
     bucket: Arc<dyn Bucket>,
     clock: Arc<dyn Clock>,
     identity: String,
-    own_namespace: String,
+    default_lease_namespace: String,
 }
 
 impl Parts {
@@ -31,14 +31,14 @@ impl Parts {
         bucket: Arc<dyn Bucket>,
         clock: Arc<dyn Clock>,
         identity: String,
-        own_namespace: String,
+        default_lease_namespace: String,
     ) -> Self {
         Self {
             api,
             bucket,
             clock,
             identity,
-            own_namespace,
+            default_lease_namespace,
         }
     }
 }
@@ -163,7 +163,7 @@ fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: 
             .lease
             .namespace
             .clone()
-            .unwrap_or(parts.own_namespace),
+            .unwrap_or(parts.default_lease_namespace),
         identity: parts.identity,
         lease: config.lease.clone(),
     };

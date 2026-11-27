@@ -183,10 +183,11 @@ impl KubeApi for FakeKube {
 
     fn get_lease<'a>(
         &'a self,
-        _namespace: &'a str,
-        _name: &'a str,
+        namespace: &'a str,
+        name: &'a str,
     ) -> ApiFuture<'a, Option<LeaseFacts>> {
         Box::pin(async move {
+            self.record_lease_target(namespace, name);
             self.check("get_lease")?;
             Ok(self.lease())
         })
@@ -194,11 +195,12 @@ impl KubeApi for FakeKube {
 
     fn create_lease<'a>(
         &'a self,
-        _namespace: &'a str,
-        _name: &'a str,
+        namespace: &'a str,
+        name: &'a str,
         write: &'a LeaseWrite,
     ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
+            self.record_lease_target(namespace, name);
             let mut state = self.state.lock().unwrap();
             state.calls.push(Call::LeaseCreate {
                 holder: write.holder.clone(),
@@ -217,12 +219,13 @@ impl KubeApi for FakeKube {
 
     fn update_lease<'a>(
         &'a self,
-        _namespace: &'a str,
-        _name: &'a str,
+        namespace: &'a str,
+        name: &'a str,
         write: &'a LeaseWrite,
         resource_version: &'a str,
     ) -> ApiFuture<'a, ()> {
         Box::pin(async move {
+            self.record_lease_target(namespace, name);
             let mut state = self.state.lock().unwrap();
             state.calls.push(Call::LeaseUpdate {
                 holder: write.holder.clone(),

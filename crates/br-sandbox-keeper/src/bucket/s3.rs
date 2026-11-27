@@ -8,7 +8,7 @@ use br_runner_sandbox::Timestamp;
 
 use crate::config::StoreSettings;
 
-use super::{Bucket, BucketError, BucketFuture, ObjectInfo};
+use super::{Bucket, BucketError, BucketFuture, ObjectInfo, SAVES_PREFIX};
 
 pub struct S3Bucket {
     backend: AmazonS3,
@@ -60,7 +60,7 @@ impl crate::sealed::Sealed for S3Bucket {}
 impl Bucket for S3Bucket {
     fn check(&self) -> BucketFuture<'_, ()> {
         Box::pin(async move {
-            let mut listing = self.backend.list(None);
+            let mut listing = self.backend.list(Some(&path(SAVES_PREFIX)?));
             match listing.next().await {
                 None | Some(Ok(_)) => Ok(()),
                 Some(Err(error)) if missing_bucket(&error) => Err(BucketError::Absent),

@@ -35,7 +35,7 @@ async fn parts(config: &KeeperConfig) -> Result<Parts, KeeperError> {
         .await
         .map_err(|error| KeeperError::ApiUnreachable(error.to_string()))?;
     let hostname = lookup("HOSTNAME").unwrap_or_else(|| "keeper".to_owned());
-    let own_namespace = own_namespace(std::fs::read_to_string(POD_NAMESPACE_FILE).ok())
+    let default_lease_namespace = own_namespace(std::fs::read_to_string(POD_NAMESPACE_FILE).ok())
         .or_else(|| config.lease.namespace.clone())
         .ok_or_else(|| environment_error("lease_namespace", "no namespace for the lease"))?;
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
@@ -44,7 +44,7 @@ async fn parts(config: &KeeperConfig) -> Result<Parts, KeeperError> {
         Arc::new(bucket),
         clock,
         format!("{hostname}-{}", Uuid::now_v7()),
-        own_namespace,
+        default_lease_namespace,
     ))
 }
 

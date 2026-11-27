@@ -11,6 +11,7 @@ use br_sandbox_keeper::rules::{
     Action, DeleteReason, ExpiryRules, ScaleDownRules, ScaleState, SweepRules, condition_write,
     damp, judge_pod, judge_pool, record_needs_read,
 };
+use br_sandbox_keeper::{FloorInput, KeeperConfig, KeeperConfigInput, PoolInput};
 
 fn at(seconds: u64) -> Timestamp {
     Timestamp::from_system_time(UNIX_EPOCH + Duration::from_secs(seconds))
@@ -95,4 +96,29 @@ fn the_enums_of_the_read_model_can_grow_so_an_importer_matches_them_with_a_wildc
         _ => "other",
     };
     assert_eq!(state, "warm");
+}
+
+#[test]
+fn an_importer_builds_the_configuration_inputs_from_their_default_and_converts_them() {
+    let mut floor = FloorInput::default();
+    floor.from = Some("08:00".to_owned());
+    floor.to = Some("18:00".to_owned());
+    floor.floor = Some(4);
+    let mut pool = PoolInput::default();
+    pool.id = Some("p".to_owned());
+    pool.namespace = Some("sbx".to_owned());
+    pool.replicaset = Some("warm-p".to_owned());
+    pool.min_replicas = Some(1);
+    pool.max_replicas = Some(20);
+    pool.floors = Some(vec![floor]);
+    let mut input = KeeperConfigInput::default();
+    input.store_bucket = Some("saves".to_owned());
+    input.store_endpoint = Some("http://store.test:8333".to_owned());
+    input.store_region = Some("eu".to_owned());
+    input.listen_address = Some("127.0.0.1:0".to_owned());
+    input.save_ttl_seconds = Some(1000);
+    input.pools = Some(vec![pool]);
+    let config = KeeperConfig::try_from(input).unwrap();
+    assert_eq!(config.pools[0].id, "p");
+    assert_eq!(config.pools[0].floors[0].floor, 4);
 }

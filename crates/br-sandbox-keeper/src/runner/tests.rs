@@ -35,7 +35,7 @@ fn parts(rig: &Rig, identity: &str) -> Parts {
         bucket: rig.bucket.clone(),
         clock,
         identity: identity.to_owned(),
-        own_namespace: "keeper-ns".to_owned(),
+        default_lease_namespace: "keeper-ns".to_owned(),
     }
 }
 
@@ -205,4 +205,42 @@ async fn a_follower_keeps_its_watches_ready_and_writes_nothing() {
     assert_eq!(LEASE_NAME, "br-sandbox-keeper");
     shutdown.cancel();
     assert_eq!(handle.await.unwrap(), Ok(()));
+}
+
+async fn lease_targets_of_a_run(document: &serde_json::Value) -> Vec<(String, String)> {
+    let rig = rig();
+    let (listener, _) = listener().await;
+    let shutdown = CancellationToken::new();
+    let handle = tokio::spawn(run_on(
+        listener,
+        testing::config_of(document),
+        parts(&rig, "a"),
+        shutdown.clone(),
+    ));
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(
+        rig.kube.lease().and_then(|lease| lease.holder),
+        Some("a".to_owned())
+    );
+    shutdown.cancel();
+    assert_eq!(handle.await.unwrap(), Ok(()));
+    rig.kube.lease_targets()
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_lease_is_held_in_the_lease_namespace_when_the_key_is_set() {
+    let mut document = testing::document();
+    document["lease_namespace"] = "leases".into();
+    assert_eq!(
+        lease_targets_of_a_run(&document).await,
+        vec![("leases".to_owned(), LEASE_NAME.to_owned())]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_lease_is_held_in_the_default_lease_namespace_when_the_key_is_not_set() {
+    assert_eq!(
+        lease_targets_of_a_run(&testing::document()).await,
+        vec![("keeper-ns".to_owned(), LEASE_NAME.to_owned())]
+    );
 }

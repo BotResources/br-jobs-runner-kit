@@ -53,14 +53,16 @@ impl Engine {
     }
 
     async fn evaluate_pool(&mut self, pool: &PoolConfig) {
+        let id = pool_id(pool);
         if !self.synced.contains(&pool.namespace) {
+            self.pool_wake.remove(&id);
             return;
         }
         self.refresh_pool_metrics(pool);
         if !self.leadership.is_leader() {
+            self.pool_wake.remove(&id);
             return;
         }
-        let id = pool_id(pool);
         let replica_set = match self
             .api
             .get_replica_set(&pool.namespace, &pool.replicaset)
@@ -73,6 +75,7 @@ impl Engine {
                     &pool.replicaset,
                     &"absent",
                 );
+                self.pool_wake.remove(&id);
                 return;
             }
             Err(error) => {

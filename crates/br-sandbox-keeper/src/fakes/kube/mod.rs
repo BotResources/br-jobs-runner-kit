@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Mutex;
 
 use tokio::sync::mpsc;
@@ -43,6 +43,7 @@ struct State {
     senders: Vec<(String, mpsc::UnboundedSender<PodEvent>)>,
     replica_sets: BTreeMap<(String, String), ReplicaSetFacts>,
     lease: Option<LeaseFacts>,
+    lease_targets: BTreeSet<(String, String)>,
     version: u64,
     calls: Vec<Call>,
     failing: HashSet<&'static str>,
@@ -85,6 +86,14 @@ impl FakeKube {
                 conditions: Vec::new(),
             },
         );
+    }
+
+    pub fn remove_replica_set(&self, namespace: &str, name: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .replica_sets
+            .remove(&(namespace.to_owned(), name.to_owned()));
     }
 
     pub fn put_pod(&self, mut pod: PodFacts) -> PodFacts {
@@ -199,6 +208,24 @@ impl FakeKube {
 
     pub fn lease(&self) -> Option<LeaseFacts> {
         self.state.lock().unwrap().lease.clone()
+    }
+
+    pub fn lease_targets(&self) -> Vec<(String, String)> {
+        self.state
+            .lock()
+            .unwrap()
+            .lease_targets
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    fn record_lease_target(&self, namespace: &str, name: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .lease_targets
+            .insert((namespace.to_owned(), name.to_owned()));
     }
 
     pub fn set_lease(&self, lease: Option<LeaseFacts>) {

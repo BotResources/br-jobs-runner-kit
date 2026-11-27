@@ -118,6 +118,15 @@ async fn a_store_that_lists_and_a_store_with_no_object_are_both_present() {
 }
 
 #[tokio::test]
+async fn the_start_check_lists_only_under_a_prefix_that_the_keeper_uses() {
+    let stub = Stub::serving(vec![canned(200, listing(&["saves/a"]))]).await;
+    assert_eq!(stub.bucket(true).check().await, Ok(()));
+    let heads = stub.heads();
+    assert_eq!(heads.len(), 1);
+    assert!(heads[0].contains("prefix=saves%2F"), "{heads:?}");
+}
+
+#[tokio::test]
 async fn a_page_takes_at_most_its_limit_and_the_next_page_starts_after_the_last_key() {
     let keys = [
         "saves/c/t/a/u1/manifest.json",

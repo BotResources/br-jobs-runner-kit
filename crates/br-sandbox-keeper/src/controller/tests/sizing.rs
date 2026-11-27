@@ -178,3 +178,53 @@ async fn a_failed_write_of_the_replicas_is_counted_and_tried_again_after_the_ret
     bed.pass(3).await;
     assert_eq!(bed.replicas(), Some(14));
 }
+
+fn no_wake_up_is_late(bed: &Bed) -> bool {
+    let now = bed.engine.clock.now();
+    bed.engine.pool_wake.values().all(|at| !at.has_passed(now))
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_replica_that_lost_the_lease_keeps_no_wake_up_that_has_passed() {
+    let mut bed = bed(true);
+    bed.kube.add_replica_set(NS, RS, Some(20));
+    bed.sync().await;
+    assert!(!bed.engine.pool_wake.is_empty());
+    bed.leadership.lost();
+    bed.pass(300).await;
+    assert!(no_wake_up_is_late(&bed));
+    assert!(bed.replica_writes().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_replica_that_never_led_keeps_no_wake_up_that_has_passed() {
+    let mut bed = bed(false);
+    bed.kube.add_replica_set(NS, RS, Some(20));
+    bed.sync().await;
+    bed.pass(300).await;
+    assert!(no_wake_up_is_late(&bed));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pool_whose_replicaset_is_gone_keeps_no_wake_up_that_has_passed() {
+    let mut bed = bed(true);
+    bed.kube.add_replica_set(NS, RS, Some(20));
+    bed.sync().await;
+    assert!(!bed.engine.pool_wake.is_empty());
+    bed.kube.remove_replica_set(NS, RS);
+    bed.pass(300).await;
+    assert!(no_wake_up_is_late(&bed));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_leader_that_lost_the_lease_and_gets_it_back_goes_on_with_the_scale_down_at_once() {
+    let mut bed = bed(true);
+    bed.kube.add_replica_set(NS, RS, Some(20));
+    bed.sync().await;
+    bed.leadership.lost();
+    bed.pass(300).await;
+    assert!(bed.replica_writes().is_empty());
+    bed.leadership.renewed(at(START + 1_000_000));
+    bed.engine.gained_leadership().await;
+    assert_eq!(bed.replica_writes(), vec![15]);
+}

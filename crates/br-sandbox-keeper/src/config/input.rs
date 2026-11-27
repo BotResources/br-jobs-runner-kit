@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct FloorInput {
     pub from: Option<String>,
     pub to: Option<String>,
@@ -10,6 +11,7 @@ pub struct FloorInput {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct PoolInput {
     pub id: Option<String>,
     pub namespace: Option<String>,
@@ -25,6 +27,7 @@ pub struct PoolInput {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct KeeperConfigInput {
     pub label_prefix: Option<String>,
     pub managed_namespace_selector: Option<String>,
