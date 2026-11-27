@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use br_runner_sandbox::Clock;
 
+mod wiring;
+
 use super::*;
 use crate::bucket::BucketError;
 use crate::facts::fixtures;

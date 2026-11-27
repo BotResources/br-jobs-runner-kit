@@ -4,10 +4,15 @@ set -euo pipefail
 event="${EVENT_NAME:?}"
 version="${VERSION:?}"
 previous="${PREVIOUS_VERSION:-}"
-published="${PUBLISHED:-false}"
+published="${PUBLISHED:-}"
 head_sha="${HEAD_SHA:?}"
 ref="${REF:-}"
 push_input="${PUSH_INPUT:-}"
+
+if [ "$published" != "true" ] && [ "$published" != "false" ]; then
+  echo "::error::PUBLISHED must be exactly 'true' or 'false', got '${published}'" >&2
+  exit 1
+fi
 
 if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "::error::the crate version '${version}' is not a plain X.Y.Z version" >&2

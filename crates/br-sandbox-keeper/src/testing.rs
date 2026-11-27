@@ -87,10 +87,9 @@ pub mod saves {
 }
 
 pub mod logs {
+    use std::cell::RefCell;
     use std::io::Write;
-    use std::sync::{Arc, Mutex};
-
-    use tracing::subscriber::DefaultGuard;
+    use std::sync::{Arc, Mutex, Once};
 
     #[derive(Clone, Default)]
     pub struct Captured(Arc<Mutex<Vec<u8>>>);
@@ -112,13 +111,45 @@ pub mod logs {
         }
     }
 
-    pub fn capture() -> (Captured, DefaultGuard) {
+    thread_local! {
+        static SINK: RefCell<Option<Captured>> = const { RefCell::new(None) };
+    }
+
+    struct Routed;
+
+    impl Write for Routed {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            SINK.with(|sink| match sink.borrow_mut().as_mut() {
+                Some(captured) => captured.write(bytes),
+                None => Ok(bytes.len()),
+            })
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    static INSTALLED: Once = Once::new();
+
+    pub struct CaptureGuard;
+
+    impl Drop for CaptureGuard {
+        fn drop(&mut self) {
+            SINK.with(|sink| sink.borrow_mut().take());
+        }
+    }
+
+    pub fn capture() -> (Captured, CaptureGuard) {
+        INSTALLED.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .json()
+                .with_writer(|| Routed)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber).unwrap();
+        });
         let captured = Captured::default();
-        let sink = captured.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || sink.clone())
-            .finish();
-        (captured, tracing::subscriber::set_default(subscriber))
+        SINK.with(|sink| *sink.borrow_mut() = Some(captured.clone()));
+        (captured, CaptureGuard)
     }
 }

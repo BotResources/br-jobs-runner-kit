@@ -8,6 +8,8 @@ use url::Url;
 use super::*;
 use crate::testing;
 
+mod secret;
+
 struct Canned {
     status: u16,
     body: String,

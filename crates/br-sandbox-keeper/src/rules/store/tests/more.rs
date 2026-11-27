@@ -41,7 +41,7 @@ fn an_expired_save_is_removed_tombstone_then_manifest_then_every_part_and_the_re
         StoreStep::PutTombstone { key, .. }
         | StoreStep::DeleteManifest { key }
         | StoreStep::DeleteExpiredPart { key } => !key.starts_with("records/"),
-        StoreStep::DeleteOrphanAttempt { .. } => false,
+        StoreStep::DeleteOrphanAttempt { .. } | StoreStep::TombstoneNotSerialized { .. } => false,
     }));
 }
 
@@ -94,4 +94,35 @@ fn the_age_of_an_attempt_counts_from_its_newest_object() {
         plan_turn(&turn, &ManifestRead::Absent, at(9000 + 3601), &rules()).len(),
         1
     );
+}
+
+#[test]
+fn a_tombstone_that_cannot_be_serialized_gives_one_failed_step_and_no_delete() {
+    let key = save_key();
+    let named = AttemptId::mint();
+    let made = manifest(&key, named, at(10_000));
+    let turn = listing(&key, Some(10_000), &[(named, 10_000)]);
+    let steps = expiry_steps_serialized(&turn, &made, &rules(), |_| Err::<Vec<u8>, _>("boom"));
+    assert_eq!(
+        steps,
+        vec![StoreStep::TombstoneNotSerialized {
+            key: br_runner_sandbox::tombstone_key(&key),
+        }]
+    );
+}
+
+#[test]
+fn a_tombstone_that_is_serialized_gives_the_same_steps_as_the_plan_of_an_expired_save() {
+    let key = save_key();
+    let named = AttemptId::mint();
+    let made = manifest(&key, named, at(10_000));
+    let turn = listing(&key, Some(10_000), &[(named, 10_000)]);
+    let planned = plan_turn(
+        &turn,
+        &ManifestRead::Parsed(Box::new(made.clone())),
+        at(11_061),
+        &rules(),
+    );
+    assert_eq!(planned, expiry_steps(&turn, &made, &rules()));
+    assert_eq!(planned.len(), 3);
 }

@@ -32,6 +32,10 @@ impl Engine {
                 }
             }
             PodEvent::Deleted { name } => self.remove(&(namespace.to_owned(), name), &mut touched),
+            PodEvent::WatchFailed { reason } => {
+                tracing::error!(namespace, reason, "the pod watch of a namespace failed");
+                self.metrics.sweep_error();
+            }
         }
         self.refresh_fleet_metrics();
         for pool in touched {

@@ -86,13 +86,17 @@ fn a_lease_without_a_duration_uses_the_own_duration() {
     );
 }
 
+mod failures;
+
 struct Replica {
     elector: Elector,
     leadership: Arc<Leadership>,
+    metrics: Arc<Metrics>,
 }
 
 fn replica(kube: &Arc<FakeKube>, clock: &Arc<TokioClock>, identity: &str) -> Replica {
     let leadership = Leadership::new(clock.clone());
+    let metrics = Arc::new(Metrics::new());
     Replica {
         elector: Elector {
             api: kube.clone(),
@@ -101,8 +105,10 @@ fn replica(kube: &Arc<FakeKube>, clock: &Arc<TokioClock>, identity: &str) -> Rep
             namespace: "sys".to_owned(),
             identity: identity.to_owned(),
             lease: settings(),
+            metrics: metrics.clone(),
         },
         leadership,
+        metrics,
     }
 }
 

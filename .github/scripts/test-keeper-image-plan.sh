@@ -38,20 +38,47 @@ expect_refused() {
   fi
 }
 
-expect "version changed on main" "push=true tag=0.2.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.2.0 PREVIOUS_VERSION=0.1.0
-expect "first version on main" "push=true tag=0.1.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 PREVIOUS_VERSION=
-expect "version unchanged on main" "push=false tag=0.1.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 PREVIOUS_VERSION=0.1.0
-expect "version changed on another branch" "push=false tag=0.2.0" EVENT_NAME=push REF=refs/heads/feature VERSION=0.2.0 PREVIOUS_VERSION=0.1.0
+expect "version changed on main" "push=true tag=0.2.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.2.0 PREVIOUS_VERSION=0.1.0 PUBLISHED=false
+expect "first version on main" "push=true tag=0.1.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 PREVIOUS_VERSION= PUBLISHED=false
+expect "version unchanged on main" "push=false tag=0.1.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 PREVIOUS_VERSION=0.1.0 PUBLISHED=false
+expect "version changed on another branch" "push=false tag=0.2.0" EVENT_NAME=push REF=refs/heads/feature VERSION=0.2.0 PREVIOUS_VERSION=0.1.0 PUBLISHED=false
 expect "tag already published" "push=false tag=0.2.0" EVENT_NAME=push REF=refs/heads/main VERSION=0.2.0 PREVIOUS_VERSION=0.1.0 PUBLISHED=true
-expect "pull request" "push=false tag=0.2.0" EVENT_NAME=pull_request REF=refs/pull/7/merge VERSION=0.2.0 PREVIOUS_VERSION=0.1.0
-expect "dispatch with push on main" "push=true tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=true
+expect "pull request" "push=false tag=0.2.0" EVENT_NAME=pull_request REF=refs/pull/7/merge VERSION=0.2.0 PREVIOUS_VERSION=0.1.0 PUBLISHED=false
+expect "dispatch with push on main" "push=true tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=true PUBLISHED=false
 expect "dispatch with push on main, tag published" "push=false tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=true PUBLISHED=true
-expect "dispatch without push" "push=false tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=false
-expect "dispatch with push on another ref" "push=false tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/feature VERSION=0.1.0 PUSH_INPUT=true
-expect_refused "an event that the workflow does not handle" EVENT_NAME=schedule REF=refs/heads/main VERSION=0.1.0
-expect_refused "a version that is not plain" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0-rc1 PREVIOUS_VERSION=0.0.9
-expect_refused "no version" EVENT_NAME=push REF=refs/heads/main
-expect_refused "no head commit" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 HEAD_SHA=
+expect "dispatch without push" "push=false tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=false PUBLISHED=false
+expect "dispatch with push on another ref" "push=false tag=0.1.0" EVENT_NAME=workflow_dispatch REF=refs/heads/feature VERSION=0.1.0 PUSH_INPUT=true PUBLISHED=false
+expect_refused "an event that the workflow does not handle" EVENT_NAME=schedule REF=refs/heads/main VERSION=0.1.0 PUBLISHED=false
+expect_refused "a version that is not plain" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0-rc1 PREVIOUS_VERSION=0.0.9 PUBLISHED=false
+expect_refused "no version" EVENT_NAME=push REF=refs/heads/main PUBLISHED=false
+expect_refused "no head commit" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 HEAD_SHA= PUBLISHED=false
+
+expect_refused_on_published() {
+  local label="$1" out err status=0
+  shift
+  out="$(plan "$@" 2>"${tmp}/stderr")" || status=$?
+  err="$(cat "${tmp}/stderr")"
+  if [ "$status" -eq 0 ]; then
+    fail "${label}: the plan accepted it"
+  elif [ -n "$out" ]; then
+    fail "${label}: the plan failed but printed '${out}' on stdout"
+  elif [[ "$err" != *PUBLISHED* ]]; then
+    fail "${label}: the plan failed without naming PUBLISHED on stderr: '${err}'"
+  else
+    pass "${label}"
+  fi
+}
+
+valid=(EVENT_NAME=push REF=refs/heads/main VERSION=0.2.0 PREVIOUS_VERSION=0.1.0)
+expect "published false" "push=true tag=0.2.0" "${valid[@]}" PUBLISHED=false
+expect "published true" "push=false tag=0.2.0" "${valid[@]}" PUBLISHED=true
+expect_refused_on_published "published unset" "${valid[@]}"
+expect_refused_on_published "published empty" "${valid[@]}" PUBLISHED=
+expect_refused_on_published "published with a wrong value" "${valid[@]}" PUBLISHED=yes
+expect_refused_on_published "published in capitals" "${valid[@]}" PUBLISHED=TRUE
+expect_refused_on_published "published with a space" "${valid[@]}" "PUBLISHED=true "
+expect_refused_on_published "published unset on a pull request" EVENT_NAME=pull_request REF=refs/pull/7/merge VERSION=0.2.0 PREVIOUS_VERSION=0.1.0
+expect_refused_on_published "published unset on a dispatch with push" EVENT_NAME=workflow_dispatch REF=refs/heads/main VERSION=0.1.0 PUSH_INPUT=true
 
 reference="ghcr.io/botresources/br-sandbox-keeper:0.1.0"
 mkdir "${tmp}/bin"
@@ -140,6 +167,11 @@ if grep -q 'images-build.yml' "$workflow" && grep -q 'image: br-sandbox-keeper' 
   pass "the workflow calls images-build.yml for br-sandbox-keeper"
 else
   fail "the workflow calls images-build.yml for br-sandbox-keeper"
+fi
+if grep -q "PUBLISHED: \${{ steps.published.outputs.published }}" "$workflow"; then
+  pass "the workflow gives the plan the output of the published check"
+else
+  fail "the workflow gives the plan the output of the published check"
 fi
 top_permissions="$(awk '/^permissions:/{flag=1;next} /^[a-z]/{flag=0} flag' "$workflow")"
 if grep -q 'packages: write' <<<"$top_permissions"; then

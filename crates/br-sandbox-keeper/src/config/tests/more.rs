@@ -126,7 +126,13 @@ fn a_document_with_no_pool_is_a_fault() {
 
 #[test]
 fn the_store_endpoint_is_an_http_url_with_no_user_information() {
-    assert!(load(&with("store_endpoint", json!("http://seaweed:8333"))).is_ok());
+    assert!(
+        load(&with(
+            "store_endpoint",
+            json!("http://object-store.test:8333")
+        ))
+        .is_ok()
+    );
     for bad in [
         "s3.example.test",
         "ftp://host",
