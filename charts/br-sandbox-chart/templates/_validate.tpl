@@ -52,6 +52,12 @@
 {{- range $path := list "service_account" "namespace" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" (printf "clients.%s.modes.%s.runner.%s" $client $mode $path)) -}}
 {{- end -}}
+{{- if and $root.Values.egress.enabled (eq $mode "allow") -}}
+{{- $listed := get $modeValues "allow" | default dict -}}
+{{- if not (or (get $listed "domains" | default list | len) (get $listed "cidrs" | default list | len)) -}}
+{{- fail (printf "BR_SANDBOX_ALLOW_EMPTY{client=%s,mode=%s}" $client $mode) -}}
+{{- end -}}
+{{- end -}}
 {{- if not $root.Values.egress.enabled -}}
 {{- $allow := get $modeValues "allow" | default dict -}}
 {{- if or (get $allow "domains" | default list | len) (get $allow "cidrs" | default list | len) -}}

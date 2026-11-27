@@ -15,7 +15,7 @@ check_licences_in_the_readme() {
 check_README_holds_the_contract() {
     section "README contract"
     local phrase
-    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Keeper document.**' '**Adapter document.**' 'the flat keys of `SandboxConfigInput`' '`store_credentials` is never in the document' 'The only reader of this ConfigMap is the runner identity' 'No pod mounts it, and it holds no secret' 'The old key `config.yaml` is not rendered' 'the adapter refuses mode `allow` with no list when it starts' 'The adapter document is proved by the real type' 'BR_SANDBOX_KEEPER_SETTING_COMPUTED' '`br-sandbox-keeper-config`' '`br.sandbox/keeper-config-sha256`' 'a change of the document rolls the keeper pods' 'the system namespace holds no such ConfigMap' 'the image `rancher/k3s` has no `nc`' 'the probe is tested with a busybox-style `nc`' '**Targets named by an IP literal.**' 'the render needs no name for it' 'TLS to an IP literal does not work' '**Targets named by a name.**' 'a DNS that answers its names' '**Limit.**' 'a response body that echoed the `Authorization` header carried the real value to the client' 'in every sandbox namespace and in the system namespace' 'subordinate id ranges' 'sets `pool.node_selector`' 'greps registries and host names only' 'checked by review' 'BR_SANDBOX_RUNNER_IS_POD_IDENTITY' 'RUN_AS_NON_ROOT' 'system:serviceaccount:{system namespace}:br-sandbox-netcheck' 'No rule protects the seed against an adapter that is compromised' 'A container with the seed name and another image is refused' 'does not share its process namespace' 'runAsNonRoot: true' 'Rule 10 is the only rule that reads `ephemeralContainers`' 'holds a verb on `pods/ephemeralcontainers`' 'The seed container of the regular container list (`containers`)' 'the exception does not apply to those two lists' 'Upgrade from a pool of chart 0.1.0 to 0.1.1' 'delete the old warm pods' 'warm or claimed' 'a claimed pod is not owned by the ReplicaSet' 'let the agent finish and delete the pod' 'A cluster test of the refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role' 'is to be made; no such test exists in this repository at this version and none was executed'; do
+    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Keeper document.**' '**Adapter document.**' 'the flat keys of `SandboxConfigInput`' '`store_credentials` is never in the document' 'The only reader of this ConfigMap is the runner identity' 'No pod mounts it, and it holds no secret' 'The old key `config.yaml` is not rendered' 'The adapter document is proved by the real type' 'BR_SANDBOX_KEEPER_SETTING_COMPUTED' '`br-sandbox-keeper-config`' '`br.sandbox/keeper-config-sha256`' 'a change of the document rolls the keeper pods' 'The system namespace holds no ConfigMap `br-sandbox-config`.' 'The image is chosen by the project. One image was measured by hand on a test cluster, and no test of this repository proves it: the image `rancher/k3s` has no `nc`.' 'Two keys of this table are also keys of the document with the same name, `warm_max_age_seconds` and `idle_keep_min_state_bytes`' 'The warm age, the tombstone age, the pool keys, the three lease keys, `listen_address` and `managed_namespace_selector` are in the keeper document only.' 'and no pool key, no warm age and no tombstone age' '`BR_SANDBOX_ALLOW_EMPTY{client=...,mode=allow}`' 'it cannot be used until egress is enabled and a list is given' 'which sets each of these values away from its default, and checks that both documents carry exactly those values' '**Targets named by an IP literal.**' 'the render needs no name for it' 'TLS to an IP literal does not work' '**Targets named by a name.**' 'a DNS that answers its names' '**Limit.**' 'a response body that echoed the `Authorization` header carried the real value to the client' 'in every sandbox namespace and in the system namespace' 'subordinate id ranges' 'sets `pool.node_selector`' 'greps registries and host names only' 'checked by review' 'BR_SANDBOX_RUNNER_IS_POD_IDENTITY' 'RUN_AS_NON_ROOT' 'system:serviceaccount:{system namespace}:br-sandbox-netcheck' 'No rule protects the seed against an adapter that is compromised' 'A container with the seed name and another image is refused' 'does not share its process namespace' 'runAsNonRoot: true' 'Rule 10 is the only rule that reads `ephemeralContainers`' 'holds a verb on `pods/ephemeralcontainers`' 'The seed container of the regular container list (`containers`)' 'the exception does not apply to those two lists' 'Upgrade from a pool of chart 0.1.0 to 0.1.1' 'delete the old warm pods' 'warm or claimed' 'a claimed pod is not owned by the ReplicaSet' 'let the agent finish and delete the pod' 'A cluster test of the refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role' 'is to be made; no such test exists in this repository at this version and none was executed'; do
         t "the README holds: ${phrase}" grep -qF -- "$phrase" "$README"
     done
     local slot
@@ -54,12 +54,13 @@ check_file_hygiene() {
 }
 
 check_lint_strict_on_every_fixture() {
-    section "helm lint --strict on the four fixtures"
+    section "helm lint --strict on the five fixtures"
     t "example" helm lint --strict "$CHART" -f "$EXAMPLE"
     t "example and mirror" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$MIRROR_VALUES"
     t "example and keeper" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$KEEPER_VALUES"
+    t "example and keeper with non-default values" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$NONDEFAULT_VALUES"
     t "example and egress" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper egress; do' "$ROOT/.github/workflows/ci.yml"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper keeper-nondefault egress; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
 
@@ -122,4 +123,56 @@ check_the_docs_state_the_credential_set_schema_rule() {
     section "the README and the CHANGELOG state that secret_ref and secrets go together and secrets has an item"
     t "the README states the rule and the effect on a 0.1.0 value" grep -qF '`secret_ref` and `secrets` must be given together and `secrets` needs at least one item: a 0.1.0 value with only one of them, or with an empty `secrets`, now fails the render.' "$README"
     t "the CHANGELOG states the rule and the effect on a 0.1.0 value" grep -qF '`secret_ref` and `secrets` must be given together and `secrets` needs at least one item: a 0.1.0 value with only one of them, or with an empty `secrets`, now fails.' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_what_the_egress_tests_do_not_prove() {
+    section "the README and the CHANGELOG state the limits of the egress tests and warn on internal_cidrs"
+    local text literal
+    text="$(grep '^\*\*Not proved offline\.\*\*' "$README")"
+    literal="$(grep '^\*\*Targets named by an IP literal\.\*\*' "$README")"
+    t "the Not proved offline paragraph says no test shows that a name that resolves to an internal address is refused, and that a change of the DNS answer between the check and the dial is the product's, not measured" grep -qF 'The suite does not prove that the proxy refuses a name that resolves to an internal address: no test resolves such a name, and a change of the DNS answer between the check of the address and the dial is a property of the proxy product, not measured here.' <<<"$text"
+    t "the Not proved offline paragraph leaves the refusals of the runner and keeper identity by the API server to a cluster test" grep -qF 'the refusals of the runner and keeper identity by the real API server in an egress namespace (the suite shows only that the render holds no Role, no RoleBinding and no binding subject there)' <<<"$text"
+    t "the Not proved offline paragraph narrows the file modes to a running pod and says the render value is read" grep -qF 'the file modes of the Secret files in a running pod (the render sets `defaultMode: 288`, octal 0440, on the CA key volume and on the credential volume and the suite reads that value; it does not show what the kubelet gives the files)' <<<"$text"
+    t "the Not proved offline paragraph no longer lists the Secret file modes without the narrowing" test "$(grep -cF 'the Secret file modes,' <<<"$text")" -eq 0
+    t "the Not proved offline paragraph says the probes come from the node, that the network plugin is not tested, and what follows if it refuses them" grep -qF 'The probes of the proxy pod come from the node: the chart does not test that the network plugin lets them through `default-deny` and `ingress-tunnel`; if it does not, the proxy does not become Ready and the mode has no egress.' <<<"$text"
+    t "the IP literal paragraph says one internal_cidrs value feeds the proxy policy and the proxy deny list, that a removed range is taken out of what that value contributes to both lists, that whether it is then open depends on the other lists and on the loopback ranges the proxy list always holds, and that the change is for a test cluster" grep -qF 'One value, `network.internal_cidrs`, feeds both the `egress-proxy` policy and the deny list of the proxy: a range taken out of it is taken out of what that value contributes to both lists. Whether the range is then open depends on the other lists that the chart builds, and the proxy list always holds the loopback ranges, so read the rendered lists. Change it on a test cluster only.' <<<"$literal"
+    t "the README does not advise narrowing internal_cidrs" test "$(grep -ciE 'narrow[a-z]* `?network\.internal_cidrs|needs an address outside it' "$README")" -eq 0
+    t "the CHANGELOG does not advise narrowing internal_cidrs either" test "$(grep -cE '(narrow `network\.internal_cidrs|needs an address outside it)' "$CHART/CHANGELOG.md")" -eq 0
+    t "the README marks the refusal of an address outside service_cidr as documented behaviour of Kubernetes, not measured here, and says the chart does not check the range" grep -qF 'The address must be free and inside `network.service_cidr`; the API server refuses the Service otherwise (documented behaviour of Kubernetes, not measured here). The chart does not check that the address lies in that range.' "$README"
+    t "the chart validation does not compare the proxy address with service_cidr" test "$(grep -c 'service_cidr' "$CHART/templates/_validate_egress.tpl")" -eq 0
+}
+
+check_the_docs_mark_the_keeper_probes_under_default_deny_as_untested() {
+    section "the README and the CHANGELOG do not claim that the keeper probes pass under default-deny"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
+    t "the Keeper document paragraph states the port, the two probes and that the chart does not change default-deny" grep -qF 'declares the port `http` (`keeper.port`) and has a `livenessProbe` on `/livez` and a `readinessProbe` on `/readyz`; the chart does not change the `default-deny` policy of the system namespace.' <<<"$keeper"
+    t "the Keeper document paragraph says that the probes under default-deny are not tested on a cluster" grep -qF 'Not tested on a cluster: that the probes of the kubelet pass under `default-deny`' <<<"$keeper"
+    t "the Keeper document paragraph no longer says that the probes are served to the kubelet" bash -c '! grep -qF "The probes are served by the pod to the kubelet" <<<"$1"' _ "$keeper"
+    t "the CHANGELOG says that the probes under default-deny are not tested on a cluster" grep -qF 'that the probes of the kubelet pass under it is not tested on a cluster' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_who_reads_the_adapter_document_and_what_the_upgrade_does() {
+    section "the README and the CHANGELOG state who reads the adapter document and what the 0.2.2 and 0.2.4 upgrades do"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
+    t "the Keeper document paragraph says that the adapter document holds no pool key, no warm age and no tombstone age" grep -qF 'and no pool key, no warm age and no tombstone age' <<<"$keeper"
+    t "the Keeper document paragraph no longer says that the adapter keys are nested or that the importer must map them" bash -c '! grep -qE "in nested form|its importer must map the keys|known limit of this release" <<<"$1"' _ "$keeper"
+    t "the Keeper document paragraph no longer says that the adapter reads the ConfigMaps" bash -c '! grep -qF "The adapter reads the ConfigMaps" <<<"$1"' _ "$keeper"
+    t "the Runner role paragraph says that the Role gets the adapter document by name" grep -qF '`configmaps` get on `br-sandbox-config` only (the adapter document)' "$README"
+    t "the Runner role paragraph no longer says that the adapter reads the config" bash -c '! grep -qF "(the adapter reads the config)" "$1"' _ "$README"
+    t "the CHANGELOG says that the keeper Deployment rolls once at the upgrade" grep -qF 'the keeper Deployment rolls once at the upgrade, because its pod template changes' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the ConfigMap of the system namespace is deleted by the upgrade" grep -qF 'The ConfigMap `br-sandbox-config` of the system namespace is deleted by the upgrade.' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_the_keeper_port_and_the_lint_loop_overlay() {
+    section "the README states that the sandbox pods declare no port and the CHANGELOG states that the lint loop covers the keeper overlay"
+    t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
+    t "the CHANGELOG says that the lint loop covers the new overlay" grep -qF 'also covers the overlay `ci/keeper-nondefault-values.yaml`' "$CHART/CHANGELOG.md"
+}
+
+check_the_changelog_states_the_budget_and_the_length_of_the_window() {
+    section "the CHANGELOG states the budget of the enforcement wait and what the report does not tell about the window"
+    t "the CHANGELOG says the limit is one budget for the whole pod and what a later target gets" grep -qF 'the limit is one budget for the whole pod, a later target gets what is left of it, and once it is spent each remaining target is tried once' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says the chart does not close the window and the report does not tell its length" grep -qF 'A window exists in which a fresh pod reaches internal targets; the chart does not close it, and the report does not tell its length: `refused_after_seconds` is the time from the start of the probe script to the first refusal of the probe, and it carries the `nc -w 2` waits of the probes dropped before it.' "$CHART/CHANGELOG.md"
 }

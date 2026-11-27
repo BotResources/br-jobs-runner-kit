@@ -290,6 +290,7 @@
         "image": {"$ref": "#/definitions/imageRef"},
         "targets": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9.:-]+:[0-9]{1,5}$"}},
         "offlist_host": {"type": "string", "pattern": "^[A-Za-z0-9.-]+$"},
+        "enforcement_wait_seconds": {"type": "integer", "minimum": 1, "maximum": 999999999},
         "run_id": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,20}[a-z0-9])?$|^$"},
         "cron": {"type": "string"}
       }

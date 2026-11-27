@@ -6,9 +6,10 @@ PROXY_ONLY='{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metada
 
 render_egress_fixtures() {
     render cred -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
+    render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.allow.domains = ["git.example.test"] | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
     render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
     render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
+    render keeperegress -f "$EXAMPLE" -f "$KEEPER_VALUES" -f "$EGRESS_VALUES"
 }
 
 policy_json() {
@@ -28,7 +29,11 @@ check_no_identity_of_the_chart_has_a_right_in_the_egress_namespace() {
 
 check_no_cluster_wide_right_on_secrets_and_pods_beyond_the_network_check_read() {
     section "cluster-wide rights: none on secrets, none on pods but the read of the network check"
-    t "no ClusterRole rule names secrets or a wildcard resource" jqt keeper '[.[] | select(.kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
+    local render
+    for render in keeper cred keeperegress; do
+        t "in the ${render} render no ClusterRole rule names secrets or a wildcard resource" jqt "$render" '[.[] | select(.kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
+    done
+    t "the keeperegress render holds the keeper and the proxy Deployments, so the checks above read both" jqt keeperegress '[.[] | select(.kind == "Deployment") | .metadata.name] | index("br-sandbox-proxy") != null and (map(select(test("keeper"))) | length) > 0'
     t "the only cluster-wide pod right is get and list in the network check ClusterRole" jqt keeper '[.[] | select(.kind == "ClusterRole") | select(any(.rules[]; .resources | any(. == "pods" or startswith("pods/")))) | {name: .metadata.name, rules: [.rules[] | select(.resources | any(. == "pods" or startswith("pods/")))]}] == [{"name": "sbx-system-netcheck", "rules": [{"apiGroups": [""], "resources": ["nodes", "services", "endpoints", "pods"], "verbs": ["get", "list"]}]}]'
     t "every ClusterRoleBinding names a ClusterRole of the render and a ServiceAccount" jqt keeper '[.[] | select(.kind == "ClusterRole") | .metadata.name] as $c | [.[] | select(.kind == "ClusterRoleBinding") | select((.roleRef.name as $r | $c | index($r) != null) and (.subjects | all(.kind == "ServiceAccount")) | not)] | length == 0'
     t "every RoleBinding names a Role of the render, never a ClusterRole" jqt keeper '[.[] | select(.kind == "RoleBinding") | select(.roleRef.kind != "Role")] | length == 0'
@@ -141,7 +146,7 @@ check_the_proxy_pod_exists_only_when_egress_is_enabled_and_only_in_an_egress_nam
         t "render ${name}: no Deployment, Service or Pod lives in a sandbox, system or mode-none namespace but the keeper's" jqt "$name" "${EGRESS_NAMESPACES} as \$e | [.[] | select((.kind == \"Deployment\" or .kind == \"Pod\" or .kind == \"Service\") and (.metadata.namespace as \$n | \$e | index(\$n) == null))] | length == 0"
     done
     t "the README says the proxy Deployment lives in the egress namespace and never in a sandbox namespace" grep -qF 'A proxy Deployment lives in an egress namespace and never in a sandbox namespace.' "$README"
-    t "the README says that with egress disabled no proxy pod exists and a sandbox of a mode with a proxy has no egress (fail closed)" grep -qF 'With `egress.enabled: false` no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).' "$README"
+    t "the README says that with egress disabled no proxy pod exists and a sandbox of a mode with a proxy has no egress once the policies are enforced" grep -qF 'With `egress.enabled: false` no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all once the network plugin enforces the policies (fail closed in that steady state, see The enforcement window).' "$README"
 }
 
 check_the_credential_secrets_live_in_the_egress_namespace() {
@@ -161,6 +166,19 @@ check_an_allow_list_outside_mode_allow_fails_the_render() {
     t "an allow list in mode allow renders when egress is enabled" render allowok -f "$(valsx allowok '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
     t "empty allow lists in mode none and full render when egress is enabled" render allowempty -f "$(valsx allowempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []} | .clients.alpha.modes.full.allow = {"domains": [], "cidrs": []}')"
     t "the README names BR_SANDBOX_ALLOW_MODE" grep -qF 'BR_SANDBOX_ALLOW_MODE' "$README"
+}
+
+check_a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
+    section "a mode allow with no domain and no cidr fails when egress is enabled, and renders without a list when egress is disabled"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_deleted 'del(.clients.alpha.modes.allow.allow)')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_lists '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []}')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(vals allowempty_noproxy '.egress.enabled = true')"
+    t "a mode allow with domains only renders when egress is enabled" render allowdomainsonly -f "$(valsx allowdomainsonly '.clients.alpha.modes.allow.allow = {"domains": ["git.example.test"]}')"
+    t "a mode allow with cidrs only renders when egress is enabled" render allowcidrsonly -f "$(valsx allowcidrsonly '.clients.alpha.modes.allow.allow = {"cidrs": ["192.0.2.0/24"]}')"
+    t "an empty allow list in mode none and mode full is not an error when egress is enabled" render allownoneempty -f "$(valsx allownoneempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []}')"
+    t "with egress disabled a mode allow with no list renders: no list can be given there" render allowoff -f "$EXAMPLE"
+    t "the README names BR_SANDBOX_ALLOW_EMPTY and says it needs egress.enabled" grep -qF 'With `egress.enabled`, mode `allow` needs at least one domain or one cidr, else `BR_SANDBOX_ALLOW_EMPTY`.' "$README"
+    t "the CHANGELOG names BR_SANDBOX_ALLOW_EMPTY" grep -qF 'BR_SANDBOX_ALLOW_EMPTY{client=...,mode=allow}' "$CHART/CHANGELOG.md"
 }
 
 check_the_cluster_default_policy_exclusion_is_stated_for_both_namespace_kinds() {

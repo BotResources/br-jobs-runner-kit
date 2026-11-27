@@ -36,7 +36,7 @@ true
 {{- end -}}
 
 {{- define "br-sandbox-chart.proxy.probe.env" -}}
-{{- $out := list (dict "name" "NETCHECK_TARGETS" "value" "__TARGETS__") -}}
+{{- $out := list (dict "name" "NETCHECK_TARGETS" "value" "__TARGETS__") (dict "name" "NETCHECK_ENFORCEMENT_WAIT" "value" (.root.Values.network_check.enforcement_wait_seconds | int64 | toString)) -}}
 {{- if include "br-sandbox-chart.proxy.probe.active" . -}}
 {{- $out = append $out (dict "name" "NETCHECK_PROXY" "value" (printf "%s:%d" .ns.proxy.cluster_ip (.root.Values.egress.proxy.port | int64))) -}}
 {{- $out = append $out (dict "name" "NETCHECK_OFFLIST" "value" (printf "%s:443" .root.Values.network_check.offlist_host)) -}}

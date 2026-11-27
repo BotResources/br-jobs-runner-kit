@@ -71,7 +71,7 @@ check_slots_hold_the_egress_proxy_and_the_keeper_slot_is_empty() {
     t "with egress disabled the proxy slots render nothing: no Service, no proxy ConfigMap, no CA ConfigMap, no proxy env or CA mount" jqt ex '([.[] | select(.kind == "Service" or (.kind == "ConfigMap" and (.metadata.name | startswith("br-sandbox-proxy") or . == "br-sandbox-ca")))] | length == 0) and ([.[] | select(.kind == "ReplicaSet") | .spec.template.spec | (.containers[0].env | map(.name)) == ["HOME"] and (.volumes | map(.name) | index("egress-ca") == null)] | all)'
     render egon -f "$EXAMPLE" -f "$EGRESS_VALUES"
     t "egress.enabled true renders a Deployment and a Service in each egress namespace" jqt egon '([.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-proxy")] | length) == 2 and ([.[] | select(.kind == "Service")] | length) == 2'
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$EXAMPLE" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$(vals slotdomain '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
 }
 
 check_egress_values_fail_while_egress_is_disabled() {

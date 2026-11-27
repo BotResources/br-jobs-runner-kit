@@ -25,7 +25,7 @@ fn chart() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../charts/br-sandbox-chart")
 }
 
-fn template(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, String)> {
+fn helm(overlay: Option<&Path>, sets: &[&str]) -> std::process::Output {
     let example = chart().join("ci/example-values.yaml");
     let mut arguments = vec!["template", "t"];
     let chart = chart().display().to_string();
@@ -38,10 +38,14 @@ fn template(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, String)> {
     arguments.push(&chart);
     arguments.extend(files.iter().map(String::as_str));
     arguments.extend(sets.iter().flat_map(|set| ["--set", *set]));
-    let output = Command::new("helm")
+    Command::new("helm")
         .args(&arguments)
         .output()
-        .unwrap_or_else(|error| panic!("helm must be installed to run this test: {error}"));
+        .unwrap_or_else(|error| panic!("helm must be installed to run this test: {error}"))
+}
+
+fn template(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, String)> {
+    let output = helm(overlay, sets);
     assert!(
         output.status.success(),
         "helm template failed: {}",
@@ -279,4 +283,28 @@ fn a_document_with_a_misnamed_key_is_caught_by_the_table_and_by_the_values() {
         silently_defaulted.contains(&"restore_timeout_seconds".to_owned()),
         "{silently_defaulted:?}"
     );
+}
+
+#[test]
+fn a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
+    let output = helm(None, &["egress.enabled=true"]);
+    assert!(!output.status.success(), "the render passed");
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains("BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_mode_allow_with_a_list_renders_a_document_that_the_adapter_accepts() {
+    let egress = chart().join("ci/egress-values.yaml");
+    let documents = template(Some(&egress), &[]);
+    let (_, text) = documents
+        .iter()
+        .find(|(namespace, _)| namespace == "sbx-alpha-allow")
+        .expect("the allow namespace of the fixture");
+    let document = object(text);
+    assert!(document.contains_key("allowlist"));
+    assert_eq!(value_differences(&document), Vec::<String>::new());
 }
