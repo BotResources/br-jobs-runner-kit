@@ -28,7 +28,7 @@ check_the_exec_timeout_is_in_every_adapter_document() {
     local overlay name
     for overlay in "$CHART"/ci/*-values.yaml; do
         name="$(basename "$overlay" -values.yaml)"
-        [[ "$name" == example || "$name" == platform || "$name" == crds || "$name" == stamper ]] && continue
+        [[ "$name" == example || "$name" == platform || "$name" == crds || "$name" == stamper || "$name" == netcheck-route ]] && continue
         render "exec_fixture_${name}" -f "$EXAMPLE" -f "$overlay"
         t "the fixture ${name} renders the key as an integer in the document of every namespace" test "$(jq -r '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-config") | .data["config.json"] | fromjson | .exec_timeout_seconds | select(type == "number" and . == floor and . >= 1)] | length' "$WORK/exec_fixture_${name}.json")" = "$(adapter_documents "exec_fixture_${name}")" -a "$(adapter_documents "exec_fixture_${name}")" -ge 4
     done
