@@ -16,6 +16,7 @@ render_proxy_fixtures() {
     render egressother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.image.repository=registry.example.test/other/proxy --set egress.proxy.image.digest="$OTHER_DIGEST"
     render nocred -f "$(valsx nocred 'del((.namespaces[] | select(.name == "sbx-alpha-full")).credential_set) | del((.namespaces[] | select(.name == "sbx-alpha-full")).proxy)')"
     render_yaml egress_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES"
+    render_yaml egress_fence_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$CHART/ci/fence-values.yaml"
 }
 
 check_the_proxy_objects_exist_in_each_egress_namespace_only() {
@@ -81,9 +82,9 @@ check_the_secrets_are_mounted_in_the_proxy_pod_only() {
     t "only proxy Deployments name a Secret in the egress render" jqt cred '[.[] | select(.kind != "ValidatingAdmissionPolicy" and (tostring | test("secretName|secretKeyRef"))) | .kind + "/" + .metadata.name] | unique == ["Deployment/br-sandbox-proxy"]'
     t "no sandbox pod names a Secret, a credential or a CA key" jqt cred "${SANDBOX_PODS} | length == 4 and (tostring | test(\"secret|credentials|ca-key\"; \"i\") | not)"
     t "no ConfigMap holds a Secret name or a private key" test -z "$(jq -r '.[] | select(.kind == "ConfigMap") | .data | tostring' "$WORK/cred.json" | grep -iE 'sbx-alpha-full-credentials|PRIVATE KEY' || true)"
-    t "a proxied sandbox pod passes the model of its admission policy" test "$(model_result sbx-alpha-allow '.' cred)" = true -a "$(model_result sbx-alpha-full '.' cred)" = true
-    t "the model refuses a secretKeyRef on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.containers[0].env += [{"name": "A", "valueFrom": {"secretKeyRef": {"name": "x", "key": "y"}}}]' cred)" = false
-    t "the model refuses a Secret volume on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.volumes += [{"name": "s", "secret": {"secretName": "x"}}]' cred)" = false
+    t "a proxied sandbox pod passes the model of its admission policy" test "$(model_result sbx-alpha-allow '.' egress_keeper)" = true -a "$(model_result sbx-alpha-full '.' egress_keeper)" = true
+    t "the model refuses a secretKeyRef on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.containers[0].env += [{"name": "A", "valueFrom": {"secretKeyRef": {"name": "x", "key": "y"}}}]' egress_keeper)" = false
+    t "the model refuses a Secret volume on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.volumes += [{"name": "s", "secret": {"secretName": "x"}}]' egress_keeper)" = false
 }
 
 check_the_proxy_probes_the_tmp_mount_and_the_warm_age_default_are_pinned() {

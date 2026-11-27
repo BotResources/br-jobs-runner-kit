@@ -59,7 +59,7 @@ check_the_reload_listener_is_a_loopback_constant() {
     fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.reload.listen=127.0.0.1:9092
     fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.reload.listen=0.0.0.0:9092
     t "no template, value or schema key reads a reload listen value" test -z "$({ grep -rnE 'reload\.listen' "$CHART/templates" "$CHART/values.yaml"; grep -n '"listen"' "$CHART/values.schema.json"; } || true)"
-    t "no object of the egress render binds a listener to all addresses but the tunnel" test "$(grep -c '0\.0\.0\.0:' "$WORK/egress_yaml.yaml" | tr -d ' ')" = 2
+    t "no object of the egress render binds a listener to all addresses but the tunnel" test "$(grep -c '0\.0\.0\.0:' "$WORK/egress_fence_yaml.yaml" | tr -d ' ')" = 2
     t "the README says the reload API is reachable only inside the proxy pod and that nothing in the chart calls it" grep -qF 'nothing in the chart calls it' "$README"
 }
 

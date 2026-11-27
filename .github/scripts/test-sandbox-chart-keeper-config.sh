@@ -14,7 +14,7 @@ check_keeper_document() {
     t "the keeper settings reach the top level of the keeper document" test "$(keeper_doc keeper '.scale_down_cooldown_seconds')" = 120
     t "the keeper document has no nested settings key" test "$(keeper_doc keeper 'has("settings")')" = false
     t "the system namespace holds no ConfigMap br-sandbox-config when the keeper is on" jqt keeper '[.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-config")] | length == 0'
-    t "without the keeper the system namespace holds no keeper or sandbox config" jqt ex '[.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and (.metadata.name | IN("br-sandbox-config", "br-sandbox-keeper-config")))] | length == 0'
+    t "without the keeper the system namespace holds no keeper or sandbox config" jqt fence '[.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and (.metadata.name | IN("br-sandbox-config", "br-sandbox-keeper-config")))] | length == 0'
     t "the keeper reads config.json from the mounted ConfigMap" jqt keeper '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.spec as $pod | ($pod.containers[0].env[] | select(.name == "BR_SANDBOX_CONFIG") | .value) == "/etc/br-sandbox/config.json" and ($pod.volumes[] | select(.name == "config") | .configMap.name) == "br-sandbox-keeper-config"'
     t "the store credential is in the two variables and not in the document" test "$(keeper_map keeper | grep -ciE 'secret|access_key|credential')" = 0
     t "the label prefix and the managed selector are the label contract" test "$(keeper_doc keeper '[.label_prefix, .managed_namespace_selector] | join(" ")')" = "br.sandbox br.sandbox/managed=true"

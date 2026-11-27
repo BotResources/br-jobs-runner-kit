@@ -101,6 +101,8 @@ egress:
       - CURL_CA_BUNDLE
   quota:
     pods: 4
+crds:
+  install: false
 operator:
   enabled: false
   replicas: 2
@@ -118,7 +120,7 @@ operator:
     renew_deadline_seconds: 10
     retry_period_seconds: 2
 network_check:
-  enabled: true
+  enabled: false
   targets: []
   offlist_host: offlist.invalid
   enforcement_wait_seconds: 60

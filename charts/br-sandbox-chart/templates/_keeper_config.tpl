@@ -19,9 +19,6 @@
   "renew_deadline_seconds" ($values.operator.lease.renew_deadline_seconds | int64)
   "retry_period_seconds" ($values.operator.lease.retry_period_seconds | int64) -}}
 {{- range $key, $setting := $values.operator.settings -}}
-{{- if eq $key "pools" -}}
-{{- fail "BR_SANDBOX_OPERATOR_SETTING_REMOVED{key=pools}" -}}
-{{- end -}}
 {{- if hasKey $document $key -}}
 {{- fail (printf "BR_SANDBOX_KEEPER_SETTING_COMPUTED{key=%s}" $key) -}}
 {{- end -}}

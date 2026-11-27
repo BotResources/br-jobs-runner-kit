@@ -39,6 +39,16 @@
 {{- if hasKey .Values "clients" -}}
 {{- fail "BR_SANDBOX_CLIENTS_REMOVED{key=clients}" -}}
 {{- end -}}
+{{- if and .Values.network_check.enabled (not .Values.operator.enabled) -}}
+{{- fail "BR_SANDBOX_OPERATOR_PART_REQUIRED{key=network_check}" -}}
+{{- end -}}
+{{- if hasKey .Values.operator.settings "pools" -}}
+{{- fail "BR_SANDBOX_OPERATOR_SETTING_REMOVED{key=pools}" -}}
+{{- end -}}
+{{- if not (or .Values.operator.enabled .Values.crds.install (gt (len (.Values.namespaces | default list)) 0)) -}}
+{{- fail "BR_SANDBOX_NOTHING_TO_RENDER" -}}
+{{- end -}}
+{{- if or .Values.operator.enabled (gt (len (.Values.namespaces | default list)) 0) -}}
 {{- range $path := list "installation.namespace_prefix" "tools.image.repository" "tools.image.digest" "save.ttl_seconds" "store.endpoint" "store.bucket" "store.region" "store.path_style" "store.credentials_secret" "network.pod_cidr" "network.service_cidr" "network.node_addresses" "network.node_public_addresses" "network.load_balancer_addresses" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
@@ -138,5 +148,6 @@
 {{- end -}}
 {{- if $needsResolvers -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" "network.public_resolvers") -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}

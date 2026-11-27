@@ -5,10 +5,10 @@ TUNNEL_SOURCE='{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/m
 PROXY_ONLY='{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "%s"}}, "podSelector": {"matchLabels": {"br.sandbox/role": "proxy"}}}], "ports": [{"protocol": "TCP", "port": %s}]}'
 
 render_egress_fixtures() {
-    render cred -f "$EXAMPLE" -f "$EGRESS_VALUES"
+    render cred -f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$CHART/ci/fence-values.yaml"
     render two -f "$(valsx two '.namespaces += [{"name": "sbx-beta-allow", "mode": "allow", "allow": {"domains": ["git.example.test"]}, "proxy": {"cluster_ip": "10.43.0.60", "ca": {"certificate": "-----BEGIN CERTIFICATE-----\nZmFrZS1jYS1hbGxvdw==\n-----END CERTIFICATE-----\n", "key_secret": "sbx-beta-allow-ca-key"}}}]')"
-    render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
-    render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
+    render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')" -f "$CHART/ci/fence-values.yaml"
+    render tunnel -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml" --set egress.proxy.port=9999 --set egress.quota.pods=7
     render keeperegress -f "$EXAMPLE" -f "$OPERATOR_VALUES" -f "$EGRESS_VALUES"
 }
 

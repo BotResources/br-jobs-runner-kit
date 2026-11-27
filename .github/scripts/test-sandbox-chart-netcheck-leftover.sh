@@ -89,5 +89,5 @@ check_network_check_fails_on_a_leftover_probe_pod_that_cannot_be_deleted() {
     t "the CHANGELOG no longer says that only a pod that cannot be deleted gives the probe_pod object" test "$(grep -c 'A leftover pod that cannot be deleted' "$CHART/CHANGELOG.md")" -eq 0
     t "the README says the Role of the check identity is not changed" grep -qF 'The Role of the check identity is not changed: it already holds `delete` on pods in the sandbox namespaces.' "$README"
     t "the CHANGELOG says the same fix under 0.2.4" test "$(awk '/^## 0.2.4$/ {on=1; next} /^## / {on=0} on' "$CHART/CHANGELOG.md" | grep -cF -e 'A leftover pod that the delete does not remove (the delete command fails for any cause) gives one object with `kind` `probe_pod`')" -eq 1
-    t "the Role of the check identity holds delete on pods in each sandbox namespace" jqt cred '[.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-netcheck") | .rules[] | select(.resources == ["pods"]) | .verbs | index("delete")] | all(. != null) and length > 0'
+    t "the Role of the check identity holds delete on pods in each sandbox namespace" jqt keeperegress '[.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-netcheck") | .rules[] | select(.resources == ["pods"]) | .verbs | index("delete")] | all(. != null) and length > 0'
 }

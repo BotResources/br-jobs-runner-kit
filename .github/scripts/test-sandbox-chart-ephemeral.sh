@@ -39,7 +39,7 @@ check_no_role_of_the_chart_reaches_pods_ephemeralcontainers() {
     render ephemeral_keeper_nocheck -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.enabled=false
     local name
     for name in ex mirror keeper cred two egressdual tunnel ephemeral_nocheck ephemeral_keeper_nocheck; do
-        [[ "$name" == ephemeral_nocheck ]] || t "render ${name}: the render holds Roles with rules" jqt "$name" "$ROLES_AND_RULES_OF_THE_RENDER"
+        [[ " ex mirror keeper ephemeral_keeper_nocheck " != *" $name "* ]] || t "render ${name}: the render holds Roles with rules" jqt "$name" "$ROLES_AND_RULES_OF_THE_RENDER"
         t "render ${name}: no rule reaches pods/ephemeralcontainers" test "$(jqv "$name" "$RULES_REACHING_EPHEMERAL_CONTAINERS")" = 0
     done
     t "the render with the network check holds its namespaced Roles" jqt ex '[.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-netcheck")] | length == 4'

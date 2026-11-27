@@ -78,7 +78,7 @@ export CREDENTIAL_SET='{"secret_ref": "set-a-credentials", "secrets": [{"placeho
 
 valsx() {
     local name="$1" expr="$2"
-    yq ea 'select(fileIndex == 0) * select(fileIndex == 1)' "$EXAMPLE" "$EGRESS_VALUES" | yq "$expr" - >"$WORK/$name.yaml"
+    yq ea 'select(fileIndex == 0) * select(fileIndex == 1) * select(fileIndex == 2)' "$EXAMPLE" "$EGRESS_VALUES" "$CHART/ci/fence-values.yaml" | yq "$expr" - >"$WORK/$name.yaml"
     printf '%s' "$WORK/$name.yaml"
 }
 

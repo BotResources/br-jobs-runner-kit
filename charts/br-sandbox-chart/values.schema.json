@@ -241,6 +241,7 @@
         }
       }
     },
+    "crds": {"type": "object", "additionalProperties": false, "properties": {"install": {"type": "boolean"}}},
     "keeper": {}, "operator": {
       "type": "object",
       "additionalProperties": false,

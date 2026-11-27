@@ -57,6 +57,15 @@ fn documents(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, Map<String, 
     found
 }
 
+fn renders_no_namespace(path: &Path) -> bool {
+    let text = std::fs::read_to_string(path).expect("a readable values file");
+    let values: Value = serde_saphyr::from_str(&text).expect("a YAML values file");
+    values
+        .get("namespaces")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty)
+}
+
 fn fixtures() -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(chart().join("ci"))
         .expect("the chart has a ci folder")
@@ -64,6 +73,7 @@ fn fixtures() -> Vec<PathBuf> {
         .filter(|path| {
             let name = path.file_name().and_then(|name| name.to_str());
             name.is_some_and(|name| name.ends_with("-values.yaml") && name != "example-values.yaml")
+                && !renders_no_namespace(path)
         })
         .collect();
     found.sort();

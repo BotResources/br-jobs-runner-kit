@@ -41,7 +41,7 @@ check_keeper_rights() {
     t "without the operator no keeper Deployment, account, document, role or cluster binding is rendered" jqt fence '[.[] | select((.kind | IN("Deployment", "ServiceAccount", "ConfigMap", "Role", "ClusterRole", "ClusterRoleBinding")) and ((.metadata.name // "") | test("keeper")))] | length == 0'
     t "the keeper Deployment has two replicas, a restricted security context and no token mount of sandbox" jqt keeper '.[] | select(.kind == "Deployment") | .spec.replicas == 2 and .spec.template.spec.containers[0].securityContext.runAsNonRoot == true'
     t "the keeper image is mirrored like every image" jqt mirror '.[] | select(.kind == "Deployment") | .spec.template.spec.containers[0].image | startswith("mirror.example.test/")'
-    t "operator.enabled needs an image" test "$(helm template t "$CHART" -f "$EXAMPLE" --set operator.enabled=true 2>&1 | grep -c 'BR_SANDBOX_MISSING_VALUE{key=operator.image}')" -ge 1
+    t "operator.enabled needs an image" test "$(helm template t "$CHART" -f "$(vals noimage 'del(.operator.image)')" 2>&1 | grep -c 'BR_SANDBOX_MISSING_VALUE{key=operator.image}')" -ge 1
     t "the keeper egress policy names the API server and the store" jqt keeper '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-keeper") | [.spec.egress[].to[].ipBlock.cidr | select(. != null)] | sort == ["10.0.0.11/32", "10.0.1.0/24"]'
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.store_cidrs}" -f "$OPERATOR_VALUES" -f "$(vals nostore 'del(.network.store_cidrs)')"
 }

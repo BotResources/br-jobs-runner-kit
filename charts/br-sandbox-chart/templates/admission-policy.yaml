@@ -1,3 +1,4 @@
+{{- if .Values.operator.enabled }}
 {{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
 {{- $name := printf "%s-pod" $ns.name }}
 ---
@@ -46,4 +47,5 @@ spec:
       matchLabels:
         br.sandbox/managed: "true"
         kubernetes.io/metadata.name: {{ $ns.name }}
+{{- end }}
 {{- end }}
