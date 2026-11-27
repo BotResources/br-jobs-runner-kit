@@ -57,7 +57,10 @@ fn the_pods_that_are_not_ready_go_before_the_ready_ones_whatever_their_age() {
         stale("mid-ready", 50),
         not_ready(stale("old-not-ready", 10)),
     ];
-    assert_eq!(run(&pods, 3).delete, ["old-not-ready", "young-not-ready", "old-ready"]);
+    assert_eq!(
+        run(&pods, 3).delete,
+        ["old-not-ready", "young-not-ready", "old-ready"]
+    );
 }
 
 #[test]
@@ -220,7 +223,10 @@ fn a_rollout_that_goes_well_ends_in_ceil_of_stale_over_step_steps_and_makes_no_l
     }
     assert_eq!(steps, 4);
     assert_eq!(made, 20);
-    assert!(pods.iter().all(|pod| pod.template_hash == Mark::Value(CURRENT.to_owned())));
+    assert!(
+        pods.iter()
+            .all(|pod| pod.template_hash == Mark::Value(CURRENT.to_owned()))
+    );
 }
 
 #[test]

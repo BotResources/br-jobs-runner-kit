@@ -1,21 +1,21 @@
 use k8s_openapi::api::admissionregistration::v1::{
     MatchResources, ValidatingAdmissionPolicyBindingSpec,
 };
-use k8s_openapi::api::networking::v1::{
-    NetworkPolicyEgressRule, NetworkPolicyIngressRule, NetworkPolicySpec,
-};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelectorRequirement, ObjectMeta};
+use k8s_openapi::api::networking::v1::NetworkPolicySpec;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+
+mod shape;
 
 use super::*;
 use crate::rights::{NETWORK_POLICY_EGRESS_ALLOW, NETWORK_POLICY_EGRESS_FULL};
 
 const SELECTOR: &str = "br.sandbox/managed=true";
 
-struct World {
-    labels: BTreeMap<String, String>,
-    quotas: Vec<ResourceQuota>,
-    policies: Vec<NetworkPolicy>,
-    binding: Option<ValidatingAdmissionPolicyBinding>,
+pub(super) struct World {
+    pub(super) labels: BTreeMap<String, String>,
+    pub(super) quotas: Vec<ResourceQuota>,
+    pub(super) policies: Vec<NetworkPolicy>,
+    pub(super) binding: Option<ValidatingAdmissionPolicyBinding>,
 }
 
 fn named<T: Default>(name: &str, build: impl FnOnce(ObjectMeta) -> T) -> T {
@@ -44,19 +44,21 @@ fn policy(name: &str) -> NetworkPolicy {
 }
 
 fn binding(selector: Option<LabelSelector>) -> ValidatingAdmissionPolicyBinding {
-    named(ADMISSION_BINDING_NAME, |metadata| ValidatingAdmissionPolicyBinding {
-        metadata,
-        spec: Some(ValidatingAdmissionPolicyBindingSpec {
-            match_resources: Some(MatchResources {
-                namespace_selector: selector,
-                ..MatchResources::default()
+    named(ADMISSION_BINDING_NAME, |metadata| {
+        ValidatingAdmissionPolicyBinding {
+            metadata,
+            spec: Some(ValidatingAdmissionPolicyBindingSpec {
+                match_resources: Some(MatchResources {
+                    namespace_selector: selector,
+                    ..MatchResources::default()
+                }),
+                ..ValidatingAdmissionPolicyBindingSpec::default()
             }),
-            ..ValidatingAdmissionPolicyBindingSpec::default()
-        }),
+        }
     })
 }
 
-fn fenced_world() -> World {
+pub(super) fn fenced_world() -> World {
     World {
         labels: BTreeMap::from([("br.sandbox/managed".to_owned(), "true".to_owned())]),
         quotas: vec![named(QUOTA_NAME, |metadata| ResourceQuota {
@@ -74,7 +76,7 @@ fn fenced_world() -> World {
     }
 }
 
-fn verdict(world: &World) -> FenceVerdict {
+pub(super) fn verdict(world: &World) -> FenceVerdict {
     fence_verdict(&FenceFacts::new(
         "sbx-acme",
         &world.labels,
@@ -85,7 +87,7 @@ fn verdict(world: &World) -> FenceVerdict {
     ))
 }
 
-fn fault_of(world: &World) -> FenceFault {
+pub(super) fn fault_of(world: &World) -> FenceFault {
     match verdict(world) {
         FenceVerdict::NotFenced(fault) => fault,
         FenceVerdict::Fenced => panic!("the namespace is fenced"),
@@ -105,7 +107,9 @@ fn a_namespace_that_does_not_match_the_selector_is_not_fenced_and_the_namespace_
     assert_eq!(fault.object, FenceObject::Namespace);
     assert_eq!(fault.name, "sbx-acme");
     assert!(fault.to_string().contains("sbx-acme"));
-    world.labels.insert("br.sandbox/managed".to_owned(), "false".to_owned());
+    world
+        .labels
+        .insert("br.sandbox/managed".to_owned(), "false".to_owned());
     assert_eq!(fault_of(&world).problem, FenceProblem::NotSelected);
 }
 
@@ -122,7 +126,10 @@ fn a_selector_that_cannot_be_read_is_never_a_fence() {
     ));
     assert!(matches!(
         result,
-        FenceVerdict::NotFenced(FenceFault { problem: FenceProblem::SelectorUnreadable(_), .. })
+        FenceVerdict::NotFenced(FenceFault {
+            problem: FenceProblem::SelectorUnreadable(_),
+            ..
+        })
     ));
 }
 
@@ -131,7 +138,10 @@ fn a_missing_quota_is_named_and_a_quota_of_another_name_is_no_quota() {
     let mut world = fenced_world();
     world.quotas.clear();
     let fault = fault_of(&world);
-    assert_eq!((fault.object, fault.name.as_str()), (FenceObject::ResourceQuota, "br-sandbox-quota"));
+    assert_eq!(
+        (fault.object, fault.name.as_str()),
+        (FenceObject::ResourceQuota, "br-sandbox-quota")
+    );
     assert_eq!(fault.problem, FenceProblem::Missing);
     world.quotas = vec![named("other-quota", |metadata| ResourceQuota {
         metadata,
@@ -148,80 +158,11 @@ fn a_missing_default_deny_is_named() {
     assert_eq!(fault.object, FenceObject::NetworkPolicy);
     assert_eq!(fault.name, "br-sandbox-default-deny");
     assert_eq!(fault.problem, FenceProblem::Missing);
-    assert!(fault.to_string().contains("br-sandbox-default-deny is missing"));
-}
-
-#[test]
-fn the_default_deny_must_select_all_pods() {
-    for selector in [
-        LabelSelector {
-            match_labels: Some(BTreeMap::from([("app".to_owned(), "x".to_owned())])),
-            match_expressions: None,
-        },
-        LabelSelector {
-            match_labels: None,
-            match_expressions: Some(vec![LabelSelectorRequirement {
-                key: "app".to_owned(),
-                operator: "Exists".to_owned(),
-                values: None,
-            }]),
-        },
-    ] {
-        let mut world = fenced_world();
-        world.policies[0].spec.as_mut().unwrap().pod_selector = Some(selector);
-        assert!(matches!(
-            fault_of(&world).problem,
-            FenceProblem::NotDefaultDeny(reason) if reason.contains("all pods")
-        ));
-    }
-    let mut empty_maps = fenced_world();
-    empty_maps.policies[0].spec.as_mut().unwrap().pod_selector = Some(LabelSelector {
-        match_labels: Some(BTreeMap::new()),
-        match_expressions: Some(Vec::new()),
-    });
-    assert!(verdict(&empty_maps).is_fenced());
-}
-
-#[test]
-fn the_default_deny_types_must_hold_ingress_and_egress() {
-    for types in [
-        None,
-        Some(vec![]),
-        Some(vec!["Ingress".to_owned()]),
-        Some(vec!["Egress".to_owned()]),
-    ] {
-        let mut world = fenced_world();
-        world.policies[0].spec.as_mut().unwrap().policy_types = types;
-        assert!(matches!(
-            fault_of(&world).problem,
-            FenceProblem::NotDefaultDeny(reason) if reason.contains("Ingress and Egress")
-        ));
-    }
-}
-
-#[test]
-fn the_default_deny_must_have_no_allow_rule_of_either_kind() {
-    let mut ingress = fenced_world();
-    ingress.policies[0].spec.as_mut().unwrap().ingress = Some(vec![NetworkPolicyIngressRule::default()]);
-    let mut egress = fenced_world();
-    egress.policies[0].spec.as_mut().unwrap().egress = Some(vec![NetworkPolicyEgressRule::default()]);
-    for world in [ingress, egress] {
-        assert!(matches!(
-            fault_of(&world).problem,
-            FenceProblem::NotDefaultDeny(reason) if reason.contains("allow rule")
-        ));
-    }
-    let mut empty_lists = fenced_world();
-    empty_lists.policies[0].spec.as_mut().unwrap().ingress = Some(Vec::new());
-    empty_lists.policies[0].spec.as_mut().unwrap().egress = Some(Vec::new());
-    assert!(verdict(&empty_lists).is_fenced());
-}
-
-#[test]
-fn a_default_deny_with_no_spec_is_not_a_default_deny() {
-    let mut world = fenced_world();
-    world.policies[0].spec = None;
-    assert!(matches!(fault_of(&world).problem, FenceProblem::NotDefaultDeny(_)));
+    assert!(
+        fault
+            .to_string()
+            .contains("br-sandbox-default-deny is missing")
+    );
 }
 
 #[test]
@@ -275,7 +216,8 @@ fn a_binding_with_no_namespace_selector_selects_every_namespace() {
     world.binding = Some(binding(None));
     assert!(verdict(&world).is_fenced());
     let mut no_resources = fenced_world();
-    no_resources.binding.as_mut().unwrap().spec = Some(ValidatingAdmissionPolicyBindingSpec::default());
+    no_resources.binding.as_mut().unwrap().spec =
+        Some(ValidatingAdmissionPolicyBindingSpec::default());
     assert!(verdict(&no_resources).is_fenced());
 }
 

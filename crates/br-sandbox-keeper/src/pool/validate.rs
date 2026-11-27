@@ -103,10 +103,7 @@ pub fn validate_spec(spec: &SandboxPoolSpec) -> Result<PoolSettings, InvalidSpec
         bounds("disk", &spec.size.disk)?,
     );
     if spec.min_replicas > spec.max_replicas {
-        return Err(InvalidSpec::new(
-            "minReplicas",
-            "it is above maxReplicas",
-        ));
+        return Err(InvalidSpec::new("minReplicas", "it is above maxReplicas"));
     }
     Ok(PoolSettings {
         image: spec.image.clone(),

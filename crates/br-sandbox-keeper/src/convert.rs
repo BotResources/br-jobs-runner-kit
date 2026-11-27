@@ -6,10 +6,10 @@ use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
-use crate::pool::template_hash_key;
 use crate::facts::{
     ConditionFacts, ContainerFacts, Mark, Phase, PodFacts, PoolState, ReplicaSetFacts, Terminated,
 };
+use crate::pool::template_hash_key;
 
 const READY: &str = "Ready";
 const TRUE: &str = "True";

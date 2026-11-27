@@ -98,11 +98,11 @@ fn the_metrics_with_no_label_render_one_series_from_the_start() {
 }
 
 #[test]
-fn pods_deleted_carries_the_label_reason_with_the_four_reasons_from_the_start() {
+fn pods_deleted_carries_the_label_reason_with_the_five_reasons_from_the_start() {
     let text = Metrics::new().render(false);
     let mut found = series(&text, "pods_deleted_total");
     found.sort();
-    let mut expected: Vec<String> = ["warm_max_age", "idle", "stuck", "failed"]
+    let mut expected: Vec<String> = ["warm_max_age", "idle", "stuck", "failed", "rollout"]
         .iter()
         .map(|reason| format!("br_sandbox_keeper_pods_deleted_total{{reason=\"{reason}\"}} 0"))
         .collect();

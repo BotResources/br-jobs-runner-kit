@@ -9,15 +9,27 @@
 - `rights`: `RIGHTS` (the rights table of the intent as data, with `Right` and `RightScope`), `POD_TEMPLATE_CONFIGMAP`, and the closed list of network policy names (`NETWORK_POLICY_NAMES`, `NETWORK_POLICY_DEFAULT_DENY`, `NETWORK_POLICY_EGRESS_ALLOW`, `NETWORK_POLICY_EGRESS_FULL`).
 - `serde-saphyr` is now a dependency (it was a dev-dependency, and is already in the lock through `kube`).
 
+- `pool`: the pure rules of the resource: `validate` (`InvalidSpec`), `template` (`PoolTemplate`, `TemplateFault`, `RenderedTemplate`, the template hash), `fence` (`FenceFacts`, `fence_verdict`, `FenceFault`), `duplicate` (`pool_winner`, `is_duplicate`), `status` (`judge_acceptance`, `compute_status`, `decide_write`, `STATUS_WRITE_INTERVAL`), `selector`, `quantity`, `PoolSettings`, and the names (`replicaset_name`, `template_hash_key`).
+- `rules::plan_rollout`, `RolloutPlan`, `RolloutState`, `Wait`, `failing_status`; the delete reason `DeleteReason::Rollout` and the metric reason `rollout`; `PodFacts` carries `template_hash` and `unschedulable`.
+- Configuration keys `idle_ttl_seconds`, `idle_keep_min_state_bytes` (for the whole keeper) and `agent_container` (required, no default).
+
+### Changed
+
+- The key `pools` is removed from the configuration; a document that holds it is a start fault (`ConfigError::PoolsAreResources`). The pool types of the configuration (`pools`, `PoolInput`, `FloorInput`) and the errors that belonged to them are removed.
+- `rules::size_pool` takes `PoolSettings`. `judge_pod` takes a flag for a pod chosen by the rollout.
+- The start no longer checks that the namespace of a configured pool is managed (`KeeperError::PoolNamespaceNotManaged` is removed).
+- The controller keeps a transitional `Engine.pools` list that the production runner leaves empty: this version does expiry and sweep only, and does not size a pool. The next piece drives the pools from the resources.
+
 ### Tests
 
+- The pure rules above are covered by unit tests, one for each sentence of the intent that they touch (spec validation, template check and hash, fence verdict, duplicate rule, sizing, rollout plan, pod expiry by state, status conditions and write rate). The tests of the removed pool configuration are replaced by tests of the `pools` fault and of the new keys; the chart 0.3 tests now hold that the keeper refuses its document.
 - The checked-in definition file equals the generated definition; each level of the type has the keys of its schema; the preserve mark, the bounds and the four rules are held; no other rule is present.
 - The spec is read strictly at each level, with the defaults of the table, and a bad spec does not fail the object that holds it.
 - The rights table equals the table of the intent row by row, and has no wildcard, no `escalate`, `bind` or `impersonate`, and no write on the objects that the keeper only reads. The rights test of the client now takes the granted set from `RIGHTS`.
 
 ### Documentation
 
-- README: "The resource `SandboxPool`" and "Rights table", and the two new rows of the public surface. This version does not yet validate every rule of the resource, does not read a resource or a network policy, and does not call the new rights.
+- README: "The resource `SandboxPool`" and "Rights table", and the two new rows of the public surface. This version does not yet read a resource, a ConfigMap or a network policy, and does not call the new rights: the pure rules of `pool` are not yet wired into the controller.
 
 ## 0.1.1
 

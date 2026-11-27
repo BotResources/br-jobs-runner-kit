@@ -76,22 +76,17 @@ pub fn plan_rollout<'a>(
     if current.iter().any(|pod| pod_failure(pod).is_some()) {
         return verdict(RolloutState::Stopped, Vec::new());
     }
-    if current.iter().any(|pod| !pod.ready || pod.phase == Phase::Failed) {
-        return verdict(
-            RolloutState::Waiting(Wait::CurrentPodNotReady),
-            Vec::new(),
-        );
+    if current
+        .iter()
+        .any(|pod| !pod.ready || pod.phase == Phase::Failed)
+    {
+        return verdict(RolloutState::Waiting(Wait::CurrentPodNotReady), Vec::new());
     }
     if count(&live) < replicas {
-        return verdict(
-            RolloutState::Waiting(Wait::ReplacementsMissing),
-            Vec::new(),
-        );
+        return verdict(RolloutState::Waiting(Wait::ReplacementsMissing), Vec::new());
     }
     let mut order = stale.clone();
-    order.sort_by(|a, b| {
-        (a.ready, a.created_at, &a.name).cmp(&(b.ready, b.created_at, &b.name))
-    });
+    order.sort_by(|a, b| (a.ready, a.created_at, &a.name).cmp(&(b.ready, b.created_at, &b.name)));
     let chosen: Vec<String> = order
         .into_iter()
         .take(step as usize)

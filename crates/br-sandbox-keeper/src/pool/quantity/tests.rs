@@ -64,7 +64,10 @@ fn a_text_that_is_not_a_quantity_is_refused() {
 #[test]
 fn a_value_that_does_not_fit_is_refused_and_never_wraps() {
     assert_eq!(parse("1e100"), Err(Refusal::TooLarge));
-    assert_eq!(parse("340282366920938463463374607431768211455"), Err(Refusal::TooLarge));
+    assert_eq!(
+        parse("340282366920938463463374607431768211455"),
+        Err(Refusal::TooLarge)
+    );
     assert_eq!(parse("1e99999999999"), Err(Refusal::TooLarge));
 }
 

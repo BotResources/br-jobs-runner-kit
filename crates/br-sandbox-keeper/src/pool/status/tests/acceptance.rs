@@ -74,7 +74,12 @@ fn a_view_that_is_not_synced_or_a_read_that_failed_gives_not_observed() {
         Acceptance::NotObserved
     );
     assert_eq!(
-        judge_acceptance(Some(&FenceVerdict::Fenced), None, &good_spec(), Some(&template)),
+        judge_acceptance(
+            Some(&FenceVerdict::Fenced),
+            None,
+            &good_spec(),
+            Some(&template)
+        ),
         Acceptance::NotObserved
     );
     assert_eq!(
@@ -111,7 +116,9 @@ fn an_absent_template_is_template_absent_and_never_a_fence_fault() {
 
 #[test]
 fn an_invalid_template_carries_its_reason() {
-    let invalid = Err(TemplateFault::Invalid("no container is named agent".to_owned()));
+    let invalid = Err(TemplateFault::Invalid(
+        "no container is named agent".to_owned(),
+    ));
     let accepted = judge_acceptance(
         Some(&FenceVerdict::Fenced),
         Some(false),
@@ -127,7 +134,10 @@ fn an_invalid_template_carries_its_reason() {
 #[test]
 fn an_invalid_spec_names_the_field_and_the_reason() {
     let accepted = judge_acceptance(Some(&FenceVerdict::Fenced), Some(false), &bad_spec(), None);
-    assert_eq!(accepted, Acceptance::InvalidSpec("image: it is blank".to_owned()));
+    assert_eq!(
+        accepted,
+        Acceptance::InvalidSpec("image: it is blank".to_owned())
+    );
 }
 
 #[test]
@@ -145,11 +155,21 @@ fn the_order_of_the_faults_is_fence_then_duplicate_then_spec_then_template() {
         Acceptance::NamespaceNotFenced(_)
     ));
     assert_eq!(
-        judge_acceptance(Some(&FenceVerdict::Fenced), Some(true), &bad_spec(), Some(&template)),
+        judge_acceptance(
+            Some(&FenceVerdict::Fenced),
+            Some(true),
+            &bad_spec(),
+            Some(&template)
+        ),
         Acceptance::DuplicatePool
     );
     assert!(matches!(
-        judge_acceptance(Some(&FenceVerdict::Fenced), Some(false), &bad_spec(), Some(&template)),
+        judge_acceptance(
+            Some(&FenceVerdict::Fenced),
+            Some(false),
+            &bad_spec(),
+            Some(&template)
+        ),
         Acceptance::InvalidSpec(_)
     ));
 }
@@ -158,11 +178,23 @@ fn the_order_of_the_faults_is_fence_then_duplicate_then_spec_then_template() {
 fn each_reason_of_the_table_is_the_text_of_the_intent() {
     let cases = [
         (Acceptance::Valid, "True", "Valid"),
-        (Acceptance::InvalidSpec("x".to_owned()), "False", "InvalidSpec"),
-        (Acceptance::NamespaceNotFenced("x".to_owned()), "False", "NamespaceNotFenced"),
+        (
+            Acceptance::InvalidSpec("x".to_owned()),
+            "False",
+            "InvalidSpec",
+        ),
+        (
+            Acceptance::NamespaceNotFenced("x".to_owned()),
+            "False",
+            "NamespaceNotFenced",
+        ),
         (Acceptance::DuplicatePool, "False", "DuplicatePool"),
         (Acceptance::TemplateAbsent, "False", "TemplateAbsent"),
-        (Acceptance::InvalidTemplate("x".to_owned()), "False", "InvalidTemplate"),
+        (
+            Acceptance::InvalidTemplate("x".to_owned()),
+            "False",
+            "InvalidTemplate",
+        ),
         (Acceptance::NotObserved, "Unknown", "NotObserved"),
     ];
     for (acceptance, status, reason) in cases {

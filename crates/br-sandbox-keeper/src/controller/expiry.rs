@@ -1,7 +1,7 @@
-use std::collections::HashSet;
 use crate::cluster::DeleteOutcome;
 use crate::facts::PodFacts;
 use crate::rules::{Action, DeleteReason, ExpiryRules, judge_pod};
+use std::collections::HashSet;
 
 use super::{Engine, PodId, PoolId};
 

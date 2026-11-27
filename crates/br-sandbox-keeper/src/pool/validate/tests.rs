@@ -225,7 +225,11 @@ fn a_missing_required_field_and_a_negative_or_text_number_are_invalid_specs() {
     for key in ["image", "size", "minReplicas", "maxReplicas"] {
         let mut value = spec_json();
         value.as_object_mut().unwrap().remove(key);
-        assert_eq!(validate(&resource(value)).unwrap_err().field, "spec", "{key}");
+        assert_eq!(
+            validate(&resource(value)).unwrap_err().field,
+            "spec",
+            "{key}"
+        );
     }
     for bad in [json!(-1), json!("3"), json!(1.5)] {
         let mut value = spec_json();

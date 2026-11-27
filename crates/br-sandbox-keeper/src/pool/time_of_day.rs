@@ -55,7 +55,9 @@ mod tests {
 
     #[test]
     fn a_text_that_is_not_two_digits_for_each_part_is_refused() {
-        for text in ["9:00", "10:61", "10:00:60", "10", "ten", "10:5", "+1:00", "1:2:3:4", ""] {
+        for text in [
+            "9:00", "10:61", "10:00:60", "10", "ten", "10:5", "+1:00", "1:2:3:4", "",
+        ] {
             assert!(parse(text, End::End).is_err(), "{text}");
         }
     }

@@ -92,7 +92,11 @@ mod tests {
 
     #[test]
     fn three_resources_leave_one_winner_and_two_duplicates() {
-        let all = [pool("c", Some(30)), pool("a", Some(10)), pool("b", Some(20))];
+        let all = [
+            pool("c", Some(30)),
+            pool("a", Some(10)),
+            pool("b", Some(20)),
+        ];
         let duplicates = all.iter().filter(|pool| is_duplicate(pool, &all)).count();
         assert_eq!(duplicates, 2);
         assert_eq!(pool_winner(&all).unwrap().name, "a");

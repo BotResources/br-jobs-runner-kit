@@ -106,10 +106,16 @@ fn requirement(text: &str) -> Result<Requirement, SelectorError> {
         return Ok(found);
     }
     if let Some((key, wanted)) = text.split_once("!=") {
-        return Ok(Requirement::NotEquals(name(key.trim())?, value(wanted.trim())?));
+        return Ok(Requirement::NotEquals(
+            name(key.trim())?,
+            value(wanted.trim())?,
+        ));
     }
     if let Some((key, wanted)) = text.split_once("==").or_else(|| text.split_once('=')) {
-        return Ok(Requirement::Equals(name(key.trim())?, value(wanted.trim())?));
+        return Ok(Requirement::Equals(
+            name(key.trim())?,
+            value(wanted.trim())?,
+        ));
     }
     match text.strip_prefix('!') {
         Some(key) => Ok(Requirement::Absent(name(key.trim())?)),

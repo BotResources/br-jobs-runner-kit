@@ -19,7 +19,10 @@ fn the_default_selector_of_the_keeper_matches_a_label_with_that_value_only() {
     assert!(selects(selector, &[("br.sandbox/managed", "true")]));
     assert!(!selects(selector, &[("br.sandbox/managed", "false")]));
     assert!(!selects(selector, &[]));
-    assert!(selects("br.sandbox/managed==true", &[("br.sandbox/managed", "true")]));
+    assert!(selects(
+        "br.sandbox/managed==true",
+        &[("br.sandbox/managed", "true")]
+    ));
 }
 
 #[test]
@@ -63,7 +66,16 @@ fn an_empty_selector_matches_every_namespace() {
 
 #[test]
 fn a_selector_that_cannot_be_read_is_an_error_and_never_a_match() {
-    for text in ["=b", "a b", "a in b", "a in (x", "a,,b", "a>3", "a=b,", "a in (x))"] {
+    for text in [
+        "=b",
+        "a b",
+        "a in b",
+        "a in (x",
+        "a,,b",
+        "a>3",
+        "a=b,",
+        "a in (x))",
+    ] {
         assert!(Selector::parse(text).is_err(), "{text}");
     }
 }

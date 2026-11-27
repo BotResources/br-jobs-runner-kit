@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::sync::Mutex;
 
-pub const POD_DELETE_REASONS: [&str; 4] = ["warm_max_age", "idle", "stuck", "failed"];
+pub const POD_DELETE_REASONS: [&str; 5] = ["warm_max_age", "idle", "stuck", "failed", "rollout"];
 
 #[derive(Default)]
 struct PoolGauges {

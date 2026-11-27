@@ -6,10 +6,6 @@ use br_sandbox_keeper::facts::{
     ConditionFacts, ContainerFacts, Mark, Phase, PodFacts, PodVersion, PoolState, ReplicaSetFacts,
     Terminated,
 };
-use br_sandbox_keeper::rules::{
-    Action, DeleteReason, ExpiryRules, ScaleDownRules, ScaleState, SweepRules, condition_write,
-    damp, judge_pod, judge_pool, record_is_old,
-};
 use br_sandbox_keeper::pool::{
     Acceptance, Counts, FenceFacts, FenceVerdict, Observation, PoolRef, PoolTemplate,
     ReplicaSetView, StatusInput, StatusWrite, TemplateFault, compute_status, decide_write,
@@ -17,6 +13,10 @@ use br_sandbox_keeper::pool::{
 };
 use br_sandbox_keeper::resource::{PoolSize, SandboxPoolSpec, SizeBounds};
 use br_sandbox_keeper::rules::plan_rollout;
+use br_sandbox_keeper::rules::{
+    Action, DeleteReason, ExpiryRules, ScaleDownRules, ScaleState, SweepRules, condition_write,
+    damp, judge_pod, judge_pool, record_is_old,
+};
 use br_sandbox_keeper::{ConfigError, KeeperConfig, KeeperConfigInput};
 
 fn at(seconds: u64) -> Timestamp {
@@ -162,7 +162,14 @@ fn an_importer_applies_the_pure_rules_of_the_resource_with_the_constructors() {
         judge_pool(std::iter::empty::<&PodFacts>()),
         at(10),
     );
-    let input = StatusInput::new(Some(1), Some(1), &acceptance, Some(&observation), None, at(10));
+    let input = StatusInput::new(
+        Some(1),
+        Some(1),
+        &acceptance,
+        Some(&observation),
+        None,
+        at(10),
+    );
     let status = compute_status(&input);
     assert!(matches!(
         decide_write(status, None, None, at(10)),

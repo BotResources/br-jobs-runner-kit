@@ -22,7 +22,11 @@ fn ready_of(observation: Option<&Observation>, min: Option<u32>) -> (String, Str
         at(600),
     ));
     let ready = condition(&status, "Ready");
-    (ready.status.clone(), ready.reason.clone(), ready.message.clone())
+    (
+        ready.status.clone(),
+        ready.reason.clone(),
+        ready.message.clone(),
+    )
 }
 
 #[test]
@@ -38,7 +42,10 @@ fn a_valid_resource_with_a_synced_view_is_accepted_and_ready_with_the_counts() {
     assert_eq!(status.ready_replicas, Some(2));
     assert_eq!(status.updated_replicas, Some(3));
     assert_eq!(
-        status.observed_at.as_ref().map(|time| crate::convert::timestamp_of(time)),
+        status
+            .observed_at
+            .as_ref()
+            .map(crate::convert::timestamp_of),
         Some(at(500))
     );
 }
@@ -48,7 +55,10 @@ fn ready_needs_the_minimum_of_ready_warm_pods() {
     let (status, _, _) = ready_of(Some(&owned(None, 2)), Some(2));
     assert_eq!(status, "True");
     let (status, reason, message) = ready_of(Some(&owned(None, 1)), Some(2));
-    assert_eq!((status.as_str(), reason.as_str()), ("False", "WarmBelowMinimum"));
+    assert_eq!(
+        (status.as_str(), reason.as_str()),
+        ("False", "WarmBelowMinimum")
+    );
     assert!(message.contains("1") && message.contains("2"), "{message}");
 }
 
@@ -97,7 +107,10 @@ fn a_view_that_is_not_synced_gives_unknown_not_observed_for_ready_and_accepted()
 #[test]
 fn an_unknown_minimum_is_never_turned_into_a_true_ready() {
     let (status, reason, _) = ready_of(Some(&owned(None, 9)), None);
-    assert_eq!((status.as_str(), reason.as_str()), ("Unknown", "NotObserved"));
+    assert_eq!(
+        (status.as_str(), reason.as_str()),
+        ("Unknown", "NotObserved")
+    );
 }
 
 #[test]
@@ -109,7 +122,12 @@ fn with_no_observation_and_no_earlier_status_no_count_and_no_instant_is_said() {
     assert_eq!(status.ready_replicas, None);
     assert_eq!(status.updated_replicas, None);
     assert_eq!(status.observed_at, None);
-    assert!(status.conditions.iter().all(|c| c.type_ != "WarmPodsFailing"));
+    assert!(
+        status
+            .conditions
+            .iter()
+            .all(|c| c.type_ != "WarmPodsFailing")
+    );
 }
 
 #[test]
@@ -127,7 +145,10 @@ fn a_view_that_is_lost_keeps_the_earlier_counts_the_instant_and_the_observed_gen
     assert_eq!(lost.observed_generation, Some(7));
     assert_eq!(lost.ready_replicas, Some(2));
     assert_eq!(lost.observed_at, first.observed_at);
-    assert_eq!(condition(&lost, "WarmPodsFailing"), condition(&first, "WarmPodsFailing"));
+    assert_eq!(
+        condition(&lost, "WarmPodsFailing"),
+        condition(&first, "WarmPodsFailing")
+    );
     assert_eq!(condition(&lost, "Accepted").status, "Unknown");
 }
 
@@ -170,7 +191,12 @@ fn the_failing_condition_of_the_resource_equals_the_one_of_the_replicaset() {
 fn the_transition_time_changes_only_when_the_status_of_a_condition_changes() {
     let healthy = observed(2, 100);
     let first = status_of(&Acceptance::Valid, Some(&healthy), None, at(1000));
-    let same = status_of(&Acceptance::Valid, Some(&observed(3, 150)), Some(&first), at(2000));
+    let same = status_of(
+        &Acceptance::Valid,
+        Some(&observed(3, 150)),
+        Some(&first),
+        at(2000),
+    );
     for kind in ["Accepted", "Ready", "WarmPodsFailing"] {
         assert_eq!(
             condition(&same, kind).last_transition_time,

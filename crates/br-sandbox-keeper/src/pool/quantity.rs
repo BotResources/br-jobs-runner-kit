@@ -94,7 +94,10 @@ pub(super) fn parse(text: &str) -> Result<Nano, Refusal> {
         .ok_or(Refusal::TooLarge)?;
     if power >= 0 {
         let factor = power_of_ten(power.unsigned_abs()).ok_or(Refusal::TooLarge)?;
-        return scaled.checked_mul(factor).map(Nano).ok_or(Refusal::TooLarge);
+        return scaled
+            .checked_mul(factor)
+            .map(Nano)
+            .ok_or(Refusal::TooLarge);
     }
     match power_of_ten(power.unsigned_abs()) {
         Some(divisor) => Ok(Nano(scaled.div_ceil(divisor))),

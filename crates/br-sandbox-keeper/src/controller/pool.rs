@@ -124,8 +124,14 @@ impl Engine {
             name: pool.replicaset.clone(),
             uid: replica_set.uid.clone(),
         };
-        self.at_max_event(pool, &id, &target, desired.above_max(&pool.settings), desired.raw)
-            .await;
+        self.at_max_event(
+            pool,
+            &id,
+            &target,
+            desired.above_max(&pool.settings),
+            desired.raw,
+        )
+        .await;
         let judged = judge_pool(self.pool_pods(pool, PoolState::Warm));
         if let Some(write) = condition_write(&replica_set.conditions, &judged, now)
             && self.leadership.is_leader()

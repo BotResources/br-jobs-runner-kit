@@ -92,7 +92,9 @@ fn a_good_template_is_read() {
 #[test]
 fn a_config_map_with_no_key_or_a_text_that_is_not_a_json_object_is_invalid() {
     let no_key = PoolTemplate::read(Some(&config_map(None)), "sbx-acme", &keys(), "agent");
-    assert!(matches!(no_key, Err(TemplateFault::Invalid(reason)) if reason.contains("pod-template.json")));
+    assert!(
+        matches!(no_key, Err(TemplateFault::Invalid(reason)) if reason.contains("pod-template.json"))
+    );
     for text in ["not json", "[1]", "\"x\"", "null"] {
         let result = PoolTemplate::read(
             Some(&config_map(Some(text.to_owned()))),
@@ -118,7 +120,10 @@ fn the_pool_label_must_be_warm() {
         .remove("br.sandbox/pool");
     assert!(fault_of(&missing).contains("br.sandbox/pool must be warm"));
     let mut no_labels = template_json();
-    no_labels["metadata"].as_object_mut().unwrap().remove("labels");
+    no_labels["metadata"]
+        .as_object_mut()
+        .unwrap()
+        .remove("labels");
     assert!(fault_of(&no_labels).contains("must be warm"));
 }
 
@@ -145,11 +150,14 @@ fn the_labels_follow_the_label_prefix() {
         &keys,
         "agent",
     );
-    assert!(matches!(result, Err(TemplateFault::Invalid(reason)) if reason.contains("acme.sbx/pool")));
+    assert!(
+        matches!(result, Err(TemplateFault::Invalid(reason)) if reason.contains("acme.sbx/pool"))
+    );
 }
 
 #[test]
-fn a_container_with_the_name_of_the_agent_container_must_exist_and_an_init_container_does_not_count() {
+fn a_container_with_the_name_of_the_agent_container_must_exist_and_an_init_container_does_not_count()
+ {
     let mut bad = template_json();
     bad["spec"]["containers"] = json!([{"name": "seed", "image": "x"}]);
     assert!(fault_of(&bad).contains("no container is named agent"));
@@ -182,7 +190,10 @@ fn the_keeper_changes_the_image_and_the_resources_of_the_agent_container_and_the
 #[test]
 fn the_annotation_is_added_when_the_template_has_no_annotation() {
     let mut value = template_json();
-    value["metadata"].as_object_mut().unwrap().remove("annotations");
+    value["metadata"]
+        .as_object_mut()
+        .unwrap()
+        .remove("annotations");
     let rendered = read(&value).unwrap().render(&settings("i:1"), &keys());
     assert_eq!(
         rendered.template["metadata"]["annotations"]["br.sandbox/template-hash"],
@@ -202,8 +213,12 @@ fn the_hash_is_64_hex_characters_and_the_same_for_the_same_input() {
 
 #[test]
 fn the_hash_changes_with_the_image_the_size_and_any_field_of_the_config_map() {
-    let base = read(&template_json()).unwrap().render(&settings("i:1"), &keys());
-    let image = read(&template_json()).unwrap().render(&settings("i:2"), &keys());
+    let base = read(&template_json())
+        .unwrap()
+        .render(&settings("i:1"), &keys());
+    let image = read(&template_json())
+        .unwrap()
+        .render(&settings("i:2"), &keys());
     assert_ne!(base.hash, image.hash);
     let mut bigger = settings("i:1");
     bigger.size.cpu = ResourceBounds::new("500m", "3");
@@ -217,7 +232,9 @@ fn the_hash_changes_with_the_image_the_size_and_any_field_of_the_config_map() {
 
 #[test]
 fn the_hash_does_not_change_with_the_order_of_keys_or_with_a_hash_already_in_the_config_map() {
-    let base = read(&template_json()).unwrap().render(&settings("i:1"), &keys());
+    let base = read(&template_json())
+        .unwrap()
+        .render(&settings("i:1"), &keys());
     let text = template_json().to_string();
     let reordered: Value = {
         let mut value: Value = serde_json::from_str(&text).unwrap();
@@ -236,7 +253,9 @@ fn the_hash_does_not_change_with_the_order_of_keys_or_with_a_hash_already_in_the
 
 #[test]
 fn the_resources_of_the_config_map_are_replaced_whole_by_the_size_of_the_resource() {
-    let rendered = read(&template_json()).unwrap().render(&settings("i:1"), &keys());
+    let rendered = read(&template_json())
+        .unwrap()
+        .render(&settings("i:1"), &keys());
     assert!(rendered.template["spec"]["containers"][1]["resources"]["limits"]["size"].is_null());
     assert_eq!(
         rendered.template["spec"]["containers"][0],

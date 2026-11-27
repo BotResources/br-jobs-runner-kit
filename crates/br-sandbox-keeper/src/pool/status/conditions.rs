@@ -1,5 +1,5 @@
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 use br_runner_sandbox::{CONDITION_WARM_PODS_FAILING, Timestamp};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 
 use super::decide::{Observation, ReplicaSetView};
 use super::{
@@ -35,7 +35,11 @@ pub(super) fn ready_fields(observation: Option<&Observation>, min_replicas: Opti
     };
     let refusal = match &observation.replica_set {
         ReplicaSetView::Absent => {
-            return Fields::new("False", REASON_REPLICASET_ABSENT, "the ReplicaSet does not exist");
+            return Fields::new(
+                "False",
+                REASON_REPLICASET_ABSENT,
+                "the ReplicaSet does not exist",
+            );
         }
         ReplicaSetView::NotOwned => {
             return Fields::new(
@@ -92,7 +96,10 @@ pub(super) fn build(
     let transition = previous
         .iter()
         .find(|condition| condition.type_ == kind && condition.status == fields.status)
-        .map_or_else(|| time_of(now), |condition| condition.last_transition_time.clone());
+        .map_or_else(
+            || time_of(now),
+            |condition| condition.last_transition_time.clone(),
+        );
     Condition {
         type_: kind.to_owned(),
         status: fields.status.to_owned(),

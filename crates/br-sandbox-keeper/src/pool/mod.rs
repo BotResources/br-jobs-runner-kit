@@ -11,9 +11,7 @@ mod time_of_day;
 mod validate;
 
 pub use duplicate::{PoolRef, is_duplicate, pool_winner};
-pub use fence::{
-    FenceFacts, FenceFault, FenceObject, FenceProblem, FenceVerdict, fence_verdict,
-};
+pub use fence::{FenceFacts, FenceFault, FenceObject, FenceProblem, FenceVerdict, fence_verdict};
 pub use names::{
     ADMISSION_BINDING_NAME, POD_TEMPLATE_KEY, QUOTA_NAME, REPLICASET_PREFIX, pool_id,
     replicaset_name, template_hash_key,

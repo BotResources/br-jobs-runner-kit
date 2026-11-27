@@ -121,7 +121,10 @@ fn fault(object: FenceObject, name: &str, problem: FenceProblem) -> FenceVerdict
 }
 
 fn is_empty_selector(selector: &LabelSelector) -> bool {
-    selector.match_labels.as_ref().is_none_or(BTreeMap::is_empty)
+    selector
+        .match_labels
+        .as_ref()
+        .is_none_or(BTreeMap::is_empty)
         && selector
             .match_expressions
             .as_ref()
@@ -174,7 +177,13 @@ fn quota_check(facts: &FenceFacts<'_>) -> Option<FenceVerdict> {
         .quotas
         .iter()
         .any(|quota| quota.metadata.name.as_deref() == Some(QUOTA_NAME));
-    (!found).then(|| fault(FenceObject::ResourceQuota, QUOTA_NAME, FenceProblem::Missing))
+    (!found).then(|| {
+        fault(
+            FenceObject::ResourceQuota,
+            QUOTA_NAME,
+            FenceProblem::Missing,
+        )
+    })
 }
 
 fn policies_check(facts: &FenceFacts<'_>) -> Option<FenceVerdict> {
@@ -201,7 +210,13 @@ fn policies_check(facts: &FenceFacts<'_>) -> Option<FenceVerdict> {
         .iter()
         .map(name_of)
         .find(|name| !NETWORK_POLICY_NAMES.contains(name))
-        .map(|name| fault(FenceObject::NetworkPolicy, name, FenceProblem::NotInClosedList))
+        .map(|name| {
+            fault(
+                FenceObject::NetworkPolicy,
+                name,
+                FenceProblem::NotInClosedList,
+            )
+        })
 }
 
 fn binding_check(facts: &FenceFacts<'_>) -> Option<FenceVerdict> {

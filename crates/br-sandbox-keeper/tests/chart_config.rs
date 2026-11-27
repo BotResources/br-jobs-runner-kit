@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use br_sandbox_keeper::{ConfigError, KeeperConfig};
 use serde_json::Value;
+use std::path::{Path, PathBuf};
 
 mod common;
 
@@ -75,7 +75,9 @@ fn the_document_of_the_chart_carries_the_pool_the_store_the_lease_and_the_settin
     let objects = rendered(&keeper_overlay(), &[]);
     let document = document_of(&objects);
 
-    let pools = document["pools"].as_array().expect("the pools of the chart");
+    let pools = document["pools"]
+        .as_array()
+        .expect("the pools of the chart");
     let pool = |id: &str| {
         pools
             .iter()
@@ -104,7 +106,10 @@ fn the_document_of_the_chart_carries_the_pool_the_store_the_lease_and_the_settin
     assert_eq!(document["retry_period_seconds"], 2);
     assert!(document.get("lease_namespace").is_none());
     assert_eq!(document["listen_address"], "0.0.0.0:8080");
-    assert_eq!(document["managed_namespace_selector"], "br.sandbox/managed=true");
+    assert_eq!(
+        document["managed_namespace_selector"],
+        "br.sandbox/managed=true"
+    );
     assert_eq!(document["scale_down_cooldown_seconds"], 120);
 }
 

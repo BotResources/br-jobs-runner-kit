@@ -59,11 +59,7 @@ impl Engine {
         for id in gone {
             self.remove(&id, touched);
         }
-        for pool in self
-            .pools
-            .iter()
-            .filter(|pool| pool.namespace == namespace)
-        {
+        for pool in self.pools.iter().filter(|pool| pool.namespace == namespace) {
             touched.insert(super::pool_id(pool));
         }
         pods.into_iter()

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde_json::Value;
+use std::path::PathBuf;
 
 mod common;
 
@@ -109,8 +109,14 @@ fn the_keeper_document_carries_the_values_of_the_overlay() {
     let overlay = overlay();
     let document = keeper_values();
 
-    assert_eq!(text(&document, "store_bucket"), text(&overlay, "store.bucket"));
-    assert_eq!(text(&document, "store_region"), text(&overlay, "store.region"));
+    assert_eq!(
+        text(&document, "store_bucket"),
+        text(&overlay, "store.bucket")
+    );
+    assert_eq!(
+        text(&document, "store_region"),
+        text(&overlay, "store.region")
+    );
     assert_eq!(
         text(&document, "store_endpoint"),
         text(&overlay, "store.endpoint")
@@ -133,7 +139,10 @@ fn the_keeper_document_carries_the_values_of_the_overlay() {
     );
     for (key, path) in [
         ("lease_duration_seconds", "keeper.lease.duration_seconds"),
-        ("renew_deadline_seconds", "keeper.lease.renew_deadline_seconds"),
+        (
+            "renew_deadline_seconds",
+            "keeper.lease.renew_deadline_seconds",
+        ),
         ("retry_period_seconds", "keeper.lease.retry_period_seconds"),
     ] {
         assert_eq!(number(&document, key), number(&overlay, path), "{key}");
@@ -143,7 +152,9 @@ fn the_keeper_document_carries_the_values_of_the_overlay() {
         format!("0.0.0.0:{}", number(&overlay, "keeper.port"))
     );
 
-    let pools = document["pools"].as_array().expect("the pools of the chart");
+    let pools = document["pools"]
+        .as_array()
+        .expect("the pools of the chart");
     assert_eq!(pools.len(), SANDBOX_NAMESPACES.len());
     for (namespace, id, source) in SANDBOX_NAMESPACES {
         let pool = pools
