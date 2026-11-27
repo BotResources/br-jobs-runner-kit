@@ -46,7 +46,7 @@ check_config_contract() {
     done
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.public_resolvers}" -f "$(vals nores 'del(.network.public_resolvers)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.none.runner.namespace}" -f "$(vals norunner 'del(.clients.alpha.modes.none.runner.namespace)')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck 'del(.network_check.image)')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck '.network_check.image = null')"
 }
 
 BINDING_SUBJECTS_OF_THE_POD_IDENTITY='
