@@ -45,8 +45,9 @@ async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
         let mut chosen = None;
         for attempt in 1..=SAVES_PER_SIZE {
             let candidate = Lane::new()?;
-            let (id, outcome, expected) = ladder_save(&sandbox, &candidate, megabytes).await?;
-            match outcome {
+            let saved = ladder_save(env, &sandbox, &candidate, megabytes).await?;
+            let (id, expected) = (saved.id, saved.expected_raw_bytes);
+            match saved.outcome {
                 Ok(receipt) => {
                     env.record(
                         &format!("save_state_{megabytes}mb_raw_bytes"),
@@ -57,9 +58,14 @@ async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
                         &format!("ladder-save-{megabytes}mb-{attempt}-is-ok"),
                         true,
                         format!(
-                            "ok, raw bytes {}, scope file bytes {expected}",
-                            receipt.bytes
+                            "ok, raw bytes {}, scope file bytes {}",
+                            receipt.bytes, saved.scope_file_bytes
                         ),
+                    );
+                    checks.expect(
+                        &format!("ladder-save-{megabytes}mb-{attempt}-size-is-the-expected-size"),
+                        receipt.bytes == expected,
+                        format!("save-bytes got={} expected={expected}", receipt.bytes),
                     );
                     if chosen.is_none() {
                         chosen = Some((candidate, id));

@@ -8,7 +8,8 @@ use battery::ids::Lane;
 use battery::prng::Stats;
 use battery::seeds;
 
-use super::support::{LIMIT_MS, bounded_fresh_series, fresh_series};
+use super::bounded::bounded_fresh_series;
+use super::support::{LIMIT_MS, fresh_series};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn fresh_start_with_a_seed_of_10_mb_is_within_500_ms() -> Res {
@@ -43,16 +44,18 @@ async fn fresh_start_with_a_seed_of_10_mb_is_within_500_ms() -> Res {
         ),
     );
     let stress = seeds::stress()?;
-    let (stress_times, stress_stopped) =
+    let stress_series =
         bounded_fresh_series(env, "fresh_start_seed_50mb_500_files", &stress, 20, 3).await?;
-    let stress_stats = Stats::of(&stress_times, LIMIT_MS);
+    let stress_stats = Stats::of(&stress_series.times, LIMIT_MS);
     record_stats(env, "fresh_start_seed_50mb_500_files", &stress_stats);
     checks.expect(
         "fresh-start-stress-seed-recorded",
         true,
         format!(
-            "limit reported, not 500 ms: median {:.0}, slowest {:.0}, {} opens stopped by the outer bound",
-            stress_stats.median, stress_stats.slowest, stress_stopped
+            "limit reported, not 500 ms: median {:.0}, slowest {:.0}; {}",
+            stress_stats.median,
+            stress_stats.slowest,
+            stress_series.summary()
         ),
     );
     checks.finish()

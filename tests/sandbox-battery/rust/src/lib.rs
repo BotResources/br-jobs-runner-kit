@@ -2,6 +2,7 @@ pub mod adapter;
 pub mod env;
 pub mod error;
 pub mod evidence;
+pub mod expected;
 pub mod guards;
 pub mod ids;
 pub mod kubeconfig;

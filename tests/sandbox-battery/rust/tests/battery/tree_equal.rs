@@ -5,6 +5,7 @@ use battery::adapter::{self, background, sh_ok};
 use battery::common::restored;
 use battery::error::Res;
 use battery::evidence::Checks;
+use battery::expected::expected_save_bytes;
 use battery::ids::Lane;
 use battery::tree;
 use br_agentic_harness_contract::Seed;
@@ -32,6 +33,7 @@ async fn a_tree_of_1000_files_and_one_50_mb_file_is_equal_after_restore() -> Res
             before.hashes.len()
         ),
     );
+    let expected_bytes = expected_save_bytes(env, &sandbox, &opened.box_id).await?;
     let started = Instant::now();
     let receipt = adapter::save(&sandbox, &opened.box_id).await?;
     env.record(
@@ -40,6 +42,11 @@ async fn a_tree_of_1000_files_and_one_50_mb_file_is_equal_after_restore() -> Res
         "s",
     );
     env.record("tree_save_raw_bytes", receipt.bytes, "bytes");
+    checks.expect(
+        "tree-save-size-is-the-expected-size",
+        receipt.bytes == expected_bytes,
+        format!("save-bytes got={} expected={expected_bytes}", receipt.bytes),
+    );
     adapter::release(&sandbox, &opened.box_id).await?;
     let (_, next) = lane.child(first)?;
     let started = Instant::now();
