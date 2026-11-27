@@ -13,7 +13,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Added
 
-- Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`. No change of the crate version or of its public surface.
+- Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`, for each values file of the chart CI and for a values file that sets every mapped value away from its default (`tests/chart_values.rs`). No change of the crate version or of its public surface.
 
 ### Fixed
 
