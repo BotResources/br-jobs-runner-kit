@@ -122,20 +122,42 @@ async fn the_tombstone_is_the_same_whenever_the_save_is_swept() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_save_inside_the_margin_is_left_whole_and_its_manifest_is_not_read() {
+async fn a_save_inside_the_margin_is_left_whole_and_its_manifest_is_read() {
     let harness = harness(true, 100);
     let key = save_key();
     let attempt = AttemptId::mint();
     put_save(&harness.bucket, &key, &[attempt], attempt, NOW - 1050);
     harness.sweeper.sweep_once().await;
     assert!(harness.bucket.writes().is_empty());
-    assert!(
-        !harness
-            .bucket
-            .log()
-            .iter()
-            .any(|line| line.starts_with("get "))
+    assert!(harness.bucket.contains(&manifest_key(&key)));
+    assert!(harness.bucket.contains(&part_object(&key, attempt)));
+    assert_eq!(
+        harness.bucket.log(),
+        vec![format!("get {}", manifest_key(&key))]
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_manifest_of_every_listed_save_is_read_once_in_a_sweep_whatever_its_age_and_the_page_size()
+ {
+    let harness = harness(true, 2);
+    let mut manifests = Vec::new();
+    for made in [NOW - 10, NOW - 1050, NOW - 2000, NOW - 50_000, NOW - 10] {
+        let key = save_key();
+        let attempt = AttemptId::mint();
+        put_save(&harness.bucket, &key, &[attempt], attempt, made);
+        manifests.push(format!("get {}", manifest_key(&key)));
+    }
+    harness.sweeper.sweep_once().await;
+    let log = harness.bucket.log();
+    for read in &manifests {
+        assert_eq!(log.iter().filter(|line| *line == read).count(), 1);
+    }
+    let saves_read = log
+        .iter()
+        .filter(|line| line.starts_with(&format!("get {SAVES_PREFIX}")))
+        .count();
+    assert_eq!(saves_read, 5);
 }
 
 #[tokio::test(start_paused = true)]

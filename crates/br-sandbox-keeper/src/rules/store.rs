@@ -90,7 +90,6 @@ impl TurnGrouper {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ManifestRead {
-    NotNeeded,
     Absent,
     Unreadable,
     Parsed(Box<Manifest>),
@@ -116,18 +115,6 @@ pub fn tombstone_for(manifest: &Manifest, save_ttl: Duration) -> Tombstone {
 
 fn attempt_is_old(attempt: &AttemptListing, now: Timestamp, rules: &SweepRules) -> bool {
     elapsed(now, attempt.newest) > rules.attempt_ttl
-}
-
-pub fn needs_manifest(turn: &TurnListing, now: Timestamp, rules: &SweepRules) -> bool {
-    let Some(manifest) = &turn.manifest else {
-        return false;
-    };
-    let candidate = elapsed(now, manifest.last_modified) > rules.save_ttl + rules.skew_margin;
-    let old_attempts = turn
-        .attempts
-        .values()
-        .any(|attempt| attempt_is_old(attempt, now, rules));
-    candidate || (turn.attempts.len() > 1 && old_attempts)
 }
 
 pub fn read_manifest(turn: &TurnListing, bytes: &[u8]) -> ManifestRead {
@@ -189,7 +176,7 @@ pub fn plan_turn(
     rules: &SweepRules,
 ) -> Vec<StoreStep> {
     match read {
-        ManifestRead::Unreadable | ManifestRead::NotNeeded => Vec::new(),
+        ManifestRead::Unreadable => Vec::new(),
         ManifestRead::Parsed(manifest) if save_expired(manifest.made_at(), now, rules) => {
             expiry_steps(turn, manifest, rules)
         }

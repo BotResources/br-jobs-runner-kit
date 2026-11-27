@@ -129,25 +129,6 @@ fn the_grouper_emits_a_turn_when_the_next_turn_begins_and_ignores_other_keys() {
 }
 
 #[test]
-fn a_manifest_is_read_when_it_may_be_expired_or_when_attempts_compete() {
-    let key = save_key();
-    let attempt = AttemptId::mint();
-    let fresh = listing(&key, Some(10_000), &[(attempt, 10_000)]);
-    assert!(!needs_manifest(&fresh, at(10_500), &rules()));
-    assert!(needs_manifest(&fresh, at(11_061), &rules()));
-    assert!(!needs_manifest(&fresh, at(10_000 + 3601), &long_lived()));
-    let rival = AttemptId::mint();
-    let two = listing(&key, Some(10_000), &[(attempt, 10_000), (rival, 10_000)]);
-    assert!(!needs_manifest(&two, at(10_500), &rules()));
-    assert!(needs_manifest(&two, at(10_000 + 3601), &long_lived()));
-    assert!(!needs_manifest(
-        &listing(&key, None, &[(attempt, 1)]),
-        at(99_999),
-        &rules()
-    ));
-}
-
-#[test]
 fn the_manifest_read_checks_that_the_manifest_belongs_to_its_key() {
     let key = save_key();
     let attempt = AttemptId::mint();
@@ -209,5 +190,4 @@ fn a_manifest_that_cannot_be_read_gives_no_step_and_so_no_delete_for_age_or_orph
     let (a, b) = (AttemptId::mint(), AttemptId::mint());
     let turn = listing(&key, Some(1), &[(a, 1), (b, 1)]);
     assert!(plan_turn(&turn, &ManifestRead::Unreadable, at(99_999_999), &rules()).is_empty());
-    assert!(plan_turn(&turn, &ManifestRead::NotNeeded, at(99_999_999), &rules()).is_empty());
 }

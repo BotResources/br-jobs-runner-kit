@@ -12,8 +12,8 @@ use crate::config::KeeperConfig;
 use crate::leader::Leadership;
 use crate::metrics::Metrics;
 use crate::rules::{
-    ManifestRead, StoreStep, SweepRules, TurnGrouper, TurnListing, needs_manifest, needs_read,
-    plan_turn, read_manifest, record_is_old, tombstone_is_old,
+    ManifestRead, StoreStep, SweepRules, TurnGrouper, TurnListing, needs_read, plan_turn,
+    read_manifest, record_is_old, tombstone_is_old,
 };
 
 impl From<&KeeperConfig> for SweepRules {
@@ -128,13 +128,10 @@ impl Sweeper {
         }
     }
 
-    async fn read_of(&self, turn: &TurnListing, now: Timestamp) -> Result<ManifestRead, Stop> {
+    async fn read_of(&self, turn: &TurnListing) -> Result<ManifestRead, Stop> {
         let Some(listed) = &turn.manifest else {
             return Ok(ManifestRead::Absent);
         };
-        if !needs_manifest(turn, now, &self.rules) {
-            return Ok(ManifestRead::NotNeeded);
-        }
         match self.bucket.get(&listed.key).await {
             Ok(Some(bytes)) => Ok(read_manifest(turn, &bytes)),
             Ok(None) => Ok(ManifestRead::Absent),
@@ -143,7 +140,7 @@ impl Sweeper {
     }
 
     async fn sweep_turn(&self, turn: &TurnListing, now: Timestamp) -> Result<(), Stop> {
-        let read = match self.read_of(turn, now).await {
+        let read = match self.read_of(turn).await {
             Ok(read) => read,
             Err(Stop::Failed) => return Ok(()),
             Err(stop) => return Err(stop),
