@@ -13,7 +13,7 @@ check_pod_spec_fixed_fields() {
     t "the writable paths are /work and /home/agent, bounded" jqt ex "${POOL_SPEC} | (.spec.containers[0].volumeMounts | map(select(.readOnly | not) | .mountPath) | sort) == [\"/home/agent\", \"/work\"] and ([.spec.volumes[] | select(.name == \"work\") | .emptyDir.sizeLimit] == [\"3Gi\"])"
     t "the runtime class stays out of the pod when empty" jqt ex "${SANDBOX_PODS} | all(.spec | has(\"runtimeClassName\") | not)"
     render rc -f "$EXAMPLE" --set runtimeClassName=kata-example
-    t "a runtime class value reaches the pod and the policy" jqt rc '([.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec.runtimeClassName] | unique == ["kata-example"]) and ([.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[].expression | select(test("kata-example"))] | length == 4)'
+    t "a runtime class value reaches the pod and the policy" jqt rc '([.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec.runtimeClassName] | unique == ["kata-example"]) and ([.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[].expression | select(test("kata-example"))] | length == 1)'
     render uid -f "$EXAMPLE" --set runAsUser=20000 --set runAsGroup=20001
     t "the user ids are values" jqt uid "${POOL_SPEC} | .spec.containers[0].securityContext | .runAsUser == 20000 and .runAsGroup == 20001"
 }

@@ -44,7 +44,7 @@ probe_pod() {
 runas_result() {
     local render="$1" pod="$2" user="$3" mutation="$4"
     jq -r --argjson pod "$pod" --arg user "$user" "${RUNAS}"'
-      (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "sbx-alpha-none-pod")) as $vap
+      (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod")) as $vap
       | runas($vap; $pod | '"${mutation}"'; $user)' "$WORK/${render}.json"
 }
 
@@ -57,15 +57,15 @@ probe_runas() {
 }
 
 policy_expression() {
-    jq -r --arg ns "$2" '.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == ($ns + "-pod")) | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:")) | .expression' "$WORK/$1.json"
+    jq -r '.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:")) | .expression' "$WORK/$1.json"
 }
 
 expression_holds() {
-    [[ "$(policy_expression "$1" "$2")" == *"$3"* ]]
+    [[ "$(policy_expression "$1")" == *"$2"* ]]
 }
 
 expression_holds_not() {
-    [[ "$(policy_expression "$1" "$2")" != *"$3"* ]]
+    [[ "$(policy_expression "$1")" != *"$2"* ]]
 }
 
 check_non_root_rule_accepts_the_pods_of_the_chart() {
@@ -118,30 +118,30 @@ check_non_root_rule_text() {
     local check_sa check_ns
     check_sa="$(jqv ex '.[] | select(.kind == "Job") | .spec.template.spec.serviceAccountName')"
     check_ns="$(jqv ex '.[] | select(.kind == "Job") | .metadata.namespace')"
-    t "the exception names the ServiceAccount of the check Job in its namespace" expression_holds ex sbx-alpha-none "request.userInfo.username == \"system:serviceaccount:${check_ns}:${check_sa}\" ||"
-    t "the policy reads the user in no other rule" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:") | not) | .expression | select(test("userInfo"))] | length == 0'
-    t "the rule reads the user once" test "$(policy_expression ex sbx-alpha-none | grep -o 'userInfo' | wc -l | tr -d ' ')" = 1
-    t "the seed exception image is the tools image of the seed container" expression_holds ex sbx-alpha-none "c.image == \"$(jqv ex '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
-    t "the seed exception image is the mirrored tools image with a mirror" expression_holds mirror sbx-alpha-none "c.image == \"$(jqv mirror '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
-    t "the mirrored tools image starts with the mirror" expression_holds mirror sbx-alpha-none 'c.image == "mirror.example.test/'
-    t "the seed exception pins root, the read-only root file system and no port" expression_holds ex sbx-alpha-none 'c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports)'
-    t "the rule refuses a shared process namespace" expression_holds ex sbx-alpha-none '!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)'
-    t "the seed exception applies to the regular container list only" expression_holds ex sbx-alpha-none 'object.spec.containers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0) || (c.name == "seed"'
-    t "the init and ephemeral lists hold the plain non-root condition only" test "$(policy_expression ex sbx-alpha-none | grep -o 'c.name ==' | wc -l | tr -d ' ')" = 1
-    t "the rule reads the three container lists" expression_holds ex sbx-alpha-none 'object.spec.ephemeralContainers.all(c,'
+    t "the exception names the ServiceAccount of the check Job in its namespace" expression_holds ex "request.userInfo.username == \"system:serviceaccount:${check_ns}:${check_sa}\" ||"
+    t "the policy reads the user in no other rule" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:") | not) | .expression | select(test("userInfo"))] | length == 0'
+    t "the rule reads the user once" test "$(policy_expression ex | grep -o 'userInfo' | wc -l | tr -d ' ')" = 1
+    t "the seed exception image is the tools image of the seed container" expression_holds ex "c.image == \"$(jqv ex '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
+    t "the seed exception image is the mirrored tools image with a mirror" expression_holds mirror "c.image == \"$(jqv mirror '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
+    t "the mirrored tools image starts with the mirror" expression_holds mirror 'c.image == "mirror.example.test/'
+    t "the seed exception pins root, the read-only root file system and no port" expression_holds ex 'c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports)'
+    t "the rule refuses a shared process namespace" expression_holds ex '!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)'
+    t "the seed exception applies to the regular container list only" expression_holds ex 'object.spec.containers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0) || (c.name == "seed"'
+    t "the init and ephemeral lists hold the plain non-root condition only" test "$(policy_expression ex | grep -o 'c.name ==' | wc -l | tr -d ' ')" = 1
+    t "the rule reads the three container lists" expression_holds ex 'object.spec.ephemeralContainers.all(c,'
     t "the pods of the chart set runAsNonRoot true on the agent and the init container, not on the root containers" jqt ex "${SANDBOX_PODS} | all(.spec | (.containers[0].securityContext.runAsNonRoot == true) and (.initContainers[0].securityContext.runAsNonRoot == true) and (.containers[1:] | all(.securityContext.runAsUser == 0 and (.securityContext | has(\"runAsNonRoot\") | not))))"
     t "the probe pods run as uid 0, which is why the check identity is an exception" test "$(probe_pod ex sbx-alpha-none | jq -c '.spec.containers[0].securityContext | [.runAsUser, has("runAsNonRoot")]')" = '[0,false]'
-    t "the policy watches the ephemeral containers subresource on update" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.matchConstraints.resourceRules[1] | select(.resources == ["pods/ephemeralcontainers"] and .operations == ["UPDATE"])] | length == 4'
+    t "the policy watches the ephemeral containers subresource on update" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.matchConstraints.resourceRules[1] | select(.resources == ["pods/ephemeralcontainers"] and .operations == ["UPDATE"])] | length == 1'
     render nocheck -f "$EXAMPLE" --set network_check.enabled=false
-    t "without the network check the rule has no user exception" expression_holds_not nocheck sbx-alpha-none 'userInfo'
+    t "without the network check the rule has no user exception" expression_holds_not nocheck 'userInfo'
     t "without the network check the pods of the chart still pass" test "$(pool_runas nocheck sbx-alpha-none '.')" = true
     render noseed -f "$EXAMPLE" --set tools.seed_container.enabled=false
-    t "without the seed container the rule has no seed exception" expression_holds_not noseed sbx-alpha-none 'c.name =='
+    t "without the seed container the rule has no seed exception" expression_holds_not noseed 'c.name =='
     t "without the seed container the pool pod passes" test "$(pool_runas noseed sbx-alpha-none '.')" = true
     t "without the seed container a seed named container is refused" test "$(pool_runas noseed sbx-alpha-none '.spec.containers += [.spec.initContainers[0] | .name = "seed" | .securityContext.runAsUser = 0 | .securityContext.readOnlyRootFilesystem = true | del(.securityContext.runAsNonRoot)]')" = false
     render custom -f "$EXAMPLE" --set tools.seed_container.name=skills-writer --set installation.system_namespace=custom-system
-    t "the seed name and the system namespace are values of the exception" expression_holds custom sbx-alpha-none 'c.name == "skills-writer" && c.image =='
-    t "the user of the exception follows the system namespace" expression_holds custom sbx-alpha-none 'request.userInfo.username == "system:serviceaccount:custom-system:br-sandbox-netcheck"'
+    t "the seed name and the system namespace are values of the exception" expression_holds custom 'c.name == "skills-writer" && c.image =='
+    t "the user of the exception follows the system namespace" expression_holds custom 'request.userInfo.username == "system:serviceaccount:custom-system:br-sandbox-netcheck"'
     t "the pool pod passes with the custom seed name" test "$(pool_runas custom sbx-alpha-none '.')" = true
 }
 

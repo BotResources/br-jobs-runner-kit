@@ -1,15 +1,17 @@
 {{- if .Values.operator.enabled }}
-{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
-{{- $name := printf "%s-pod" $ns.name }}
+{{- $_ := include "br-sandbox-chart.validate" . }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ $name }}
+  name: br-sandbox-pod
   labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
+  paramKind:
+    apiVersion: sandbox.botresources.ai/v1alpha1
+    kind: SandboxPool
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
@@ -28,7 +30,7 @@ spec:
     - name: containers
       expression: {{ "object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers : [])" | include "br-sandbox-chart.json_string" }}
   validations:
-    {{- range $rule := include "br-sandbox-chart.vap.rules" (dict "root" $ "ns" $ns) | fromJsonArray }}
+    {{- range $rule := include "br-sandbox-chart.vap.rules" (dict "root" $) | fromJsonArray }}
     - expression: {{ $rule.expression | include "br-sandbox-chart.json_string" }}
       message: {{ printf "%s: %s" $rule.code $rule.message | include "br-sandbox-chart.json_string" }}
     {{- end }}
@@ -36,16 +38,41 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ $name }}
+  name: br-sandbox-pod
   labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
 spec:
-  policyName: {{ $name }}
+  policyName: br-sandbox-pod
+  validationActions: ["Deny"]
+  paramRef:
+    selector: {}
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        br.sandbox/managed: "true"
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: br-sandbox-pod-update
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  policyName: br-sandbox-pod
   validationActions: ["Deny"]
   matchResources:
     namespaceSelector:
       matchLabels:
         br.sandbox/managed: "true"
-        kubernetes.io/metadata.name: {{ $ns.name }}
-{{- end }}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
 {{- end }}

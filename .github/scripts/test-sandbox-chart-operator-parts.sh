@@ -22,12 +22,12 @@ check_a_keeper_key_is_a_named_render_fault() {
 }
 
 check_the_operator_part_renders_without_a_namespace() {
-    section "the operator part: with no namespace it renders the controller objects and no sandbox namespace object"
+    section "the operator part: with no namespace it renders the controller objects, the policies and no sandbox namespace object"
     t "the render holds the keeper Deployment, its document and the system namespace" jqt platform '([.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper")] | length == 1) and ([.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-keeper-config")] | length == 1) and ([.[] | select(.kind == "Namespace") | .metadata.name] == ["sbx-system"])'
     t "the render holds the controller ClusterRole, the runner ClusterRole and the cluster binding of the keeper" jqt platform '[.[] | select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding") | .kind + "/" + .metadata.name] | sort | IN(["ClusterRole/br-sandbox-controller", "ClusterRole/br-sandbox-runner", "ClusterRole/sbx-system-keeper-namespaces", "ClusterRole/sbx-system-netcheck", "ClusterRoleBinding/sbx-system-keeper-namespaces", "ClusterRoleBinding/sbx-system-netcheck"])'
     t "the render holds no object in a sandbox namespace and no binding of a sandbox namespace" jqt platform '[.[] | select((.metadata.namespace // "sbx-system") != "sbx-system" or .kind == "RoleBinding" and .metadata.name != "br-sandbox-keeper-lease")] | length == 0'
     t "the render holds no ServiceAccount named sandbox, no quota, no pod template and no adapter document" jqt platform '[.[] | select((.kind == "ServiceAccount" and .metadata.name == "sandbox") or .kind == "ResourceQuota" or .kind == "LimitRange" or (.kind == "ConfigMap" and (.metadata.name | IN("br-sandbox-pod-template", "br-sandbox-config"))))] | length == 0'
-    t "the render holds no admission policy until a namespace is declared" jqt platform '[.[] | select(.kind | startswith("ValidatingAdmission"))] | length == 0'
+    t "the render holds the pod policy and its two bindings and no object of an admission policy that depends on a namespace" jqt platform '[.[] | select(.kind | startswith("ValidatingAdmission")) | .kind + "/" + .metadata.name] | sort == ["ValidatingAdmissionPolicy/br-sandbox-pod", "ValidatingAdmissionPolicyBinding/br-sandbox-pod", "ValidatingAdmissionPolicyBinding/br-sandbox-pod-update"]'
 }
 
 check_nothing_to_render_and_a_part_that_needs_the_operator() {

@@ -100,7 +100,7 @@ quota_is() {
 
 policy_size_is() {
     jqt "$1" --arg request_cpu "$2" --arg request_memory "$3" --arg request_disk "$4" --arg limit_cpu "$5" --arg limit_memory "$6" --arg limit_disk "$7" '
-        .[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "sbx-alpha-none-pod") | .spec.validations[]
+        .[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "br-sandbox-pod") | .spec.validations[]
         | select(.message | startswith("BR_SANDBOX_RESOURCES:")) | .expression
         | contains("quantity(c.resources.requests[\u0027cpu\u0027]).isGreaterThan(quantity(\u0027" + $request_cpu + "\u0027))")
         and contains("quantity(c.resources.requests[\u0027memory\u0027]).isGreaterThan(quantity(\u0027" + $request_memory + "\u0027))")

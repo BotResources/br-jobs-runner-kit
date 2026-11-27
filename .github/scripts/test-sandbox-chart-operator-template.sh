@@ -48,13 +48,13 @@ check_the_template_equals_the_golden_of_the_previous_release() {
 }
 
 check_the_template_passes_the_policy_model() {
-    section "the template passes the model of the admission policy of its namespace"
+    section "the pod that the keeper makes from the template passes the model of the admission policy"
     local ns
     for ns in sbx-alpha-allow sbx-alpha-full sbx-alpha-none sbx-beta-none; do
-        t "the template of ${ns} passes the model" test "$(model_result "$ns" '.')" = true
+        t "the pod made from the template of ${ns}, with the image and the size of its pool, passes the model" test "$(model_result "$ns" '.')" = true
     done
     t "the agent image of the template is the tools image of the platform" template_of_every_namespace_is ex '.spec.containers[0].image == .spec.containers[1].image and .spec.containers[0].image == .spec.initContainers[0].image'
-    t "the model refuses the template with an agent image of another repository" test "$(model_result sbx-alpha-none '.spec.containers[0].image = "other.example.test/agent:1"')" = false
+    t "the model refuses the pod made from the template with an agent image of another repository" test "$(model_result sbx-alpha-none '.spec.containers[0].image = "other.example.test/agent:1"')" = false
 }
 
 check_nothing_mounts_or_reads_the_template() {
