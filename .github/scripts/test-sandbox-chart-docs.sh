@@ -141,3 +141,13 @@ check_the_docs_state_what_the_egress_tests_do_not_prove() {
     t "the README marks the refusal of an address outside service_cidr as documented behaviour of Kubernetes, not measured here, and says the chart does not check the range" grep -qF 'The address must be free and inside `network.service_cidr`; the API server refuses the Service otherwise (documented behaviour of Kubernetes, not measured here). The chart does not check that the address lies in that range.' "$README"
     t "the chart validation does not compare the proxy address with service_cidr" test "$(grep -c 'service_cidr' "$CHART/templates/_validate_egress.tpl")" -eq 0
 }
+
+check_the_docs_mark_the_keeper_probes_under_default_deny_as_untested() {
+    section "the README and the CHANGELOG do not claim that the keeper probes pass under default-deny"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
+    t "the Keeper document paragraph states the port, the two probes and that the chart does not change default-deny" grep -qF 'declares the port `http` (`keeper.port`) and has a `livenessProbe` on `/livez` and a `readinessProbe` on `/readyz`; the chart does not change the `default-deny` policy of the system namespace.' <<<"$keeper"
+    t "the Keeper document paragraph says that the probes under default-deny are not tested on a cluster" grep -qF 'Not tested on a cluster: that the probes of the kubelet pass under `default-deny`' <<<"$keeper"
+    t "the Keeper document paragraph no longer says that the probes are served to the kubelet" bash -c '! grep -qF "The probes are served by the pod to the kubelet" <<<"$1"' _ "$keeper"
+    t "the CHANGELOG says that the probes under default-deny are not tested on a cluster" grep -qF 'that the probes of the kubelet pass under it is not tested on a cluster' "$CHART/CHANGELOG.md"
+}
