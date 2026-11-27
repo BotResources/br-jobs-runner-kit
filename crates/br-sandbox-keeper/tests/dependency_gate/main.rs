@@ -17,7 +17,7 @@ fn manifest_path() -> String {
 fn metadata() -> Value {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
-        .args(["metadata", "--format-version", "1", "--locked", "--offline"])
+        .args(["metadata", "--format-version", "1", "--locked"])
         .arg("--manifest-path")
         .arg(manifest_path())
         .output()
