@@ -9,7 +9,7 @@ pub enum TarError {
     Size,
     #[error("a pax extended header is larger than {META_LIMIT} bytes")]
     MetaTooLarge,
-    #[error("the tar stream ends inside an entry")]
+    #[error("the tar stream ends before its end-of-archive blocks")]
     Truncated,
 }
 
@@ -30,6 +30,7 @@ pub struct TarCounter {
     state: State,
     entries: u64,
     size_override: Option<u64>,
+    lone_zero_block: bool,
 }
 
 impl Default for TarCounter {
@@ -44,6 +45,7 @@ impl TarCounter {
             state: State::Header(Vec::with_capacity(BLOCK)),
             entries: 0,
             size_override: None,
+            lone_zero_block: false,
         }
     }
 
@@ -60,7 +62,6 @@ impl TarCounter {
 
     pub fn finish(self) -> Result<u64, TarError> {
         match self.state {
-            State::Header(buffer) if buffer.is_empty() => Ok(self.entries),
             State::End => Ok(self.entries),
             State::Header(_) | State::Meta { .. } | State::Skip(_) => Err(TarError::Truncated),
         }
@@ -111,9 +112,15 @@ impl TarCounter {
 
     fn header(&mut self, block: &[u8]) -> Result<(), TarError> {
         if block.iter().all(|byte| *byte == 0) {
-            self.state = State::End;
+            self.state = if self.lone_zero_block {
+                State::End
+            } else {
+                self.lone_zero_block = true;
+                State::Header(Vec::with_capacity(BLOCK))
+            };
             return Ok(());
         }
+        self.lone_zero_block = false;
         if !checksum_matches(block) {
             return Err(TarError::Checksum);
         }

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use br_runner_sandbox::{PartStream, PartUpload, PutOutcome, Store, StoreError, StoreFuture};
 use bytes::Bytes;
@@ -15,6 +16,7 @@ struct State {
     size_lies: Vec<(String, u64)>,
     stream_chunk: usize,
     on_stream: Option<Arc<dyn Fn() + Send + Sync>>,
+    write_delay: Option<Duration>,
 }
 
 #[derive(Clone, Default)]
@@ -81,6 +83,10 @@ impl FakeStore {
         self.lock().stream_chunk = size;
     }
 
+    pub fn delay_each_upload_write(&self, delay: Duration) {
+        self.lock().write_delay = Some(delay);
+    }
+
     pub fn on_stream(&self, hook: impl Fn() + Send + Sync + 'static) {
         self.lock().on_stream = Some(Arc::new(hook));
     }
@@ -106,6 +112,10 @@ impl PartUpload for FakeUpload {
     fn write(&mut self, chunk: Bytes) -> StoreFuture<'_, ()> {
         Box::pin(async move {
             self.store.enter("upload_write", &self.key)?;
+            let delay = self.store.lock().write_delay;
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
             self.buffer.extend_from_slice(&chunk);
             Ok(())
         })

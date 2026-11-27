@@ -3,6 +3,7 @@ use std::io::Write;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use br_runner_sandbox::{AbsolutePath, argv};
 
@@ -19,7 +20,7 @@ fn absolute(text: &str) -> AbsolutePath {
     AbsolutePath::new("test", text).expect("a path")
 }
 
-fn bsdtar_on_path() -> Option<PathBuf> {
+pub fn bsdtar_on_path() -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|folder| folder.join("bsdtar"))
@@ -27,7 +28,12 @@ fn bsdtar_on_path() -> Option<PathBuf> {
 }
 
 fn own_ids() -> (u32, u32) {
-    let probe = std::env::temp_dir().join(format!("br-sbx-ids-{}", std::process::id()));
+    static PROBES: AtomicUsize = AtomicUsize::new(0);
+    let probe = std::env::temp_dir().join(format!(
+        "br-sbx-ids-{}-{}",
+        std::process::id(),
+        PROBES.fetch_add(1, Ordering::SeqCst)
+    ));
     fs::create_dir_all(&probe).expect("a probe folder");
     let metadata = fs::metadata(&probe).expect("metadata");
     fs::remove_dir(&probe).expect("the probe folder goes");
@@ -41,7 +47,7 @@ fn foreign_root(uid: u32) -> Option<String> {
     })
 }
 
-fn skipped<T>(test: &str, reason: &str) -> Option<T> {
+pub fn skipped<T>(test: &str, reason: &str) -> Option<T> {
     eprintln!("skipped {test}: {reason}");
     None
 }

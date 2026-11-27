@@ -8,6 +8,7 @@ mod merge;
 mod pool;
 mod pool_fixtures;
 mod rig;
+mod stdout;
 mod store;
 
 pub use boxes::{
@@ -21,4 +22,5 @@ pub use log::Capture;
 pub use pool::PoolCluster;
 pub use pool_fixtures::{failing, pool, pool_template, warm_pod};
 pub use rig::{Ids, POD, Rig, rig, rig_with, start_time};
+pub use stdout::StdoutModel;
 pub use store::FakeStore;
