@@ -8,7 +8,7 @@ use super::*;
 
 const HASH_KEY: &str = "br.sandbox/template-hash";
 
-fn template_of(bed: &Bed) -> Value {
+pub(super) fn template_of(bed: &Bed) -> Value {
     serde_json::to_value(
         bed.kube
             .raw_replica_set(NS, RS)
@@ -44,7 +44,7 @@ fn restore_hash(bed: &Bed, hash: &str) {
     bed.kube.put_replica_set(set);
 }
 
-async fn damaged_as_the_previous_version_left_it(restore: bool) -> (Bed, Value) {
+pub(super) async fn damaged_as_the_previous_version_left_it(restore: bool) -> (Bed, Value) {
     let mut bed = bare(true);
     bed.kube.put_pool(NS, main_pool());
     bed.sync().await;

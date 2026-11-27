@@ -9,6 +9,7 @@ mod managers;
 mod metrics;
 mod refusals;
 mod repair;
+mod repair_rollout;
 mod restart;
 mod rollout;
 mod run;
