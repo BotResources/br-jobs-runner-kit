@@ -10,6 +10,8 @@ on:
       - "images/br-sandbox-keeper/**"
       - ".github/workflows/keeper-image.yml"
       - ".github/scripts/keeper-image-plan.sh"
+      - ".github/scripts/keeper-image-published.sh"
+      - ".github/scripts/test-keeper-image-plan.sh"
   push:
     branches: [main]
     paths:
@@ -70,11 +72,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          if docker buildx imagetools inspect "ghcr.io/${OWNER,,}/br-sandbox-keeper:${VERSION}" >/dev/null 2>&1; then
-            echo "published=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "published=false" >>"$GITHUB_OUTPUT"
-          fi
+          bash .github/scripts/keeper-image-published.sh "ghcr.io/${OWNER,,}/br-sandbox-keeper:${VERSION}" >>"$GITHUB_OUTPUT"
       - name: decide the push and the tag
         id: plan
         env:

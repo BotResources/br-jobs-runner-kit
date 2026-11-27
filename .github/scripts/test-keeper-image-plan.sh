@@ -3,6 +3,8 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 failures=0
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
 pass() { echo "ok   $1"; }
 fail() {
@@ -51,7 +53,70 @@ expect_refused "a version that is not plain" EVENT_NAME=push REF=refs/heads/main
 expect_refused "no version" EVENT_NAME=push REF=refs/heads/main
 expect_refused "no head commit" EVENT_NAME=push REF=refs/heads/main VERSION=0.1.0 HEAD_SHA=
 
+reference="ghcr.io/botresources/br-sandbox-keeper:0.1.0"
+mkdir "${tmp}/bin"
+cat >"${tmp}/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1 $2 $3" != "buildx imagetools inspect" ] || [ "$4" != "$STUB_REFERENCE" ]; then
+  echo "unexpected call: $*" >&2
+  exit 2
+fi
+case "$STUB_ANSWER" in
+  found) echo "Name: ${STUB_REFERENCE}" ;;
+  not-found) echo "ERROR: ${STUB_REFERENCE}: not found" >&2; exit 1 ;;
+  manifest-unknown) echo "ERROR: ${STUB_REFERENCE}: unexpected status from HEAD request: 404 Not Found (MANIFEST_UNKNOWN: manifest unknown)" >&2; exit 1 ;;
+  denied) echo "ERROR: ${STUB_REFERENCE}: unexpected status from HEAD request: 403 Forbidden" >&2; exit 1 ;;
+  unauthorized) echo "ERROR: failed to authorize: failed to fetch anonymous token: 401 Unauthorized" >&2; exit 1 ;;
+  unreachable) echo "ERROR: Head \"https://ghcr.io/v2/botresources/br-sandbox-keeper/manifests/0.1.0\": dial tcp: lookup ghcr.io: no such host" >&2; exit 1 ;;
+  rate-limited) echo "ERROR: ${STUB_REFERENCE}: 429 Too Many Requests" >&2; exit 1 ;;
+  silent) exit 1 ;;
+  other-image-not-found) echo "ERROR: ghcr.io/botresources/other:1.0.0: not found" >&2; exit 1 ;;
+esac
+STUB
+chmod +x "${tmp}/bin/docker"
+
+published() {
+  env -i PATH="${tmp}/bin:$PATH" STUB_REFERENCE="$reference" STUB_ANSWER="$1" bash "$here/keeper-image-published.sh" "$reference"
+}
+
+expect_published() {
+  local answer="$1" wanted="$2" got
+  if got="$(published "$answer" 2>/dev/null)" && [ "$got" = "$wanted" ]; then
+    pass "registry answer '${answer}': ${got}"
+  else
+    fail "registry answer '${answer}': wanted '${wanted}' got '${got:-}'"
+  fi
+}
+
+expect_published_fails() {
+  local answer="$1" got
+  if got="$(published "$answer" 2>/dev/null)"; then
+    fail "registry answer '${answer}': the check went on with '${got}'"
+  elif [ -n "$got" ]; then
+    fail "registry answer '${answer}': the check failed but printed '${got}'"
+  else
+    pass "registry answer '${answer}': the check fails"
+  fi
+}
+
+expect_published found "published=true"
+expect_published not-found "published=false"
+expect_published manifest-unknown "published=false"
+for answer in denied unauthorized unreachable rate-limited silent other-image-not-found; do
+  expect_published_fails "$answer"
+done
+if env -i PATH="${tmp}/bin:$PATH" bash "$here/keeper-image-published.sh" >/dev/null 2>&1; then
+  fail "the published check accepted a call with no reference"
+else
+  pass "the published check needs a reference"
+fi
+
 workflow="${here}/../workflows/keeper-image.yml"
+if grep -q 'bash .github/scripts/keeper-image-published.sh' "$workflow" && ! grep -q 'imagetools inspect' "$workflow"; then
+  pass "the workflow decides published with keeper-image-published.sh"
+else
+  fail "the workflow decides published with keeper-image-published.sh"
+fi
 if grep -q 'images-build.yml' "$workflow" && grep -q 'image: br-sandbox-keeper' "$workflow"; then
   pass "the workflow calls images-build.yml for br-sandbox-keeper"
 else
