@@ -40,6 +40,7 @@ source "$HERE/test-sandbox-chart-netcheck-leftover.sh"
 source "$HERE/test-sandbox-chart-netcheck-guards.sh"
 source "$HERE/test-sandbox-chart-netcheck-reading.sh"
 source "$HERE/test-sandbox-chart-netcheck-contract.sh"
+source "$HERE/test-sandbox-chart-netcheck-image.sh"
 
 render ex -f "$EXAMPLE"
 render fence -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml"

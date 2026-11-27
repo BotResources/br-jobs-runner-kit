@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${TOOLBOX_POD}
+  namespace: ${NS_TOOLS}
+  labels:
+    app: toolbox
+spec:
+  hostAliases:
+    - ip: "${GIT_IP}"
+      hostnames: ["${GITEA_HOST}", "${REGISTRY_HOST}"]
+    - ip: "${ECHO_IP}"
+      hostnames: ["${ECHO_HOST}"]
+    - ip: "${PROBE_IP}"
+      hostnames: ["${PROBE_HOST}"]
+    - ip: "${STORE_IP}"
+      hostnames: ["${STORE_HOST}"]
+  containers:
+    - name: ${TOOLBOX_POD}
+      image: ${GITEA_IMAGE}
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "86400"]
+      env:
+        - {name: GIT_SSL_CAINFO, value: /ca/ca.crt}
+        - {name: CURL_CA_BUNDLE, value: /ca/ca.crt}
+        - {name: HOME, value: /tmp}
+      resources:
+        requests: {cpu: 50m, memory: 32Mi}
+      volumeMounts:
+        - {name: ca, mountPath: /ca, readOnly: true}
+  volumes:
+    - name: ca
+      configMap: {name: test-ca}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pytool
+  namespace: ${NS_TOOLS}
+  labels:
+    app: pytool
+spec:
+  hostAliases:
+    - ip: "${GIT_IP}"
+      hostnames: ["${GITEA_HOST}", "${REGISTRY_HOST}"]
+    - ip: "${ECHO_IP}"
+      hostnames: ["${ECHO_HOST}"]
+    - ip: "${PROBE_IP}"
+      hostnames: ["${PROBE_HOST}"]
+    - ip: "${STORE_IP}"
+      hostnames: ["${STORE_HOST}"]
+  containers:
+    - name: pytool
+      image: ${PYTHON_IMAGE}
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "86400"]
+      env:
+        - {name: SSL_CERT_FILE, value: /ca/ca.crt}
+        - {name: REQUESTS_CA_BUNDLE, value: /ca/ca.crt}
+        - {name: PIP_CERT, value: /ca/ca.crt}
+        - {name: HOME, value: /tmp}
+      resources:
+        requests: {cpu: 50m, memory: 32Mi}
+      volumeMounts:
+        - {name: ca, mountPath: /ca, readOnly: true}
+  volumes:
+    - name: ca
+      configMap: {name: test-ca}

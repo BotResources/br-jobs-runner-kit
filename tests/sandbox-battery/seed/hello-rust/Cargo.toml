@@ -1,0 +1,7 @@
+[package]
+name = "hello-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+${PKG_CARGO} = { version = "${PKG_VERSION}", registry = "${CARGO_REGISTRY_NAME}" }

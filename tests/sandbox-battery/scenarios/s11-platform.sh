@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/common.sh"
+scenario_begin s11-platform
+
+ns=$(ns_of "$CLIENT_PLATFORM" "$NET_ALLOW")
+eg=$(egress_ns_of "$CLIENT_PLATFORM" "$NET_ALLOW")
+branch="battery-$(new_id)"
+
+if [ -z "${GIT_TOKEN:-}" ]; then check platform-creds fail "creds.env has no GIT_TOKEN"; scenario_end; fi
+set_secret "$eg" "$PLATFORM_SECRET_NAME" "$PLATFORM_GIT_SECRET_KEY" "$GIT_TOKEN"
+k -n "$eg" patch secret "$PLATFORM_SECRET_NAME" --type merge -p "{\"data\":{\"$PLATFORM_PKG_SECRET_KEY\":\"$(printf '%s' "$PKG_TOKEN" | base64 | tr -d '\n')\"}}" > /dev/null
+need_proxy platform "$CLIENT_PLATFORM" "$NET_ALLOW" || scenario_end
+proxy_restart "$eg" || { check platform-proxy-restart fail "proxy pods of $eg did not come back Ready"; scenario_end; }
+
+wait_warm "$ns" 1 180 || { check platform-warm-pod fail "no warm pod in $ns"; scenario_end; }
+claim_to pod "$ns" "platform-$(new_id)" agent-a || { check platform-claim fail "claim refused"; scenario_end; }
+
+dns_window_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+flow_log=$(with_timeout 1500 sxi "$ns" "$pod" env \
+  "GIT_HOST=$TEST_HOST_GIT" "PKG_HOST=$TEST_HOST_PKG" "REPO=$PLATFORM_REPO" "BRANCH=$branch" \
+  "GIT_PH_NAME=$PLATFORM_GIT_PLACEHOLDER_ENV" "PKG_PH_NAME=$PLATFORM_PKG_PLACEHOLDER_ENV" \
+  "REG_UPPER=$(printf '%s' "$PLATFORM_CARGO_REGISTRY" | tr '[:lower:]-' '[:upper:]_')" sh -s < "$HERE/platform-flow.sh" 2>&1)
+flow_rc=$?
+printf '%s\n' "$flow_log"
+
+stage_ms() { printf '%s\n' "$flow_log" | awk -v s="$1" '$1 == "STAGE" && $2 == s {print $3}'; }
+for stage in clone packages build push; do
+  if [ -n "$(stage_ms "$stage")" ]; then record "platform-$stage" "$(stage_ms "$stage")" ms; fi
+done
+
+verdict platform-clone "private repo cloned over HTTPS through the proxy" test -n "$(stage_ms clone)"
+verdict platform-packages "packages downloaded from the package registry" test -n "$(stage_ms packages)"
+verdict platform-build "cargo build ended with exit code 0" test -n "$(stage_ms build)"
+verdict platform-push "branch $branch pushed" test -n "$(stage_ms push)"
+verdict platform-flow-exit-code "flow exit code $flow_rc" test "$flow_rc" = 0
+
+remote_branches=$(docker exec "$GITEA_CONTAINER" git -c safe.directory='*' --git-dir="$GITEA_REPO_ROOT/$PLATFORM_REPO.git" branch --list "$branch" 2> /dev/null)
+verdict platform-branch-on-server "branch listed by the server: $remote_branches" test -n "$remote_branches"
+
+dns_queries=$(docker logs --since "$dns_window_start" "$EXTRA_DNS_CONTAINER" 2>&1 | awk '$2 == "Q" {print $4}' | sort | uniq -c)
+printf '%s\n' "$dns_queries" > "$EVIDENCE/platform-resolver-queries.txt"
+foreign=$(printf '%s\n' "$dns_queries" | awk -v dom="$TEST_DOMAIN" 'NF == 2 && $2 !~ ("(^|[.])" dom "$") {print $2}' | sort -u | tr '\n' ' ')
+verdict platform-resolver-saw-queries "resolver of the proxy pods logged $(printf '%s\n' "$dns_queries" | awk '{sum += $1} END {print sum + 0}') queries during the flow: $(printf '%s' "$dns_queries" | tr '\n' ';')" \
+  test "$(printf '%s\n' "$dns_queries" | awk '{sum += $1} END {print sum + 0}')" -gt 0
+verdict platform-resolver-only-test-names "queries naming a host that is not a test name (under $TEST_DOMAIN): [${foreign}]" test -z "$foreign"
+
+scan_token() {
+  sxi "$ns" "$pod" env "SCAN_CANARY=$1" "$SANDBOX_PYTHON" - scan < "$HERE/canary-scan.py" | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^value_hits=/) {split($i, a, "="); sum += a[2]}} END {print sum + 0}'
+}
+git_hits=$(scan_token "$GIT_TOKEN")
+pkg_hits=$(scan_token "$PKG_TOKEN")
+record platform-git-token-hits "$git_hits" hits
+record platform-pkg-token-hits "$pkg_hits" hits
+verdict platform-no-real-token-in-sandbox "env, memory and files hold 0 value of either token: $git_hits and $pkg_hits" test "$git_hits" = 0 -a "$pkg_hits" = 0
+
+scenario_end

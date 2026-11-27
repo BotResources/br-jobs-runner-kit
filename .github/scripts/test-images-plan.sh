@@ -48,10 +48,88 @@ expect "dispatch with no input" "push=false tag=sha-1111111" EVENT_NAME=workflow
 expect_refused "an event that images.yml does not run on" EVENT_NAME=workflow_call PUSH_INPUT=true
 expect_refused "a schedule" EVENT_NAME=schedule
 
-if grep -Eq 'HEAD_REPOSITORY: .*(\|\||github\.repository)' "${workflows}/images.yml"; then fail "images.yml gives a default to the head repository"; else pass "images.yml gives no default to the head repository"; fi
+plan_value() {
+  local key="$1"
+  shift
+  env -i PATH="$PATH" REPOSITORY=BotResources/br-jobs-runner-kit SHA=1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$@" bash "$here/images-plan.sh" | grep -E "^${key}=" | cut -d= -f2
+}
+
+expect_hold() {
+  local label="$1" wanted="$2"
+  shift 2
+  local got
+  got="$(plan_value hold_marked "$@")"
+  if [ "$got" = "$wanted" ]; then pass "${label}: hold_marked=${got}"; else fail "${label}: wanted hold_marked=${wanted} got '${got}'"; fi
+}
+
+expect_hold "push to main" false EVENT_NAME=push REF=refs/heads/main
+expect_hold "push to a release branch" true EVENT_NAME=push REF=refs/heads/release/x
+expect_hold "pull request of this repository" true EVENT_NAME=pull_request PR_NUMBER=7 "$head" HEAD_REPOSITORY=BotResources/br-jobs-runner-kit
+expect_hold "pull request of a fork" true EVENT_NAME=pull_request PR_NUMBER=7 "$head" HEAD_REPOSITORY=someone/br-jobs-runner-kit
+expect_hold "dispatch with push" true EVENT_NAME=workflow_dispatch PUSH_INPUT=true
+expect_hold "dispatch without push" true EVENT_NAME=workflow_dispatch PUSH_INPUT=false
+
+pushed_images() {
+  local root="$1"
+  shift
+  local push hold
+  push="$(plan_value push "$@")"
+  hold="$(plan_value hold_marked "$@")"
+  PUSH="$push" HOLD_MARKED="$hold" IMAGES_ROOT="$root" bash "$here/images-select-push.sh" "$(IMAGES_ROOT="$root" bash "$here/images-discover.sh")"
+}
+
+expect_pushed() {
+  local label="$1" root="$2" wanted="$3"
+  shift 3
+  local got
+  got="$(pushed_images "$root" "$@")"
+  if [ "$got" = "$wanted" ]; then pass "${label}: ${got}"; else fail "${label}: wanted '${wanted}' got '${got}'"; fi
+}
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+marked_root="${tmp}/marked-root"
+mkdir -p "$marked_root/marked" "$marked_root/plain"
+touch "$marked_root/marked/Dockerfile" "$marked_root/marked/PUSH_ON_MAIN_ONLY" "$marked_root/plain/Dockerfile"
+this_repository=HEAD_REPOSITORY=BotResources/br-jobs-runner-kit
+expect_pushed "pull request of the marked image folder and of an unmarked one" "$marked_root" '["plain"]' EVENT_NAME=pull_request PR_NUMBER=7 "$head" "$this_repository"
+expect_pushed "push to main publishes both" "$marked_root" '["marked", "plain"]' EVENT_NAME=push REF=refs/heads/main
+expect_pushed "pull request of a fork pushes none" "$marked_root" '[]' EVENT_NAME=pull_request PR_NUMBER=7 "$head" HEAD_REPOSITORY=someone/br-jobs-runner-kit
+expect_pushed "pull request of Dependabot pushes none" "$marked_root" '[]' EVENT_NAME=pull_request PR_NUMBER=7 "$head" "$this_repository" ACTOR=dependabot[bot]
+expect_pushed "push to another branch pushes none" "$marked_root" '[]' EVENT_NAME=push REF=refs/heads/feat/x
+expect_pushed "dispatch with push holds the marked image" "$marked_root" '["plain"]' EVENT_NAME=workflow_dispatch PUSH_INPUT=true
+expect_pushed "dispatch without push pushes none" "$marked_root" '[]' EVENT_NAME=workflow_dispatch PUSH_INPUT=false
+
+select_images() {
+  PUSH="$1" HOLD_MARKED="$2" IMAGES_ROOT="$marked_root" bash "$here/images-select-push.sh" "$3"
+}
+if select_images true true '["plain"]' >/dev/null 2>&1 && ! select_images maybe true '["plain"]' >/dev/null 2>&1 && ! select_images true maybe '["plain"]' >/dev/null 2>&1 && ! select_images true '' '["plain"]' >/dev/null 2>&1; then pass "the selection refuses a value that is not true or false"; else fail "the selection accepted a value that is not true or false"; fi
+for bad in 'not json' '"plain"' '["../x"]' '["a b"]' '[1]' '["Upper"]'; do
+  if select_images true true "$bad" >/dev/null 2>&1; then fail "the selection accepted the images '${bad}'"; else pass "the selection refuses the images '${bad}'"; fi
+done
+if [ "$(select_images true true '[]')" = '[]' ]; then pass "the selection of no image is empty"; else fail "the selection of no image"; fi
+mkdir -p "$marked_root/dir-marker"
+touch "$marked_root/dir-marker/Dockerfile"
+mkdir "$marked_root/dir-marker/PUSH_ON_MAIN_ONLY"
+if [ "$(select_images true true '["dir-marker"]')" = '["dir-marker"]' ]; then pass "a folder named like the marker is not a marker"; else fail "a folder named like the marker holds an image back"; fi
+
+product="${here}/../../images"
+marked_products="$(cd "$product" && for dir in */; do if [ -f "${dir}PUSH_ON_MAIN_ONLY" ]; then echo "${dir%/}"; fi; done | tr '\n' ' ')"
+if [ "$marked_products" = "br-sandbox-check " ]; then pass "the only image held back from pull requests is br-sandbox-check"; else fail "the images with the marker: '${marked_products}'"; fi
+all_images="$(IMAGES_ROOT="$product" bash "$here/images-discover.sh")"
+case "$all_images" in *br-sandbox-check*br-sandbox-keeper*br-sandbox-python*br-sandbox-tools*) pass "the product images are discovered" ;; *) fail "the product images: ${all_images}" ;; esac
+pull_request_pushed="$(PUSH=true HOLD_MARKED=true IMAGES_ROOT="$product" bash "$here/images-select-push.sh" "$all_images")"
+if [ "$pull_request_pushed" = '["br-sandbox-keeper", "br-sandbox-python", "br-sandbox-tools"]' ]; then pass "a pull request pushes the three other images and not br-sandbox-check"; else fail "a pull request pushes ${pull_request_pushed}"; fi
+main_pushed="$(PUSH=true HOLD_MARKED=false IMAGES_ROOT="$product" bash "$here/images-select-push.sh" "$all_images")"
+if [ "$main_pushed" = "$all_images" ]; then pass "a push to main pushes every image"; else fail "a push to main pushes ${main_pushed}"; fi
+
+if grep -q '^  build:' "${workflows}/images-build.yml" && ! sed -n '/^  build:/,/^  manifest:/p' "${workflows}/images-build.yml" | grep -q 'inputs\.push'; then pass "the build job of images-build.yml never reads the input push"; else fail "the build job of images-build.yml reads the input push"; fi
+if sed -n '/^  manifest:/,/^  digests:/p' "${workflows}/images-build.yml" | grep -q 'fromJSON(needs.plan.outputs.pushed)'; then pass "the manifest lists are made for the pushed images only"; else fail "the manifest job does not use the pushed images"; fi
+if grep -q "hold_marked: \${{ needs.plan.outputs.hold_marked != 'false' }}" "${workflows}/images.yml"; then pass "images.yml gives hold_marked from the plan to images-build.yml and holds when the value is anything but false"; else fail "images.yml does not give hold_marked from the plan, or does not hold on a missing value"; fi
+if sed -n '/^      hold_marked:/,/^    outputs:/p' "${workflows}/images-build.yml" | grep -q 'default: true'; then pass "images-build.yml holds marked images back unless its caller says otherwise"; else fail "hold_marked has no default true"; fi
+
+if grep -Eq 'HEAD_REPOSITORY: .*(\|\||github\.repository)' "${workflows}/images.yml"; then fail "images.yml gives a default to the head repository"; else pass "images.yml gives no default to the head repository"; fi
+
 mkdir -p "$tmp/images/a-one" "$tmp/images/b-two" "$tmp/images/c.d_e" "$tmp/images/no-dockerfile"
 touch "$tmp/images/a-one/Dockerfile" "$tmp/images/b-two/Dockerfile"
 discovered="$(IMAGES_ROOT="$tmp/images" bash "$here/images-discover.sh")"

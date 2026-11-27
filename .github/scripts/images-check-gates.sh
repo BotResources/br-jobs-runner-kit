@@ -1,32 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-workflow="${1:?usage: images-check-gates.sh <workflow file>}"
+workflow="${1:?usage: images-check-gates.sh <images-build.yml> <images.yml>}"
+caller="${2:?usage: images-check-gates.sh <images-build.yml> <images.yml>}"
 
-python3 -I - "$workflow" <<'PY'
+python3 -I - "$workflow" "$caller" <<'PY'
 import re, sys
 
 path = sys.argv[1]
-lines = open(path).read().split("\n")
+caller_path = sys.argv[2]
 errors = []
 
-jobs = {}
-current = None
-in_jobs = False
-for line in lines:
-    if re.match(r"^jobs:\s*$", line):
-        in_jobs = True
-        continue
-    if in_jobs and re.match(r"^\S", line):
-        in_jobs = False
-    if not in_jobs:
-        continue
-    match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
-    if match:
-        current = match.group(1)
-        jobs[current] = []
-    elif current is not None:
-        jobs[current].append(line)
+def parse_jobs(file):
+    lines = open(file).read().split("\n")
+    found = {}
+    current = None
+    in_jobs = False
+    for line in lines:
+        if re.match(r"^jobs:\s*$", line):
+            in_jobs = True
+            continue
+        if in_jobs and re.match(r"^\S", line):
+            in_jobs = False
+        if not in_jobs:
+            continue
+        match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if match:
+            current = match.group(1)
+            found[current] = []
+        elif current is not None:
+            found[current].append(line)
+    return found
+
+jobs = parse_jobs(path)
+caller_jobs = parse_jobs(caller_path)
 
 def needs_of(body):
     for index, line in enumerate(body):
@@ -75,6 +82,67 @@ for name in ("manifest", "digests"):
     for condition in job_conditions(jobs.get(name, [])):
         if status_function.search(condition):
             errors.append("the job '%s' has a status function in its condition: %s" % (name, condition.strip()))
+def steps_of(body):
+    steps = []
+    for line in body:
+        if re.match(r"^      - ", line):
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    return steps
+
+def has_line(body, text):
+    return any(line.strip() == text for line in body)
+
+def require_in_job(file, job_set, job, expected):
+    for text in expected:
+        if not has_line(job_set.get(job, []), text):
+            errors.append("%s: the job '%s' lacks the line: %s" % (file, job, text))
+
+def require_in_step(file, job_set, job, step_id, expected):
+    step = None
+    for candidate in steps_of(job_set.get(job, [])):
+        if any(line.strip() == "id: " + step_id for line in candidate):
+            step = candidate
+    if step is None:
+        errors.append("%s: the job '%s' has no step with the id '%s'" % (file, job, step_id))
+        return
+    for text in expected:
+        if not has_line(step, text):
+            errors.append("%s: the step '%s' of the job '%s' lacks the line: %s" % (file, step_id, job, text))
+
+require_in_job(path, jobs, "plan", ["pushed: ${{ steps.pushed.outputs.pushed }}"])
+require_in_step(path, jobs, "plan", "pushed", [
+    "IMAGES: ${{ steps.discover.outputs.images }}",
+    "PUSH: ${{ inputs.push }}",
+    "HOLD_MARKED: ${{ inputs.hold_marked }}",
+    'run: echo "pushed=$(bash .github/scripts/images-select-push.sh "$IMAGES")" >>"$GITHUB_OUTPUT"',
+])
+require_in_step(path, jobs, "build", "names", [
+    "PUSHED: ${{ contains(fromJSON(needs.plan.outputs.pushed), matrix.image) }}",
+    'echo "push=${PUSHED}"',
+])
+require_in_job(caller_path, caller_jobs, "plan", ["hold_marked: ${{ steps.plan.outputs.hold_marked }}"])
+require_in_step(caller_path, caller_jobs, "plan", "plan", [
+    "grep -E '^(push|hold_marked|tag|revision)=' plan.txt >>\"$GITHUB_OUTPUT\"",
+])
+require_in_job(caller_path, caller_jobs, "build", [
+    "needs: plan",
+    "uses: ./.github/workflows/images-build.yml",
+    "push: ${{ needs.plan.outputs.push == 'true' }}",
+    "hold_marked: ${{ needs.plan.outputs.hold_marked != 'false' }}",
+])
+
+per_image_push = "steps.names.outputs.push == 'true'"
+for line in jobs.get("build", []):
+    if "inputs.push" in line:
+        errors.append("the job 'build' reads inputs.push: the push is decided for each image (steps.names.outputs.push)")
+logins = [step for step in steps_of(jobs.get("build", [])) if any("docker/login-action" in line for line in step)]
+if not logins:
+    errors.append("the job 'build' has no login step")
+for step in logins:
+    if not any(line.strip() == "if: " + per_image_push for line in step):
+        errors.append("the login step of the job 'build' does not run only when " + per_image_push)
 for name, body in jobs.items():
     for line in body:
         if "continue-on-error" in line:
