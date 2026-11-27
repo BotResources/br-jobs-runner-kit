@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::cluster::PodEvent;
-use crate::facts::{Phase, PodFacts, PoolState};
+use crate::facts::{Mark, Phase, PodFacts, PoolState};
 use crate::rules::{ClaimWindow, pod_failure};
 use crate::time::elapsed;
 
@@ -33,7 +33,7 @@ impl Engine {
             }
             PodEvent::Deleted { name } => self.remove(&(namespace.to_owned(), name), &mut touched),
         }
-        self.refresh_unreadable_metric();
+        self.refresh_fleet_metrics();
         for pool in touched {
             self.evaluate_pool_id(&pool).await;
         }
@@ -141,7 +141,16 @@ impl Engine {
         }
     }
 
-    pub(crate) fn refresh_unreadable_metric(&self) {
+    pub(crate) fn refresh_fleet_metrics(&self) {
+        let idle = self
+            .pods
+            .values()
+            .filter(|tracked| {
+                tracked.facts.pool_state == PoolState::Claimed
+                    && tracked.facts.clean == Mark::Value(true)
+            })
+            .count();
+        self.metrics.set_idle_pods(idle);
         self.metrics.set_unreadable_pods(self.unreadable.len());
     }
 }

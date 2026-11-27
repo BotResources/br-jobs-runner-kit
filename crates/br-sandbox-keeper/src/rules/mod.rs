@@ -6,7 +6,7 @@ mod rate;
 mod sizing;
 mod store;
 
-pub use aged::{record_is_old, record_needs_read, tombstone_is_old, tombstone_needs_read};
+pub use aged::{record_is_old, tombstone_is_old};
 pub use damping::{Damped, ScaleDownRules, ScaleState, damp};
 pub use failing::{
     ConditionWrite, FailureKind, PodFailure, PoolJudgement, condition_write, judge_pool,

@@ -73,7 +73,7 @@ impl Engine {
             self.pending_due.remove(&id);
             self.refresh_pool_metrics(pool);
         }
-        self.refresh_unreadable_metric();
+        self.refresh_fleet_metrics();
         tracing::info!(
             namespace,
             "a namespace is no longer managed and is no longer served"

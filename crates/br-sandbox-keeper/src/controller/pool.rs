@@ -1,6 +1,6 @@
 use crate::cluster::{EventTarget, PoolEvent};
 use crate::config::PoolConfig;
-use crate::facts::{Mark, PodFacts, PoolState};
+use crate::facts::{PodFacts, PoolState};
 use crate::rules::{
     ClaimWindow, ScaleDownRules, condition_write, damp, desired_size, floor_now, judge_pool,
 };
@@ -42,14 +42,8 @@ impl Engine {
             .pool_pods(pool, PoolState::Warm)
             .filter(|pod| pod.ready)
             .count();
-        let idle = self
-            .pool_pods(pool, PoolState::Claimed)
-            .filter(|pod| pod.clean == Mark::Value(true))
-            .count();
         self.metrics
             .set_pool_warm_ready(&pool.id, u32::try_from(ready).unwrap_or(u32::MAX));
-        self.metrics
-            .set_idle_pods(&pool.id, u32::try_from(idle).unwrap_or(u32::MAX));
     }
 
     async fn evaluate_pool(&mut self, pool: &PoolConfig) {

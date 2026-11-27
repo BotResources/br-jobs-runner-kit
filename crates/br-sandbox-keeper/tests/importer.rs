@@ -1,7 +1,6 @@
 use std::time::{Duration, UNIX_EPOCH};
 
-use br_runner_sandbox::Timestamp;
-use br_sandbox_keeper::bucket::ObjectInfo;
+use br_runner_sandbox::{AttemptId, Record, Timestamp};
 use br_sandbox_keeper::cluster::{EventTarget, LeaseWrite};
 use br_sandbox_keeper::facts::{
     ConditionFacts, ContainerFacts, Mark, Phase, PodFacts, PodVersion, PoolState, ReplicaSetFacts,
@@ -9,7 +8,7 @@ use br_sandbox_keeper::facts::{
 };
 use br_sandbox_keeper::rules::{
     Action, DeleteReason, ExpiryRules, ScaleDownRules, ScaleState, SweepRules, condition_write,
-    damp, judge_pod, judge_pool, record_needs_read,
+    damp, judge_pod, judge_pool, record_is_old,
 };
 use br_sandbox_keeper::{FloorInput, KeeperConfig, KeeperConfigInput, PoolInput};
 
@@ -67,11 +66,11 @@ fn an_importer_builds_the_other_inputs_with_the_constructors() {
     );
     assert_eq!(damped.replicas, 10);
     let sweep = SweepRules::new(seconds(1000), seconds(60), seconds(3600), seconds(10_000));
-    assert!(record_needs_read(
-        &ObjectInfo::new("records/x", at(1)),
-        at(1),
-        &sweep
-    ));
+    let record = Record::started(AttemptId::mint(), at(1));
+    assert_eq!(
+        record_is_old(&record.to_vec().unwrap(), at(10_001), &sweep),
+        Ok(true)
+    );
     let _ = (
         ReplicaSetFacts::new("rs", Some(3)),
         EventTarget::new("warm-p", "rs"),

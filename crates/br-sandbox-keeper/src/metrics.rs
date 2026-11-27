@@ -9,7 +9,6 @@ struct PoolGauges {
     desired: u32,
     warm_ready: u32,
     claims_per_second: f64,
-    idle_pods: u32,
 }
 
 #[derive(Default)]
@@ -21,6 +20,7 @@ struct State {
     orphans_deleted: u64,
     sweep_errors: u64,
     unreadable_pods: u64,
+    idle_pods: u64,
 }
 
 #[derive(Default)]
@@ -97,8 +97,8 @@ impl Metrics {
         self.with_pool(pool, |gauges| gauges.claims_per_second = rate);
     }
 
-    pub fn set_idle_pods(&self, pool: &str, idle: u32) {
-        self.with_pool(pool, |gauges| gauges.idle_pods = idle);
+    pub fn set_idle_pods(&self, count: usize) {
+        self.lock().idle_pods = u64::try_from(count).unwrap_or(u64::MAX);
     }
 
     pub fn pod_deleted(&self, reason: &str) {
@@ -155,12 +155,12 @@ impl Metrics {
             &state.pools,
             |g| g.claims_per_second,
         );
-        pool_series(
+        plain(
             &mut out,
             "idle_pods",
-            "Claimed pods with no running turn.",
-            &state.pools,
-            |g| g.idle_pods,
+            "gauge",
+            "Claimed pods with a saved state and no running turn.",
+            state.idle_pods,
         );
         header(
             &mut out,
@@ -222,74 +222,4 @@ impl Metrics {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_renders_every_metric_name() {
-        let metrics = Metrics::new();
-        metrics.set_pool_desired("p", 3);
-        metrics.set_pool_warm_ready("p", 2);
-        metrics.set_claims_per_second("p", 0.5);
-        metrics.set_idle_pods("p", 1);
-        let text = metrics.render(false);
-        for name in [
-            "pool_desired",
-            "pool_warm_ready",
-            "claims_per_second",
-            "idle_pods",
-            "pods_deleted_total",
-            "saves_deleted_total",
-            "tombstones_written_total",
-            "orphans_deleted_total",
-            "sweep_errors_total",
-            "unreadable_pods",
-            "is_leader",
-        ] {
-            assert!(
-                text.contains(&format!("# TYPE br_sandbox_keeper_{name} ")),
-                "{name}"
-            );
-        }
-    }
-
-    #[test]
-    fn it_shows_one_deleted_series_per_reason_from_the_start() {
-        let text = Metrics::new().render(false);
-        for reason in POD_DELETE_REASONS {
-            assert!(text.contains(&format!(
-                "br_sandbox_keeper_pods_deleted_total{{reason=\"{reason}\"}} 0"
-            )));
-        }
-    }
-
-    #[test]
-    fn values_follow_the_calls() {
-        let metrics = Metrics::new();
-        metrics.set_pool_desired("p", 7);
-        metrics.pod_deleted("idle");
-        metrics.pod_deleted("idle");
-        metrics.save_deleted();
-        metrics.tombstone_written();
-        metrics.orphan_deleted();
-        metrics.sweep_error();
-        metrics.set_unreadable_pods(4);
-        let text = metrics.render(true);
-        assert!(text.contains("br_sandbox_keeper_pool_desired{pool=\"p\"} 7"));
-        assert!(text.contains("br_sandbox_keeper_pods_deleted_total{reason=\"idle\"} 2"));
-        assert!(text.contains("br_sandbox_keeper_saves_deleted_total 1"));
-        assert!(text.contains("br_sandbox_keeper_tombstones_written_total 1"));
-        assert!(text.contains("br_sandbox_keeper_orphans_deleted_total 1"));
-        assert!(text.contains("br_sandbox_keeper_sweep_errors_total 1"));
-        assert!(text.contains("br_sandbox_keeper_unreadable_pods 4"));
-        assert!(text.contains("br_sandbox_keeper_is_leader 1"));
-    }
-
-    #[test]
-    fn it_escapes_label_values() {
-        let metrics = Metrics::new();
-        metrics.set_pool_desired("a\"b\\c\nd", 1);
-        let text = metrics.render(false);
-        assert!(text.contains("{pool=\"a\\\"b\\\\c\\nd\"} 1"));
-    }
-}
+mod tests;

@@ -13,7 +13,7 @@ use crate::leader::Leadership;
 use crate::metrics::Metrics;
 use crate::rules::{
     ManifestRead, StoreStep, SweepRules, TurnGrouper, TurnListing, plan_turn, read_manifest,
-    record_is_old, record_needs_read, tombstone_is_old, tombstone_needs_read,
+    record_is_old, tombstone_is_old,
 };
 
 impl From<&KeeperConfig> for SweepRules {
@@ -42,24 +42,20 @@ enum Stop {
     Failed,
 }
 
-type NeedsRead = fn(&ObjectInfo, Timestamp, &SweepRules) -> bool;
 type IsOld = fn(&[u8], Timestamp, &SweepRules) -> Result<bool, br_runner_sandbox::FormatError>;
 
 struct Aged {
     prefix: &'static str,
-    needs_read: NeedsRead,
     is_old: IsOld,
 }
 
 const RECORDS: Aged = Aged {
     prefix: RECORDS_PREFIX,
-    needs_read: record_needs_read,
     is_old: record_is_old,
 };
 
 const TOMBSTONES: Aged = Aged {
     prefix: TOMBSTONES_PREFIX,
-    needs_read: tombstone_needs_read,
     is_old: tombstone_is_old,
 };
 
@@ -240,9 +236,6 @@ impl Sweeper {
         now: Timestamp,
         kind: &Aged,
     ) -> Result<(), Stop> {
-        if !(kind.needs_read)(info, now, &self.rules) {
-            return Ok(());
-        }
         let bytes = match self.bucket.get(&info.key).await {
             Ok(Some(bytes)) => bytes,
             Ok(None) => return Ok(()),
@@ -264,6 +257,7 @@ impl Sweeper {
                     key = info.key,
                     "an object cannot be read and is left in place"
                 );
+                self.metrics.sweep_error();
             }
         }
         Ok(())

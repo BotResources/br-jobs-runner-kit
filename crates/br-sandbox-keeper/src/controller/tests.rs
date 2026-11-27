@@ -1,5 +1,6 @@
 mod condition;
 mod expiry;
+mod metrics;
 mod run;
 mod served;
 mod sizing;
