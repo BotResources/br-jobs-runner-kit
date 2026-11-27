@@ -83,3 +83,14 @@ check_the_secrets_are_mounted_in_the_proxy_pod_only() {
     t "the model refuses a secretKeyRef on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.containers[0].env += [{"name": "A", "valueFrom": {"secretKeyRef": {"name": "x", "key": "y"}}}]' cred)" = false
     t "the model refuses a Secret volume on a proxied sandbox pod" test "$(model_result sbx-alpha-full '.spec.volumes += [{"name": "s", "secret": {"secretName": "x"}}]' cred)" = false
 }
+
+check_the_proxy_probes_the_tmp_mount_and_the_warm_age_default_are_pinned() {
+    section "proxy pod: probe period, /tmp mount; chart default: warm_max_age_seconds"
+    local namespace
+    for namespace in "$PROXY_ALLOW_NS" "$PROXY_FULL_NS"; do
+        t "${namespace}: the readiness and the liveness probe are TCP on the tunnel port every 5 seconds" jqt cred "$(proxy_pod "$namespace") | .containers[0] | .readinessProbe == {\"tcpSocket\": {\"port\": 8888}, \"periodSeconds\": 5} and .livenessProbe == {\"tcpSocket\": {\"port\": 8888}, \"periodSeconds\": 5}"
+        t "${namespace}: /tmp is the mount of the volume tmp, and that volume is the 16Mi emptyDir" jqt cred "$(proxy_pod "$namespace") | . as \$p | [\$p.containers[0].volumeMounts[] | select(.mountPath == \"/tmp\") | .name] == [\"tmp\"] and ([\$p.volumes[] | select(.name == \"tmp\")] == [{\"name\": \"tmp\", \"emptyDir\": {\"sizeLimit\": \"16Mi\"}}])"
+    done
+    t "the probe period stays 5 seconds when the tunnel port is set to another value" jqt egresssized "$(proxy_pod "$PROXY_ALLOW_NS") | .containers[0] | .readinessProbe == {\"tcpSocket\": {\"port\": 9999}, \"periodSeconds\": 5} and .livenessProbe == {\"tcpSocket\": {\"port\": 9999}, \"periodSeconds\": 5}"
+    t "the default of warm_max_age_seconds in the chart values is 1800" test "$(yq '.warm_max_age_seconds' "$CHART/values.yaml")" = 1800
+}
