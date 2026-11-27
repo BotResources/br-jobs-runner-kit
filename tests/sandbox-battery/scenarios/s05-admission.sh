@@ -29,7 +29,7 @@ verdict admission-runner-may-create-pods "runner can create pods in $ns" test "$
 verdict admission-runner-may-not-create-deployments "runner cannot create deployments" test "$(as_runner auth can-i create deployments)" = no
 verdict admission-policy-bound "policy $POD_POLICY with the bindings $POD_POLICY_CREATE_BINDING and $POD_POLICY_UPDATE_BINDING exist" \
   test "$(k get validatingadmissionpolicy "$POD_POLICY" -o name 2> /dev/null)" != "" -a "$(k get validatingadmissionpolicybinding "$POD_POLICY_CREATE_BINDING" -o name 2> /dev/null)" != "" -a "$(k get validatingadmissionpolicybinding "$POD_POLICY_UPDATE_BINDING" -o name 2> /dev/null)" != ""
-verdict admission-policy-has-15-rules "policy $POD_POLICY holds $POD_RULE_COUNT rules and their codes are the expected ones, in order" \
+verdict admission-policy-has-all-rules "policy $POD_POLICY holds $POD_RULE_COUNT rules and their codes are the expected ones, in order" \
   pod_policy_rules_ok
 
 verdict admission-sandbox-pod-passes "legitimate pod: role=sandbox, agent non-root, seed container with the tools image" \

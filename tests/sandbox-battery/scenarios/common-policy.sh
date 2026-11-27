@@ -1,5 +1,7 @@
 POLICY_NS=
 POLICY_TEMPLATE=
+POLICY_PSA_ORIGINAL=
+POLICY_PSA_TOUCHED=
 
 first_line() { printf '%s' "$1" | tr '\n' ' ' | cut -c1-260; }
 
@@ -14,8 +16,32 @@ policy_setup() {
   POLICY_TEMPLATE=$(pod_template "$POLICY_NS")
   verdict pod-policy-namespace-managed "namespace $POLICY_NS carries $LBL_MANAGED=true, so the pod policy is bound to it" \
     test "$(ns_label "$POLICY_NS" "$LBL_MANAGED")" = true
-  verdict pod-policy-no-pod-security-enforce "namespace $POLICY_NS has no pod-security enforce label (a refusal by Pod Security would come before the policy and hide its code)" \
-    test -z "$(ns_label "$POLICY_NS" pod-security.kubernetes.io/enforce)"
+  policy_pod_security_remove
+}
+
+policy_pod_security_remove() {
+  POLICY_PSA_ORIGINAL=$(ns_label "$POLICY_NS" "$POD_SECURITY_ENFORCE_LABEL")
+  POLICY_PSA_TOUCHED=1
+  if [ -z "$POLICY_PSA_ORIGINAL" ]; then
+    log "set-up: namespace $POLICY_NS has no $POD_SECURITY_ENFORCE_LABEL label, nothing to remove"
+    return 0
+  fi
+  k label ns "$POLICY_NS" "$POD_SECURITY_ENFORCE_LABEL-" > /dev/null
+  log "set-up: removed the label $POD_SECURITY_ENFORCE_LABEL=$POLICY_PSA_ORIGINAL from the scratch namespace $POLICY_NS, so Pod Security does not refuse before the pod policy; the scenario puts it back at the end"
+}
+
+policy_pod_security_enforce() {
+  k label ns "$POLICY_NS" "$POD_SECURITY_ENFORCE_LABEL=$1" --overwrite > /dev/null
+}
+
+policy_pod_security_restore() {
+  if [ -z "$POLICY_PSA_TOUCHED" ] || [ -z "$POLICY_NS" ]; then return 0; fi
+  if [ -n "$POLICY_PSA_ORIGINAL" ]; then
+    policy_pod_security_enforce "$POLICY_PSA_ORIGINAL"
+  else
+    k label ns "$POLICY_NS" "$POD_SECURITY_ENFORCE_LABEL-" > /dev/null 2>&1 || true
+  fi
+  POLICY_PSA_TOUCHED=
 }
 
 policy_case() {

@@ -13,6 +13,8 @@ scenario_begin s16-pod-policy-host-and-privilege
 
 PROBE_TARGET_HOST=192.0.2.10
 
+cleanup_extra() { policy_pod_security_restore; }
+
 policy_setup "$(ns_of "$CLIENT_A" "$NET_ALLOW")" || scenario_end
 
 host_refs='.spec.hostUsers = true'
@@ -50,6 +52,11 @@ probe_without_host() { printf '%s' "{$1: {httpGet: {port: 8080, path: \"/\"}}}";
 tcp_with_host() { printf '%s' "{$1: {tcpSocket: {host: \"$PROBE_TARGET_HOST\", port: 8080}}}"; }
 tcp_without_host() { printf '%s' "{$1: {tcpSocket: {port: 8080}}}"; }
 
+post_start_bad=".lifecycle.postStart = {httpGet: {host: \"$PROBE_TARGET_HOST\", port: 8080, path: \"/\"}}"
+post_start_ok='.lifecycle.postStart = {httpGet: {port: 8080, path: "/"}}'
+pre_stop_bad=".lifecycle.preStop = {tcpSocket: {host: \"$PROBE_TARGET_HOST\", port: 8080}}"
+pre_stop_ok='.lifecycle.preStop = {tcpSocket: {port: 8080}}'
+
 for where in main init; do
   if [ "$where" = main ]; then put=on_agent; else put=on_init; fi
   policy_case "policy-refuses-liveness-http-host-$where" "$where container with a liveness probe httpGet.host" "$CODES_PROBE_HOST" \
@@ -59,11 +66,9 @@ for where in main init; do
   policy_case "policy-refuses-startup-http-host-$where" "$where container with a startup probe httpGet.host" "$CODES_PROBE_HOST" \
     "$($put ". += $(probe_with_host startupProbe)")" "$($put ". += $(probe_without_host startupProbe)")"
   policy_case "policy-refuses-post-start-hook-host-$where" "$where container with a postStart hook httpGet.host" "$CODES_HOOK_HOST" \
-    "$($put ".lifecycle.postStart = {httpGet: {host: \"$PROBE_TARGET_HOST\", port: 8080, path: \"/\"}}")" \
-    "$($put '.lifecycle.postStart = {httpGet: {port: 8080, path: "/"}}')"
+    "$($put "$post_start_bad")" "$($put "$post_start_ok")"
   policy_case "policy-refuses-pre-stop-hook-host-$where" "$where container with a preStop hook tcpSocket.host" "$CODES_HOOK_HOST" \
-    "$($put ".lifecycle.preStop = {tcpSocket: {host: \"$PROBE_TARGET_HOST\", port: 8080}}")" \
-    "$($put '.lifecycle.preStop = {tcpSocket: {port: 8080}}')"
+    "$($put "$pre_stop_bad")" "$($put "$pre_stop_ok")"
 done
 
 scenario_end

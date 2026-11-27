@@ -51,7 +51,7 @@ use_closed() {
 helm_ctx() { helm --kube-context "$CTX" "$@"; }
 ns_of() { printf '%s-%s-%s\n' "$NS_PREFIX" "$1" "$2"; }
 egress_ns_of() { printf '%s%s\n' "$(ns_of "$1" "$2")" "$EGRESS_SUFFIX"; }
-pool_of() { printf '%s\n' "${1#"$NS_PREFIX"-}"; }
+pool_of() { printf '%s\n' "${1#"$POOL_ID_STRIP"}"; }
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time()*1000'; }
 new_id() { openssl rand -hex 4; }
 count_lines() { wc -l | tr -d ' '; }
