@@ -61,11 +61,12 @@ check_no_project_value_in_the_chart() {
     section "no host or registry outside the fixtures"
     local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local)$'
     local found
-    local default_repository='^      repository: docker\.io/ironsh/iron-proxy$'
-    found="$(cd "$CHART" && hosts_of Chart.yaml README.md CHANGELOG.md values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
+    local default_repository='^      repository: docker\.io/ironsh/iron-proxy$|^  image: ghcr\.io/botresources/br-sandbox-check@sha256:[a-f0-9]{64}$'
+    local check_image='ghcr\.io/botresources/br-sandbox-check@sha256:[a-f0-9]{64}'
+    found="$(cd "$CHART" && hosts_of Chart.yaml <(sed -E "s#${check_image}##g" README.md) <(sed -E "s#${check_image}##g" CHANGELOG.md) values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
     t "no host in the chart files outside the allowed suffixes" test -z "$found"
-    t "no registry host in the chart files" test -z "$(cd "$CHART" && { grep -rniE "ghcr|docker\.io|quay\.io" README.md CHANGELOG.md values.schema.json templates files; grep -vE "$default_repository" values.yaml | grep -niE "ghcr|docker\.io|quay\.io"; } || true)"
-    t "the only registry name of the values is the default repository of the proxy image" test "$(grep -cE 'docker\.io|ghcr|quay\.io' "$CHART/values.yaml")" -eq 1
+    t "no registry host in the chart files" test -z "$(cd "$CHART" && { sed -E "s#${check_image}##g" README.md CHANGELOG.md | grep -niE "ghcr|docker\.io|quay\.io"; grep -rniE "ghcr|docker\.io|quay\.io" values.schema.json templates files; grep -vE "$default_repository" values.yaml | grep -niE "ghcr|docker\.io|quay\.io"; } || true)"
+    t "the only registry names of the values are the default repository of the proxy image and the default check image" test "$(grep -cE 'docker\.io|ghcr|quay\.io' "$CHART/values.yaml")" -eq 2
     t "the fixtures hold only example.test hosts" test -z "$(cd "$CHART/ci" && hosts_of ./*.yaml | grep -v 'example\.test$' || true)"
     t "the render holds no host that is not a value or a Kubernetes name" test -z "$(hosts_of "$WORK/mirror_yaml.yaml" | grep -vE "$allowed" || true)"
 }

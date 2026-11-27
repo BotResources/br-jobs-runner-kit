@@ -33,6 +33,7 @@ runtimeClassName: ""
 runAsUser: 10001
 runAsGroup: 10001
 restore_timeout_seconds: 30
+exec_timeout_seconds: 600
 idle_ttl: 120
 idle_keep_min_state_bytes: 10000000
 warm_max_age_seconds: 1800
@@ -118,6 +119,7 @@ keeper:
     retry_period_seconds: 2
 network_check:
   enabled: true
+  image: ghcr.io/botresources/br-sandbox-check@sha256:51bd276e6c14b568a55633419d31a824338d423360c08d6584ecf28a7bcf556d
   targets: []
   offlist_host: offlist.invalid
   enforcement_wait_seconds: 60

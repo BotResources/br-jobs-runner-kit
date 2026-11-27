@@ -157,6 +157,7 @@
     "runAsUser": {"type": "integer", "minimum": 1},
     "runAsGroup": {"type": "integer", "minimum": 1},
     "restore_timeout_seconds": {"$ref": "#/definitions/positiveInt"},
+    "exec_timeout_seconds": {"$ref": "#/definitions/positiveInt"},
     "idle_ttl": {"type": "integer", "minimum": 0},
     "idle_keep_min_state_bytes": {"type": "integer", "minimum": 0},
     "warm_max_age_seconds": {"$ref": "#/definitions/positiveInt"},

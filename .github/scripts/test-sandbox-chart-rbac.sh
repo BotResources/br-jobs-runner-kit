@@ -12,7 +12,7 @@ role_rules() {
 
 check_runner_role_and_binding() {
     section "runner Role: pods, exec, replicasets read, the config"
-    t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(role_rules br-sandbox-runner ex)" = "configmaps:get pods/exec:create pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
+    t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(role_rules br-sandbox-runner ex)" = "configmaps:get pods/exec:create,get pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
     t "the runner Role names the ConfigMap it reads" jqt ex "$(role_filter br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
     t "the runner binding names the service account of the values" jqt ex '.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner" and .metadata.namespace == "sbx-beta-none") | .subjects == [{"kind": "ServiceAccount", "name": "runner", "namespace": "runners"}]'
     local render
@@ -46,7 +46,7 @@ check_config_contract() {
     done
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.public_resolvers}" -f "$(vals nores 'del(.network.public_resolvers)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.none.runner.namespace}" -f "$(vals norunner 'del(.clients.alpha.modes.none.runner.namespace)')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck 'del(.network_check.image)')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck '.network_check.image = null')"
 }
 
 BINDING_SUBJECTS_OF_THE_POD_IDENTITY='
