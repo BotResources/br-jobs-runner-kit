@@ -14,14 +14,7 @@ metadata:
     pod-security.kubernetes.io/audit: restricted
 {{- end }}
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: sandbox
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-automountServiceAccountToken: false
+{{ include "br-sandbox-chart.fence.service_account" (dict "root" $ "ns" $ns) }}
 {{- end }}
 {{- if .Values.operator.enabled }}
 ---

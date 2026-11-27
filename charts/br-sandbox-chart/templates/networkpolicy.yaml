@@ -1,71 +1,12 @@
 {{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: br-sandbox-default-deny
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-    - Egress
+{{ include "br-sandbox-chart.fence.default_deny" (dict "root" $ "ns" $ns) }}
 {{- if $ns.egress }}
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: br-sandbox-egress-{{ $ns.mode }}
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      br.sandbox/role: sandbox
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ $ns.egress }}
-          podSelector:
-            matchLabels:
-              br.sandbox/role: proxy
-      ports:
-        - protocol: TCP
-          port: {{ $.Values.egress.proxy.port | int64 }}
+{{ include "br-sandbox-chart.fence.egress_proxy" (dict "root" $ "ns" $ns) }}
 {{- else if eq $ns.mode "full" }}
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: br-sandbox-egress-full
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      br.sandbox/role: sandbox
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "4") | fromJsonArray | toYaml | nindent 14 }}
-    {{- if eq $.Values.network.ipv6 "dual_stack" }}
-    - to:
-        - ipBlock:
-            cidr: ::/0
-            except:
-              {{- include "br-sandbox-chart.cidr.except" (dict "root" $ "family" "6") | fromJsonArray | toYaml | nindent 14 }}
-    {{- end }}
+{{ include "br-sandbox-chart.fence.egress_full" (dict "root" $ "ns" $ns) }}
 {{- end }}
 {{- end }}
 {{- $system := include "br-sandbox-chart.system_namespace" . }}
