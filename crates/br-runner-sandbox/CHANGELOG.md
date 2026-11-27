@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2
+
+### Fixed
+
+- A pod that is gone, not `Running` or being deleted while an exec runs is now a port fault (`Error::Cluster(ClusterError::Gone)`), not an exit code, except in one window: the pod is read once at one instant, and a pod that the kubelet is evicting can still show `Running` with no deletion mark, so an exit code can still come back then. The API ends the exec stream of a killed process with a status of 137, and a foreground `run` gave `Ok(Finished)` with exit code 137 and empty streams. When the status of an exec of `run`, `read`, `write`, `list` or `kill` is 128 or more, the adapter reads the pod once; a pod that is not found, that has a deletion timestamp, or whose phase is not exactly `Running` (no phase, `Pending`, `Unknown`, `Failed`, `Succeeded`), is the fault `Gone`. A pod that is `Running` and not being deleted keeps the status as it was: a command that really ends with 137 (`kill -9`, the out-of-memory killer) is still `Ok` with exit code 137 for a foreground `run`, a `read` of a file that cannot be read is still a refusal, and a background `run`, a `write`, a `list` or a `kill` keeps its exec failure.
+- When the read of the pod fails, the operation is a port fault (`ClusterError::Call`), not an exit code. A status below 128 reads no pod.
+- `save` needed no change: any status other than 0 of the `bsdtar` of a save is already a port fault.
+
+### Known issues
+
+- The virtual-host style of the store (`store_path_style` false, the default) builds the object URL with a double slash before the key. A test store refused the request with a 405; the effect on a store that keeps the empty segment was not tested. Use the path style (`store_path_style` true).
+- A background `run` returns the id of the shell that runs the command text, not always the id of the command itself: a `kill` with that id may leave the command running, and the processes that the killed process started are not killed by `kill`.
+- A save of a large tree can fail on a node under heavy load; the failure is a port fault and no manifest is written, so no save exists (an uploaded part may remain in the store until the sweep).
+
 ## 0.1.1
 
 ### Fixed
