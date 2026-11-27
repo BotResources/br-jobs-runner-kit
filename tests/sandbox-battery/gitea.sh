@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/store.sh"
-source "$BATTERY_DIR/pki.sh"
+source "$BATTERY_DIR/servers.sh"
 
+GITEA_UID=1000
 GITEA_URL="https://$GITEA_HOST"
+REGISTRY_URL="https://$REGISTRY_HOST"
 
 creds_file() {
   if [ "$MODE" = closed ]; then
@@ -24,14 +26,55 @@ load_or_make_passwords() {
   GITEA_PASSWORD="${GITEA_PASSWORD:-$(random_alnum 24)}"
 }
 
-install_gitea_secrets() {
-  if kc -n "$NS_TESTSVC" get secret gitea-secrets >/dev/null 2>&1; then
+start_gitea() {
+  if container_reusable "$GITEA_CONTAINER" "$(servers_network)"; then
+    log "reuse $GITEA_CONTAINER"
     return 0
   fi
-  kubectl -n "$NS_TESTSVC" create secret generic gitea-secrets \
-    --from-literal=secret-key="$(random_alnum 48)" \
-    --from-literal=internal-token="$(random_alnum 105)" \
-    --dry-run=client -o yaml | kc apply -f - >&2
+  remove_own_container "$GITEA_CONTAINER"
+  local tmpfs_opts="rw,exec,uid=$GITEA_UID,gid=$GITEA_UID,mode=0755"
+  create_container "$GITEA_CONTAINER" "$(servers_network)" 768m \
+    --tmpfs "/var/lib/gitea:$tmpfs_opts,size=$GITEA_TMPFS_SIZE" --tmpfs "/etc/gitea:$tmpfs_opts,size=16m" \
+    -e GITEA__server__PROTOCOL=https -e "GITEA__server__DOMAIN=$GITEA_HOST" -e "GITEA__server__ROOT_URL=$GITEA_URL/" \
+    -e GITEA__server__HTTP_ADDR=0.0.0.0 -e GITEA__server__HTTP_PORT=443 \
+    -e GITEA__server__CERT_FILE=/tls/server.crt -e GITEA__server__KEY_FILE=/tls/server.key \
+    -e GITEA__server__DISABLE_SSH=true -e GITEA__server__START_SSH_SERVER=false -e GITEA__server__OFFLINE_MODE=true \
+    -e GITEA__database__DB_TYPE=sqlite3 -e GITEA__database__PATH=/var/lib/gitea/data/gitea.db \
+    -e GITEA__security__INSTALL_LOCK=true -e GITEA__service__DISABLE_REGISTRATION=true \
+    -e GITEA__service__REQUIRE_SIGNIN_VIEW=true -e GITEA__service__DEFAULT_KEEP_EMAIL_PRIVATE=true \
+    -e GITEA__picture__DISABLE_GRAVATAR=true -e GITEA__actions__ENABLED=false \
+    -e GITEA__cron_0X2E_update_checker__ENABLED=false -e GITEA__repository__DEFAULT_PRIVATE=private \
+    -e "GITEA__security__SECRET_KEY=$(random_alnum 48)" -e "GITEA__security__INTERNAL_TOKEN=$(random_alnum 105)" \
+    "$GITEA_IMAGE"
+  put_files "$GITEA_CONTAINER" tls "$GITEA_UID" "$PKI_DIR" server.crt server.key
+  docker start "$GITEA_CONTAINER" >/dev/null
+}
+
+wait_gitea_up() {
+  local _
+  for _ in $(seq 1 90); do
+    if [ "$(docker exec "$GITEA_CONTAINER" curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/api/healthz 2>/dev/null)" = 200 ]; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "gitea not up"
+}
+
+start_servers() {
+  create_servers_network
+  local node
+  for node in $(node_containers); do
+    attach_to_servers_network "$node"
+  done
+  attach_to_servers_network "$STORE_CONTAINER"
+  start_gitea
+  wait_gitea_up
+  start_echo
+  start_probe
+  start_dns
+  write_servers_env
+  load_servers_env
 }
 
 api() {
@@ -49,7 +92,7 @@ token_valid() {
 
 create_user() {
   local name="$1" password="$2" admin_flag="$3"
-  kc -n "$NS_TESTSVC" exec deploy/"$GITEA_SERVICE" -- gitea admin user create \
+  docker exec "$GITEA_CONTAINER" gitea admin user create \
     --username "$name" --password "$password" --email "$name@sbx.test" \
     --must-change-password=false $admin_flag >/dev/null 2>&1 ||
     log "user $name exists or create refused"
@@ -77,6 +120,8 @@ write_creds() {
   {
     echo "GITEA_URL=$GITEA_URL"
     echo "GITEA_HOST=$GITEA_HOST"
+    echo "REGISTRY_HOST=$REGISTRY_HOST"
+    echo "REGISTRY_URL=$REGISTRY_URL"
     echo "GITEA_ADMIN_USER=$GITEA_ADMIN_USER"
     echo "GITEA_ADMIN_PASSWORD=$GITEA_ADMIN_PASSWORD"
     echo "GITEA_USER=$GITEA_USER"
@@ -91,8 +136,6 @@ write_creds() {
 }
 
 setup_gitea() {
-  apply_rendered "$BATTERY_DIR/manifests/10-gitea.yaml" >&2
-  wait_rollout "$NS_TESTSVC" deploy/"$GITEA_SERVICE" 240s
   load_or_make_passwords
   create_users_org_token
   write_creds

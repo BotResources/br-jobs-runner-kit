@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 BATTERY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$BATTERY_DIR/names.env"
-EVIDENCE="${EVIDENCE:-$HOME/sbx-build-work/battery/evidence}"
-WORK="${WORK:-$HOME/sbx-build-work/battery}"
+EVIDENCE="${EVIDENCE:-$HOME/sbx-battery-work/battery/evidence}"
+WORK="${WORK:-$HOME/sbx-battery-work/battery}"
 mkdir -p "$EVIDENCE" "$WORK"
 
 log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }

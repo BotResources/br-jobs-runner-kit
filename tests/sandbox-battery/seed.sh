@@ -28,7 +28,7 @@ push_repo() {
 
 publish_packages() {
   kc exec -i -n "$NS_TOOLS" pytool -- env \
-    "REGISTRY_BASE=$GITEA_URL/api/packages/$GITEA_ORG" "REGISTRY_TOKEN=$GITEA_TOKEN" \
+    "REGISTRY_BASE=$REGISTRY_URL/api/packages/$GITEA_ORG" "REGISTRY_TOKEN=$GITEA_TOKEN" \
     "PKG_VERSION=$PKG_VERSION" "PKG_NPM=$PKG_NPM" "PKG_PYPI=$PKG_PYPI" "PKG_CARGO=$PKG_CARGO" \
     python3 -I - <"$BATTERY_DIR/seed/publish_packages.py"
 }

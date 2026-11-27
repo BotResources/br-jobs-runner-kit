@@ -33,7 +33,7 @@ start_store_container() {
     publish=(-p "127.0.0.1:${STORE_HOST_PORT}:${STORE_PORT}")
   fi
   docker run -d --name "$STORE_CONTAINER" --network "$(store_network)" ${publish[@]+"${publish[@]}"} \
-    "$SEAWEED_IMAGE" server -s3 -dir=/data -volume.max=20 >/dev/null
+    "$SEAWEED_IMAGE" server -ip.bind=0.0.0.0 -s3 -dir=/data -volume.max=20 >/dev/null
 }
 
 weed_shell() {
@@ -51,13 +51,15 @@ wait_store_up() {
 }
 
 configure_identity() {
-  if [ -s "$(store_env_file)" ]; then
-    log "store identity exists"
-    return 0
+  local ak sk file
+  file="$(store_env_file)"
+  if [ -s "$file" ]; then
+    ak="$(grep '^S3_ACCESS_KEY=' "$file" | cut -d= -f2-)"
+    sk="$(grep '^S3_SECRET_KEY=' "$file" | cut -d= -f2-)"
+  else
+    ak="SBX$(random_alnum 17)"
+    sk="$(random_alnum 40)"
   fi
-  local ak sk
-  ak="SBX$(random_alnum 17)"
-  sk="$(random_alnum 40)"
   weed_shell "s3.configure -user=sbx-battery -access_key=$ak -secret_key=$sk -actions=Admin -apply" >/dev/null
   umask 077
   {
@@ -67,9 +69,9 @@ configure_identity() {
     echo "S3_REGION=us-east-1"
     echo "S3_PATH_STYLE=true"
     echo "S3_ENDPOINT_IN_CLUSTER=http://$STORE_SERVICE.$NS_STORE.svc.cluster.local:$STORE_PORT"
-  } >"$(store_env_file)"
+  } >"$file"
   if [ "$MODE" = main ]; then
-    echo "S3_ENDPOINT_HOST=http://127.0.0.1:$STORE_HOST_PORT" >>"$(store_env_file)"
+    echo "S3_ENDPOINT_HOST=http://127.0.0.1:$STORE_HOST_PORT" >>"$file"
   fi
 }
 

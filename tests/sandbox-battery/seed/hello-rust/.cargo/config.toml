@@ -1,0 +1,5 @@
+[registries.${CARGO_REGISTRY_NAME}]
+index = "sparse+https://${GITEA_HOST}/api/packages/${GITEA_ORG}/cargo/"
+
+[registry]
+global-credential-providers = ["cargo:token"]

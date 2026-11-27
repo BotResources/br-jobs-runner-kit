@@ -40,3 +40,18 @@ create_cluster() {
 wait_pods_ready() {
   kc -n "$NS_TOOLS" wait --for=condition=Ready "pod/$TOOLBOX_POD" pod/pytool --timeout=180s >&2
 }
+
+remove_incluster_gitea() {
+  kc -n "$NS_TESTSVC" delete deployment/"$GITEA_SERVICE" service/"$GITEA_SERVICE" secret/gitea-secrets secret/gitea-tls \
+    configmap/test-ca --ignore-not-found >&2
+}
+
+apply_toolbox() {
+  local want have
+  want="$GIT_IP $ECHO_IP $PROBE_IP $STORE_IP"
+  have="$(kc -n "$NS_TOOLS" get pod "$TOOLBOX_POD" -o jsonpath='{.spec.hostAliases[*].ip}' 2>/dev/null || true)"
+  if [ "$have" != "$want" ]; then
+    kc -n "$NS_TOOLS" delete pod "$TOOLBOX_POD" pytool --ignore-not-found --wait=true >&2
+  fi
+  apply_rendered "$BATTERY_DIR/manifests/20-toolbox.yaml" >&2
+}
