@@ -150,9 +150,10 @@ impl Sweeper {
         };
         if read == ManifestRead::Unreadable {
             tracing::warn!(
-                turn = turn.dir,
+                key = turn.manifest.as_ref().map(|listed| listed.key.as_str()),
                 "a manifest cannot be read and is left in place"
             );
+            self.metrics.sweep_error();
         }
         for step in plan_turn(turn, &read, now, &self.rules) {
             self.require_leader()?;
@@ -243,8 +244,11 @@ impl Sweeper {
                 }
             }
             Ok(false) => {}
-            Err(error) => {
-                tracing::warn!(%error, key = info.key, "an object cannot be read and is left in place");
+            Err(_) => {
+                tracing::warn!(
+                    key = info.key,
+                    "an object cannot be read and is left in place"
+                );
             }
         }
         Ok(())

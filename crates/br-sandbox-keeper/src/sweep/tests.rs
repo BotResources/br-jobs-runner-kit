@@ -149,6 +149,7 @@ async fn a_manifest_that_cannot_be_read_is_never_deleted_for_age() {
         .insert(&part_object(&key, attempt), b"part", 10);
     harness.sweeper.sweep_once().await;
     assert!(harness.bucket.writes().is_empty());
+    assert!(metric(&harness, "br_sandbox_keeper_sweep_errors_total 1"));
 }
 
 #[tokio::test(start_paused = true)]
