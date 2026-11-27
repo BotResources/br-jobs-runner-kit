@@ -236,6 +236,8 @@ jobs:
         run: bash .github/scripts/test-no-llm-clients.sh
       - name: test the bus access gate
         run: bash .github/scripts/test-check-bus-access.sh
+      - name: plan of the keeper image
+        run: bash .github/scripts/test-keeper-image-plan.sh
 
   registry-gate:
     name: registry gate
