@@ -179,6 +179,7 @@ check_a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
     t "with egress disabled a mode allow with no list renders: no list can be given there" render allowoff -f "$EXAMPLE"
     t "the README names BR_SANDBOX_ALLOW_EMPTY and says it needs egress.enabled" grep -qF 'With `egress.enabled`, mode `allow` needs at least one domain or one cidr, else `BR_SANDBOX_ALLOW_EMPTY`.' "$README"
     t "the CHANGELOG names BR_SANDBOX_ALLOW_EMPTY" grep -qF 'BR_SANDBOX_ALLOW_EMPTY{client=...,mode=allow}' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the render fault changes what 0.2.0 to 0.2.3 accepted" grep -qF 'This changes what 0.2.0 to 0.2.3 accepted' "$CHART/CHANGELOG.md"
 }
 
 check_the_cluster_default_policy_exclusion_is_stated_for_both_namespace_kinds() {
