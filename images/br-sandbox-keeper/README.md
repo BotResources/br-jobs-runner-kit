@@ -16,7 +16,7 @@ The image has no shell and no other file. The binary reads its configuration fro
 
 ## Tag
 
-The tag of a published image is the version of the crate (for example `0.1.0`). `.github/workflows/keeper-image.yml` pushes it when `crates/br-sandbox-keeper/Cargo.toml` changes its version on `main`, and never replaces a tag that exists. A pull request that changes the crate builds and tests the image and pushes nothing. `images.yml` also builds every folder of `images/`, with the tags `sha-<7>` and `pr-<number>-<7>`.
+The tag of a published image is the version of the crate (for example `0.1.0`). `.github/workflows/keeper-image.yml` pushes it in two cases, and only on `main`: a push to `main` where the version in `crates/br-sandbox-keeper/Cargo.toml` changed, and a manual run (`workflow_dispatch`) with `push=true`. It never replaces a tag that exists. A pull request that changes the crate, or a manual run without `push=true`, builds and tests the image and pushes nothing. `images.yml` also builds every folder of `images/`, with the tags `sha-<7>` and `pr-<number>-<7>`.
 
 ## Tests
 
