@@ -51,7 +51,19 @@ check_file_hygiene() {
     done
     t "no comment in the values, the templates and the fixtures" test -z "$(grep -rnE '^\s*#|\{\{-?\s*/\*' "$CHART/values.yaml" "$CHART/templates" "$CHART/ci" || true)"
     t "no comment in the check script but the shebang" test -z "$(grep -nE '^\s*#' "$CHART/files/network-check.sh" | grep -v '^1:#!' || true)"
-    t "no secret-like string in the fixtures" test -z "$(grep -rniE --exclude-dir=golden 'password|passwd|token|secret_key|api_key|BEGIN [A-Z ]*KEY|AKIA' "$CHART/ci" || true)"
+    t "no secret-like string in the fixtures, the golden files included" test -z "$(secret_hits_of "$CHART/ci")"
+    mkdir "$WORK/hits_key" "$WORK/hits_planted"
+    printf '{"spec":{"automountServiceAccountToken":false}}\n' >"$WORK/hits_key/golden.json"
+    printf '{"spec":{"automountServiceAccountToken":false,"env":[{"name":"X","password":"y"}]}}\n' >"$WORK/hits_planted/golden.json"
+    t "the scan lets the key automountServiceAccountToken pass and nothing else" test -z "$(secret_hits_of "$WORK/hits_key")"
+    t "the scan sees a secret planted next to that key, as in a golden file" test -n "$(secret_hits_of "$WORK/hits_planted")"
+}
+
+secret_hits_of() {
+    local file
+    find "$1" -type f | sort | while read -r file; do
+        sed 's/automountServiceAccountToken//g' "$file" | grep -niE 'password|passwd|token|secret_key|api_key|BEGIN [A-Z ]*KEY|AKIA' | sed "s#^#${file}:#" || true
+    done
 }
 
 check_lint_strict_on_every_fixture() {
