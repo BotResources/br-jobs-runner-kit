@@ -1,12 +1,19 @@
 use bytes::Bytes;
 
-use crate::cluster::{ClusterError, ExecIo};
+use crate::cluster::{ClusterError, ExecIo, PodView};
 use crate::env::Env;
 use crate::error::Error;
 
 use super::session::{ExecOutput, collect, expect_success};
 
 const SIGNAL_EXIT_FLOOR: i32 = 128;
+const ENDED_PHASES: [&str; 2] = ["Failed", "Succeeded"];
+
+fn ended(view: &PodView) -> bool {
+    view.phase
+        .as_deref()
+        .is_some_and(|phase| ENDED_PHASES.contains(&phase))
+}
 
 impl Env {
     pub(crate) async fn collect_in_pod(
@@ -38,7 +45,7 @@ impl Env {
             return Ok(());
         }
         match self.cluster.get_pod(pod).await? {
-            Some(view) if !view.deleting => Ok(()),
+            Some(view) if !view.deleting && !ended(&view) => Ok(()),
             _ => Err(ClusterError::Gone(pod.to_owned()).into()),
         }
     }

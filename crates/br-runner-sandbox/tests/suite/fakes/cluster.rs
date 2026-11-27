@@ -159,6 +159,12 @@ impl FakeCluster {
         }
     }
 
+    pub fn set_phase(&self, name: &str, phase: &str) {
+        if let Some(pod) = self.lock().pods.get_mut(name) {
+            pod.phase = Some(phase.to_owned());
+        }
+    }
+
     pub fn fail_gets(&self) {
         self.lock().fail_get = true;
     }

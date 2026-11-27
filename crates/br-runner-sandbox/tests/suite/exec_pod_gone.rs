@@ -75,6 +75,16 @@ async fn fake_cluster_a_status_of_137_in_a_pod_that_is_being_deleted_is_a_port_f
 }
 
 #[tokio::test(start_paused = true)]
+async fn fake_cluster_a_status_of_137_in_an_evicted_pod_that_has_no_deletion_mark_is_a_port_fault()
+{
+    for phase in ["Failed", "Succeeded"] {
+        let rig = rig();
+        rig.cluster.set_phase(POD, phase);
+        assert_gone_fault(every_operation(&rig, KILLED).await);
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn fake_cluster_a_status_of_143_in_a_pod_that_is_gone_is_a_port_fault() {
     let rig = rig();
     rig.cluster.remove_pod(POD);
