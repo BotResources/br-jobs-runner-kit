@@ -3,11 +3,15 @@ use battery::adapter::{self, sh_ok};
 use battery::common::restored;
 use battery::error::{Res, data};
 use battery::evidence::Checks;
+use battery::guards::PodReaper;
 use battery::ids::Lane;
 use battery::tree;
 use br_agentic_harness_contract::Seed;
 
-const IMAGE_FILES: [&str; 2] = ["/home/agent/image-two.txt", "/work/image-one.txt"];
+const WORK_FILE: &str = "/work/agent-wrote-one.txt";
+const WORK_TEXT: &str = "text written under work";
+const HOME_FILE: &str = "/home/agent/agent-wrote-two.txt";
+const HOME_TEXT: &str = "text written under home";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn hard_links_and_the_executable_bit_survive_save_and_restore() -> Res {
@@ -64,55 +68,67 @@ async fn hard_links_and_the_executable_bit_survive_save_and_restore() -> Res {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_image_file_deleted_by_the_agent_comes_back_only_if_it_is_in_the_save() -> Res {
+async fn a_file_deleted_by_the_agent_stays_deleted_after_the_next_restore() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
     let sandbox = adapter::standard(env).await?;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     let lane = Lane::new()?;
+    reaper.track_thread(lane.thread.to_string());
     let (first, turn) = lane.first()?;
     let opened = adapter::open(&sandbox, turn, Seed::empty()).await?;
-    let listing = sh_ok(
+    sh_ok(
         &sandbox,
         &opened.box_id,
-        "find /work /home/agent -mindepth 1 -type f | sort",
+        &format!("printf '{WORK_TEXT}' > {WORK_FILE} && printf '{HOME_TEXT}' > {HOME_FILE}"),
     )
     .await?;
-    let files: Vec<&str> = listing.lines().collect();
-    if files != IMAGE_FILES {
-        checks.expect(
-            "image-file-deleted-by-the-agent-stays-deleted",
-            false,
-            format!(
-                "the pool image must hold exactly {IMAGE_FILES:?} in the save scope (/work, /home/agent) and holds {files:?}"
-            ),
-        );
-        adapter::release(&sandbox, &opened.box_id).await?;
-        return checks.finish();
-    }
-    let (gone, kept) = (files[0].to_owned(), files[1].to_owned());
-    sh_ok(&sandbox, &opened.box_id, &format!("rm -f '{gone}'")).await?;
     adapter::save(&sandbox, &opened.box_id).await?;
     adapter::release(&sandbox, &opened.box_id).await?;
-    let (_, next) = lane.child(first)?;
+    let (second, next) = lane.child(first)?;
     let again = adapter::open(&sandbox, next, Seed::empty()).await?;
     checks.expect(
-        "deleted-image-file-case-start-is-restored",
+        "deleted-file-case-second-start-is-restored",
         restored(&again.start, first),
         format!("{:?}", again.start),
     );
-    let state = sh_ok(
+    let both = sh_ok(
         &sandbox,
         &again.box_id,
-        &format!("[ ! -e '{gone}' ] && [ -e '{kept}' ] && echo ok"),
+        &format!(
+            "[ \"$(cat {WORK_FILE})\" = '{WORK_TEXT}' ] && [ \"$(cat {HOME_FILE})\" = '{HOME_TEXT}' ] && echo ok"
+        ),
+    )
+    .await
+    .map_err(|e| data("files before the delete", e.to_string()))?;
+    checks.expect(
+        "both-files-written-by-the-agent-are-restored-before-the-delete",
+        both.trim() == "ok",
+        both,
+    );
+    sh_ok(&sandbox, &again.box_id, &format!("rm -f {WORK_FILE}")).await?;
+    adapter::save(&sandbox, &again.box_id).await?;
+    adapter::release(&sandbox, &again.box_id).await?;
+    let (_, last) = lane.child(second)?;
+    let third = adapter::open(&sandbox, last, Seed::empty()).await?;
+    checks.expect(
+        "deleted-file-case-third-start-is-restored",
+        restored(&third.start, second),
+        format!("{:?}", third.start),
+    );
+    let state = sh_ok(
+        &sandbox,
+        &third.box_id,
+        &format!("[ ! -e {WORK_FILE} ] && [ \"$(cat {HOME_FILE})\" = '{HOME_TEXT}' ] && echo ok"),
     )
     .await
     .map_err(|e| data("deleted file check", e.to_string()))?;
     checks.expect(
-        "image-file-deleted-by-the-agent-stays-deleted",
+        "file-deleted-by-the-agent-stays-deleted-and-the-other-file-is-still-there",
         state.trim() == "ok",
-        format!("deleted {gone}, kept {kept}: {state}"),
+        format!("deleted {WORK_FILE}, kept {HOME_FILE}: {state}"),
     );
-    adapter::release(&sandbox, &again.box_id).await?;
+    adapter::release(&sandbox, &third.box_id).await?;
     checks.finish()
 }

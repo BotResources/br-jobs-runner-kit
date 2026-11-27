@@ -88,7 +88,8 @@ Variables that only some tests need (the test fails with the variable name when 
 | Expiry after 60 s, named start results | `expiry`, `start_results` |
 | Second image by value, same tag reaches a new warm pod within `warm_max_age_seconds` (no box is opened while waiting, so the pool is not renewed by claims), two image errors | `images`, `open_images` |
 | Harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
-| Hard links, executable bit, image file deleted by the agent | `properties` |
+| Hard links, executable bit | `properties::hard_links_and_the_executable_bit_survive_save_and_restore` |
+| A file that the agent deleted stays deleted after the next restore, and the file that stayed is still there. The image files in `/work` and `/home/agent` are hidden by the volumes of the chart, so the property is shown with two files that the agent writes itself (one under each path). An image file outside the save scope is not saved and is not restored (not tested here) | `properties::a_file_deleted_by_the_agent_stays_deleted_after_the_next_restore` |
 | Restore ladder 10, 30, 50, 100 MB, stalls, cold start effect | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split`, `start_times::cold::cold_start_effect_of_the_init_container_and_the_image_size` |
 
 ## Harness suite with the adapter
