@@ -20,10 +20,21 @@ with_timeout() {
   return $rc
 }
 
+validate_timing_lock_wait() {
+  TIMING_LOCK_LIMIT=${TIMING_LOCK_WAIT_SECONDS-21600}
+  case "$TIMING_LOCK_LIMIT" in
+    '' | *[!0-9]* | 0 | 0[0-9]*)
+      check timing-lock-wait-valid fail "TIMING_LOCK_WAIT_SECONDS must be a whole number of 1 or more, got: $TIMING_LOCK_LIMIT"
+      return 1
+      ;;
+  esac
+}
+
 lock_timed() {
   if [ -n "${TIMING_LOCK_HELD:-}" ]; then return 0; fi
+  validate_timing_lock_wait || return 1
   mkdir -p "$(dirname "$TIMING_LOCK")"
-  local waited=0 limit=${TIMING_LOCK_WAIT_SECONDS:-21600}
+  local waited=0 limit=$TIMING_LOCK_LIMIT
   until mkdir "$TIMING_LOCK" 2> /dev/null; do
     if [ "$waited" -ge "$limit" ]; then
       check timing-lock fail "the lock $TIMING_LOCK is still held after $limit s; if no test is running, remove the folder by hand"
@@ -50,6 +61,7 @@ scenario_cleanup() {
 
 scenario_begin() {
   SCENARIO_NAME=$1
+  validate_timing_lock_wait || scenario_end
   if [ -z "${PREFLIGHT_DONE:-}" ]; then preflight; fi
   mkdir -p "$BATTERY_OUT"
   route_kubectl

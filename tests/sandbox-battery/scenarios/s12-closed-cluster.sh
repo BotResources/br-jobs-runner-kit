@@ -10,27 +10,85 @@ render_with_mirror() {
     --set "$VALUES_REGISTRY_MIRROR=$CLOSED_MIRROR_HOST" --set-json "$VALUES_PULL_SECRETS=[\"$CLOSED_PULL_SECRET\"]"
 }
 
-pods_without_pull_secret() {
-  k create --dry-run=client --validate=false -o json -f - < "$rendered_file" | jq -s '[.[] | (if .kind == "List" then .items[] else . end)
-    | (if .kind == "Pod" then .spec elif .spec.template.spec then .spec.template.spec elif .spec.jobTemplate.spec.template.spec then .spec.jobTemplate.spec.template.spec else empty end)
-    | select((.imagePullSecrets // []) | length == 0)] | length'
+pod_template_specs='[.[] | (if .kind == "List" then .items[] else . end)
+  | (if .kind == "Pod" then .spec elif .spec.template.spec then .spec.template.spec elif .spec.jobTemplate.spec.template.spec then .spec.jobTemplate.spec.template.spec else empty end)]'
+
+nonempty_output() {
+  local out
+  out=$("$@") || return 1
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out"
 }
+
+read_pod_templates() { nonempty_output k create --dry-run=client --validate=false -o json -f - < "$rendered_file"; }
+count_pod_templates() { jq -s "$pod_template_specs | length"; }
+count_pods_without_pull_secret() { jq -s "$pod_template_specs | map(select((.imagePullSecrets // []) | length == 0)) | length"; }
+positive() { case "$1" in '' | *[!0-9]* | 0 | 0[0-9]*) return 1 ;; esac; }
+counted_zero() { [ "$1" = 0 ] && positive "$2"; }
+fails() { ! "$@"; }
+
+pod_without_secret='{"apiVersion":"v1","kind":"Pod","metadata":{"name":"a"},"spec":{"containers":[{"name":"c","image":"x"}]}}'
+pod_with_secret='{"apiVersion":"v1","kind":"Pod","metadata":{"name":"b"},"spec":{"imagePullSecrets":[{"name":"s"}],"containers":[{"name":"c","image":"x"}]}}'
+deployment_without_secret='{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"d"},"spec":{"template":{"spec":{"containers":[{"name":"c","image":"x"}]}}}}'
+verdict closed-cluster-pull-secret-count-finds-bare-pod "a pod without imagePullSecrets is counted as 1" \
+  test "$(printf '%s' "$pod_without_secret" | count_pods_without_pull_secret)" = 1
+verdict closed-cluster-pull-secret-count-skips-pod-with-secret "a pod with imagePullSecrets is counted as 0" \
+  test "$(printf '%s' "$pod_with_secret" | count_pods_without_pull_secret)" = 0
+verdict closed-cluster-pull-secret-count-finds-bare-template "a deployment template without imagePullSecrets is counted as 1" \
+  test "$(printf '%s%s' "$deployment_without_secret" "$pod_with_secret" | count_pods_without_pull_secret)" = 1
+verdict closed-cluster-template-count-counts-templates "a pod and a deployment are counted as 2 pod templates" \
+  test "$(printf '%s%s' "$pod_with_secret" "$deployment_without_secret" | count_pod_templates)" = 2
+verdict closed-cluster-template-count-empty-is-not-positive "an empty read holds no pod template and the count is not positive" \
+  fails positive "$(printf '' | count_pod_templates)"
+verdict closed-cluster-read-fails-on-failed-command "a read whose command fails gives a failure" fails nonempty_output false
+verdict closed-cluster-read-fails-on-empty-output "a read whose command prints nothing gives a failure" fails nonempty_output true
+verdict closed-cluster-read-keeps-output "a read whose command prints keeps the output" test "$(nonempty_output echo kept)" = kept
 
 if ! render_with_mirror > "$rendered_file"; then check closed-cluster-render fail "helm template failed with the mirror values"; scenario_end; fi
 check closed-cluster-render pass "chart renders with registry mirror $CLOSED_MIRROR_HOST and pull secret $CLOSED_PULL_SECRET"
 
-foreign_images=$(grep -E '^[[:space:]]*-?[[:space:]]*image:' "$rendered_file" | grep -v -F "$CLOSED_MIRROR_HOST/" | count_lines)
-verdict closed-cluster-all-images-via-mirror "$foreign_images image fields outside the mirror" test "$foreign_images" = 0
-unpulled=$(pods_without_pull_secret)
-verdict closed-cluster-pull-secrets-everywhere "$unpulled pod templates without imagePullSecrets" test "$unpulled" = 0
-vendor_pattern="(^|[^[:alnum:]._/:@-])([[:alnum:]-]+\\.)*($VENDOR_HOST_REGEX)(:[0-9]+)?/|://([^/\"' ]*[.@])?($VENDOR_HOST_REGEX)([:/\"' ]|\$)"
+image_fields_of() { grep -E '^[[:space:]]*-?[[:space:]]*image:' "$rendered_file"; }
+image_fields=$(image_fields_of | count_lines)
+verdict closed-cluster-render-holds-image-fields "$image_fields image fields in the render" positive "$image_fields"
+foreign_images=$(image_fields_of | grep -v -F "$CLOSED_MIRROR_HOST/" | count_lines)
+verdict closed-cluster-all-images-via-mirror "$foreign_images of $image_fields image fields outside the mirror" counted_zero "$foreign_images" "$image_fields"
+
+templates="not counted"
+unpulled="not counted"
+if pod_templates_json=$(read_pod_templates); then
+  templates=$(count_pod_templates <<< "$pod_templates_json") || templates="not counted"
+  unpulled=$(count_pods_without_pull_secret <<< "$pod_templates_json") || unpulled="not counted"
+else
+  check closed-cluster-pod-templates-read fail "kubectl create --dry-run=client failed or printed nothing for the render"
+fi
+verdict closed-cluster-render-holds-pod-templates "$templates pod templates in the render" positive "$templates"
+verdict closed-cluster-pull-secrets-everywhere "$unpulled of $templates pod templates without imagePullSecrets" counted_zero "$unpulled" "$templates"
+
+host_value="([[:alnum:]-]+\\.)*($VENDOR_HOST_REGEX)(:[0-9]+)?"
+quote="[\"']"
+host_end="($quote|/|[[:space:]]|\$)"
+vendor_pattern="(^|[^[:alnum:]._/:@-])$host_value/|://([^/\"' ]*[.@])?($VENDOR_HOST_REGEX)([:/\"' ]|\$)|(^[[:space:]]*-|[:=])[[:space:]]*$quote?$host_value$host_end|$quote$host_value$quote"
 vendor_sample_hits() { printf '%s\n' "$1" | grep -c -i -E "$vendor_pattern"; }
 verdict closed-cluster-vendor-search-finds-image-host "an image reference with a vendor host in the host position is found" \
   test "$(vendor_sample_hits 'image: "ghcr.io/example/tool:1"')" = 1
 verdict closed-cluster-vendor-search-finds-url-host "a URL with a vendor host is found" \
   test "$(vendor_sample_hits 'url: https://api.iron.sh/v1')" = 1
+verdict closed-cluster-vendor-search-finds-bare-registry "a bare vendor host after registry: is found" \
+  test "$(vendor_sample_hits 'registry: ghcr.io')" = 1
+verdict closed-cluster-vendor-search-finds-quoted-host-with-port "a quoted vendor host with a port after host: is found" \
+  test "$(vendor_sample_hits 'host: "ghcr.io:443"')" = 1
+verdict closed-cluster-vendor-search-finds-bare-value "a vendor host that is the whole value is found" \
+  test "$(vendor_sample_hits 'value: iron.sh')" = 1
+verdict closed-cluster-vendor-search-finds-list-item "a vendor host that is a list item is found" \
+  test "$(vendor_sample_hits '- quay.io')" = 1
+verdict closed-cluster-vendor-search-finds-server-and-url-keys "a vendor host after server: and after url: is found" \
+  test "$(vendor_sample_hits 'server: docker.io:5000')$(vendor_sample_hits "url: 'gcr.io'")" = 11
 verdict closed-cluster-vendor-search-skips-mirror-path "a vendor host after the mirror host is not found" \
   test "$(vendor_sample_hits "image: \"$CLOSED_MIRROR_HOST/ghcr.io/example/tool:1\"")" = 0
+verdict closed-cluster-vendor-search-skips-mirror-path-in-value "a vendor host after the mirror host in a value is not found" \
+  test "$(vendor_sample_hits "value: \"$CLOSED_MIRROR_HOST/ghcr.io/example\"")$(vendor_sample_hits "registry: $CLOSED_MIRROR_HOST/ghcr.io")" = 00
+verdict closed-cluster-vendor-search-skips-mirror-host "the mirror host alone is not found" \
+  test "$(vendor_sample_hits "registry: $CLOSED_MIRROR_HOST")" = 0
 vendor_hits=$(grep -c -i -E "$vendor_pattern" "$rendered_file")
 record closed-cluster-vendor-host-hits "$vendor_hits" hits
 verdict closed-cluster-no-vendor-host-rendered "$vendor_hits vendor or upstream registry hosts in the rendered objects" test "$vendor_hits" = 0

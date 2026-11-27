@@ -10,6 +10,7 @@ SCENARIO_TALLY="$BATTERY_OUT/tally-$(date +%Y%m%d-%H%M%S).tsv"
 export SCENARIO_TALLY
 : > "$SCENARIO_TALLY"
 export PREFLIGHT_DONE=1
+validate_timing_lock_wait || exit 1
 
 fails_recorded() { awk -F'\t' '$2 == "fail"' "$SCENARIO_TALLY" | count_lines; }
 
