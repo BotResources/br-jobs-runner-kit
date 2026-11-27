@@ -8,15 +8,11 @@ mod common;
 
 use common::{chart, keeper_document, rendered};
 
-const SANDBOX_NAMESPACES: [(&str, &str, &str); 4] = [
-    ("sbx-alpha-allow", "alpha-allow", "pool"),
-    (
-        "sbx-alpha-full",
-        "alpha-full",
-        "clients.alpha.modes.full.pool",
-    ),
-    ("sbx-alpha-none", "alpha-none", "pool"),
-    ("sbx-beta-none", "beta-none", "pool"),
+const SANDBOX_NAMESPACES: [&str; 4] = [
+    "sbx-alpha-allow",
+    "sbx-alpha-full",
+    "sbx-alpha-none",
+    "sbx-beta-none",
 ];
 
 fn parsed(path: PathBuf) -> Value {
@@ -25,7 +21,7 @@ fn parsed(path: PathBuf) -> Value {
 }
 
 fn overlay() -> Value {
-    parsed(chart().join("ci/keeper-nondefault-values.yaml"))
+    parsed(chart().join("ci/operator-nondefault-values.yaml"))
 }
 
 fn lookup<'a>(values: &'a Value, path: &str) -> &'a Value {
@@ -93,14 +89,10 @@ fn the_values_of_the_overlay_are_not_the_defaults() {
         "store.bucket",
         "store.region",
         "store.path_style",
-        "pool.floor",
-        "pool.max_sandboxes",
-        "pool.refill_seconds",
-        "pool.margin",
-        "keeper.port",
-        "keeper.lease.duration_seconds",
-        "keeper.lease.renew_deadline_seconds",
-        "keeper.lease.retry_period_seconds",
+        "operator.port",
+        "operator.lease.duration_seconds",
+        "operator.lease.renew_deadline_seconds",
+        "operator.lease.retry_period_seconds",
     ] {
         differs_from_the_defaults(&overlay, path);
     }
@@ -109,7 +101,7 @@ fn the_values_of_the_overlay_are_not_the_defaults() {
 #[test]
 fn the_typed_config_carries_the_values_of_the_overlay() {
     let overlay = overlay();
-    let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
+    let objects = rendered(&chart().join("ci/operator-nondefault-values.yaml"), &[]);
     let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
 
     assert_eq!(config.store.bucket, text(&overlay, "store.bucket"));
@@ -135,80 +127,50 @@ fn the_typed_config_carries_the_values_of_the_overlay() {
     );
     assert_eq!(
         config.lease.duration,
-        seconds(&overlay, "keeper.lease.duration_seconds")
+        seconds(&overlay, "operator.lease.duration_seconds")
     );
     assert_eq!(
         config.lease.renew_deadline,
-        seconds(&overlay, "keeper.lease.renew_deadline_seconds")
+        seconds(&overlay, "operator.lease.renew_deadline_seconds")
     );
     assert_eq!(
         config.lease.retry_period,
-        seconds(&overlay, "keeper.lease.retry_period_seconds")
+        seconds(&overlay, "operator.lease.retry_period_seconds")
     );
     assert_eq!(
         config.listen_address.to_string(),
-        format!("0.0.0.0:{}", number(&overlay, "keeper.port"))
+        format!("0.0.0.0:{}", number(&overlay, "operator.port"))
     );
 
-    assert_eq!(config.pools.len(), SANDBOX_NAMESPACES.len());
-    for (namespace, id, source) in SANDBOX_NAMESPACES {
-        let pool = config
-            .pool(namespace, id)
-            .unwrap_or_else(|| panic!("the pool {id}"));
-        assert_eq!(
-            u64::from(pool.min_replicas),
-            number(&overlay, &format!("{source}.floor")),
-            "{id}"
-        );
-        assert_eq!(
-            u64::from(pool.max_replicas),
-            number(&overlay, &format!("{source}.max_sandboxes")),
-            "{id}"
-        );
-        assert_eq!(
-            pool.refill,
-            seconds(&overlay, &format!("{source}.refill_seconds")),
-            "{id}"
-        );
-        assert_eq!(
-            u64::from(pool.margin),
-            number(&overlay, &format!("{source}.margin")),
-            "{id}"
-        );
-        assert_eq!(pool.idle_ttl, seconds(&overlay, "idle_ttl"), "{id}");
-        assert_eq!(
-            pool.idle_keep_min_state_bytes,
-            number(&overlay, "idle_keep_min_state_bytes"),
-            "{id}"
-        );
-    }
+    assert_eq!(config.idle_ttl, seconds(&overlay, "idle_ttl"));
+    assert_eq!(
+        config.idle_keep_min_state_bytes,
+        number(&overlay, "idle_keep_min_state_bytes")
+    );
 }
 
 #[test]
 fn the_adapter_document_carries_the_same_values_as_the_keeper_document() {
-    let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
+    let objects = rendered(&chart().join("ci/operator-nondefault-values.yaml"), &[]);
     let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
     let adapters = adapter_documents(&objects);
     assert_eq!(adapters.len(), SANDBOX_NAMESPACES.len());
 
     for (namespace, document) in &adapters {
-        let (_, id, _) = SANDBOX_NAMESPACES
-            .iter()
-            .find(|(name, _, _)| name == namespace)
-            .unwrap_or_else(|| panic!("the namespace {namespace}"));
-        let pool = config
-            .pool(namespace, id)
-            .expect("the pool of the namespace");
+        assert!(
+            SANDBOX_NAMESPACES.contains(&namespace.as_str()),
+            "the namespace {namespace}"
+        );
         assert_eq!(text(document, "namespace"), namespace);
-        assert_eq!(text(document, "pool_id"), *id);
+        assert_eq!(text(document, "pool_id"), namespace);
         assert_eq!(
             seconds(document, "idle_ttl_seconds"),
-            pool.idle_ttl,
+            config.idle_ttl,
             "{namespace}"
         );
         assert_eq!(
             number(document, "idle_keep_min_state_bytes"),
-            pool.idle_keep_min_state_bytes,
+            config.idle_keep_min_state_bytes,
             "{namespace}"
         );
         assert_eq!(

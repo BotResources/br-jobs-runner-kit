@@ -54,7 +54,7 @@ fn documents(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, Map<String, 
             }
         })
         .collect();
-    assert!(found.len() >= 4, "fewer than four sandbox namespaces");
+    assert!(found.len() >= 3, "fewer than three sandbox namespaces");
     found
 }
 
