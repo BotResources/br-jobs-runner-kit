@@ -14,6 +14,7 @@ def unguarded_params($e): ($e | contains("params.")) and ((guarded($e) | not) or
 def platform_bounds($e): [$e | scan("quantity\\(c\\.resources\\.(requests|limits)\\[" + q + "([a-z-]+)" + q + "\\]\\)\\.isGreaterThan\\(quantity\\(" + q + "([^" + q + "]+)" + q + "\\)\\)")] | map({key: (.[0] + "/" + .[1]), value: (.[2] | qty)}) | from_entries;
 def pool_bounds($e): [$e | scan("quantity\\(c\\.resources\\.(requests|limits)\\[" + q + "([a-z-]+)" + q + "\\]\\)\\.isGreaterThan\\(quantity\\(params\\.spec\\.size\\.(cpu|memory|disk)\\.(request|limit)\\)\\)")] | map({kind: .[0], res: .[1], size: .[2], bound: .[3]});
 def quoted_list($e; $re): [first($e | capture($re).l) | split(", ")[] | gsub("" + q + ""; "")];
+def listed($e; $re): ([$e | capture($re).l] | .[0] // "") | if . == "" then [] else split(", ") | map(gsub("" + q + ""; "")) end;
 def under($c; $kind; $res; $bound): (($c.resources[$kind][$res] // null) != null) and (($c.resources[$kind][$res] | qty) <= $bound);
 
 def failing($vap; $r; $params):
@@ -25,6 +26,17 @@ def failing($vap; $r; $params):
   | txt($vap; "BR_SANDBOX_RESOURCES") as $resE
   | txt($vap; "BR_SANDBOX_SERVICE_ACCOUNT") as $saE
   | txt($vap; "BR_SANDBOX_EPHEMERAL_CONTAINERS") as $ephE
+  | txt($vap; "BR_SANDBOX_HOST_NAMESPACE") as $hostE
+  | txt($vap; "BR_SANDBOX_PROBE_HOST") as $probeE
+  | txt($vap; "BR_SANDBOX_PROC_MOUNT") as $procE
+  | txt($vap; "BR_SANDBOX_APPARMOR") as $aaE
+  | txt($vap; "BR_SANDBOX_SELINUX") as $seE
+  | txt($vap; "BR_SANDBOX_SYSCTLS") as $sysE
+  | txt($vap; "BR_SANDBOX_WINDOWS_HOST_PROCESS") as $winE
+  | listed($aaE; "appArmorProfile\\.type in \\[(?<l>[^\\]]*)\\]") as $aaTypes
+  | listed($seE; "seLinuxOptions\\.type in \\[(?<l>[^\\]]*)\\]") as $seTypes
+  | listed($sysE; "s\\.name in \\[(?<l>[^\\]]*)\\]") as $sysSafe
+  | ([$aaE | scan("k\\.startsWith\\(" + q + "([^" + q + "]+)" + q + "\\)")] | .[0][0]) as $aaPrefix
   | txt($vap; "BR_SANDBOX_IMMUTABLE") as $immE
   | quoted_list($capE; "a in \\[(?<l>[^\\]]*)\\]") as $caps
   | quoted_list($imgE; "\\[(?<l>[^\\]]*)\\]\\.exists") as $repos
@@ -42,7 +54,20 @@ def failing($vap; $r; $params):
       (if $sandbox and (($pod.spec.securityContext.seccompProfile.type != "RuntimeDefault") or ($all | any((.securityContext.allowPrivilegeEscalation != false) or (.securityContext.privileged // false) or ((.securityContext.seccompProfile.type // "RuntimeDefault") != "RuntimeDefault")))) then "BR_SANDBOX_PRIVILEGE" else empty end),
       (if $sandbox and ((($pod.spec.volumes // []) | any(has("emptyDir") or has("configMap") | not)) or ($all | any((.env // []) | any(.valueFrom.secretKeyRef != null)))) then "BR_SANDBOX_VOLUME_FORBIDDEN" else empty end),
       (if $sandbox and ($all | any(((.securityContext.capabilities.drop // []) | index("ALL")) == null or (((.securityContext.capabilities.add // []) - $caps) != []))) then "BR_SANDBOX_CAPABILITY" else empty end),
-      (if $sandbox and ($all | any(has("ports"))) then "BR_SANDBOX_HOST_NAMESPACE" else empty end),
+      (if $sandbox and (
+           (($hostE | contains("hostNetwork")) and ($pod.spec.hostNetwork // false))
+           or (($hostE | contains("hostPID")) and ($pod.spec.hostPID // false))
+           or (($hostE | contains("hostIPC")) and ($pod.spec.hostIPC // false))
+           or (($hostE | contains("p.hostPort == 0")) and ($all | any((.ports // []) | any((.hostPort // 0) != 0))))
+         ) then "BR_SANDBOX_HOST_NAMESPACE" else empty end),
+      (if $sandbox and ([["livenessProbe"], ["readinessProbe"], ["startupProbe"], ["lifecycle", "postStart"], ["lifecycle", "preStop"]] | any(
+           . as $path | ["httpGet", "tcpSocket"] | any(
+             . as $h | ($probeE | contains("c." + ($path | join(".")) + "." + $h + ".host == " + q + q)) and ($all | any(((getpath($path) // {})[$h].host // "") != ""))))) then "BR_SANDBOX_PROBE_HOST" else empty end),
+      (if $sandbox and ($procE | contains("c.securityContext.procMount == " + q + "Default" + q)) and ($all | any((.securityContext.procMount // "Default") != "Default")) then "BR_SANDBOX_PROC_MOUNT" else empty end),
+      (if $sandbox and ((($aaTypes | length) > 0 and (([$pod.spec.securityContext] + ($all | map(.securityContext // {}))) | any((.appArmorProfile.type // null) as $t | $t != null and (($aaTypes | index($t)) == null)))) or ($aaPrefix != null and (($pod.metadata.annotations // {}) | to_entries | any((.key | startswith($aaPrefix)) and (.value != "runtime/default") and ((.value | startswith("localhost/")) | not))))) then "BR_SANDBOX_APPARMOR" else empty end),
+      (if $sandbox and (($seE | contains("seLinuxOptions.user == " + q + q)) or ($seTypes | length) > 0) and (([$pod.spec.securityContext] + ($all | map(.securityContext // {}))) | any((.seLinuxOptions // {}) as $o | ((($seTypes | length) > 0) and (($seTypes | index($o.type // "")) == null)) or (($seE | contains("seLinuxOptions.user == " + q + q)) and ($o.user // "") != "") or (($seE | contains("seLinuxOptions.role == " + q + q)) and ($o.role // "") != ""))) then "BR_SANDBOX_SELINUX" else empty end),
+      (if $sandbox and ($sysSafe | length) > 0 and (($pod.spec.securityContext.sysctls // []) | any(. as $s | ($sysSafe | index($s.name)) == null)) then "BR_SANDBOX_SYSCTLS" else empty end),
+      (if $sandbox and ($winE | contains("windowsOptions.hostProcess")) and (([$pod.spec.securityContext] + ($all | map(.securityContext // {}))) | any((.windowsOptions.hostProcess // false) == true)) then "BR_SANDBOX_WINDOWS_HOST_PROCESS" else empty end),
       (if $sandbox and (($create | not) and unguarded_params($imgE)) then "BR_SANDBOX_IMAGE"
        elif $sandbox and ($create or (guarded($imgE) | not)) and ($all | any(
            . as $c
