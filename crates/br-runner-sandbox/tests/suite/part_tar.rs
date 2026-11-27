@@ -63,7 +63,11 @@ fn the_count_does_not_depend_on_how_the_bytes_are_cut() {
 fn an_empty_archive_has_no_entry() {
     let tar = Builder::new(Vec::new()).into_inner().expect("tar");
     assert_eq!(count(&tar), Ok(0));
-    assert_eq!(count(&[]), Ok(0));
+}
+
+#[test]
+fn an_empty_stream_is_refused() {
+    assert_eq!(count(&[]), Err(TarError::Truncated));
 }
 
 #[test]
@@ -139,6 +143,33 @@ fn a_tar_that_ends_inside_an_entry_is_refused() {
     for cut in [100, 512 + 100, 1024 + 200] {
         assert_eq!(count(&tar[..cut]), Err(TarError::Truncated), "cut {cut}");
     }
+}
+
+const END_BLOCKS: usize = 1024;
+
+#[test]
+fn a_tar_that_ends_between_two_entries_is_refused() {
+    let tar = sample_tar();
+    for cut in [512, 1536, tar.len() - END_BLOCKS] {
+        assert_eq!(count(&tar[..cut]), Err(TarError::Truncated), "cut {cut}");
+    }
+}
+
+#[test]
+fn a_tar_that_ends_inside_its_end_blocks_is_refused() {
+    let tar = sample_tar();
+    let end = tar.len() - END_BLOCKS;
+    for cut in [end + 1, end + 100, end + 512, end + 513, end + 1023] {
+        assert_eq!(count(&tar[..cut]), Err(TarError::Truncated), "cut {cut}");
+    }
+}
+
+#[test]
+fn a_complete_tar_is_counted_and_what_follows_its_end_blocks_is_ignored() {
+    let mut tar = sample_tar();
+    assert_eq!(count(&tar), Ok(5));
+    tar.extend([0u8; 10240]);
+    assert_eq!(count(&tar), Ok(5));
 }
 
 #[test]

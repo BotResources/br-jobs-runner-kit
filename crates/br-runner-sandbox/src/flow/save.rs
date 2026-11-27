@@ -13,7 +13,7 @@ use crate::keys::{manifest_key, part_key, record_key};
 use crate::save::PartEncoder;
 use crate::store::{PartUpload, PutOutcome};
 
-use super::tar_stream::{encode_and_upload, read_at_full_speed};
+use super::tar_stream::{ReaderTask, encode_and_upload};
 
 const OPERATION: &str = "save";
 
@@ -153,9 +153,10 @@ impl Env {
         } = io;
         let mut encoder = PartEncoder::new(self.config.save_zstd_level())?;
         let (chunks, received) = mpsc::unbounded_channel();
+        let mut reader = ReaderTask::spawn(OPERATION, stdout, chunks);
         let (code, (), (), ()) = tokio::try_join!(
             async { Ok::<_, Error>(exit_code(OPERATION, status).await?) },
-            async { Ok::<_, Error>(read_at_full_speed(OPERATION, stdout, chunks).await?) },
+            async { Ok::<_, Error>(reader.join().await?) },
             async { encode_and_upload(received, &mut encoder, upload).await },
             async { Ok::<_, Error>(drain(OPERATION, stderr).await?) },
         )?;

@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::task::JoinHandle;
 
 use crate::cluster::ExecOut;
 use crate::error::Error;
@@ -8,7 +9,37 @@ use crate::exec::{CHUNK, ExecError};
 use crate::save::PartEncoder;
 use crate::store::PartUpload;
 
-pub async fn read_at_full_speed(
+pub struct ReaderTask {
+    handle: JoinHandle<Result<(), ExecError>>,
+    operation: &'static str,
+}
+
+impl ReaderTask {
+    pub fn spawn(operation: &'static str, stdout: ExecOut, chunks: UnboundedSender<Bytes>) -> Self {
+        Self {
+            handle: tokio::spawn(read_at_full_speed(operation, stdout, chunks)),
+            operation,
+        }
+    }
+
+    pub async fn join(&mut self) -> Result<(), ExecError> {
+        match (&mut self.handle).await {
+            Ok(read) => read,
+            Err(error) => Err(ExecError::Io {
+                operation: self.operation,
+                reason: error.to_string(),
+            }),
+        }
+    }
+}
+
+impl Drop for ReaderTask {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+async fn read_at_full_speed(
     operation: &'static str,
     mut stdout: ExecOut,
     chunks: UnboundedSender<Bytes>,
@@ -22,12 +53,12 @@ pub async fn read_at_full_speed(
         if read == 0 {
             return Ok(());
         }
-        chunks
+        if chunks
             .send(Bytes::copy_from_slice(&buffer[..read]))
-            .map_err(|_| ExecError::Io {
-                operation,
-                reason: "the consumer of the output stopped".to_owned(),
-            })?;
+            .is_err()
+        {
+            return Ok(());
+        }
     }
 }
 

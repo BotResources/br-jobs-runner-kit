@@ -6,6 +6,7 @@ use crate::fakes::{Ids, POD, Rig, Script, StdoutModel, rig};
 use crate::flow_support::{failed_with, noisy_tar_of, record_of};
 
 const LARGE: usize = 1_500_000;
+const STALL: usize = 6 * 64 * 1024;
 
 fn manifest_of(rig: &Rig, ids: &Ids) -> Manifest {
     let key = ids.key(rig);
@@ -74,7 +75,7 @@ async fn fake_cluster_and_store_a_failing_upload_ends_the_save_and_the_read_of_t
     let ids = Ids::new();
     let key = ids.key(&rig);
     let tar = noisy_tar_of(LARGE);
-    let model = StdoutModel::yielding();
+    let model = StdoutModel::stalling_after(STALL);
     rig.store.fail("upload_write", "part-0");
     rig.cluster
         .push_script(Script::out(tar.clone()).through(&model));
@@ -84,8 +85,10 @@ async fn fake_cluster_and_store_a_failing_upload_ends_the_save_and_the_read_of_t
     assert!(rig.store.object(&manifest_key(&key)).is_none());
     assert_eq!(rig.store.aborted().len(), 1);
     assert!(rig.cluster.patches().is_empty());
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(model.dropped());
     let read_at_the_fault = model.delivered();
-    assert!(read_at_the_fault < tar.len(), "{read_at_the_fault} bytes");
+    assert!(read_at_the_fault <= STALL, "{read_at_the_fault} bytes");
     tokio::time::sleep(Duration::from_secs(5)).await;
     assert_eq!(model.delivered(), read_at_the_fault);
 }
