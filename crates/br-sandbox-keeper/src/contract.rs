@@ -63,3 +63,45 @@ fn the_store_keys_have_the_documented_layout() {
     assert!(part[6].starts_with("part-") && part[6].ends_with(".tar.zst"));
     assert_eq!(manifest[1..5], part[1..5]);
 }
+
+fn lock_graph() -> std::collections::BTreeMap<String, Vec<String>> {
+    let lock = include_str!("../../../Cargo.lock");
+    let mut graph = std::collections::BTreeMap::new();
+    for block in lock.split("[[package]]").skip(1) {
+        let mut name = None;
+        let mut dependencies = Vec::new();
+        let mut in_dependencies = false;
+        for line in block.lines() {
+            if let Some(value) = line.strip_prefix("name = ") {
+                name = Some(value.trim_matches('"').to_owned());
+            } else if line.starts_with("dependencies = [") {
+                in_dependencies = true;
+            } else if in_dependencies && line.starts_with(']') {
+                in_dependencies = false;
+            } else if in_dependencies {
+                let entry = line.trim().trim_end_matches(',').trim_matches('"');
+                dependencies.push(entry.split(' ').next().unwrap_or_default().to_owned());
+            }
+        }
+        if let Some(name) = name {
+            graph.insert(name, dependencies);
+        }
+    }
+    graph
+}
+
+#[test]
+fn the_dependency_tree_of_the_keeper_has_no_webpki_roots() {
+    let graph = lock_graph();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut queue = vec!["br-sandbox-keeper".to_owned()];
+    while let Some(name) = queue.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        queue.extend(graph.get(&name).cloned().unwrap_or_default());
+    }
+    assert!(seen.contains("kube"));
+    assert!(seen.contains("object_store"));
+    assert!(!seen.contains("webpki-roots"), "{seen:?}");
+}
