@@ -21,6 +21,13 @@
 {{- if le (.Values.save.ttl_seconds | int64) 0 -}}
 {{- fail "BR_SANDBOX_SAVE_AGE_INVALID{key=save.ttl_seconds}" -}}
 {{- end -}}
+{{- $execTimeout := .Values.exec_timeout_seconds -}}
+{{- if not (or (kindIs "float64" $execTimeout) (kindIs "int64" $execTimeout) (kindIs "int" $execTimeout)) -}}
+{{- fail "BR_SANDBOX_EXEC_TIMEOUT_INVALID{key=exec_timeout_seconds}" -}}
+{{- end -}}
+{{- if or (lt ($execTimeout | float64) 1.0) (ne ($execTimeout | float64) (floor ($execTimeout | float64))) -}}
+{{- fail "BR_SANDBOX_EXEC_TIMEOUT_INVALID{key=exec_timeout_seconds}" -}}
+{{- end -}}
 {{- if .Values.keeper.enabled -}}
 {{- range $path := list "keeper.image" "network.api_server_addresses" "network.store_cidrs" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}

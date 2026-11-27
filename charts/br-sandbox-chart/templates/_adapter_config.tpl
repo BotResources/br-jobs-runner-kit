@@ -19,6 +19,7 @@
   "save_ttl_seconds" ($values.save.ttl_seconds | int64)
   "save_scope_paths" $values.save.paths
   "restore_timeout_seconds" ($values.restore_timeout_seconds | int64)
+  "exec_timeout_seconds" ($values.exec_timeout_seconds | int64)
   "idle_ttl_seconds" ($values.idle_ttl | int64)
   "idle_keep_min_state_bytes" ($values.idle_keep_min_state_bytes | int64)
   "agent_container" (include "br-sandbox-chart.agent_container" .root)
