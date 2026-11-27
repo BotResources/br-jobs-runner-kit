@@ -4,19 +4,22 @@ set -eu
 dir="${NETCHECK_DIR:-/netcheck}"
 wait_seconds="${NETCHECK_WAIT_SECONDS:-180}"
 
+status_code() {
+  printf '%s\n' "$1" | sed -n 1p | awk '$1 ~ /^HTTP\/[0-9]/ && $2 ~ /^[0-9][0-9][0-9]$/ {printf "%s", $2}'
+}
+
 tunnel_state() {
   inner=$(printf '%s\n' "$1" | awk '/^HTTP\//{n++} n>=2')
-  status=$(printf '%s\n' "$inner" | sed -n 1p)
-  case "$status" in
-    "HTTP/"*" 502" | "HTTP/"*" 502 "*)
+  case "$(status_code "$inner")" in
+    502)
       if printf '%s\n' "$inner" | grep -qx 'bad gateway'; then
         printf 'unanswered'
       else
         printf 'reached'
       fi
       ;;
-    "HTTP/"[0-9]*" "[0-9][0-9][0-9]*) printf 'reached' ;;
-    *) printf 'no_result' ;;
+    "") printf 'no_result' ;;
+    *) printf 'reached' ;;
   esac
 }
 
@@ -26,10 +29,9 @@ connect_state() {
     sleep "${NETCHECK_TUNNEL_WAIT:-1}"
     printf 'GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$1"
   } | nc -w 3 "${NETCHECK_PROXY%:*}" "${NETCHECK_PROXY##*:}" 2>/dev/null | tr -d '\r') || reply=""
-  first=$(printf '%s\n' "$reply" | sed -n 1p)
-  case "$first" in
-    "HTTP/"*" 403 "*) printf 'refused' ;;
-    "HTTP/"*" 200 "*) tunnel_state "$reply" ;;
+  case "$(status_code "$reply")" in
+    403) printf 'refused' ;;
+    200) tunnel_state "$reply" ;;
     *) printf 'no_result' ;;
   esac
 }

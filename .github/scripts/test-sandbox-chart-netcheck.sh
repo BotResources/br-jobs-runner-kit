@@ -28,6 +28,11 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
         tunnel404) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n' ;;
         tunnel200) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;;
         tunnelgarbled) printf "$open"; [ -n "$inner" ] && printf 'garbage\r\n' ;;
+        tunnel502target) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nServer: target-app\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
+        tunnel200x502) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 x 502 y\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
+        tunnelnocode) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 OK\r\nContent-Length: 0\r\n\r\n' ;;
+        connect200x403) printf 'HTTP/1.1 200 x 403 y\r\n\r\n'; [ -n "$inner" ] && printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;;
+        nocode) printf 'HTTP/1.1 OK\r\n\r\n' ;;
         bytarget) printf "$open"; if [ -n "$inner" ]; then case "$ct" in *:8080) printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; *) printf 'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nbad gateway' ;; esac; fi ;;
         offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf "$open"; [ -n "$inner" ] && printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' ;; esac ;;
     esac

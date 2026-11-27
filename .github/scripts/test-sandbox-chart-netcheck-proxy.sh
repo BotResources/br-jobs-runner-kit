@@ -80,9 +80,9 @@ check_network_check_connect_verdicts_of_each_mode() {
     local proxy_mode stub
     for proxy_mode in allow full; do
         assert_connect_verdict "$proxy_mode" 403 refused 403
-        assert_connect_verdict "$proxy_mode" tunnel502 unanswered 403
-        for stub in tunnel200 tunnel404 tunnel502other; do assert_connect_verdict "$proxy_mode" "$stub" reached 403; done
-        for stub in 200 502 tunnelgarbled garbled silent; do assert_connect_verdict "$proxy_mode" "$stub" no_result 403; done
+        for stub in tunnel502 tunnel502target connect200x403; do assert_connect_verdict "$proxy_mode" "$stub" unanswered 403; done
+        for stub in tunnel200 tunnel404 tunnel502other tunnel200x502; do assert_connect_verdict "$proxy_mode" "$stub" reached 403; done
+        for stub in 200 502 tunnelgarbled garbled silent tunnelnocode nocode; do assert_connect_verdict "$proxy_mode" "$stub" no_result 403; done
     done
     local out
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnel502 2>&1)" || true
@@ -90,6 +90,16 @@ check_network_check_connect_verdicts_of_each_mode() {
     t "mode full: the expected word of a probe is refused_or_unanswered" test "$(grep -c '"mode":"full","target":"[^"]*","kind":"connect","expected":"refused_or_unanswered"' <<<"$out")" -eq 10
     t "mode allow: the expected word of a probe is refused" test "$(grep -c '"mode":"allow","target":"[^"]*","kind":"connect","expected":"refused"' <<<"$out")" -eq 11
     t "mode allow, off-list host: a CONNECT answered 403 is refused" grep -q '"mode":"allow","target":"offlist.invalid:443","kind":"connect","expected":"refused","observed":"refused"' <<<"$out"
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnel502target 2>&1)" || true
+    t "documented limit: a reached HTTP target that answers 502 with the body bad gateway is counted unanswered in mode full" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"unanswered"' <<<"$out")" -eq 10 -a "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"reached"' <<<"$out")" -eq 0
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnel200x502 2>&1)" || true
+    t "a status line HTTP/1.1 200 x 502 y with a bad gateway line inside the tunnel is reached, the code is the second field" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"reached"' <<<"$out")" -eq 10 -a "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"unanswered"' <<<"$out")" -eq 0
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_ALLOW=connect200x403 CONNECT_MODE_FULL=connect200x403 2>&1)" || true
+    t "a CONNECT line HTTP/1.1 200 x 403 y is read as 200 and never as refused" test "$(grep -c '"kind":"connect".*"observed":"refused"' <<<"$out")" -eq 0 -a "$(grep -c '"kind":"connect".*"observed":"unanswered"' <<<"$out")" -eq 21
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 CONNECT_MODE_FULL=tunnelnocode 2>&1)" || true
+    t "a status line with no three-digit code inside the tunnel is no_result" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"no_result"' <<<"$out")" -eq 10
+    out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=nocode 2>&1)" || true
+    t "a CONNECT status line with no three-digit code is no_result for every probe" test "$(grep -c '"kind":"connect".*"observed":"no_result"' <<<"$out")" -eq 21
     t "a request GET / is sent after each CONNECT on the same connection" test "$(grep -c '^10.43.0.5[01]:8888 GET / HTTP/1.1$' "$WORK/netcheckstub/connect.log")" -eq "$(grep -c '^10.43.0.5[01]:8888 CONNECT ' "$WORK/netcheckstub/connect.log")"
     out="$(run_netcheck_egress env NC_MODE=all PROBE_MODE=none CONNECT_MODE=offlist 2>&1)" || true
     t "positive control: a proxy that passes a target with a 200 answer inside the tunnel is seen as reached in mode full" test "$(grep -c '"mode":"full".*"kind":"connect".*"observed":"reached"' <<<"$out")" -eq 10
@@ -109,6 +119,14 @@ check_network_check_connect_verdicts_of_each_mode() {
     t "the CHANGELOG names the expected word of a connect line" grep -qF 'is `refused` in mode `allow` and `refused_or_unanswered` in mode `full`' "$CHART/CHANGELOG.md"
     t "the CHANGELOG names no deploy test" test "$(grep -c 'deploy test' "$CHART/CHANGELOG.md")" -eq 0
     t "the README says that mode full answers 200 at the CONNECT for a deny-listed target" grep -qF 'the proxy answers the `CONNECT` with 200 for any target, a target of the deny list included' "$README"
+    t "the README says what unanswered means and names the limit for a target that answers the same bytes" grep -qF '`unanswered` means an answer that has the proxy'"'"'s 502 form: status 502 and the body line `bad gateway`. It does not prove that the deny list refused the target. A target that is reached and does not speak HTTP gets that answer from the proxy. A target that answers HTTP with exactly that form (status 502 and the body line `bad gateway`) gives the same bytes, so it is counted `unanswered` too: that is a limit of the probe, which cannot tell the two apart. A target that answers HTTP in any other form is `reached`.' "$README"
+    t "the CHANGELOG says what unanswered means and names the same limit" grep -qF 'a target that answers HTTP with exactly that form gives the same bytes and is counted `unanswered` too: a limit of the probe, which cannot tell them apart. A target that answers HTTP in any other form is `reached`.' "$CHART/CHANGELOG.md"
+    t "no text says unanswered proves no HTTP answer or that a target that answers HTTP is still caught" test "$(grep -cE 'proves that the proxy returned no HTTP answer|still fails on a target that answers HTTP|still caught as' "$README" "$CHART/CHANGELOG.md" | grep -vc ':0$')" -eq 0
+    t "the README says the code is the second field of the status line and a line with no three-digit code is no_result" grep -qF 'The status code is the second field of the status line, compared as a whole field (`HTTP/1.1 200 x 502 y` is read as 200); a status line with no three-digit code is `no_result`.' "$README"
+    t "the CHANGELOG says the same about the status code" grep -qF 'The status code is the second field of the status line, compared as a whole field (`HTTP/1.1 200 x 502 y` is read as 200); a status line with no three-digit code is `no_result`.' "$CHART/CHANGELOG.md"
+    t "the README lists the values of kind, control and observed for each kind of line" grep -qF '`kind` is `tcp`, `connect`, `target_class` or `node_list`. By kind: `tcp` carries `observed` `refused`, `reached` or `no_result` and `control` `ok` or `control_unavailable`; `connect` carries `observed` `refused`, `reached`, `unanswered` or `no_result` and `control` `not_applicable`; `target_class` carries `observed` `missing` and `control` `ok`; `node_list` carries `observed` `stale` and `control` `ok`.' "$README"
+    t "the CHANGELOG lists the same values" grep -qF 'The JSON line carries `kind` `tcp`, `connect`, `target_class` or `node_list`: `tcp` carries `observed` `refused`, `reached` or `no_result` and `control` `ok` or `control_unavailable`; `connect` carries `observed` `refused`, `reached`, `unanswered` or `no_result` and `control` `not_applicable`; `target_class` carries `observed` `missing` and `control` `ok`; `node_list` carries `observed` `stale` and `control` `ok`.' "$CHART/CHANGELOG.md"
+    t "the README no longer says control is only ok or control_unavailable" test "$(grep -cF 'control` is `ok` or `control_unavailable`' "$README")" -eq 0
     t "the CHANGELOG names the verdict unanswered" grep -qF '`unanswered` when the request inside the tunnel gets 502 with the body `bad gateway`' "$CHART/CHANGELOG.md"
     t "the CHANGELOG says the same" grep -qF 'when the CONNECT answers 200 the probe sends a plain HTTP request inside the tunnel' "$CHART/CHANGELOG.md"
 }
