@@ -11,6 +11,10 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
+### Fixed
+
+- `br-runner-sandbox` 0.1.1: the restore skips the entry of each save scope root directory, so a restore no longer fails when the agent user does not own the root (`/work`, `/home/agent`); the new `argv::tar_restore_scoped`, a test with the real `bsdtar` over a root that the user does not own. `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
+
 ### Added
 
 - Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`, for each values file of the chart CI and for a values file that sets every mapped value away from its default (`tests/chart_values.rs`). No change of the crate version or of its public surface.

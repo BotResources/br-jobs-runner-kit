@@ -66,7 +66,7 @@ async fn start_a_save_in_time_is_restored_into_a_claimed_pod_and_the_manifest_is
     assert_eq!(execs[0].request.container, "sandbox");
     assert_eq!(
         execs[0].request.command,
-        argv::tar_restore(boxes.config.tools_path())
+        argv::tar_restore_scoped(boxes.config.tools_path(), boxes.config.save_scope_paths())
     );
     let manifest_reads = reads(&boxes)
         .into_iter()
