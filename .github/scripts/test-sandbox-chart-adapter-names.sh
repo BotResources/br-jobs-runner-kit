@@ -5,7 +5,7 @@ adapter_namespaces() {
 }
 
 pod_containers() {
-    jq -r --arg ns "$2" '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template.spec.containers | map(.name) | join(" ")' "$WORK/$1.json"
+    jq -r --arg ns "$2" '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == $ns) | (.data["pod-template.json"] | fromjson).spec.containers | map(.name) | join(" ")' "$WORK/$1.json"
 }
 
 container_names_agree() {
@@ -95,7 +95,7 @@ check_the_documents_say_what_the_chart_holds_for_the_constant_and_the_save_paths
     t "a list that holds the seed root is rendered as given" test "$(adapter_doc paths_seed_root sbx-alpha-none '.save_scope_paths | join(",")')" = /skills,/work
 }
 
-pod_specs='.[] | (if .kind == "Pod" then .spec elif .kind == "CronJob" then .spec.jobTemplate.spec.template.spec elif (.kind | IN("ReplicaSet", "Deployment", "StatefulSet", "DaemonSet", "Job")) then .spec.template.spec else empty end)'
+pod_specs='.[] | (if .kind == "Pod" then .spec elif .kind == "CronJob" then .spec.jobTemplate.spec.template.spec elif (.kind | IN("Deployment", "StatefulSet", "DaemonSet", "Job")) then .spec.template.spec elif (.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") then (.data["pod-template.json"] | fromjson | .spec) else empty end)'
 
 config_maps_of_pods() {
     jq -r "[${pod_specs} | .. | objects | (.configMap, .configMapRef, .configMapKeyRef) | objects | .name] | unique | join(\" \")" "$WORK/$1.json"
@@ -109,7 +109,7 @@ no_pod_refers_to_the_adapter_config() {
 }
 
 check_no_pod_refers_to_the_adapter_config_map() {
-    section "no Pod, ReplicaSet, Job or CronJob of the render mounts or reads the ConfigMap br-sandbox-config"
+    section "no Pod, pod template, Job or CronJob of the render mounts or reads the ConfigMap br-sandbox-config"
     render refs_keeper -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.cron='0 * * * *'
     t "the query finds the ConfigMaps that the pods of the render use, so the check is not empty" test " $(config_maps_of_pods refs_keeper) " = " br-sandbox-keeper-config br-sandbox-netcheck "
     t "the document ConfigMap exists in the render, so a pod could have named it" test "$(adapter_namespaces refs_keeper | grep -c .)" -ge 3

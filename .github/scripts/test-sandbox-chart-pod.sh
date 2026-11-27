@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CAPS='["CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "SETGID", "SETUID"]'
-POOL_SPEC='.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.template'
+POOL_SPEC='.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson)'
 
 check_pod_spec_fixed_fields() {
     section "the fixed fields of the pod"
@@ -13,7 +13,7 @@ check_pod_spec_fixed_fields() {
     t "the writable paths are /work and /home/agent, bounded" jqt ex "${POOL_SPEC} | (.spec.containers[0].volumeMounts | map(select(.readOnly | not) | .mountPath) | sort) == [\"/home/agent\", \"/work\"] and ([.spec.volumes[] | select(.name == \"work\") | .emptyDir.sizeLimit] == [\"3Gi\"])"
     t "the runtime class stays out of the pod when empty" jqt ex "${SANDBOX_PODS} | all(.spec | has(\"runtimeClassName\") | not)"
     render rc -f "$EXAMPLE" --set runtimeClassName=kata-example
-    t "a runtime class value reaches the pod and the policy" jqt rc '([.[] | select(.kind == "ReplicaSet") | .spec.template.spec.runtimeClassName] | unique == ["kata-example"]) and ([.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[].expression | select(test("kata-example"))] | length == 4)'
+    t "a runtime class value reaches the pod and the policy" jqt rc '([.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec.runtimeClassName] | unique == ["kata-example"]) and ([.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[].expression | select(test("kata-example"))] | length == 4)'
     render uid -f "$EXAMPLE" --set runAsUser=20000 --set runAsGroup=20001
     t "the user ids are values" jqt uid "${POOL_SPEC} | .spec.containers[0].securityContext | .runAsUser == 20000 and .runAsGroup == 20001"
 }
@@ -25,8 +25,8 @@ check_seed_container() {
     t "the seed container writes /skills, the agent mounts it read-only" jqt ex "${POOL_SPEC} | (.spec.containers[1].volumeMounts == [{\"name\": \"skills\", \"mountPath\": \"/skills\"}]) and (.spec.containers[0].volumeMounts[] | select(.name == \"skills\") | .readOnly == true)"
     t "no pod shares its process namespace" jqt ex "${SANDBOX_PODS} | all(.spec | has(\"shareProcessNamespace\") | not)"
     t "the seed resources are small keys apart from the pool size" jqt ex "${POOL_SPEC} | .spec.containers[1].resources | .requests == {\"cpu\": \"10m\", \"memory\": \"8Mi\", \"ephemeral-storage\": \"8Mi\"}"
-    render bigseed -f "$EXAMPLE" --set pool.size.cpu.limit=3
-    t "a bigger pool size leaves the seed resources alone" test "$(jq -c '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.containers[1].resources]' "$WORK/bigseed.json")" = "$(jq -c '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.containers[1].resources]' "$WORK/ex.json")"
+    render bigseed -f "$EXAMPLE" --set limits.size.cpu.limit=3
+    t "a bigger pool size leaves the seed resources alone" test "$(jq -c '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec.containers[1].resources]' "$WORK/bigseed.json")" = "$(jq -c '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec.containers[1].resources]' "$WORK/ex.json")"
     render noseed -f "$EXAMPLE" --set tools.seed_container.enabled=false
     t "without the seed container the pod has one container" jqt noseed "${SANDBOX_PODS} | all(.spec.containers | length == 1)"
     render seedname -f "$EXAMPLE" --set tools.seed_container.name=skills-writer
@@ -41,7 +41,7 @@ check_no_secret_in_a_sandbox_pod() {
     t "the chart renders no Secret" jqt mirror '[.[] | select(.kind == "Secret")] | length == 0'
     t "with a mirror every image starts with the mirror" test -z "$(grep -E '^\s+image: ' "$WORK/mirror_yaml.yaml" | grep -vE 'image: mirror\.example\.test/' || true)"
     t "every image of the probe pods starts with the mirror" test -z "$(grep -E '^\s+image: ' "$WORK/mirror_yaml.yaml" | sed -E 's/^ +//' | grep -v '^image: mirror.example.test/' || true)"
-    t "every pod spec of the render names the pull secret" jqt mirror '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec] + [.[] | select(.kind == "Deployment") | .spec.template.spec] + [.[] | select(.kind == "Job") | .spec.template.spec] + [.[] | select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec] | length == 7 and all(.imagePullSecrets == [{"name": "mirror-pull"}])'
+    t "every pod spec of the render names the pull secret" jqt mirror '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec] + [.[] | select(.kind == "Deployment") | .spec.template.spec] + [.[] | select(.kind == "Job") | .spec.template.spec] + [.[] | select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec] | length == 7 and all(.imagePullSecrets == [{"name": "mirror-pull"}])'
     t "the probe pod manifests name the pull secret" test "$(yq 'select(.metadata.name == "br-sandbox-netcheck" and .metadata.namespace == "sbx-system") | .data | to_entries | map(select(.key | test("^probe-")) | .value | from_yaml | .spec.imagePullSecrets[0].name) | unique | .[]' "$WORK/mirror_yaml.yaml")" = mirror-pull
     t "the policy accepts the mirrored repositories only" jqt mirror '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_IMAGE")) | .expression | test("\\[(.mirror.example.test/[^,\\]]+(, )?)+\\]")] | all'
     t "the render names no vendor token" bash -c '! grep -q IRON_PROXY_TOKEN "$1"' _ "$WORK/mirror_yaml.yaml"
@@ -49,15 +49,15 @@ check_no_secret_in_a_sandbox_pod() {
 
 check_PSS_namespace_labels() {
     section "PSS baseline is enforced, restricted warns and audits"
-    t "every managed namespace carries the Pod Security labels and the managed label" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.labels | select(.["pod-security.kubernetes.io/enforce"] == "baseline" and .["pod-security.kubernetes.io/warn"] == "restricted" and .["pod-security.kubernetes.io/audit"] == "restricted" and (.["br.sandbox/mode"] | IN("none", "allow", "full")) and .["br.sandbox/client"] != null)] | length == 4'
+    t "every managed namespace carries the Pod Security labels and the managed label" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.labels | select(.["pod-security.kubernetes.io/enforce"] == "baseline" and .["pod-security.kubernetes.io/warn"] == "restricted" and .["pod-security.kubernetes.io/audit"] == "restricted" and (.["br.sandbox/mode"] | IN("none", "allow", "full")) and has("br.sandbox/client") | not)] | length == 4'
     t "the system namespace is not managed, so no exclusion applies to it" jqt ex '.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system") | .metadata.labels | has("br.sandbox/managed") | not'
     t "the sandbox service account of each managed namespace has no token" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox" and .automountServiceAccountToken == false)] | length == 4'
 }
 
 check_label_contract() {
     section "label contract of the pool"
-    t "selector and template carry role, pool and pool-id" jqt ex "${POOL_SPEC} | .metadata.labels == {\"br.sandbox/role\": \"sandbox\", \"br.sandbox/pool\": \"warm\", \"br.sandbox/pool-id\": \"alpha-none\"}"
-    t "the selector holds pool and pool-id, never the role alone" jqt ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.selector.matchLabels == {"br.sandbox/pool": "warm", "br.sandbox/pool-id": "alpha-none"}'
+    t "the template carries role, pool and the namespace name as pool-id" jqt ex "${POOL_SPEC} | .metadata.labels == {\"br.sandbox/role\": \"sandbox\", \"br.sandbox/pool\": \"warm\", \"br.sandbox/pool-id\": \"sbx-alpha-none\"}"
+    t "the pool id of each template is the name of its namespace" jqt ex '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | .metadata.namespace == (.data["pod-template.json"] | fromjson | .metadata.labels["br.sandbox/pool-id"])] | length == 4 and all'
     t "no policy selects a pod by the pool label" jqt ex "[${NP} | .. | objects | select(has(\"matchLabels\")) | .matchLabels | keys[] | select(. == \"br.sandbox/pool\")] | length == 0"
 }
 
@@ -67,19 +67,19 @@ check_slots_hold_the_egress_proxy_and_the_keeper_slot_is_empty() {
     for slot in egress.env egress.volumes egress.volume_mounts egress.objects keeper.objects; do
         t "the slot ${slot} exists" grep -q "define \"br-sandbox-chart.slot.${slot}\"" "$CHART/templates/_slots.tpl"
     done
-    t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "ReplicaSet", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
-    t "with egress disabled the proxy slots render nothing: no Service, no proxy ConfigMap, no CA ConfigMap, no proxy env or CA mount" jqt ex '([.[] | select(.kind == "Service" or (.kind == "ConfigMap" and (.metadata.name | startswith("br-sandbox-proxy") or . == "br-sandbox-ca")))] | length == 0) and ([.[] | select(.kind == "ReplicaSet") | .spec.template.spec | (.containers[0].env | map(.name)) == ["HOME"] and (.volumes | map(.name) | index("egress-ca") == null)] | all)'
+    t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
+    t "with egress disabled the proxy slots render nothing: no Service, no proxy ConfigMap, no CA ConfigMap, no proxy env or CA mount" jqt ex '([.[] | select(.kind == "Service" or (.kind == "ConfigMap" and (.metadata.name | startswith("br-sandbox-proxy") or . == "br-sandbox-ca")))] | length == 0) and ([.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | (.data["pod-template.json"] | fromjson).spec | (.containers[0].env | map(.name)) == ["HOME"] and (.volumes | map(.name) | index("egress-ca") == null)] | all)'
     render egon -f "$EXAMPLE" -f "$EGRESS_VALUES"
     t "egress.enabled true renders a Deployment and a Service in each egress namespace" jqt egon '([.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-proxy")] | length) == 2 and ([.[] | select(.kind == "Service")] | length) == 2'
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$(vals slotdomain '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=namespaces.sbx-alpha-allow.proxy.cluster_ip}" -f "$(vals slotdomain '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow.domains = ["git.example.test"]')" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
 }
 
 check_egress_values_fail_while_egress_is_disabled() {
     section "a credential set or an allow list fails the render while egress is disabled"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowdomains '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowcidrs '.clients.alpha.modes.allow.allow.cidrs = ["192.0.2.0/24"]')"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset ".clients.beta.modes.none.credential_set = ${CREDENTIAL_SET}")"
-    t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []} | .clients.beta.modes.none.credential_set = {}')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{namespace=sbx-alpha-allow,mode=allow,key=allow}" -f "$(vals allowdomains '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow.domains = ["git.example.test"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{namespace=sbx-alpha-allow,mode=allow,key=allow}" -f "$(vals allowcidrs '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow.cidrs = ["192.0.2.0/24"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{namespace=sbx-beta-none,mode=none,key=credential_set}" -f "$(vals credset "(.namespaces[] | select(.name == \"sbx-beta-none\")).credential_set = ${CREDENTIAL_SET}")"
+    t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow = {"domains": [], "cidrs": []} | (.namespaces[] | select(.name == "sbx-beta-none")).credential_set = {}')"
 }
 
 check_node_selector_reaches_the_pool() {

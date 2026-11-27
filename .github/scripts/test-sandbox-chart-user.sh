@@ -34,7 +34,7 @@ def runas($vap; $pod; $user):
 '
 
 pool_pod() {
-    jq -c --arg ns "$2" '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template' "$WORK/$1.json"
+    jq -c --arg ns "$2" '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == $ns) | (.data["pod-template.json"] | fromjson)' "$WORK/$1.json"
 }
 
 probe_pod() {
@@ -97,7 +97,7 @@ check_non_root_rule_refuses() {
     t "an ephemeral container as uid 0 is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 0}}]')" = false
     t "an ephemeral container without a security context is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x"}]')" = false
     t "the seed name with another image is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "registry.example.test/agents/base:1.0"')" = false
-    t "the seed name with the project image of the agent is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = .spec.containers[0].image')" = false
+    t "the seed name with an image of another repository is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "other.example.test/x:1"')" = false
     t "the seed name with the tools repository and another digest is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "registry.example.test/tools/br-sandbox-tools@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"')" = false
     t "the tools image under another name is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].name = "writer"')" = false
     t "an init container with the seed name and the tools image that is not root is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers[0].name = "seed" | del(.spec.initContainers[0].securityContext.runAsNonRoot) | .spec.initContainers[0].securityContext.runAsUser = 5')" = false
@@ -121,8 +121,8 @@ check_non_root_rule_text() {
     t "the exception names the ServiceAccount of the check Job in its namespace" expression_holds ex sbx-alpha-none "request.userInfo.username == \"system:serviceaccount:${check_ns}:${check_sa}\" ||"
     t "the policy reads the user in no other rule" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:") | not) | .expression | select(test("userInfo"))] | length == 0'
     t "the rule reads the user once" test "$(policy_expression ex sbx-alpha-none | grep -o 'userInfo' | wc -l | tr -d ' ')" = 1
-    t "the seed exception image is the tools image of the seed container" expression_holds ex sbx-alpha-none "c.image == \"$(jqv ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.template.spec.containers[1].image')\""
-    t "the seed exception image is the mirrored tools image with a mirror" expression_holds mirror sbx-alpha-none "c.image == \"$(jqv mirror '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.template.spec.containers[1].image')\""
+    t "the seed exception image is the tools image of the seed container" expression_holds ex sbx-alpha-none "c.image == \"$(jqv ex '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
+    t "the seed exception image is the mirrored tools image with a mirror" expression_holds mirror sbx-alpha-none "c.image == \"$(jqv mirror '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec.containers[1].image')\""
     t "the mirrored tools image starts with the mirror" expression_holds mirror sbx-alpha-none 'c.image == "mirror.example.test/'
     t "the seed exception pins root, the read-only root file system and no port" expression_holds ex sbx-alpha-none 'c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports)'
     t "the rule refuses a shared process namespace" expression_holds ex sbx-alpha-none '!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)'

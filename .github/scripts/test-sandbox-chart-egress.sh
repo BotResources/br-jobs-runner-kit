@@ -6,7 +6,7 @@ PROXY_ONLY='{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metada
 
 render_egress_fixtures() {
     render cred -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.allow.domains = ["git.example.test"] | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
+    render two -f "$(valsx two '.namespaces += [{"name": "sbx-beta-allow", "mode": "allow", "allow": {"domains": ["git.example.test"]}, "proxy": {"cluster_ip": "10.43.0.60", "ca": {"certificate": "-----BEGIN CERTIFICATE-----\nZmFrZS1jYS1hbGxvdw==\n-----END CERTIFICATE-----\n", "key_secret": "sbx-beta-allow-ca-key"}}}]')"
     render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
     render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
     render keeperegress -f "$EXAMPLE" -f "$OPERATOR_VALUES" -f "$EGRESS_VALUES"
@@ -24,7 +24,7 @@ check_no_identity_of_the_chart_has_a_right_in_the_egress_namespace() {
         t "render ${name}: no subject of a RoleBinding or a ClusterRoleBinding is in an egress namespace" jqt "$name" "${EGRESS_NAMESPACES} as \$e | (\$e | length) > 0 and ([.[] | select(.kind == \"RoleBinding\" or .kind == \"ClusterRoleBinding\") | .subjects[]? | select(.namespace as \$n | \$e | index(\$n) != null)] | length == 0)"
         t "render ${name}: no rule of a Role or ClusterRole names an egress namespace" jqt "$name" "${EGRESS_NAMESPACES} as \$e | (\$e | length) > 0 and ([.[] | select(.kind == \"Role\" or .kind == \"ClusterRole\") | .rules[]? | (.resourceNames // [])[] | select(. as \$r | \$e | index(\$r) != null)] | length == 0)"
     done
-    fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=alpha,client_b=runner-of-alpha,namespace=sbx-alpha-allow-egress}" -f "$(vals runneregress '.clients.alpha.modes.none.runner.namespace = "sbx-alpha-allow-egress"')"
+    fails_with "BR_SANDBOX_SHARED_NAMESPACE{first=egress,second=runner-of-sbx-alpha,namespace=sbx-alpha-allow-egress}" -f "$(vals runneregress '.scopes.sbx-alpha.runner.namespace = "sbx-alpha-allow-egress"')"
 }
 
 check_no_cluster_wide_right_on_secrets_and_pods_beyond_the_network_check_read() {
@@ -58,7 +58,7 @@ check_the_sandbox_policy_reaches_only_the_proxy_pods_of_the_egress_namespace() {
     t "full with credentials has br-sandbox-default-deny and br-sandbox-egress-full only" test "$(jqv cred '[.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-full") | .metadata.name] | sort | join(",")')" = "br-sandbox-default-deny,br-sandbox-egress-full"
     want="$(printf "$PROXY_ONLY" sbx-alpha-allow-egress 9999)"
     t "the tunnel port is the value egress.proxy.port" jqt tunnel "$(policy_json sbx-alpha-allow br-sandbox-egress-allow) | .spec.egress == [${want}]"
-    t "full with credentials resolves nothing outside: the pod resolver is the local address" jqt cred '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.dnsConfig.nameservers == ["127.0.0.1"]'
+    t "full with credentials resolves nothing outside: the pod resolver is the local address" jqt cred '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-full") | (.data["pod-template.json"] | fromjson).spec.dnsConfig.nameservers == ["127.0.0.1"]'
     t "the sandbox policy of a mode with a proxy names no ipBlock" jqt cred '[.[] | select(.kind == "NetworkPolicy" and (.metadata.namespace == "sbx-alpha-allow" or .metadata.namespace == "sbx-alpha-full")) | .. | objects | select(has("ipBlock"))] | length == 0'
 }
 
@@ -101,29 +101,26 @@ check_the_egress_namespace_labels() {
 check_full_with_credentials_follows_the_same_layout() {
     section "mode full: an egress namespace only when a credential set is configured"
     t "full without a credential set has no egress namespace and keeps br-sandbox-egress-full to the public addresses" jqt ex '([.[] | select(.kind == "Namespace" and .metadata.name == "sbx-alpha-full-egress")] | length == 0) and ([.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-full" and .metadata.name == "br-sandbox-egress-full") | .spec.egress[0].to[0].ipBlock.cidr] == ["0.0.0.0/0"])'
-    t "an empty credential set is no credential set" render emptyset -f "$(valsx emptyset '.clients.alpha.modes.full.credential_set = {}')"
+    t "an empty credential set is no credential set" render emptyset -f "$(valsx emptyset '(.namespaces[] | select(.name == "sbx-alpha-full")).credential_set = {}')"
     t "an empty credential set renders no egress namespace for full" jqt emptyset '[.[] | select(.kind == "Namespace" and .metadata.name == "sbx-alpha-full-egress")] | length == 0'
     t "a credential set of full renders its egress namespace: three policies, the quota, two ConfigMaps, the Deployment and the Service" jqt cred '[.[] | select(.metadata.namespace == "sbx-alpha-full-egress") | .kind] | sort == ["ConfigMap", "ConfigMap", "Deployment", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy", "ResourceQuota", "Service"]'
     t "mode none never has an egress namespace" jqt cred '[.[] | select(.kind == "Namespace" and (.metadata.name | test("none-egress$")))] | length == 0'
-    fails_with "BR_SANDBOX_CREDENTIAL_SET_MODE{client=beta,mode=none}" -f "$(valsx credsetnone ".clients.beta.modes.none.credential_set = ${CREDENTIAL_SET}")"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=full,key=credential_set}" -f "$(vals credsetoff ".clients.alpha.modes.full.credential_set = ${CREDENTIAL_SET}")"
+    fails_with "BR_SANDBOX_CREDENTIAL_SET_MODE{namespace=sbx-beta-none,mode=none}" -f "$(valsx credsetnone "(.namespaces[] | select(.name == \"sbx-beta-none\")).credential_set = ${CREDENTIAL_SET}")"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{namespace=sbx-alpha-full,mode=full,key=credential_set}" -f "$(vals credsetoff "(.namespaces[] | select(.name == \"sbx-alpha-full\")).credential_set = ${CREDENTIAL_SET}")"
 }
 
 check_the_egress_namespace_name_is_a_helper_with_a_bound() {
     section "egress namespace name: one helper, 63 characters at most, a clash fails"
     t "the helper br-sandbox-chart.egress.namespace holds the suffix and no other template writes it" test "$(grep -rlF -e '%s-egress' "$CHART/templates")" = "$CHART/templates/_helpers.tpl"
     t "the name is the sandbox namespace and -egress" jqt ex "${EGRESS_NAMESPACES} == [\"sbx-alpha-allow-egress\"]"
-    local prefix client long fits
-    prefix="$(printf 'a%.0s' {1..22})"
-    client="$(printf 'c%.0s' {1..31})"
-    long="${prefix}-${client}-allow-egress"
-    fails_with "BR_SANDBOX_NAME_TOO_LONG{client=${client},mode=allow,namespace=${long}}" -f "$(vals long ".installation.namespace_prefix = \"${prefix}\" | .clients = {\"${client}\": .clients.alpha}")"
-    prefix="$(printf 'a%.0s' {1..20})"
-    client="$(printf 'c%.0s' {1..29})"
-    fits="${prefix}-${client}-allow-egress"
-    render fits -f "$(vals fits ".installation.namespace_prefix = \"${prefix}\" | .clients = {\"${client}\": .clients.alpha}")"
+    local long fits
+    long="sbx-alpha-$(printf 'c%.0s' {1..47})"
+    fails_with "BR_SANDBOX_NAME_TOO_LONG{namespace=${long},egress=${long}-egress}" -f "$(vals long ".namespaces[1].name = \"${long}\"")"
+    fits="sbx-alpha-$(printf 'c%.0s' {1..46})"
+    render fits -f "$(vals fits ".namespaces[1].name = \"${fits}\"")"
+    fits="${fits}-egress"
     t "an egress name of 63 characters is accepted" jqt fits "${EGRESS_NAMESPACES} == [\"${fits}\"] and (\"${fits}\" | length) == 63"
-    fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=system,client_b=alpha,namespace=sbx-alpha-allow-egress}" -f "$(vals clash '.installation.system_namespace = "sbx-alpha-allow-egress"')"
+    fails_with "BR_SANDBOX_SHARED_NAMESPACE{first=system,second=egress,namespace=sbx-alpha-allow-egress}" -f "$(vals clash '.installation.system_namespace = "sbx-alpha-allow-egress"')"
 }
 
 check_the_network_check_identity_reads_pod_specs_cluster_wide() {
@@ -160,22 +157,22 @@ check_the_credential_secrets_live_in_the_egress_namespace() {
 
 check_an_allow_list_outside_mode_allow_fails_the_render() {
     section "an allow list in a mode other than allow fails when egress is enabled"
-    fails_with "BR_SANDBOX_ALLOW_MODE{client=alpha,mode=none}" -f "$(valsx allownone '.clients.alpha.modes.none.allow.domains = ["git.example.test"]')"
-    fails_with "BR_SANDBOX_ALLOW_MODE{client=alpha,mode=full}" -f "$(valsx allowfull '.clients.alpha.modes.full.allow.cidrs = ["192.0.2.0/24"]')"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=full,key=allow}" -f "$(vals allowfulloff '.clients.alpha.modes.full.allow.cidrs = ["192.0.2.0/24"]')"
-    t "an allow list in mode allow renders when egress is enabled" render allowok -f "$(valsx allowok '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
-    t "empty allow lists in mode none and full render when egress is enabled" render allowempty -f "$(valsx allowempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []} | .clients.alpha.modes.full.allow = {"domains": [], "cidrs": []}')"
+    fails_with "BR_SANDBOX_ALLOW_MODE{namespace=sbx-alpha-none,mode=none}" -f "$(valsx allownone '(.namespaces[] | select(.name == "sbx-alpha-none")).allow.domains = ["git.example.test"]')"
+    fails_with "BR_SANDBOX_ALLOW_MODE{namespace=sbx-alpha-full,mode=full}" -f "$(valsx allowfull '(.namespaces[] | select(.name == "sbx-alpha-full")).allow.cidrs = ["192.0.2.0/24"]')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{namespace=sbx-alpha-full,mode=full,key=allow}" -f "$(vals allowfulloff '(.namespaces[] | select(.name == "sbx-alpha-full")).allow.cidrs = ["192.0.2.0/24"]')"
+    t "an allow list in mode allow renders when egress is enabled" render allowok -f "$(valsx allowok '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow.domains = ["git.example.test"]')"
+    t "empty allow lists in mode none and full render when egress is enabled" render allowempty -f "$(valsx allowempty '(.namespaces[] | select(.name == "sbx-alpha-none")).allow = {"domains": [], "cidrs": []} | (.namespaces[] | select(.name == "sbx-alpha-full")).allow = {"domains": [], "cidrs": []}')"
     t "the README names BR_SANDBOX_ALLOW_MODE" grep -qF 'BR_SANDBOX_ALLOW_MODE' "$README"
 }
 
 check_a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
     section "a mode allow with no domain and no cidr fails when egress is enabled, and renders without a list when egress is disabled"
-    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_deleted 'del(.clients.alpha.modes.allow.allow)')"
-    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(valsx allowempty_lists '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []}')"
-    fails_with "BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}" -f "$(vals allowempty_noproxy '.egress.enabled = true')"
-    t "a mode allow with domains only renders when egress is enabled" render allowdomainsonly -f "$(valsx allowdomainsonly '.clients.alpha.modes.allow.allow = {"domains": ["git.example.test"]}')"
-    t "a mode allow with cidrs only renders when egress is enabled" render allowcidrsonly -f "$(valsx allowcidrsonly '.clients.alpha.modes.allow.allow = {"cidrs": ["192.0.2.0/24"]}')"
-    t "an empty allow list in mode none and mode full is not an error when egress is enabled" render allownoneempty -f "$(valsx allownoneempty '.clients.alpha.modes.none.allow = {"domains": [], "cidrs": []}')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{namespace=sbx-alpha-allow,mode=allow}" -f "$(valsx allowempty_deleted 'del((.namespaces[] | select(.name == "sbx-alpha-allow")).allow)')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{namespace=sbx-alpha-allow,mode=allow}" -f "$(valsx allowempty_lists '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow = {"domains": [], "cidrs": []}')"
+    fails_with "BR_SANDBOX_ALLOW_EMPTY{namespace=sbx-alpha-allow,mode=allow}" -f "$(vals allowempty_noproxy '.egress.enabled = true')"
+    t "a mode allow with domains only renders when egress is enabled" render allowdomainsonly -f "$(valsx allowdomainsonly '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow = {"domains": ["git.example.test"]}')"
+    t "a mode allow with cidrs only renders when egress is enabled" render allowcidrsonly -f "$(valsx allowcidrsonly '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow = {"cidrs": ["192.0.2.0/24"]}')"
+    t "an empty allow list in mode none and mode full is not an error when egress is enabled" render allownoneempty -f "$(valsx allownoneempty '(.namespaces[] | select(.name == "sbx-alpha-none")).allow = {"domains": [], "cidrs": []}')"
     t "with egress disabled a mode allow with no list renders: no list can be given there" render allowoff -f "$EXAMPLE"
     t "the README names BR_SANDBOX_ALLOW_EMPTY and says it needs egress.enabled" grep -qF 'With `egress.enabled`, mode `allow` needs at least one domain or one cidr, else `BR_SANDBOX_ALLOW_EMPTY`.' "$README"
     t "the CHANGELOG names BR_SANDBOX_ALLOW_EMPTY" grep -qF 'BR_SANDBOX_ALLOW_EMPTY{client=...,mode=allow}' "$CHART/CHANGELOG.md"

@@ -1,5 +1,9 @@
 {{- define "br-sandbox-chart.require" -}}
-{{- $node := .root.Values -}}
+{{- include "br-sandbox-chart.require.in" (dict "node" .root.Values "path" .path "label" .path) -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.require.in" -}}
+{{- $node := .node -}}
 {{- $ok := true -}}
 {{- range $segment := splitList "." .path -}}
 {{- if and $ok (kindIs "map" $node) (hasKey $node $segment) -}}
@@ -9,7 +13,21 @@
 {{- end -}}
 {{- end -}}
 {{- if or (not $ok) (kindIs "invalid" $node) (and (kindIs "string" $node) (eq $node "")) -}}
-{{- fail (printf "BR_SANDBOX_MISSING_VALUE{key=%s}" .path) -}}
+{{- fail (printf "BR_SANDBOX_MISSING_VALUE{key=%s}" .label) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.validate.scopes" -}}
+{{- $root := . -}}
+{{- range $scope, $table := .Values.scopes -}}
+{{- range $path := list "service_account" "namespace" -}}
+{{- include "br-sandbox-chart.require.in" (dict "node" $table "path" (printf "runner.%s" $path) "label" (printf "scopes.%s.runner.%s" $scope $path)) -}}
+{{- end -}}
+{{- range $other, $_ := $root.Values.scopes -}}
+{{- if and (ne $scope $other) (hasPrefix (printf "%s-" $scope) $other) -}}
+{{- fail (printf "BR_SANDBOX_SCOPES_OVERLAP{scope=%s,other=%s}" $scope $other) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -18,7 +36,10 @@
 {{- if hasKey .Values "keeper" -}}
 {{- fail "BR_SANDBOX_KEEPER_VALUES_REMOVED{key=keeper}" -}}
 {{- end -}}
-{{- range $path := list "installation.namespace_prefix" "image" "tools.image.repository" "tools.image.digest" "save.ttl_seconds" "store.endpoint" "store.bucket" "store.region" "store.path_style" "store.credentials_secret" "network.pod_cidr" "network.service_cidr" "network.node_addresses" "network.node_public_addresses" "network.load_balancer_addresses" "clients" -}}
+{{- if hasKey .Values "clients" -}}
+{{- fail "BR_SANDBOX_CLIENTS_REMOVED{key=clients}" -}}
+{{- end -}}
+{{- range $path := list "installation.namespace_prefix" "tools.image.repository" "tools.image.digest" "save.ttl_seconds" "store.endpoint" "store.bucket" "store.region" "store.path_style" "store.credentials_secret" "network.pod_cidr" "network.service_cidr" "network.node_addresses" "network.node_public_addresses" "network.load_balancer_addresses" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
 {{- if le (.Values.save.ttl_seconds | int64) 0 -}}
@@ -41,6 +62,7 @@
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
 {{- end -}}
+{{- include "br-sandbox-chart.validate.scopes" . -}}
 {{- $prefix := .Values.installation.namespace_prefix -}}
 {{- $system := default (printf "%s-system" $prefix) .Values.installation.system_namespace -}}
 {{- $seen := dict $system "system" -}}
@@ -48,82 +70,67 @@
 {{- $ips := dict -}}
 {{- $sandboxNames := dict -}}
 {{- $needsResolvers := false -}}
-{{- range $client, $clientValues := .Values.clients -}}
-{{- if not (hasKey $clientValues "modes") -}}
-{{- fail (printf "BR_SANDBOX_MISSING_VALUE{key=clients.%s.modes}" $client) -}}
-{{- end -}}
-{{- range $mode, $modeValues := $clientValues.modes -}}
+{{- range $entry := .Values.namespaces -}}
+{{- $name := $entry.name -}}
+{{- $mode := $entry.mode -}}
 {{- if not (has $mode (list "none" "allow" "full")) -}}
-{{- fail (printf "BR_SANDBOX_MODE_UNKNOWN{client=%s,mode=%s}" $client $mode) -}}
+{{- fail (printf "BR_SANDBOX_MODE_UNKNOWN{namespace=%s,mode=%s}" $name $mode) -}}
 {{- end -}}
 {{- if ne $mode "none" -}}
 {{- $needsResolvers = true -}}
 {{- end -}}
-{{- range $path := list "service_account" "namespace" -}}
-{{- include "br-sandbox-chart.require" (dict "root" $root "path" (printf "clients.%s.modes.%s.runner.%s" $client $mode $path)) -}}
-{{- end -}}
+{{- $scope := include "br-sandbox-chart.scope.of" (dict "root" $root "name" $name) | fromJson -}}
 {{- if and $root.Values.egress.enabled (eq $mode "allow") -}}
-{{- $listed := get $modeValues "allow" | default dict -}}
+{{- $listed := get $entry "allow" | default dict -}}
 {{- if not (or (get $listed "domains" | default list | len) (get $listed "cidrs" | default list | len)) -}}
-{{- fail (printf "BR_SANDBOX_ALLOW_EMPTY{client=%s,mode=%s}" $client $mode) -}}
+{{- fail (printf "BR_SANDBOX_ALLOW_EMPTY{namespace=%s,mode=%s}" $name $mode) -}}
 {{- end -}}
 {{- end -}}
 {{- if not $root.Values.egress.enabled -}}
-{{- $allow := get $modeValues "allow" | default dict -}}
+{{- $allow := get $entry "allow" | default dict -}}
 {{- if or (get $allow "domains" | default list | len) (get $allow "cidrs" | default list | len) -}}
-{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=allow}" $client $mode) -}}
+{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{namespace=%s,mode=%s,key=allow}" $name $mode) -}}
 {{- end -}}
-{{- if get $modeValues "credential_set" | default dict | len -}}
-{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{client=%s,mode=%s,key=credential_set}" $client $mode) -}}
+{{- if get $entry "credential_set" | default dict | len -}}
+{{- fail (printf "BR_SANDBOX_EGRESS_DISABLED{namespace=%s,mode=%s,key=credential_set}" $name $mode) -}}
 {{- end -}}
 {{- end -}}
 {{- if and $root.Values.egress.enabled (ne $mode "allow") -}}
-{{- $listed := get $modeValues "allow" | default dict -}}
+{{- $listed := get $entry "allow" | default dict -}}
 {{- if or (get $listed "domains" | default list | len) (get $listed "cidrs" | default list | len) -}}
-{{- fail (printf "BR_SANDBOX_ALLOW_MODE{client=%s,mode=%s}" $client $mode) -}}
+{{- fail (printf "BR_SANDBOX_ALLOW_MODE{namespace=%s,mode=%s}" $name $mode) -}}
 {{- end -}}
 {{- end -}}
-{{- if and $root.Values.egress.enabled (eq $mode "none") (get $modeValues "credential_set" | default dict | len) -}}
-{{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{client=%s,mode=%s}" $client $mode) -}}
+{{- if and $root.Values.egress.enabled (eq $mode "none") (get $entry "credential_set" | default dict | len) -}}
+{{- fail (printf "BR_SANDBOX_CREDENTIAL_SET_MODE{namespace=%s,mode=%s}" $name $mode) -}}
 {{- end -}}
-{{- include "br-sandbox-chart.validate.credentials" (dict "root" $root "client" $client "mode" $mode "values" $modeValues) -}}
-{{- $name := printf "%s-%s-%s" $prefix $client $mode -}}
+{{- include "br-sandbox-chart.validate.credentials" (dict "root" $root "namespace" $name "mode" $mode "values" $entry) -}}
 {{- if hasKey $seen $name -}}
-{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}
+{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{first=%s,second=sandbox,namespace=%s}" (get $seen $name) $name) -}}
 {{- end -}}
-{{- $_ := set $seen $name $client -}}
-{{- $_ := set $sandboxNames $name $client -}}
-{{- if gt (len $name) 63 -}}
-{{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{client=%s,mode=%s,namespace=%s}" $client $mode $name) -}}
-{{- end -}}
-{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
+{{- $_ := set $seen $name "sandbox" -}}
+{{- $_ := set $sandboxNames $name $scope.name -}}
+{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $entry) -}}
 {{- $egressName := include "br-sandbox-chart.egress.namespace" $name -}}
 {{- if gt (len $egressName) 63 -}}
-{{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{client=%s,mode=%s,namespace=%s}" $client $mode $egressName) -}}
+{{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{namespace=%s,egress=%s}" $name $egressName) -}}
 {{- end -}}
 {{- if hasKey $seen $egressName -}}
-{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $egressName) $client $egressName) -}}
+{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{first=%s,second=egress,namespace=%s}" (get $seen $egressName) $egressName) -}}
 {{- end -}}
-{{- $_ := set $seen $egressName $client -}}
-{{- $_ := set $egressNames $egressName $client -}}
+{{- $_ := set $seen $egressName "egress" -}}
+{{- $_ := set $egressNames $egressName $name -}}
 {{- if $root.Values.egress.enabled -}}
-{{- include "br-sandbox-chart.validate.proxy" (dict "root" $root "client" $client "mode" $mode "values" $modeValues "ips" $ips) -}}
-{{- end -}}
-{{- end -}}
-{{- $pool := mergeOverwrite (deepCopy $root.Values.pool) (deepCopy ($modeValues.pool | default dict)) -}}
-{{- if gt ($pool.floor | int64) ($pool.max_sandboxes | int64) -}}
-{{- fail (printf "BR_SANDBOX_POOL_INVALID{client=%s,mode=%s,reason=floor_above_max_sandboxes}" $client $mode) -}}
+{{- include "br-sandbox-chart.validate.proxy" (dict "root" $root "namespace" $name "mode" $mode "values" $entry "ips" $ips) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- range $client, $clientValues := .Values.clients -}}
-{{- range $mode, $modeValues := $clientValues.modes -}}
-{{- if hasKey $egressNames $modeValues.runner.namespace -}}
-{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=runner-of-%s,namespace=%s}" (get $egressNames $modeValues.runner.namespace) $client $modeValues.runner.namespace) -}}
+{{- range $scope, $table := .Values.scopes -}}
+{{- if hasKey $egressNames $table.runner.namespace -}}
+{{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{first=egress,second=runner-of-%s,namespace=%s}" $scope $table.runner.namespace) -}}
 {{- end -}}
-{{- if and (eq $modeValues.runner.service_account "sandbox") (hasKey $sandboxNames $modeValues.runner.namespace) -}}
-{{- fail (printf "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=%s,mode=%s,namespace=%s}" $client $mode $modeValues.runner.namespace) -}}
-{{- end -}}
+{{- if and (eq $table.runner.service_account "sandbox") (hasKey $sandboxNames $table.runner.namespace) -}}
+{{- fail (printf "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{scope=%s,namespace=%s}" $scope $table.runner.namespace) -}}
 {{- end -}}
 {{- end -}}
 {{- if gt (len $ips) 0 -}}

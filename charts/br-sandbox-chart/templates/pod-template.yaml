@@ -1,0 +1,13 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-pod-template
+  namespace: {{ $ns.name }}
+  labels:
+    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
+data:
+  pod-template.json: |
+    {{- include "br-sandbox-chart.pod.template" (dict "root" $ "ns" $ns) | nindent 4 }}
+{{- end }}

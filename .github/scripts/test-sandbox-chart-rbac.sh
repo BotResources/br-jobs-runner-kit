@@ -45,7 +45,7 @@ check_config_contract() {
         fails_with "BR_SANDBOX_MISSING_VALUE{key=${key}}" -f "$(vals "no_${key}" "del(.${key})")"
     done
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.public_resolvers}" -f "$(vals nores 'del(.network.public_resolvers)')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.none.runner.namespace}" -f "$(vals norunner 'del(.clients.alpha.modes.none.runner.namespace)')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=scopes.sbx-alpha.runner.namespace}" -f "$(vals norunner 'del(.scopes.sbx-alpha.runner.namespace)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck 'del(.network_check.image)')"
 }
 
@@ -67,8 +67,8 @@ check_the_pod_identity_has_no_binding() {
 
 check_the_runner_identity_is_not_the_pod_identity() {
     section "the runner service account is never the sandbox service account of a sandbox namespace"
-    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=alpha,mode=none,namespace=sbx-alpha-none}" -f "$(vals runnerownns '.clients.alpha.modes.none.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-none"}')"
-    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=beta,mode=none,namespace=sbx-alpha-full}" -f "$(vals runnerothersandbox '.clients.beta.modes.none.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-full"}')"
-    t "a runner service account named sandbox outside a sandbox namespace renders" helm template t "$CHART" -f "$(vals sandboxoutside '.clients.beta.modes.none.runner = {"service_account": "sandbox", "namespace": "runners"}')"
-    t "a runner service account of another name in a sandbox namespace renders" helm template t "$CHART" -f "$(vals runnerinside '.clients.beta.modes.none.runner = {"service_account": "runner", "namespace": "sbx-alpha-none"}')"
+    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{scope=sbx-alpha,namespace=sbx-alpha-none}" -f "$(vals runnerownns '.scopes.sbx-alpha.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-none"}')"
+    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{scope=sbx-beta,namespace=sbx-alpha-full}" -f "$(vals runnerothersandbox '.scopes.sbx-beta.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-full"}')"
+    t "a runner service account named sandbox outside a sandbox namespace renders" helm template t "$CHART" -f "$(vals sandboxoutside '.scopes.sbx-beta.runner = {"service_account": "sandbox", "namespace": "runners"}')"
+    t "a runner service account of another name in a sandbox namespace renders" helm template t "$CHART" -f "$(vals runnerinside '.scopes.sbx-beta.runner = {"service_account": "runner", "namespace": "sbx-alpha-none"}')"
 }

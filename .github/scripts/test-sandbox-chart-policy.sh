@@ -26,9 +26,8 @@ check_VAP_every_rule_exists_per_namespace() {
     t "rule 3 refuses secretKeyRef and secretRef" has_rule_text sbx-alpha-none BR_SANDBOX_VOLUME_FORBIDDEN "!has(e.valueFrom.secretKeyRef)"
     t "rule 4 lists the seven capabilities" has_rule_text sbx-alpha-none BR_SANDBOX_CAPABILITY "['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'SETUID', 'SETGID', 'KILL']"
     t "rule 5 requires seccomp RuntimeDefault and no privilege" has_rule_text sbx-alpha-none BR_SANDBOX_PRIVILEGE "seccompProfile.type == 'RuntimeDefault'"
-    t "rule 6 inlines the size of the pool of the namespace" has_rule_text sbx-alpha-none BR_SANDBOX_RESOURCES "quantity('500m')"
-    t "rule 6 inlines another size for another pool" has_rule_text sbx-alpha-full BR_SANDBOX_RESOURCES "quantity('10Gi')"
-    t "rule 7 inlines the allowed repositories" has_rule_text sbx-alpha-none BR_SANDBOX_IMAGE "'registry.example.test/agents/base'"
+    t "rule 6 inlines limits.size" has_rule_text sbx-alpha-none BR_SANDBOX_RESOURCES "quantity('500m')"
+    t "rule 7 inlines the allowed repositories" has_rule_text sbx-alpha-none BR_SANDBOX_IMAGE "'registry.example.test/tools/br-sandbox-tools'"
     t "rule 8 requires no token and the chart runtime class" has_rule_text sbx-alpha-none BR_SANDBOX_TOKEN_OR_RUNTIME "object.spec.runtimeClassName : '') == \"\""
     t "rule 9 compares security contexts and resources on update" has_rule_text sbx-alpha-none BR_SANDBOX_IMMUTABLE "oldObject.spec.containers.map(c, c.securityContext)"
     t "every isolation rule applies to role=sandbox pods only" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|RUN_AS_NON_ROOT)\")) | .expression | startswith(\"variables.role != 'sandbox' || \")] | all"
@@ -78,7 +77,7 @@ model_result() {
     local ns="$1" mutation="$2" render="${3:-ex}"
     jq -r --arg ns "$ns" "${QTY}${MODEL}"'
       (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == ($ns + "-pod"))) as $vap
-      | (.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template) as $pod
+      | (.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == $ns) | (.data["pod-template.json"] | fromjson)) as $pod
       | passes($vap; $pod | '"${mutation}"')' "$WORK/${render}.json"
 }
 
@@ -123,8 +122,6 @@ check_VAP_every_expression_is_the_exact_text() {
         t "the expression of ${code} equals the expected text" expression_is_exactly sbx-alpha-none "$code"
     done
     t "the policy holds exactly the thirteen rules and no other" jqt ex "[${VAP} | select(.metadata.name == \"sbx-alpha-none-pod\") | [.spec.validations[].message | split(\":\")[0]] | . == (\"${CODES}\" | split(\" \"))] | all"
-    t "the size rule of a pool with another size equals the expected text" expression_is_exactly sbx-alpha-full BR_SANDBOX_RESOURCES
-    t "the image rule of the allow namespace equals the expected text" expression_is_exactly sbx-alpha-allow BR_SANDBOX_IMAGE
     t "a pod with a role other than sandbox is refused: the role rule is the one case" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
     t "the user-namespace rule has no alternative before the guard and the clause" expression_is_exactly sbx-alpha-none BR_SANDBOX_USERNS_REQUIRED
     t "no expression holds a literal true or false operand of || or &&" jqt ex "[${VAP} | .spec.validations[].expression | select(test(\"(^|[(]|[|][|] |&& )(true|false) ([|][|]|&&)|([|][|]|&&) (true|false)([) ]|$)\"))] | length == 0"

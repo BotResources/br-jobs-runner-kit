@@ -46,7 +46,7 @@ work:
   size_limit: 3Gi
 home:
   size_limit: 512Mi
-pool:
+limits:
   size:
     cpu:
       request: 500m
@@ -57,10 +57,8 @@ pool:
     disk:
       request: 2Gi
       limit: 5Gi
-  floor: 1
-  max_sandboxes: 20
-  refill_seconds: 3
-  margin: 2
+  pods: 20
+pool:
   terminationGracePeriodSeconds: 1
   node_selector: {}
 quota:
@@ -74,7 +72,9 @@ network:
     - 169.254.0.0/16
     - 127.0.0.0/8
   ipv6: single_stack
-clients: {}
+namespaces: []
+scopes: {}
+render_namespace: false
 egress:
   enabled: false
   proxy:

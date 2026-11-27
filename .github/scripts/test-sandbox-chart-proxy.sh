@@ -14,7 +14,7 @@ render_proxy_fixtures() {
     render_yaml egressmirror_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$MIRROR_VALUES"
     render egresssized -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.replicas=2 --set egress.proxy.resources.requests.cpu=250m --set egress.proxy.port=9999
     render egressother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.image.repository=registry.example.test/other/proxy --set egress.proxy.image.digest="$OTHER_DIGEST"
-    render nocred -f "$(valsx nocred 'del(.clients.alpha.modes.full.credential_set) | del(.clients.alpha.modes.full.proxy)')"
+    render nocred -f "$(valsx nocred 'del((.namespaces[] | select(.name == "sbx-alpha-full")).credential_set) | del((.namespaces[] | select(.name == "sbx-alpha-full")).proxy)')"
     render_yaml egress_yaml -f "$EXAMPLE" -f "$EGRESS_VALUES"
 }
 

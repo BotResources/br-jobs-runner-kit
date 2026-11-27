@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SET0='.clients.alpha.modes.full.credential_set.secrets[0]'
+SET0='(.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secrets[0]'
 
 cfgt() {
     local render="$1" ns="$2"
@@ -17,7 +17,7 @@ cfgv() {
 render_proxy_config_fixtures() {
     render ipliteral -f "$EXAMPLE" -f "$EGRESS_VALUES" --set 'network.internal_cidrs={10.0.0.0/8,192.168.0.0/16,100.64.0.0/10,169.254.0.0/16,127.0.0.0/8}'
     render egressdual6 -f "$EXAMPLE" -f "$EGRESS_VALUES" --set network.ipv6=dual_stack
-    render cidronly -f "$(valsx cidronly '.clients.alpha.modes.allow.allow = {"cidrs": ["192.0.2.10/32"]}')"
+    render cidronly -f "$(valsx cidronly '(.namespaces[] | select(.name == "sbx-alpha-allow")).allow = {"cidrs": ["192.0.2.10/32"]}')"
     render cidrhost -f "$(valsx cidrhost "${SET0}.hosts = [\"192.0.2.0/24\"]")"
     render caother -f "$EXAMPLE" -f "$EGRESS_VALUES" --set 'egress.ca.env_names={SSL_CERT_FILE}'
 }
@@ -80,30 +80,30 @@ check_the_proxy_leaks_nothing_of_the_vendor_platform() {
 
 check_the_sandbox_side_holds_the_proxy_address_the_ca_and_the_placeholders() {
     section "sandbox side: proxy env, CA mount, placeholders, no real value, no DNS"
-    local env='.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "%s") | .spec.template.spec.containers[0].env'
+    local env='.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "%s") | (.data["pod-template.json"] | fromjson).spec.containers[0].env'
     t "mode full: the proxy variables, the empty no-proxy, the CA variables, then the placeholders" jqt cred "$(printf "$env" sbx-alpha-full) | map({(.name): .value}) | add | .HTTPS_PROXY == \"http://10.43.0.51:8888\" and .HTTP_PROXY == .HTTPS_PROXY and .https_proxy == .HTTPS_PROXY and .http_proxy == .HTTPS_PROXY and .NO_PROXY == \"\" and .no_proxy == \"\" and .SSL_CERT_FILE == \"/etc/br-sandbox-ca/ca.crt\" and .REQUESTS_CA_BUNDLE == .SSL_CERT_FILE and .NODE_EXTRA_CA_CERTS == .SSL_CERT_FILE and .GIT_SSL_CAINFO == .SSL_CERT_FILE and .CURL_CA_BUNDLE == .SSL_CERT_FILE and .GIT_ACCESS == \"placeholder-git-a\" and .REGISTRY_ACCESS == \"placeholder-registry-a\""
     t "mode allow: the proxy address of its own mode and no placeholder" jqt cred "$(printf "$env" sbx-alpha-allow) | map({(.name): .value}) | add | .HTTPS_PROXY == \"http://10.43.0.50:8888\" and (has(\"GIT_ACCESS\") | not)"
-    t "mode none and the other client have no proxy variable and no CA mount" jqt cred '[.[] | select(.kind == "ReplicaSet" and (.metadata.namespace == "sbx-alpha-none" or .metadata.namespace == "sbx-beta-none")) | .spec.template.spec | [.containers[].env[]?.name | select(test("PROXY|proxy|CA_BUNDLE|SSL_CERT|EXTRA_CA|CAINFO"))] + [.volumes[].name | select(. == "egress-ca")] | length] == [0, 0]'
-    t "the CA ConfigMap is mounted read-only at the mount path and is the only added volume" jqt cred '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec | ([.volumes[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "configMap": {"name": "br-sandbox-ca"}}]) and ([.containers[0].volumeMounts[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "mountPath": "/etc/br-sandbox-ca", "readOnly": true}])'
-    t "the CA variable names are values and the mount path is the constant /etc/br-sandbox-ca" jqt caother '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.containers[0] | ([.env[] | select(.value == "/etc/br-sandbox-ca/ca.crt") | .name] == ["SSL_CERT_FILE"]) and ([.volumeMounts[] | select(.name == "egress-ca") | .mountPath] == ["/etc/br-sandbox-ca"])'
+    t "mode none and the other client have no proxy variable and no CA mount" jqt cred '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and (.metadata.namespace == "sbx-alpha-none" or .metadata.namespace == "sbx-beta-none")) | (.data["pod-template.json"] | fromjson).spec | [.containers[].env[]?.name | select(test("PROXY|proxy|CA_BUNDLE|SSL_CERT|EXTRA_CA|CAINFO"))] + [.volumes[].name | select(. == "egress-ca")] | length] == [0, 0]'
+    t "the CA ConfigMap is mounted read-only at the mount path and is the only added volume" jqt cred '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-full") | (.data["pod-template.json"] | fromjson).spec | ([.volumes[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "configMap": {"name": "br-sandbox-ca"}}]) and ([.containers[0].volumeMounts[] | select(.name == "egress-ca")] == [{"name": "egress-ca", "mountPath": "/etc/br-sandbox-ca", "readOnly": true}])'
+    t "the CA variable names are values and the mount path is the constant /etc/br-sandbox-ca" jqt caother '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-full") | (.data["pod-template.json"] | fromjson).spec.containers[0] | ([.env[] | select(.value == "/etc/br-sandbox-ca/ca.crt") | .name] == ["SSL_CERT_FILE"]) and ([.volumeMounts[] | select(.name == "egress-ca") | .mountPath] == ["/etc/br-sandbox-ca"])'
     fails_with "values don't meet the specifications" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.ca.mount_path=/etc/other-ca
     t "the ConfigMap of the sandbox namespace holds the certificate and no key" jqt cred '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-ca") | .data | keys] == [["ca.crt"], ["ca.crt"]]'
     t "no sandbox env or mount refers to a Secret, the credential key files or the proxy mount paths" jqt cred "${SANDBOX_PODS} | (tostring | test(\"iron-proxy|/credentials|secretKeyRef\") | not)"
-    t "the sandbox resolver is still the local address with the proxy address in the env" jqt cred '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.dnsConfig.nameservers == ["127.0.0.1"]'
+    t "the sandbox resolver is still the local address with the proxy address in the env" jqt cred '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-full") | (.data["pod-template.json"] | fromjson).spec.dnsConfig.nameservers == ["127.0.0.1"]'
 }
 
 check_the_proxy_render_errors() {
     section "render errors of the proxy and the credential set"
-    fails_with "BR_SANDBOX_CREDENTIAL_HOSTS_EMPTY{client=alpha,mode=full,item=0}" -f "$(valsx errhosts "${SET0}.hosts = []")"
-    fails_with "BR_SANDBOX_CREDENTIAL_PLACEHOLDER_EMPTY{client=alpha,mode=full,item=0}" -f "$(valsx errph "${SET0}.placeholder = \"\"")"
-    fails_with "BR_SANDBOX_CREDENTIAL_REQUIRE_TLS{client=alpha,mode=full,item=0}" -f "$(valsx errtls "${SET0}.require = true")"
-    fails_with "BR_SANDBOX_CREDENTIAL_PLACEHOLDER_DUPLICATE{client=alpha,mode=full,item=1,first=0}" -f "$(valsx errdupph "${SET0}.placeholder as \$p | .clients.alpha.modes.full.credential_set.secrets[1].placeholder = \$p")"
-    fails_with "BR_SANDBOX_CREDENTIAL_ENV_DUPLICATE{client=alpha,mode=full,item=1,env_name=GIT_ACCESS}" -f "$(valsx errdupenv '.clients.alpha.modes.full.credential_set.secrets[1].env_name = "GIT_ACCESS"')"
-    fails_with "BR_SANDBOX_CREDENTIAL_KEY_DUPLICATE{client=alpha,mode=full,item=1,key=git}" -f "$(valsx errdupkey '.clients.alpha.modes.full.credential_set.secrets[1].key = "git"')"
-    fails_with "BR_SANDBOX_PROXY_ADDRESS_DUPLICATE{client_a=alpha,client_b=alpha,cluster_ip=10.43.0.50}" -f "$(valsx errdupip '.clients.alpha.modes.full.proxy.cluster_ip = "10.43.0.50"')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$(valsx errnoip 'del(.clients.alpha.modes.allow.proxy.cluster_ip)')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.ca.certificate}" -f "$(valsx errnoca 'del(.clients.alpha.modes.allow.proxy.ca.certificate)')"
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.ca.key_secret}" -f "$(valsx errnokey 'del(.clients.alpha.modes.allow.proxy.ca.key_secret)')"
+    fails_with "BR_SANDBOX_CREDENTIAL_HOSTS_EMPTY{namespace=sbx-alpha-full,mode=full,item=0}" -f "$(valsx errhosts "${SET0}.hosts = []")"
+    fails_with "BR_SANDBOX_CREDENTIAL_PLACEHOLDER_EMPTY{namespace=sbx-alpha-full,mode=full,item=0}" -f "$(valsx errph "${SET0}.placeholder = \"\"")"
+    fails_with "BR_SANDBOX_CREDENTIAL_REQUIRE_TLS{namespace=sbx-alpha-full,mode=full,item=0}" -f "$(valsx errtls "${SET0}.require = true")"
+    fails_with "BR_SANDBOX_CREDENTIAL_PLACEHOLDER_DUPLICATE{namespace=sbx-alpha-full,mode=full,item=1,first=0}" -f "$(valsx errdupph "${SET0}.placeholder as \$p | (.namespaces[] | select(.name == \"sbx-alpha-full\")).credential_set.secrets[1].placeholder = \$p")"
+    fails_with "BR_SANDBOX_CREDENTIAL_ENV_DUPLICATE{namespace=sbx-alpha-full,mode=full,item=1,env_name=GIT_ACCESS}" -f "$(valsx errdupenv '(.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secrets[1].env_name = "GIT_ACCESS"')"
+    fails_with "BR_SANDBOX_CREDENTIAL_KEY_DUPLICATE{namespace=sbx-alpha-full,mode=full,item=1,key=git}" -f "$(valsx errdupkey '(.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secrets[1].key = "git"')"
+    fails_with "BR_SANDBOX_PROXY_ADDRESS_DUPLICATE{first=sbx-alpha-allow,second=sbx-alpha-full,cluster_ip=10.43.0.50}" -f "$(valsx errdupip '(.namespaces[] | select(.name == "sbx-alpha-full")).proxy.cluster_ip = "10.43.0.50"')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=namespaces.sbx-alpha-allow.proxy.cluster_ip}" -f "$(valsx errnoip 'del((.namespaces[] | select(.name == "sbx-alpha-allow")).proxy.cluster_ip)')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=namespaces.sbx-alpha-allow.proxy.ca.certificate}" -f "$(valsx errnoca 'del((.namespaces[] | select(.name == "sbx-alpha-allow")).proxy.ca.certificate)')"
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=namespaces.sbx-alpha-allow.proxy.ca.key_secret}" -f "$(valsx errnokey 'del((.namespaces[] | select(.name == "sbx-alpha-allow")).proxy.ca.key_secret)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=egress.proxy.reload.key_secret}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.reload.key_secret=
     fails_with "BR_SANDBOX_PROXY_PORT_CONFLICT{port=8080}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.port=8080
     fails_with "BR_SANDBOX_PROXY_PORT_CONFLICT{port=8443}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.port=8443
@@ -117,10 +117,10 @@ check_the_proxy_render_errors() {
 
 check_the_credential_set_needs_both_keys_and_one_item() {
     section "credential_set: secret_ref and secrets are given together, secrets has at least one item"
-    fails_with "properties 'secrets' required, if 'secret_ref' exists" -f "$(valsx setrefonly 'del(.clients.alpha.modes.full.credential_set.secrets)')"
-    fails_with "properties 'secret_ref' required, if 'secrets' exists" -f "$(valsx setsecretsonly 'del(.clients.alpha.modes.full.credential_set.secret_ref)')"
-    fails_with "minItems: got 0, want 1" -f "$(valsx setemptysecrets '.clients.alpha.modes.full.credential_set.secrets = []')"
-    t "a set with secret_ref and one item renders" render setone -f "$(valsx setone ".clients.alpha.modes.full.credential_set = ${CREDENTIAL_SET}")"
+    fails_with "properties 'secrets' required, if 'secret_ref' exists" -f "$(valsx setrefonly 'del((.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secrets)')"
+    fails_with "properties 'secret_ref' required, if 'secrets' exists" -f "$(valsx setsecretsonly 'del((.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secret_ref)')"
+    fails_with "minItems: got 0, want 1" -f "$(valsx setemptysecrets '(.namespaces[] | select(.name == "sbx-alpha-full")).credential_set.secrets = []')"
+    t "a set with secret_ref and one item renders" render setone -f "$(valsx setone "(.namespaces[] | select(.name == \"sbx-alpha-full\")).credential_set = ${CREDENTIAL_SET}")"
     t "that set renders its egress namespace" jqt setone '[.[] | select(.kind == "Namespace" and .metadata.name == "sbx-alpha-full-egress")] | length == 1'
 }
 

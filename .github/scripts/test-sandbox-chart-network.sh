@@ -10,7 +10,7 @@ check_network_policy_none_has_deny_only() {
     section "network policy none: br-sandbox-default-deny only, no resolver"
     t "none has exactly the policy br-sandbox-default-deny" test "$(policy_names sbx-alpha-none)" = "br-sandbox-default-deny"
     t "br-sandbox-default-deny selects every pod and both directions" jqt ex "${NP} | select(.metadata.namespace == \"sbx-alpha-none\") | select(.spec.podSelector == {} and (.spec.policyTypes | sort) == [\"Egress\", \"Ingress\"] and (.spec | has(\"egress\") | not) and (.spec | has(\"ingress\") | not))"
-    t "none pods use dnsPolicy None and nameserver 127.0.0.1" jqt ex '[.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.template.spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["127.0.0.1"])] | length == 1'
+    t "none pods use dnsPolicy None and nameserver 127.0.0.1" jqt ex '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-none") | (.data["pod-template.json"] | fromjson).spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["127.0.0.1"])] | length == 1'
 }
 
 check_network_policy_allow_reaches_only_the_proxy() {
@@ -26,23 +26,23 @@ check_network_policy_full_opens_public_addresses_only() {
     section "network policy full: public addresses except every internal list, no cluster DNS"
     t "full has br-sandbox-default-deny and br-sandbox-egress-full" test "$(policy_names sbx-alpha-full)" = "br-sandbox-default-deny,br-sandbox-egress-full"
     t "single stack: one rule, one ipBlock 0.0.0.0/0, no pod or namespace selector" jqt ex "${NP} | select(.metadata.name == \"br-sandbox-egress-full\") | select((.spec.egress | length) == 1 and (.spec.egress[0].to | length) == 1 and .spec.egress[0].to[0].ipBlock.cidr == \"0.0.0.0/0\" and (.spec.egress[0].to[0] | has(\"podSelector\") or has(\"namespaceSelector\") | not) and (.spec.egress[0] | has(\"ports\") | not))"
-    t "full pods resolve through the public resolvers only" jqt ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["198.51.100.53", "198.51.100.54"])'
+    t "full pods resolve through the public resolvers only" jqt ex '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == "sbx-alpha-full") | (.data["pod-template.json"] | fromjson).spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["198.51.100.53", "198.51.100.54"])'
     render dual -f "$EXAMPLE" --set network.ipv6=dual_stack
     t "dual stack adds ::/0 without fc00::/7 and fe80::/10" jqt dual '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-full") | .spec.egress[1].to[0].ipBlock | select(.cidr == "::/0" and (.except | index("fc00::/7")) != null and (.except | index("fe80::/10")) != null)'
 }
 
 check_network_policy_mode_is_unknown_or_from_values() {
     section "network policy an unknown mode fails, no template reads the cluster"
-    fails_with "BR_SANDBOX_MODE_UNKNOWN{client=alpha,mode=weird}" -f "$(vals weird '.clients.alpha.modes.weird = .clients.alpha.modes.none')"
+    fails_with "BR_SANDBOX_MODE_UNKNOWN{namespace=sbx-alpha-none,mode=weird}" -f "$(vals weird '(.namespaces[] | select(.name == "sbx-alpha-none")).mode = "weird"')"
     t "no template reads cluster state or the environment" test -z "$(grep -rnE 'lookup |\.Capabilities|getHostByName|[ (]env "' "$CHART/templates" || true)"
 }
 
-check_one_namespace_per_client_and_mode() {
-    section "namespaces per client and mode, br-sandbox-default-deny in each"
+check_one_namespace_per_entry() {
+    section "one namespace per entry, br-sandbox-default-deny in each"
     t "four sandbox namespaces, the egress namespace of mode allow and the system namespace" test "$(jqv ex '[.[] | select(.kind == "Namespace") | .metadata.name] | sort | join(",")')" = "sbx-alpha-allow,sbx-alpha-allow-egress,sbx-alpha-full,sbx-alpha-none,sbx-beta-none,sbx-system"
     t "every sandbox namespace has br-sandbox-default-deny on both directions" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.name] as $n | [.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-default-deny" and (.spec.policyTypes | sort) == ["Egress", "Ingress"]) | .metadata.namespace] as $d | ($n - $d) == []'
     t "no policy of a sandbox or system namespace has an ingress rule" jqt ex "[${NP} | select((.metadata.namespace | endswith(\"-egress\") | not) and (.spec | has(\"ingress\")))] | length == 0"
-    fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=system,client_b=alpha,namespace=sbx-alpha-none}" -f "$(vals shared '.installation.system_namespace = "sbx-alpha-none"')"
+    fails_with "BR_SANDBOX_SHARED_NAMESPACE{first=system,second=sandbox,namespace=sbx-alpha-none}" -f "$(vals shared '.installation.system_namespace = "sbx-alpha-none"')"
 }
 
 check_network_check_except_lists_hold_every_internal_range() {
@@ -59,7 +59,7 @@ check_network_check_except_lists_hold_every_internal_range() {
 
 check_no_project_value_in_the_chart() {
     section "no host or registry outside the fixtures"
-    local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local)$'
+    local allowed='(kubernetes\.io|k8s\.io|json-schema\.org|example\.test|cluster\.local|sandbox\.botresources\.ai)$'
     local found
     local default_repository='^      repository: docker\.io/ironsh/iron-proxy$'
     found="$(cd "$CHART" && hosts_of Chart.yaml README.md CHANGELOG.md values.schema.json templates/* files/* <(grep -vE "$default_repository" values.yaml) | grep -vE "$allowed" | grep -v '^github\.com$' || true)"
@@ -111,59 +111,50 @@ policy_size_is() {
 }
 
 check_one_size_key_per_resource() {
-    section "size lives in pool.size only"
+    section "size lives in limits.size only"
     t "no template reads cpu, memory or disk outside a size" test -z "$(grep -rnE '(^|[^e])\.(cpu|memory|disk)\.(request|limit)' "$CHART/templates" || true)"
     local key
-    for key in size.cpu=1 pool.cpu=1 tools.memory=1 clients.alpha.cpu=1 clients.alpha.modes.none.pool.cpu=1 clients.alpha.modes.none.memory=1 quota.cpu=1; do
+    for key in size.cpu=1 pool.cpu=1 tools.memory=1 limits.cpu=1 limits.size.cpu=1 namespaces[0].cpu=1 quota.cpu=1; do
         if helm template t "$CHART" -f "$EXAMPLE" --set "$key" >/dev/null 2>"$WORK/size.err"; then fail "a size key at ${key} passed the schema"; else pass "a size key at ${key} fails the schema"; fi
     done
-    render big -f "$EXAMPLE" --set pool.size.cpu.limit=3 --set pool.size.disk.limit=8Gi
+    render big -f "$EXAMPLE" --set limits.size.cpu.limit=3 --set limits.size.disk.limit=8Gi
     local normal changed
-    normal="$(jq 'map(select(.kind != "ReplicaSet" and .kind != "ResourceQuota" and .kind != "LimitRange" and .kind != "ValidatingAdmissionPolicy" and .kind != "ConfigMap"))' "$WORK/ex.json")"
-    changed="$(jq 'map(select(.kind != "ReplicaSet" and .kind != "ResourceQuota" and .kind != "LimitRange" and .kind != "ValidatingAdmissionPolicy" and .kind != "ConfigMap"))' "$WORK/big.json")"
+    normal="$(jq 'map(select(.kind != "ConfigMap" and .kind != "ResourceQuota" and .kind != "LimitRange" and .kind != "ValidatingAdmissionPolicy"))' "$WORK/ex.json")"
+    changed="$(jq 'map(select(.kind != "ConfigMap" and .kind != "ResourceQuota" and .kind != "LimitRange" and .kind != "ValidatingAdmissionPolicy"))' "$WORK/big.json")"
     t "a bigger size changes only quota, limit range, policy, config and pod resources" test "$normal" = "$changed"
-    t "the pod differs only in resources" test "$(jq -S '[.[] | select(.kind == "ReplicaSet") | del(.spec.template.spec.containers[].resources)]' "$WORK/ex.json")" = "$(jq -S '[.[] | select(.kind == "ReplicaSet") | del(.spec.template.spec.containers[].resources)]' "$WORK/big.json")"
-    render bigger -f "$EXAMPLE" --set pool.size.cpu.request=700m --set pool.size.cpu.limit=3 --set pool.size.memory.request=3Gi --set pool.size.memory.limit=5Gi --set pool.size.disk.request=6Gi --set pool.size.disk.limit=9Gi
+    t "the pod differs only in resources" test "$(jq -S "${SANDBOX_PODS} | map(del(.spec.containers[].resources))" "$WORK/ex.json")" = "$(jq -S "${SANDBOX_PODS} | map(del(.spec.containers[].resources))" "$WORK/big.json")"
+    render bigger -f "$EXAMPLE" --set limits.size.cpu.request=700m --set limits.size.cpu.limit=3 --set limits.size.memory.request=3Gi --set limits.size.memory.limit=5Gi --set limits.size.disk.request=6Gi --set limits.size.disk.limit=9Gi
     t "the default size reaches the limit range of its namespace" limit_range_is ex 500m 1Gi 2Gi 2 2Gi 5Gi
     t "the new size reaches the limit range: default request, default and max follow it" limit_range_is bigger 700m 3Gi 6Gi 3 5Gi 9Gi
     t "the default size reaches the quota of its namespace" quota_is ex 12200m 24736Mi 49312Mi 50 49792Mi 123520Mi
     t "the new size reaches the quota: each of the six quantities follows it" quota_is bigger 17000m 73888Mi 147616Mi 74 123520Mi 221824Mi
     t "the default size reaches the size rule of the policy" policy_size_is ex 500m 1Gi 2Gi 2 2Gi 5Gi
     t "the new size reaches the size rule of the policy: each of the six bounds follows it" policy_size_is bigger 700m 3Gi 6Gi 3 5Gi 9Gi
-    t "the pool of a namespace carries its own size" jqt ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec.containers[0].resources.limits.cpu == "4"'
+    t "the pod template of each namespace carries limits.size" jqt ex "${SANDBOX_PODS} | map(.spec.containers[0].resources.limits.cpu) | unique == [\"2\"]"
 }
 
-check_image_is_one_value() {
-    section "a second image changes the image value only"
-    render other -f "$EXAMPLE" --set image=registry.example.test/agents/other:2.0
-    helm template t "$CHART" -f "$EXAMPLE" | sed 's|registry.example.test/agents/base:1.0|IMAGE|; s|registry.example.test/agents/base|IMAGE_REPOSITORY|' >"$WORK/n4a.yaml"
-    helm template t "$CHART" -f "$EXAMPLE" --set image=registry.example.test/agents/other:2.0 | sed 's|registry.example.test/agents/other:2.0|IMAGE|; s|registry.example.test/agents/other|IMAGE_REPOSITORY|' >"$WORK/n4b.yaml"
-    t "two renders differ only where the image is written" cmp -s "$WORK/n4a.yaml" "$WORK/n4b.yaml"
-    t "the image reaches the pool and the policy" test "$(grep -c 'agents/other' <(helm template t "$CHART" -f "$EXAMPLE" --set image=registry.example.test/agents/other:2.0))" -ge 8
-    t "a tag pulls at each creation" jqt ex '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.containers[0].imagePullPolicy] | unique == ["Always"]'
-    render digest -f "$EXAMPLE" --set image=registry.example.test/agents/base@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    t "a digest pulls if not present" jqt digest '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.containers[0].imagePullPolicy] | unique == ["IfNotPresent"]'
-    t "the tools image is by digest and pulled if not present" jqt ex '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.initContainers[0] | select(.imagePullPolicy == "IfNotPresent" and (.image | test("@sha256:[a-f0-9]{64}$")))] | length == 4'
+check_image_pull_policies() {
+    section "the agent container pulls at each creation, the tools image is pinned by digest"
+    t "the agent container pulls at each creation" jqt ex "${SANDBOX_PODS} | map(.spec.containers[0].imagePullPolicy) | unique == [\"Always\"]"
+    t "the tools image is by digest and pulled if not present" jqt ex "${SANDBOX_PODS} | map(.spec.initContainers[0] | select(.imagePullPolicy == \"IfNotPresent\" and (.image | test(\"@sha256:[a-f0-9]{64}\$\")))) | length == 4"
     render forced -f "$EXAMPLE" --set image_pull_policy=Never
-    t "image_pull_policy overrides the computed policy" jqt forced '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.containers[0].imagePullPolicy] | unique == ["Never"]'
+    t "image_pull_policy overrides the computed policy" jqt forced "${SANDBOX_PODS} | map(.spec.containers[0].imagePullPolicy) | unique == [\"Never\"]"
     fails_with "values don't meet the specifications" -f "$EXAMPLE" --set image=registry.example.test/agents/base
-    fails_with "BR_SANDBOX_MISSING_VALUE{key=image}" -f "$(vals noimage 'del(.image)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=tools.image.digest}" -f "$(vals nodigest 'del(.tools.image.digest)')"
 }
 
-check_pool_has_no_replicas_and_a_quota_for_it() {
-    section "the keeper owns spec.replicas, the quota holds the pool, a pod leaves fast"
-    t "no ReplicaSet and no keeper Deployment sets spec.replicas except the keeper's own" jqt keeper '[.[] | select(.kind == "ReplicaSet") | .spec | has("replicas")] | any | not'
-    t "the quota allows max_sandboxes plus the extra pods" jqt ex '[.[] | select(.kind == "ResourceQuota" and (.metadata.namespace | endswith("-egress") | not))] | map(.spec.hard.pods | tonumber) | sort == [14, 24, 24, 24]'
-    local namespace max pods
+check_no_replica_set_and_a_quota_for_the_pods() {
+    section "the chart renders no ReplicaSet, the quota holds the pods of limits.pods, a pod leaves fast"
+    t "no ReplicaSet is rendered" jqt keeper '[.[] | select(.kind == "ReplicaSet")] | length == 0'
+    t "the quota allows limits.pods plus the extra pods" jqt ex '[.[] | select(.kind == "ResourceQuota" and (.metadata.namespace | endswith("-egress") | not))] | map(.spec.hard.pods | tonumber) | sort == [24, 24, 24, 24]'
+    local namespace pods
     for namespace in sbx-alpha-allow sbx-alpha-full sbx-alpha-none sbx-beta-none; do
-        max="$(jq -r --arg ns "$namespace" '.[] | select(.kind == "ConfigMap" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .pools[] | select(.namespace == $ns) | .max_replicas' "$WORK/keeper.json")"
         pods="$(yq "select(.kind == \"ResourceQuota\" and .metadata.namespace == \"${namespace}\") | .spec.hard.pods" "$WORK/ex_yaml.yaml")"
-        t "the quota of ${namespace} holds at least max_sandboxes pods" test "$pods" -ge "$max"
+        t "the quota of ${namespace} holds at least limits.pods pods" test "$pods" -ge 20
     done
-    t "a pod leaves in one second" jqt ex '[.[] | select(.kind == "ReplicaSet") | .spec.template.spec.terminationGracePeriodSeconds] | unique == [1]'
+    t "a pod leaves in one second" jqt ex "${SANDBOX_PODS} | map(.spec.terminationGracePeriodSeconds) | unique == [1]"
     t "the quota multiplies the size by the pod count and adds the seed container of each sandbox" jqt ex '.[] | select(.kind == "ResourceQuota" and .metadata.namespace == "sbx-alpha-none") | .spec.hard | .["requests.cpu"] == "12200m" and .["requests.memory"] == "24736Mi" and .["limits.ephemeral-storage"] == "123520Mi"'
-    t "a floor above max_sandboxes fails" test "$(helm template t "$CHART" -f "$EXAMPLE" --set pool.floor=30 2>&1 | grep -c 'BR_SANDBOX_POOL_INVALID')" -ge 1
+    fails_with "values don't meet the specifications" -f "$EXAMPLE" --set pool.floor=30
 }
 
 check_one_pod_per_agent_nothing_shared() {

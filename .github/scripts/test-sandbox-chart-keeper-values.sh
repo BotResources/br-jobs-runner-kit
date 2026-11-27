@@ -27,8 +27,8 @@ check_each_shared_value_reaches_both_documents_as_set() {
     section "a value that the keeper document and the adapter document both hold is one value, set away from its default"
     local row path keeper_expr adapter_expr want
     for row in \
-        '.idle_ttl@[.pools[].idle_ttl_seconds] | unique | join(",")@.idle_ttl_seconds' \
-        '.idle_keep_min_state_bytes@[.pools[].idle_keep_min_state_bytes] | unique | join(",")@.idle_keep_min_state_bytes' \
+        '.idle_ttl@.idle_ttl_seconds@.idle_ttl_seconds' \
+        '.idle_keep_min_state_bytes@.idle_keep_min_state_bytes@.idle_keep_min_state_bytes' \
         '.save.ttl_seconds@.save_ttl_seconds@.save_ttl_seconds' \
         '.store.endpoint@.store_endpoint@.store_endpoint' \
         '.store.bucket@.store_bucket@.store_bucket' \
@@ -45,32 +45,26 @@ check_each_shared_value_reaches_both_documents_as_set() {
     done
 }
 
-check_each_pool_value_reaches_the_keeper_pool_entry_as_set() {
-    section "a pool value reaches the keeper pool entry of its namespace, set away from its default, and no adapter document holds it"
-    local row namespace source pair key keeper_key want
-    for row in 'sbx-alpha-allow|.pool' 'sbx-alpha-none|.pool' 'sbx-beta-none|.pool' 'sbx-alpha-full|.clients.alpha.modes.full.pool'; do
-        IFS='|' read -r namespace source <<<"$row"
-        for pair in floor:min_replicas max_sandboxes:max_replicas refill_seconds:refill_seconds margin:margin; do
-            key="${pair%%:*}"
-            keeper_key="${pair##*:}"
-            want="$(overlay_value "${source}.${key}")"
-            t "${namespace}: ${key} is not the default" test "$want" != "$(base_value ".pool.${key}")"
-            t "${namespace}: ${key} is the value of its own pool, so a pool with an override differs from the others" test "$want" != "$(overlay_value ".pool.${key}")" -o "$source" = ".pool"
-            t "${namespace}: the keeper pool entry holds ${key} as ${keeper_key}" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .${keeper_key}")" = "$want"
-        done
-        t "${namespace}: the adapter document holds no pool key, no warm age and no tombstone age" test "$(adapter_json nondefault "$namespace" '[has("floor"), has("max_sandboxes"), has("refill_seconds"), has("margin"), has("warm_max_age_seconds"), has("tombstone_ttl_seconds"), has("pool"), has("save")] | any')" = false
+check_each_platform_constant_reaches_the_pod_template_and_the_quota_as_set() {
+    section "limits and pool values reach the pod template and the quota of every namespace as set, and no adapter document holds them"
+    local namespace
+    t "limits.pods is not the default" test "$(overlay_value '.limits.pods')" != "$(base_value '.limits.pods')"
+    t "pool.terminationGracePeriodSeconds is not the default" test "$(overlay_value '.pool.terminationGracePeriodSeconds')" != "$(base_value '.pool.terminationGracePeriodSeconds')"
+    t "limits.size.cpu.limit is not the default" test "$(overlay_value '.limits.size.cpu.limit')" != "$(base_value '.limits.size.cpu.limit')"
+    for namespace in $SANDBOX_NAMESPACES; do
+        t "${namespace}: the quota holds limits.pods plus the extra pods" test "$(jqv nondefault ".[] | select(.kind == \"ResourceQuota\" and .metadata.namespace == \"${namespace}\") | .spec.hard.pods")" = "$(($(overlay_value '.limits.pods') + 4))"
+        t "${namespace}: the pod template holds the grace period, the node selector and the size as set" jqt nondefault ".[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-pod-template\" and .metadata.namespace == \"${namespace}\") | (.data[\"pod-template.json\"] | fromjson.spec) | .terminationGracePeriodSeconds == 5 and .nodeSelector == {\"pool\": \"sandbox\"} and .containers[0].resources.limits.cpu == \"3\" and .containers[0].resources.limits.memory == \"4Gi\""
+        t "${namespace}: the adapter document holds no pool key, no warm age and no tombstone age" test "$(adapter_json nondefault "$namespace" '[has("floor"), has("max_sandboxes"), has("refill_seconds"), has("margin"), has("warm_max_age_seconds"), has("tombstone_ttl_seconds"), has("pool"), has("save"), has("limits"), has("pods")] | any')" = false
     done
 }
 
 check_the_identity_of_each_pool_is_one_value_in_both_documents() {
-    section "the label prefix and the identity of each pool are one value in the keeper document and in the adapter document"
-    local namespace id
+    section "the label prefix and the pool id are one value in the keeper document, the adapter document and the pod template"
+    local namespace
     for namespace in $SANDBOX_NAMESPACES; do
-        id="${namespace#sbx-}"
         t "${namespace}: the label prefix is the same" test "$(keeper_json nondefault '.label_prefix')" = "$(adapter_json nondefault "$namespace" '.label_prefix')"
-        t "${namespace}: the pool id is the same" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .id")" = "$(adapter_json nondefault "$namespace" '.pool_id')"
-        t "${namespace}: the namespace is the same" test "$(keeper_json nondefault ".pools[] | select(.id == \"${id}\") | .namespace")" = "$(adapter_json nondefault "$namespace" '.namespace')"
-        t "${namespace}: the ReplicaSet name of the keeper pool entry is the ReplicaSet of the render" test "$(keeper_json nondefault ".pools[] | select(.namespace == \"${namespace}\") | .replicaset")" = "$(jqv nondefault "[.[] | select(.kind == \"ReplicaSet\" and .metadata.namespace == \"${namespace}\") | .metadata.name] | join(\",\")")"
+        t "${namespace}: the pool id of the adapter document is the name of the namespace" test "$(adapter_json nondefault "$namespace" '.pool_id')" = "$namespace"
+        t "${namespace}: the pool id label of the pod template is the name of the namespace" test "$(jqv nondefault ".[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-pod-template\" and .metadata.namespace == \"${namespace}\") | (.data[\"pod-template.json\"] | fromjson).metadata.labels[\"br.sandbox/pool-id\"]")" = "$namespace"
     done
 }
 
@@ -104,8 +98,8 @@ check_the_managed_selector_is_the_label_of_the_sandbox_namespaces() {
         key="${selector%%=*}"
         value="${selector#*=}"
         t "render ${name}: the selector is a key and a value" test -n "$key" -a -n "$value" -a "$key=$value" = "$selector"
-        t "render ${name}: every namespace of a pool entry carries the label ${selector}" jqt "$name" --arg k "$key" --arg v "$value" "(.[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-keeper-config\") | .data[\"config.json\"] | fromjson | [.pools[].namespace]) as \$pools | ([.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[])))] | length) == (\$pools | length) and ([.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[])))] | all(.metadata.labels[\$k] == \$v))"
-        t "render ${name}: no namespace outside the pool entries carries the label ${selector}" jqt "$name" --arg k "$key" --arg v "$value" "(.[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-keeper-config\") | .data[\"config.json\"] | fromjson | [.pools[].namespace]) as \$pools | [.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[]) | not))] | all(.metadata.labels[\$k] != \$v)"
+        t "render ${name}: every namespace with a pod template carries the label ${selector}" jqt "$name" --arg k "$key" --arg v "$value" "[.[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-pod-template\") | .metadata.namespace] as \$pools | ([.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[])))] | length) == (\$pools | length) and ([.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[])))] | all(.metadata.labels[\$k] == \$v))"
+        t "render ${name}: no namespace without a pod template carries the label ${selector}" jqt "$name" --arg k "$key" --arg v "$value" "[.[] | select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-pod-template\") | .metadata.namespace] as \$pools | [.[] | select(.kind == \"Namespace\" and (.metadata.name | IN(\$pools[]) | not))] | all(.metadata.labels[\$k] != \$v)"
         t "render ${name}: the system namespace is a namespace that the selector does not match" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system")] | length == 1 and all(.metadata.labels[$k] != $v)'
         t "render ${name}: every admission binding selects the namespaces by the same label" jqt "$name" --arg k "$key" --arg v "$value" '[.[] | select(.kind == "ValidatingAdmissionPolicyBinding")] | length > 0 and all(.spec.matchResources.namespaceSelector.matchLabels[$k] == $v)'
     done

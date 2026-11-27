@@ -1,10 +1,10 @@
 {{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
-{{- $size := $ns.pool.size }}
-{{- $pods := add ($ns.pool.max_sandboxes | int64) ($.Values.quota.extra_pods | int64) }}
+{{- $size := $.Values.limits.size }}
+{{- $pods := add ($.Values.limits.pods | int64) ($.Values.quota.extra_pods | int64) }}
 {{- $seed := $.Values.tools.seed_container }}
 {{- $seedPods := 0 }}
 {{- if $seed.enabled }}
-{{- $seedPods = $ns.pool.max_sandboxes | int64 }}
+{{- $seedPods = $.Values.limits.pods | int64 }}
 {{- end }}
 ---
 apiVersion: v1

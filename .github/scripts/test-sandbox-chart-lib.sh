@@ -100,7 +100,7 @@ hosts_of() {
 }
 
 export QTY='def qty: tostring | capture("^(?<n>[0-9.]+)(?<u>m|Ki|Mi|Gi|Ti|K|M|G|T)?$") | (.n | tonumber) * ({"":1,"m":0.001,"Ki":1024,"Mi":1048576,"Gi":1073741824,"Ti":1099511627776,"K":1000,"M":1000000,"G":1000000000,"T":1000000000000}[.u // ""]);'
-export SANDBOX_PODS='[.[] | select(.kind == "ReplicaSet") | .spec.template]'
+export SANDBOX_PODS='[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | .data["pod-template.json"] | fromjson]'
 
 summary() {
     echo
