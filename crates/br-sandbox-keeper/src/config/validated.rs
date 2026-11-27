@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use br_runner_sandbox::{LabelPrefix, MANAGED_TRUE, PodKeys};
-use chrono_tz::Tz;
+use jiff::tz::TimeZone;
 use url::Url;
 
 use super::error::ConfigError;
@@ -53,7 +53,7 @@ pub struct KeeperConfig {
     pub scale_down_step: u32,
     pub scale_down_step_interval: Duration,
     pub lease: LeaseSettings,
-    pub timezone: Tz,
+    pub timezone: TimeZone,
     pub pools: Vec<PoolConfig>,
 }
 
@@ -172,7 +172,7 @@ impl TryFrom<KeeperConfigInput> for KeeperConfig {
             return Err(ConfigError::LeaseOrder);
         }
         let timezone_text = input.timezone.clone().unwrap_or_else(|| "UTC".to_owned());
-        let timezone = Tz::from_str(&timezone_text)
+        let timezone = TimeZone::get(&timezone_text)
             .map_err(|_| ConfigError::UnknownTimezone(timezone_text))?;
         let rate_window = seconds(
             "rate_window_seconds",

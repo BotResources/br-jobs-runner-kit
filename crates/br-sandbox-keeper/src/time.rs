@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use br_runner_sandbox::Timestamp;
-use chrono_tz::Tz;
+use jiff::tz::TimeZone;
 
 pub fn elapsed(now: Timestamp, since: Timestamp) -> Duration {
     now.to_system_time()
@@ -13,11 +13,14 @@ pub fn until(now: Timestamp, at: Timestamp) -> Duration {
     elapsed(at, now)
 }
 
-pub fn seconds_of_day(now: Timestamp, zone: Tz) -> u32 {
-    use chrono::{DateTime, Timelike, Utc};
-    let utc: DateTime<Utc> = now.to_system_time().into();
-    let local = utc.with_timezone(&zone);
-    local.num_seconds_from_midnight()
+pub fn seconds_of_day(now: Timestamp, zone: &TimeZone) -> u32 {
+    let Ok(instant) = jiff::Timestamp::try_from(now.to_system_time()) else {
+        return 0;
+    };
+    let time = instant.to_zoned(zone.clone()).time();
+    let seconds =
+        i32::from(time.hour()) * 3600 + i32::from(time.minute()) * 60 + i32::from(time.second());
+    u32::try_from(seconds).unwrap_or(0)
 }
 
 pub fn earliest(a: Option<Timestamp>, b: Option<Timestamp>) -> Option<Timestamp> {
@@ -36,6 +39,7 @@ pub(crate) fn at(seconds: u64) -> Timestamp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::paris;
 
     #[test]
     fn elapsed_is_the_distance_and_never_negative() {
@@ -52,10 +56,10 @@ mod tests {
     #[test]
     fn seconds_of_day_follow_the_zone() {
         let noon_utc = Timestamp::parse("2026-07-01T12:00:00Z").unwrap();
-        assert_eq!(seconds_of_day(noon_utc, Tz::UTC), 12 * 3600);
-        assert_eq!(seconds_of_day(noon_utc, Tz::Europe__Paris), 14 * 3600);
+        assert_eq!(seconds_of_day(noon_utc, &TimeZone::UTC), 12 * 3600);
+        assert_eq!(seconds_of_day(noon_utc, &paris()), 14 * 3600);
         let winter = Timestamp::parse("2026-01-01T12:00:00Z").unwrap();
-        assert_eq!(seconds_of_day(winter, Tz::Europe__Paris), 13 * 3600);
+        assert_eq!(seconds_of_day(winter, &paris()), 13 * 3600);
     }
 
     #[test]

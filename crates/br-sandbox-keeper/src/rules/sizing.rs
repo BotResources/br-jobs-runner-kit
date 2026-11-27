@@ -1,5 +1,5 @@
 use br_runner_sandbox::Timestamp;
-use chrono_tz::Tz;
+use jiff::tz::TimeZone;
 
 use crate::config::PoolConfig;
 use crate::time::seconds_of_day;
@@ -18,7 +18,7 @@ impl Desired {
     }
 }
 
-pub fn floor_now(pool: &PoolConfig, now: Timestamp, zone: Tz) -> u32 {
+pub fn floor_now(pool: &PoolConfig, now: Timestamp, zone: &TimeZone) -> u32 {
     let second = seconds_of_day(now, zone);
     pool.floors
         .iter()
@@ -50,7 +50,7 @@ mod tests {
 
     use super::*;
     use crate::config::FloorWindow;
-    use crate::testing;
+    use crate::testing::{self, paris};
 
     fn pool(floors: Vec<FloorWindow>) -> PoolConfig {
         let mut pool = testing::pool();
@@ -138,20 +138,20 @@ mod tests {
             window(7200, 10_000, 30),
         ]);
         let zero = |hour: &str| Timestamp::parse(&format!("2026-03-01T{hour}Z")).unwrap();
-        assert_eq!(floor_now(&pool, zero("00:00:00"), Tz::UTC), 4);
-        assert_eq!(floor_now(&pool, zero("00:45:00"), Tz::UTC), 9);
-        assert_eq!(floor_now(&pool, zero("01:00:00"), Tz::UTC), 9);
-        assert_eq!(floor_now(&pool, zero("01:59:59"), Tz::UTC), 9);
-        assert_eq!(floor_now(&pool, zero("02:00:00"), Tz::UTC), 30);
-        assert_eq!(floor_now(&pool, zero("02:46:40"), Tz::UTC), 0);
+        assert_eq!(floor_now(&pool, zero("00:00:00"), &TimeZone::UTC), 4);
+        assert_eq!(floor_now(&pool, zero("00:45:00"), &TimeZone::UTC), 9);
+        assert_eq!(floor_now(&pool, zero("01:00:00"), &TimeZone::UTC), 9);
+        assert_eq!(floor_now(&pool, zero("01:59:59"), &TimeZone::UTC), 9);
+        assert_eq!(floor_now(&pool, zero("02:00:00"), &TimeZone::UTC), 30);
+        assert_eq!(floor_now(&pool, zero("02:46:40"), &TimeZone::UTC), 0);
     }
 
     #[test]
     fn with_no_window_in_force_the_floor_is_zero_and_the_zone_counts() {
         let in_force = pool(vec![window(9 * 3600, 17 * 3600, 5)]);
         let utc_morning = Timestamp::parse("2026-07-01T07:30:00Z").unwrap();
-        assert_eq!(floor_now(&in_force, utc_morning, Tz::UTC), 0);
-        assert_eq!(floor_now(&in_force, utc_morning, Tz::Europe__Paris), 5);
-        assert_eq!(floor_now(&pool(Vec::new()), utc_morning, Tz::UTC), 0);
+        assert_eq!(floor_now(&in_force, utc_morning, &TimeZone::UTC), 0);
+        assert_eq!(floor_now(&in_force, utc_morning, &paris()), 5);
+        assert_eq!(floor_now(&pool(Vec::new()), utc_morning, &TimeZone::UTC), 0);
     }
 }

@@ -67,7 +67,7 @@ fn a_minimal_document_takes_every_default_of_the_table() {
     assert_eq!(config.lease.duration, Duration::from_secs(15));
     assert_eq!(config.lease.renew_deadline, Duration::from_secs(10));
     assert_eq!(config.lease.retry_period, Duration::from_secs(2));
-    assert_eq!(config.timezone, chrono_tz::Tz::UTC);
+    assert_eq!(config.timezone, jiff::tz::TimeZone::UTC);
     let pool = &config.pools[0];
     assert_eq!(pool.refill, Duration::from_secs(3));
     assert_eq!(pool.margin, 2);

@@ -84,7 +84,7 @@ impl Engine {
             }
         };
         let now = self.clock.now();
-        let floor = floor_now(pool, now, self.config.timezone);
+        let floor = floor_now(pool, now, &self.config.timezone);
         let (window, bucket) = (self.config.rate_window, self.config.rate_bucket);
         let rate = self
             .claims

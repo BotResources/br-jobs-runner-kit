@@ -28,6 +28,10 @@ pub fn config() -> KeeperConfig {
     config_of(&document())
 }
 
+pub fn paris() -> jiff::tz::TimeZone {
+    jiff::tz::TimeZone::get("Europe/Paris").unwrap()
+}
+
 pub fn pool() -> PoolConfig {
     config().pools.remove(0)
 }

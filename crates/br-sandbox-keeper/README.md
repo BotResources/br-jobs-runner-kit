@@ -105,4 +105,5 @@ In each managed namespace: `pods` get, list, watch, delete; `replicasets` get, l
 | `GuardedBucket` wraps the store client | The rule "writes only under `tombstones/`" is enforced by one type, not by the care of each call |
 | A failed action counts in `sweep_errors_total` | The metrics list has no other error counter; the action is tried again at the next event or pass |
 | `/readyz` reflects only the start checks and the first sync | A lost API or store at run time is logged and counted; the replica stays up and tries again |
+| The time zone database is embedded (`jiff` with `tzdb-bundle-always`) | The image has no zoneinfo files; the zone of the floors of the day must resolve by name with no file |
 | Pools are evaluated at each rate bucket as well as on events | The floor of the day and the sliding window change `desired` with no pod event |
