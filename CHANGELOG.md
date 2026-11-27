@@ -11,15 +11,13 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
-### Fixed
-
-- `br-runner-sandbox` 0.1.1: the restore skips the entry of each save scope root directory, so a restore no longer fails when the agent user does not own the root (`/work`, `/home/agent`); the new `argv::tar_restore_scoped`, a test with the real `bsdtar` over a root that the user does not own. `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
-
 ### Added
 
 - Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`, for each values file of the chart CI and for a values file that sets every mapped value away from its default (`tests/chart_values.rs`). No change of the crate version or of its public surface.
 
 ### Fixed
+
+- `br-runner-sandbox` 0.1.1: the restore skips the entry of each save scope root directory, so a restore no longer fails when the agent user does not own the root (`/work`, `/home/agent`); the new `argv::tar_restore_scoped`, tests with the real `bsdtar` over a root that the user does not own, which print a skip line and pass when `bsdtar` is absent or the user owns the root, so the proof on a pod is the cluster battery. `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
 
 - `br-sandbox-keeper` 0.1.1: a failed pod list or pod watch is logged at the error level and counted in `br_sandbox_keeper_sweep_errors_total`; a failed Lease read or write is counted in the same counter; a tombstone that cannot be serialized is a logged and counted step; more tests (no credential in logs and metrics, `SIGTERM` ends the binary with code 0, the guarded store client of the sweeper, the repair of a part after a crash) and a log-capture helper for tests that no longer depends on thread timing (see `crates/br-sandbox-keeper/CHANGELOG.md`). `Cargo.lock` records the new version.
 

@@ -6,6 +6,7 @@
 
 - A restore no longer fails on the scope root directories (`/work`, `/home/agent`) of a pod whose agent user does not own them. The save keeps the entry of each scope root directory, and `bsdtar` run as the agent user could not set the modification time of a directory that the pod gives to another owner, so the exit code was 1 and every restore ended as `Fresh(RestoreFailed)`. The restore now carries one `--exclude` for the entry of each save scope root (`^work$`, `^home/agent$`), so that entry is not applied; the content under each root is restored as before, and a save made by 0.1.0 is restored the same way.
 - An exit code of `bsdtar` other than 0 is still a failed restore. The adapter reads no standard error to accept a warning.
+- The tests with the real `bsdtar` print a skip line and pass when `bsdtar` is absent or the user owns the root, so the proof on a pod is the cluster battery.
 
 ### Added
 
