@@ -43,17 +43,20 @@ stall_context() {
 
 [ -f "$state_file" ] || make_state "$state_file" "$state_mb"
 lock_timed
+claim_failures=0
 printf 'run\tclaim_ms\ttrue_ms\tstream_ms\ttotal_ms\trc\tload\n' > "$table"
 
 for run in $(seq 1 "$runs"); do
   wait_warm "$ns" 1 120 || { check m-restore-stalls-warm fail "no warm pod before run $run"; break; }
   started=$(now_ms)
-  claim_to pod "$ns" "stall-$(new_id)" agent-a || continue
+  claim_to pod "$ns" "stall-$(new_id)" agent-a || { claim_failures=$((claim_failures + 1)); continue; }
   claimed=$(now_ms)
   sx "$ns" "$pod" true
+  true_rc=$?
   first_exec=$(now_ms)
   with_timeout 180 sxi "$ns" "$pod" "$AGENT_BSDTAR" -x -p --numeric-owner -f - -C /work < "$state_file" > /dev/null 2>&1
   rc=$?
+  if [ "$true_rc" -ne 0 ]; then rc=$true_rc; fi
   finished=$(now_ms)
   total=$((finished - started))
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$run" "$((claimed - started))" "$((first_exec - claimed))" "$((finished - first_exec))" "$total" "$rc" "$(load_now)" >> "$table"
@@ -61,15 +64,20 @@ for run in $(seq 1 "$runs"); do
   release_pod "$ns" "$pod"
 done
 
-stalls=$(awk -F'\t' -v limit="$stall_ms" 'NR > 1 && $5 > limit' "$table" | count_lines)
-record m-restore-stall-count "$stalls" "stalls of $runs runs over ${stall_ms} ms at ${state_mb} MB"
-record m-restore-stall-longest "$(awk -F'\t' 'NR > 1 {print $5}' "$table" | max_of)" ms
-record m-restore-total-median "$(awk -F'\t' 'NR > 1 {print $5}' "$table" | median_of)" ms
-for phase in 2:claim 3:first-exec 4:stream; do
-  column=${phase%%:*}
-  count=$(awk -F'\t' -v c="$column" -v limit="$stall_ms" 'NR > 1 && $5 > limit && $c >= $5 / 2' "$table" | count_lines)
-  record "m-restore-stalls-dominated-by-${phase##*:}" "$count" stalls
-done
-check m-restore-stalls-ran pass "$runs runs, $stalls stalls, table $table, context $context_log"
+ok_samples=$(awk -F'\t' 'NR > 1 && $6 == 0' "$table" | count_lines)
+record m-restore-ok-samples "$ok_samples" "runs with exit code 0 of $runs"
+if [ "$ok_samples" -gt 0 ]; then
+  stalls=$(awk -F'\t' -v limit="$stall_ms" 'NR > 1 && $6 == 0 && $5 > limit' "$table" | count_lines)
+  record m-restore-stall-count "$stalls" "stalls of $ok_samples ok runs over ${stall_ms} ms at ${state_mb} MB"
+  record m-restore-stall-longest "$(awk -F'\t' 'NR > 1 && $6 == 0 {print $5}' "$table" | max_of)" ms
+  record m-restore-total-median "$(awk -F'\t' 'NR > 1 && $6 == 0 {print $5}' "$table" | median_of)" ms
+  for phase in 2:claim 3:first-exec 4:stream; do
+    column=${phase%%:*}
+    count=$(awk -F'\t' -v c="$column" -v limit="$stall_ms" 'NR > 1 && $6 == 0 && $5 > limit && $c >= $5 / 2' "$table" | count_lines)
+    record "m-restore-stalls-dominated-by-${phase##*:}" "$count" stalls
+  done
+fi
+verdict m-restore-stalls-ran "$ok_samples ok runs of $runs, $claim_failures claims refused, table $table, context $context_log" \
+  test "$ok_samples" = "$runs"
 
 scenario_end

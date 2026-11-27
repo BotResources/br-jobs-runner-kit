@@ -45,6 +45,33 @@ probe() {
   sxi "$ns" "$pod" env "PROBE_INPUT=$input" "$SANDBOX_PYTHON" - "$mode" < "$SCEN_DIR/probe.py"
 }
 
+probe_rows() {
+  local out
+  out=$(probe "$@") || return 1
+  [ "$(jq 'length' <<< "$4")" -gt 0 ] || return 1
+  [ "$(printf '%s\n' "$out" | jq -s 'length')" = "$(jq 'length' <<< "$4")" ] || return 1
+  printf '%s\n' "$out"
+}
+
+probe_count_to() {
+  local var=$1 field=$2 out count
+  shift 2
+  if out=$(probe_rows "$@") && count=$(jq -s --arg f "$field" '[.[] | select(.[$f])] | length' <<< "$out"); then
+    printf -v "$var" '%s' "$count"
+  else
+    printf -v "$var" '%s' probe-failed
+  fi
+}
+
+probe_open_to() { probe_count_to "$1" open "${@:2}"; }
+
+probe_control() {
+  local ns=$1 pod=$2 tcp_open names_resolved
+  probe_open_to tcp_open "$ns" "$pod" self '[{"host":"127.0.0.1"}]'
+  probe_count_to names_resolved resolved "$ns" "$pod" names '[{"name":"localhost"}]'
+  [ "$tcp_open" = 1 ] && [ "$names_resolved" = 1 ]
+}
+
 probe_ctl() {
   local ns=$1 pod=$2 mode=$3 input=$4
   k -n "$ns" exec -i "$pod" -- env "PROBE_INPUT=$input" "$SANDBOX_PYTHON" - "$mode" < "$SCEN_DIR/probe.py"

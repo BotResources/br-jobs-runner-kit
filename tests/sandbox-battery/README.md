@@ -63,6 +63,12 @@ Pods of the cluster do not resolve the test names (cluster DNS forwards to the D
 
 Namespaces `sbx-testsvc` (empty: kept for scenario control pods), `sbx-teststore` (Service `store` with a fixed Endpoint to the store container, `store.sbx-teststore.svc.cluster.local:8333`, path style, region `us-east-1`, bucket `sandbox-saves`), `sbx-testtools` (the two pods). Org `platform` (private), repo `platform/hello-rust`, packages `sbx-hello-npm`, `sbx-hello-py`, `sbx-hello-lib` (0.1.0). Lifecycle on `saves/`: SeaweedFS TTL (`SAVES_TTL`).
 
+## Not done
+
+- No network capture is made in the sandbox. The canary scan covers the environment, process memory and files; "zero hits in a network capture" is not proved.
+- The full flow on the closed cluster is a hand-made `kubectl` flow (`scenarios/s12-closed-cluster.sh`); the adapter is not run on the closed cluster.
+- `SEAWEED_IMAGE` is pinned by digest. The fetch fallback of `fetch_image.py` for a digest reference is not tried; the image is expected in the local Docker store.
+
 ## Closed cluster
 
 The images are in the local Docker store and are imported into the node with `docker save --platform` piped to `ctr images import`: the cluster needs no registry. `fetch_image.py` loads an image that is not local (`docker pull` hangs on the test Mac). The API port of a cluster on an internal network is not reachable from the host: the scripts run `kubectl` inside the node container. k3s needs `--node-ip` (`CLOSED_NODE_IP`) and `--flannel-iface`, because the network has no default route.

@@ -4,6 +4,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin m-netpol-delay
 
 reps=${REPS:-10}
+gate_reps=$reps
 claim_reps=${CLAIM_REPS:-5}
 gate_ns=$GATE_NS
 target=np-target
@@ -83,14 +84,21 @@ for _ in $(seq 1 "$reps"); do
   close_from_start="$close_from_start$a"$'\n'
   close_from_return="$close_from_return$b"$'\n'
 done
+series_complete=1
 for name in open_from_start open_from_return close_from_start close_from_return; do
   values=$(printf '%s' "${!name}" | grep -E '^-?[0-9]+$')
-  record "m-netpol-$name-median" "$(printf '%s\n' "$values" | median_of)" ms
-  record "m-netpol-$name-max" "$(printf '%s\n' "$values" | max_of)" ms
+  samples=$(printf '%s' "$values" | grep -c .)
+  record "m-netpol-$name-samples" "$samples" "of $gate_reps"
+  if [ "$samples" -gt 0 ]; then
+    record "m-netpol-$name-median" "$(printf '%s\n' "$values" | median_of)" ms
+    record "m-netpol-$name-max" "$(printf '%s\n' "$values" | max_of)" ms
+  fi
+  if [ "$samples" != "$gate_reps" ]; then series_complete=0; fi
 done
 
 ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
 failures=0
+claims_with_rows=0
 if need_proxy m-netpol "$CLIENT_A" "$NET_ALLOW"; then
   pool_ns=$ns
   set_pool_replicas "$ns" "$claim_reps"
@@ -101,13 +109,16 @@ if need_proxy m-netpol "$CLIENT_A" "$NET_ALLOW"; then
     stream_to_file "$ns" "$name" "${proxy%:*}" "${proxy#*:}" 5
     sleep 2
     claim_one "$ns" "$name" "$rv" "gap-$(new_id)" agent-a
+    claim_rc=$?
     wait "$STREAM_PID" 2> /dev/null
     failures=$((failures + $(awk '$2 == 0' "$stream" | count_lines)))
+    if [ "$claim_rc" -eq 0 ] && [ "$(count_lines < "$stream")" -gt 0 ]; then claims_with_rows=$((claims_with_rows + 1)); fi
     track_pod "$ns" "$name"
     reps=$((reps - 1))
   done < <(warm_list "$ns")
   record m-netpol-claim-proxy-probe-failures "$failures" "failed probes at 20 ms across the claims"
-  check m-netpol-delay-ran pass "gate delays and claim gap recorded"
 fi
+verdict m-netpol-delay-ran "gate series with $gate_reps samples each: $series_complete (1 is complete); claims with probe rows: $claims_with_rows of $claim_reps" \
+  test "$series_complete" = 1 -a "$claims_with_rows" = "$claim_reps"
 
 scenario_end

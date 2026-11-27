@@ -1,6 +1,6 @@
 # Checks that go through the Rust adapter
 
-These checks need the `br-runner-sandbox` API (`open`, `run`, `read`, `write`, `list`, `save`, `release`, the port 0.2.0 types). They are Rust integration tests to write when the adapter API exists. No Rust code is written yet. Each check is described as Given / When / Then, with the data to prepare, the numbers to record, and the pass limit. The limits are not changed after a measurement.
+These checks need the `br-runner-sandbox` API (`open`, `run`, `read`, `write`, `list`, `save`, `release`, the port 0.2.0 types). They are Rust integration tests; the cargo project is `../rust`, and its README lists which test covers which check. A check with no row in that list is not implemented. Each check is described as Given / When / Then, with the data to prepare, the numbers to record, and the pass limit. The limits are not changed after a measurement.
 
 Common rules for all tests below:
 - Test cluster `sbx-build-test`, chart installed, store reached through the in-cluster Service (see the README of the set-up). The test starts from a warm pool of the default pool of client `ca`, mode `none`, unless the check says otherwise.
@@ -135,4 +135,4 @@ Then: all cases pass unchanged. A case that cannot run against a real sandbox (i
 
 ## Full flow through the adapter (second pass)
 
-The script `s12-closed-cluster.sh` proves the flow on the closed cluster with `kubectl` and `bsdtar`. When the adapter exists, run the same flow once through the adapter on `sbx-build-closed`: `open`, `run`, `save`, `release`, `open` with the parent (restore), a call in mode `allow` through the proxy (the proxy objects come with a later change of the chart; until then this step cannot run), a scale of the pool. Pass: every step passes with no route to the internet; the proxy logs hold no vendor host.
+Not done. The script `s12-closed-cluster.sh` runs a hand-made flow on the closed cluster with `kubectl` and `bsdtar`; no Rust test runs the adapter on `sbx-build-closed`. The flow to run once through the adapter on `sbx-build-closed` is: `open`, `run`, `save`, `release`, `open` with the parent (restore), a call in mode `allow` through the proxy (the proxy objects come with a later change of the chart; until then this step cannot run), a scale of the pool. Pass: every step passes with no route to the internet; the proxy logs hold no vendor host.

@@ -14,6 +14,19 @@ def tcp_open(item):
         return {**item, "open": False}
 
 
+def self_listener(item):
+    server = socket.socket()
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        socket.create_connection((item["host"], server.getsockname()[1]), 2.0).close()
+        return {**item, "open": True}
+    except OSError:
+        return {**item, "open": False}
+    finally:
+        server.close()
+
+
 def resolves(item):
     try:
         socket.getaddrinfo(item["name"], None)
@@ -81,7 +94,7 @@ def through_proxy(item):
         return {**item, "status": 0, "inner": "error:" + type(error).__name__}
 
 
-MODES = {"tcp": tcp_open, "names": resolves, "connect": connect_status, "via": through_proxy}
+MODES = {"tcp": tcp_open, "self": self_listener, "names": resolves, "connect": connect_status, "via": through_proxy}
 
 with ThreadPoolExecutor(16) as pool:
     for result in pool.map(MODES[sys.argv[1]], json.loads(os.environ["PROBE_INPUT"])):

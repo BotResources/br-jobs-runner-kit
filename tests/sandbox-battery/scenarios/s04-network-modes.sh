@@ -28,8 +28,6 @@ names_json() {
   k get svc -A -o json | jq -c '[.items[0:6][] | {name: "\(.metadata.name).\(.metadata.namespace).svc.cluster.local"}] + [{name: "kubernetes.default.svc.cluster.local"}]'
 }
 
-open_count() { jq -s '[.[] | select(.open)] | length'; }
-
 tunnel_targets() {
   local ip
   for ip in $1; do printf '{"host":"%s","port":%s}\n' "$ip" "$PROXY_PORT"; done | jq -s -c .
@@ -65,29 +63,32 @@ tunnel=$(tunnel_targets "$proxy_ips")
 for net in "$NET_NONE" "$NET_ALLOW" "$NET_FULL"; do
   ns=$(ns_of "$CLIENT_A" "$net")
   wait_warm "$ns" 1 120 || { check "network-modes-$net-warm-pod" fail "no warm pod in $ns"; continue; }
-  claim_to pod "$ns" "network-modes-$(new_id)" agent-a
+  claim_to pod "$ns" "network-modes-$(new_id)" agent-a || { check "network-modes-$net-claim" fail "claim refused in $ns"; continue; }
   record "network-modes-$net-agent-uid" "$(sx "$ns" "$pod" id -u)" uid
-  opened=$(probe "$ns" "$pod" tcp "$targets" | open_count)
+  verdict "network-modes-$net-probe-control" "from the same pod a loopback listener answers and localhost resolves" probe_control "$ns" "$pod"
+  probe_open_to opened "$ns" "$pod" tcp "$targets"
   verdict "network-modes-$net-no-internal-target" "$opened of $(jq 'length' <<< "$targets") internal targets reached" test "$opened" = 0
-  resolved=$(probe "$ns" "$pod" names "$names" | jq -s '[.[] | select(.resolved)] | length')
+  probe_count_to resolved resolved "$ns" "$pod" names "$names"
   verdict "network-modes-$net-no-svc-name" "$resolved cluster names resolved" test "$resolved" = 0
   if [ "$have_proxy" = 1 ] && [ "$net" != "$NET_ALLOW" ]; then
-    tunnel_open=$(probe "$ns" "$pod" tcp "$tunnel" | open_count)
+    probe_open_to tunnel_open "$ns" "$pod" tcp "$tunnel"
     verdict "network-modes-$net-tunnel-of-allow-closed" "$tunnel_open proxy tunnel ports of $(egress_ns_of "$CLIENT_A" "$NET_ALLOW") reached" test "$tunnel_open" = 0
   fi
 done
 
 if [ "$have_proxy" = 1 ]; then
   allow_ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
-  claim_to allow_pod "$allow_ns" "network-modes-$(new_id)" agent-a
-  tunnel_open=$(probe "$allow_ns" "$allow_pod" tcp "$tunnel" | open_count)
+  claim_to allow_pod "$allow_ns" "network-modes-$(new_id)" agent-a || { check network-modes-allow-claim fail "claim refused in $allow_ns"; scenario_end; }
+  probe_open_to tunnel_open "$allow_ns" "$allow_pod" tcp "$tunnel"
   verdict network-modes-allow-tunnel-port-answers "$tunnel_open of $(jq 'length' <<< "$tunnel") proxy tunnel ports answer from the sandbox" \
     test "$tunnel_open" = "$(jq 'length' <<< "$tunnel")"
   cluster_tunnel=$(tunnel_targets "$(proxy_cluster_ip "$CLIENT_A" "$NET_ALLOW")")
-  verdict network-modes-allow-cluster-ip-tunnel-answers "tunnel port at the ClusterIP in HTTPS_PROXY answers: $(probe "$allow_ns" "$allow_pod" tcp "$cluster_tunnel" | open_count)" \
-    test "$(probe "$allow_ns" "$allow_pod" tcp "$cluster_tunnel" | open_count)" = 1
+  probe_open_to cluster_tunnel_open "$allow_ns" "$allow_pod" tcp "$cluster_tunnel"
+  verdict network-modes-allow-cluster-ip-tunnel-answers "tunnel port at the ClusterIP in HTTPS_PROXY answers: $cluster_tunnel_open" \
+    test "$cluster_tunnel_open" = 1
   others=$(for ip in $proxy_ips; do for port in $PROXY_LOOPBACK_PORTS 80 443; do printf '{"host":"%s","port":%s}\n' "$ip" "$port"; done; done | jq -s -c .)
-  other_open=$(probe "$allow_ns" "$allow_pod" tcp "$others" | open_count)
+  verdict network-modes-allow-probe-control "from the same pod a loopback listener answers and localhost resolves" probe_control "$allow_ns" "$allow_pod"
+  probe_open_to other_open "$allow_ns" "$allow_pod" tcp "$others"
   verdict network-modes-allow-other-proxy-ports-closed "$other_open of $(jq 'length' <<< "$others") other proxy ports answer" test "$other_open" = 0
 
   proxy=$(proxy_endpoint "$CLIENT_A" "$NET_ALLOW")
@@ -100,8 +101,11 @@ if [ "$have_proxy" = 1 ]; then
     {proxy: $p, target: $api, allowed: false},
     {proxy: $p, target: $node, allowed: false},
     {proxy: $p, target: "169.254.169.254:80", allowed: false}]')
-  connect_report=$(probe "$allow_ns" "$allow_pod" connect "$connects")
-  wrong=$(jq -s '[.[] | select(if .allowed then .status != 200 else (.status != 403 and .status != 502) end)] | length' <<< "$connect_report")
+  if connect_report=$(probe_rows "$allow_ns" "$allow_pod" connect "$connects"); then
+    wrong=$(jq -s '[.[] | select(if .allowed then .status != 200 else (.status != 403 and .status != 502) end)] | length' <<< "$connect_report")
+  else
+    wrong=probe-failed
+  fi
   verdict network-modes-allow-only-listed-site "listed site 200, every other target 403 or 502; wrong answers: $wrong; internal_cidrs=$(internal_cidrs_value)" test "$wrong" = 0
 fi
 

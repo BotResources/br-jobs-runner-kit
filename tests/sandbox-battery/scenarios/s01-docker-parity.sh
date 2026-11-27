@@ -8,14 +8,28 @@ wait_warm "$ns" 1 120 || { check docker-parity-warm-pod fail "no warm pod in $ns
 claim_to pod "$ns" "docker-parity-$(new_id)" agent-a || { check docker-parity-claim fail "claim refused"; scenario_end; }
 image=$(pod_image "$ns" "$pod")
 
+expected_lines=("750" "background program alive" "pipe lines: 3" "after TERM: gone" "exit code: 3" "pip exit: 0" "import ok 1")
+commands_succeeded() {
+  local code=$1 output=$2 line
+  [ "$code" = 0 ] || return 1
+  for line in "${expected_lines[@]}"; do
+    grep -qxF -- "$line" <<< "$output" || return 1
+  done
+}
+
 sandbox_out=$(with_timeout 180 sxi "$ns" "$pod" sh -s < "$HERE/parity-commands.sh" 2>&1)
 sandbox_rc=$?
 plain_out=$(with_timeout 180 docker run --rm -i --entrypoint sh "$image" -s < "$HERE/parity-commands.sh" 2>&1)
 plain_rc=$?
 
+verdict docker-parity-sandbox-commands-succeeded "sandbox exit $sandbox_rc; every one of the five commands printed its success line" \
+  commands_succeeded "$sandbox_rc" "$sandbox_out"
+
 if [ "$plain_rc" -ge 125 ]; then
   check docker-parity-reference fail "plain docker run of $image failed with $plain_rc"
 else
+  verdict docker-parity-reference-commands-succeeded "plain docker exit $plain_rc; every one of the five commands printed its success line" \
+    commands_succeeded "$plain_rc" "$plain_out"
   verdict docker-parity-stdout-identical "five commands plus ps/proc/pipe/signal/wheel, sandbox against plain docker" \
     test "$sandbox_out" = "$plain_out"
   verdict docker-parity-exit-code-identical "sandbox=$sandbox_rc plain=$plain_rc" test "$sandbox_rc" = "$plain_rc"

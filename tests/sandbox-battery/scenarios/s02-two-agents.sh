@@ -15,11 +15,23 @@ verdict two-agents-two-pods "pods $pod_a and $pod_b" test "$pod_a" != "$pod_b"
 sx "$ns" "$pod_a" sh -c "echo secret-of-a > /work/x && mkdir -p /home/agent && echo secret-of-a > /home/agent/$marker && (nohup sleep 987654 > /dev/null 2>&1 &)"
 verdict two-agents-a-sees-own-file "a reads /work/x" test "$(sx "$ns" "$pod_a" cat /work/x)" = secret-of-a
 
+count_marker_files() {
+  sx "$1" "$2" sh -c 'echo "count:$(find / -xdev -name "$0" -print 2> /dev/null | wc -l | tr -d " ")"' "$3"
+}
+
+count_sleep_processes() {
+  sx "$1" "$2" sh -c 'echo "count:$(grep -l "[9]87654" /proc/[0-9]*/cmdline 2> /dev/null | wc -l | tr -d " ")"'
+}
+
 verdict two-agents-b-no-work-x "b has no /work/x" sx "$ns" "$pod_b" sh -c 'test ! -e /work/x'
-verdict two-agents-b-no-marker-anywhere "find for $marker over the whole file system of b" \
-  test -z "$(sx "$ns" "$pod_b" find / -xdev -name "$marker" -print 2> /dev/null)"
-verdict two-agents-b-no-process-of-a "b sees no sleep 987654 in /proc" \
-  sx "$ns" "$pod_b" sh -c '! grep -l 987654 /proc/[0-9]*/cmdline 2> /dev/null | grep -q .'
+a_markers=$(count_marker_files "$ns" "$pod_a" "$marker")
+b_markers=$(count_marker_files "$ns" "$pod_b" "$marker")
+verdict two-agents-a-finds-own-marker "find for $marker in a: ${a_markers:-no output}" test "$a_markers" = count:1
+verdict two-agents-b-no-marker-anywhere "find for $marker over the whole file system of b: ${b_markers:-no output}" test "$b_markers" = count:0
+a_sleeps=$(count_sleep_processes "$ns" "$pod_a")
+b_sleeps=$(count_sleep_processes "$ns" "$pod_b")
+verdict two-agents-a-runs-the-sleep "a sees its own sleep 987654 in /proc: ${a_sleeps:-no output}" test "$a_sleeps" = count:1
+verdict two-agents-b-no-process-of-a "b sees no sleep 987654 in /proc: ${b_sleeps:-no output}" test "$b_sleeps" = count:0
 
 shared_volume_kinds() {
   k -n "$ns" get pod "$1" -o json |

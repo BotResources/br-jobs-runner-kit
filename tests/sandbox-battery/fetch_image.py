@@ -30,6 +30,9 @@ OPENER = urllib.request.build_opener(DropAuthOnRedirect)
 
 
 def split_ref(ref):
+    if "@" in ref:
+        name, _, digest = ref.partition("@")
+        return name, digest
     name, _, tag = ref.partition(":")
     if "/" not in name:
         name = "library/" + name
@@ -69,6 +72,7 @@ def add_bytes(archive, path, data):
 
 
 name, tag = split_ref(REF)
+IMAGE_NAME = f"docker.io/{name}@{tag}" if tag.startswith("sha256:") else f"docker.io/{name}:{tag}"
 token = token_for(name)
 top = manifest(name, tag, token)
 top_digest = "sha256:" + hashlib.sha256(top).hexdigest()
@@ -95,8 +99,8 @@ index = {
             "digest": selected_digest,
             "size": len(selected),
             "annotations": {
-                "io.containerd.image.name": f"docker.io/{name}:{tag}",
-                "org.opencontainers.image.ref.name": tag,
+                "io.containerd.image.name": IMAGE_NAME,
+                "org.opencontainers.image.ref.name": tag.replace("sha256:", "") if tag.startswith("sha256:") else tag,
             },
         }
     ],

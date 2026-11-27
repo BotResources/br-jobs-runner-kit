@@ -11,15 +11,20 @@ export SCENARIO_TALLY
 : > "$SCENARIO_TALLY"
 export PREFLIGHT_DONE=1
 
+fails_recorded() { awk -F'\t' '$2 == "fail"' "$SCENARIO_TALLY" | count_lines; }
+
 run_one() {
-  local name=$1 before rc
+  local name=$1 before before_fails rc
   preflight
   echo "== $name, load $(load_now)"
   before=$(count_lines < "$SCENARIO_TALLY")
+  before_fails=$(fails_recorded)
   bash "$HERE/$name.sh"
   rc=$?
-  if [ "$rc" -ne 0 ] && [ "$(count_lines < "$SCENARIO_TALLY")" = "$before" ]; then
-    check "$name-script-error" fail "exit code $rc with no check recorded"
+  if [ "$rc" -ne 0 ] && [ "$(fails_recorded)" = "$before_fails" ]; then
+    check "$name-script-error" fail "exit code $rc with no failing check recorded ($(($(count_lines < "$SCENARIO_TALLY") - before)) checks recorded)"
+  elif [ "$(count_lines < "$SCENARIO_TALLY")" = "$before" ]; then
+    check "$name-no-check" fail "exit code $rc with no check recorded"
   fi
 }
 
@@ -32,6 +37,9 @@ run_timed() {
 }
 
 selected="$*"
+for name in $selected; do
+  if [[ " $UNTIMED $TIMED " != *" $name "* ]]; then check "$name-unknown-script" fail "no script of this name in the lists of run-all.sh"; fi
+done
 for name in $UNTIMED; do
   if [ -z "$selected" ] || [[ " $selected " == *" $name "* ]]; then run_one "$name"; fi
 done

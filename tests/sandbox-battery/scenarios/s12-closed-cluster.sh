@@ -57,13 +57,14 @@ outside_mirror=$(k get pods -A -o json | jq -r --arg ns "$SYSTEM_NS" --arg mirro
   | .spec.containers[], (.spec.initContainers[]?) | .image | select(startswith($mirror) | not)' | count_lines)
 verdict closed-cluster-running-images-via-mirror "$outside_mirror running images outside the mirror" test "$outside_mirror" = 0
 
-claim_to internet_pod "$full_ns" "closed-cluster-$(new_id)" agent-a
-routed=$(probe "$full_ns" "$internet_pod" tcp '[{"host":"1.1.1.1","port":443},{"host":"8.8.8.8","port":443}]' | jq -s '[.[] | select(.open)] | length')
-verdict closed-cluster-no-route-to-internet "$routed public targets reached from a mode full sandbox" test "$routed" = 0
+claim_to internet_pod "$full_ns" "closed-cluster-$(new_id)" agent-a || { check closed-cluster-claim-full fail "claim refused in $full_ns"; scenario_end; }
+verdict closed-cluster-probe-control "from the same pod a loopback listener answers and localhost resolves" probe_control "$full_ns" "$internet_pod"
+probe_open_to routed "$full_ns" "$internet_pod" tcp '[{"host":"1.1.1.1","port":443},{"host":"8.8.8.8","port":443}]'
+verdict closed-cluster-no-route-to-internet "$routed of 2 public targets reached from a mode full sandbox" test "$routed" = 0
 
 thread="closed-cluster-$(new_id)"
 started=$(now_ms)
-claim_to pod "$ns" "$thread" agent-a
+claim_to pod "$ns" "$thread" agent-a || { check closed-cluster-claim fail "claim refused in $ns"; scenario_end; }
 sx "$ns" "$pod" true
 record closed-cluster-open-ms "$(($(now_ms) - started))" ms
 sx "$ns" "$pod" sh -c 'mkdir -p /work/tree && i=0 && while [ $i -lt 200 ]; do echo "data-$i" > "/work/tree/f$i"; i=$((i + 1)); done && head -c 5000000 /dev/urandom > /work/tree/big.bin'
@@ -75,7 +76,7 @@ verdict closed-cluster-save "state tar uploaded to the store" s3_put "closed-clu
 release_pod "$ns" "$pod"
 k -n "$ns" wait --for=delete "pod/$pod" --timeout=60s > /dev/null 2>&1
 
-claim_to restored "$ns" "$thread" agent-a
+claim_to restored "$ns" "$thread" agent-a || { check closed-cluster-claim-restore fail "claim refused in $ns"; scenario_end; }
 s3_get "closed-cluster/$thread/state.tar" "$state_file"
 sxi "$ns" "$restored" "$AGENT_BSDTAR" -x -p --numeric-owner -f - -C /work < "$state_file"
 after=$(tree_hash "$ns" "$restored" /work/tree)
