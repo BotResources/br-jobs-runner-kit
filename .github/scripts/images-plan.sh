@@ -12,11 +12,13 @@ actor="${ACTOR:-}"
 push_input="${PUSH_INPUT:-}"
 
 push=false
+hold_marked=true
 reason="no rule allows a push"
 case "$event" in
   push)
     if [ "$ref" = "refs/heads/main" ]; then
       push=true
+      hold_marked=false
       reason="push to main"
     fi
     ;;
@@ -54,6 +56,7 @@ else
 fi
 
 echo "push=${push}"
+echo "hold_marked=${hold_marked}"
 echo "tag=${tag}"
 echo "revision=${head_sha}"
 echo "reason=${reason}"

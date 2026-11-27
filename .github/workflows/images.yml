@@ -46,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       push: ${{ steps.plan.outputs.push }}
+      hold_marked: ${{ steps.plan.outputs.hold_marked }}
       tag: ${{ steps.plan.outputs.tag }}
       revision: ${{ steps.plan.outputs.revision }}
     steps:
@@ -70,7 +71,7 @@ jobs:
           PUSH_INPUT: ${{ inputs.push }}
         run: |
           bash .github/scripts/images-plan.sh >plan.txt
-          grep -E '^(push|tag|revision)=' plan.txt >>"$GITHUB_OUTPUT"
+          grep -E '^(push|hold_marked|tag|revision)=' plan.txt >>"$GITHUB_OUTPUT"
           {
             echo "### Push policy"
             echo
@@ -87,6 +88,7 @@ jobs:
     with:
       image: ${{ inputs.image }}
       push: ${{ needs.plan.outputs.push == 'true' }}
+      hold_marked: ${{ needs.plan.outputs.hold_marked == 'true' }}
       tag: ${{ needs.plan.outputs.tag }}
       ref: ${{ needs.plan.outputs.revision }}
 

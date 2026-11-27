@@ -30,12 +30,12 @@ mutated_refused() {
 }
 
 mutated_refused "manifest does not need build" "'manifest' does not need the job 'build'" "needs: \[plan, build\]" "needs: [plan]"
-mutated_refused "manifest runs after a failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: always() \&\& inputs.push"
-mutated_refused "manifest runs unless cancelled" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: \${{ !cancelled() \&\& inputs.push }}"
-mutated_refused "manifest runs on failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.images != '\[\]'" "if: failure()"
+mutated_refused "manifest runs after a failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.pushed != '\[\]'" "if: always() \&\& inputs.push"
+mutated_refused "manifest runs unless cancelled" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.pushed != '\[\]'" "if: \${{ !cancelled() \&\& inputs.push }}"
+mutated_refused "manifest runs on failure" "'manifest' has a status function" "if: inputs.push && needs.plan.outputs.pushed != '\[\]'" "if: failure()"
 condition_refused() {
   local label="$1" replacement="$2"
-  REPLACEMENT="$replacement" awk '$0 == "    if: inputs.push && needs.plan.outputs.images != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/mutated.yml"
+  REPLACEMENT="$replacement" awk '$0 == "    if: inputs.push && needs.plan.outputs.pushed != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/mutated.yml"
   if cmp -s "$workflow" "${tmp}/mutated.yml"; then
     fail "gates: ${label}: the mutation changed nothing"
   elif bash "$here/images-check-gates.sh" "${tmp}/mutated.yml" >"${tmp}/out" 2>&1; then
@@ -49,7 +49,7 @@ condition_refused() {
 
 condition_refused "manifest condition folded with always()" $'    if: >-\n      inputs.push &&\n      always()'
 condition_refused "manifest condition literal with failure()" $'    if: |\n      inputs.push\n      && failure()'
-condition_refused "manifest condition folded, function on the last line" $'    if: >\n      inputs.push && needs.plan.outputs.images != \'[]\'\n      && !cancelled()'
+condition_refused "manifest condition folded, function on the last line" $'    if: >\n      inputs.push && needs.plan.outputs.pushed != \'[]\'\n      && !cancelled()'
 condition_refused "manifest condition quoted with always()" '    if: "always()"'
 condition_refused "manifest condition single-quoted with failure()" "    if: 'failure() && inputs.push'"
 condition_refused "manifest condition in an expression with cancelled()" '    if: ${{ cancelled() }}'
@@ -62,9 +62,13 @@ for function in Always FAILURE Cancelled SUCCESS; do
   condition_refused "manifest condition literal with ${function}()" $'    if: |\n      inputs.push\n      && '"${function}()"
 done
 
-REPLACEMENT=$'    if: >-\n      inputs.push &&\n      needs.plan.outputs.images != \'[]\'' awk '$0 == "    if: inputs.push && needs.plan.outputs.images != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/folded-ok.yml"
+REPLACEMENT=$'    if: >-\n      inputs.push &&\n      needs.plan.outputs.pushed != \'[]\'' awk '$0 == "    if: inputs.push && needs.plan.outputs.pushed != '"'"'[]'"'"'" { print ENVIRON["REPLACEMENT"]; next } { print }' "$workflow" >"${tmp}/folded-ok.yml"
 if cmp -s "$workflow" "${tmp}/folded-ok.yml"; then fail "gates: the folded condition without a status function: the mutation changed nothing"; elif bash "$here/images-check-gates.sh" "${tmp}/folded-ok.yml" >"${tmp}/out" 2>&1; then pass "gates: a folded manifest condition without a status function is accepted"; else fail "gates: a folded condition without a status function is refused: $(cat "${tmp}/out")"; fi
 
+mutated_refused "build decides the push for the whole run" "the job 'build' reads inputs.push" "load: \${{ steps.names.outputs.push != 'true' }}" "load: \${{ !inputs.push }}"
+mutated_refused "the login of build follows the whole run" "login step of the job 'build' does not run only when" "^        if: steps.names.outputs.push == 'true'\$" "        if: inputs.push"
+awk '$0 == "        if: steps.names.outputs.push == '"'"'true'"'"'" && !dropped { dropped = 1; next } { print }' "$workflow" >"${tmp}/no-login-condition.yml"
+if cmp -s "$workflow" "${tmp}/no-login-condition.yml"; then fail "gates: a login with no condition: the mutation changed nothing"; elif bash "$here/images-check-gates.sh" "${tmp}/no-login-condition.yml" >"${tmp}/out" 2>&1; then fail "gates: a login with no condition is accepted"; elif grep -q "login step of the job 'build' does not run only when" "${tmp}/out"; then pass "gates: a login with no condition is refused"; else fail "gates: a login with no condition: $(cat "${tmp}/out")"; fi
 mutated_refused "digests does not need manifest" "'digests' does not need the job 'manifest'" "needs: \[plan, manifest\]" "needs: [plan]"
 mutated_refused "a job continues on error" "sets continue-on-error" "fail-fast: false" "continue-on-error: true"
 

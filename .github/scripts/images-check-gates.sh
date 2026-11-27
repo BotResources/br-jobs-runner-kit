@@ -75,6 +75,25 @@ for name in ("manifest", "digests"):
     for condition in job_conditions(jobs.get(name, [])):
         if status_function.search(condition):
             errors.append("the job '%s' has a status function in its condition: %s" % (name, condition.strip()))
+def steps_of(body):
+    steps = []
+    for line in body:
+        if re.match(r"^      - ", line):
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    return steps
+
+per_image_push = "steps.names.outputs.push == 'true'"
+for line in jobs.get("build", []):
+    if "inputs.push" in line:
+        errors.append("the job 'build' reads inputs.push: the push is decided for each image (steps.names.outputs.push)")
+logins = [step for step in steps_of(jobs.get("build", [])) if any("docker/login-action" in line for line in step)]
+if not logins:
+    errors.append("the job 'build' has no login step")
+for step in logins:
+    if not any(line.strip() == "if: " + per_image_push for line in step):
+        errors.append("the login step of the job 'build' does not run only when " + per_image_push)
 for name, body in jobs.items():
     for line in body:
         if "continue-on-error" in line:
