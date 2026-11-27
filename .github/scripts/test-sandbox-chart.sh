@@ -20,6 +20,7 @@ source "$HERE/test-sandbox-chart-scopes.sh"
 source "$HERE/test-sandbox-chart-operator-rights.sh"
 source "$HERE/test-sandbox-chart-operator-template.sh"
 source "$HERE/test-sandbox-chart-operator-crd.sh"
+source "$HERE/test-sandbox-chart-stamper.sh"
 source "$HERE/test-sandbox-chart-keeper-config.sh"
 source "$HERE/test-sandbox-chart-adapter-config.sh"
 source "$HERE/test-sandbox-chart-adapter-names.sh"
@@ -54,6 +55,7 @@ render_yaml mirror_yaml -f "$EXAMPLE" -f "$MIRROR_VALUES"
 render_egress_fixtures
 render_rights_fixtures
 render_crd_fixtures
+render_stamper_fixtures
 render_proxy_fixtures
 render_proxy_config_fixtures
 render_proxy_guard_fixtures

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 README="$WORK/README-and-policies.md"
-cat "$CHART/README.md" "$CHART/POLICIES.md" > "$README"
+cat "$CHART/README.md" "$CHART/POLICIES.md" "$CHART/STAMPER.md" > "$README"
 
 check_licences_in_the_readme() {
     section "the licence table and the licence of the chart"
@@ -65,7 +65,7 @@ check_lint_strict_on_every_fixture() {
     t "example and the fence part alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml"
     t "example and the operator part alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/platform-values.yaml"
     t "example and the definition alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/crds-values.yaml"
-    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror operator operator-nondefault egress exec-timeout fence platform crds; do' "$ROOT/.github/workflows/ci.yml"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror operator operator-nondefault egress exec-timeout fence platform crds stamper; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
 
