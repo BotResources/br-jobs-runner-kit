@@ -103,3 +103,9 @@ check_the_docs_state_what_was_and_was_not_measured() {
     t "the CHANGELOG renders the proxy and has an upgrade note" test "$(grep -cF 'renders the proxy' "$CHART/CHANGELOG.md")" -eq 1 -a "$(grep -cF 'Upgrade from 0.1.0' "$CHART/CHANGELOG.md")" -eq 1
     t "the CHANGELOG does not say a working proxy" test "$(grep -c 'working proxy' "$CHART/CHANGELOG.md")" -eq 0
 }
+
+check_the_docs_state_the_credential_set_schema_rule() {
+    section "the README and the CHANGELOG state that secret_ref and secrets go together and secrets has an item"
+    t "the README states the rule and the effect on a 0.1.0 value" grep -qF '`secret_ref` and `secrets` must be given together and `secrets` needs at least one item: a 0.1.0 value with only one of them, or with an empty `secrets`, now fails the render.' "$README"
+    t "the CHANGELOG states the rule and the effect on a 0.1.0 value" grep -qF '`secret_ref` and `secrets` must be given together and `secrets` needs at least one item: a 0.1.0 value with only one of them, or with an empty `secrets`, now fails.' "$CHART/CHANGELOG.md"
+}

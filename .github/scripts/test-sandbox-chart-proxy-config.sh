@@ -115,6 +115,15 @@ check_the_proxy_render_errors() {
     t "egress disabled needs no proxy value: the example renders with no proxy key" render noegress -f "$EXAMPLE"
 }
 
+check_the_credential_set_needs_both_keys_and_one_item() {
+    section "credential_set: secret_ref and secrets are given together, secrets has at least one item"
+    fails_with "properties 'secrets' required, if 'secret_ref' exists" -f "$(valsx setrefonly 'del(.clients.alpha.modes.full.credential_set.secrets)')"
+    fails_with "properties 'secret_ref' required, if 'secrets' exists" -f "$(valsx setsecretsonly 'del(.clients.alpha.modes.full.credential_set.secret_ref)')"
+    fails_with "minItems: got 0, want 1" -f "$(valsx setemptysecrets '.clients.alpha.modes.full.credential_set.secrets = []')"
+    t "a set with secret_ref and one item renders" render setone -f "$(valsx setone ".clients.alpha.modes.full.credential_set = ${CREDENTIAL_SET}")"
+    t "that set renders its egress namespace" jqt setone '[.[] | select(.kind == "Namespace" and .metadata.name == "sbx-alpha-full-egress")] | length == 1'
+}
+
 check_the_quota_guard_keeps_one_pod_for_the_surge() {
     section "the quota guard: replicas plus one pod must fit egress.quota.pods"
     t "a pod quota of 4 and 3 replicas renders" render quotafit3 -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.quota.pods=4 --set egress.proxy.replicas=3
