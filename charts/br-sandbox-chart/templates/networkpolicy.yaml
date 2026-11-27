@@ -3,7 +3,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: default-deny
+  name: br-sandbox-default-deny
   namespace: {{ $ns.name }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
@@ -17,7 +17,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-{{ $ns.mode }}
+  name: br-sandbox-egress-{{ $ns.mode }}
   namespace: {{ $ns.name }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
@@ -43,7 +43,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-full
+  name: br-sandbox-egress-full
   namespace: {{ $ns.name }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
@@ -74,7 +74,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: default-deny
+  name: br-sandbox-default-deny
   namespace: {{ $system }}
   labels:
     {{- include "br-sandbox-chart.labels" . | nindent 4 }}
@@ -89,7 +89,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-keeper
+  name: br-sandbox-egress-keeper
   namespace: {{ $system }}
   labels:
     {{- include "br-sandbox-chart.labels" . | nindent 4 }}
@@ -128,7 +128,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-netcheck
+  name: br-sandbox-egress-netcheck
   namespace: {{ $system }}
   labels:
     {{- include "br-sandbox-chart.labels" . | nindent 4 }}

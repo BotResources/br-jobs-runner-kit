@@ -17,7 +17,7 @@ metadata:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: default-deny
+  name: br-sandbox-default-deny
   namespace: {{ $ns.egress }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
@@ -30,7 +30,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ingress-tunnel
+  name: br-sandbox-ingress-tunnel
   namespace: {{ $ns.egress }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
@@ -55,7 +55,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-proxy
+  name: br-sandbox-egress-proxy
   namespace: {{ $ns.egress }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}

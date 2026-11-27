@@ -7,28 +7,28 @@ policy_names() {
 }
 
 check_network_policy_none_has_deny_only() {
-    section "network policy none: default-deny only, no resolver"
-    t "none has exactly the policy default-deny" test "$(policy_names sbx-alpha-none)" = "default-deny"
-    t "default-deny selects every pod and both directions" jqt ex "${NP} | select(.metadata.namespace == \"sbx-alpha-none\") | select(.spec.podSelector == {} and (.spec.policyTypes | sort) == [\"Egress\", \"Ingress\"] and (.spec | has(\"egress\") | not) and (.spec | has(\"ingress\") | not))"
+    section "network policy none: br-sandbox-default-deny only, no resolver"
+    t "none has exactly the policy br-sandbox-default-deny" test "$(policy_names sbx-alpha-none)" = "br-sandbox-default-deny"
+    t "br-sandbox-default-deny selects every pod and both directions" jqt ex "${NP} | select(.metadata.namespace == \"sbx-alpha-none\") | select(.spec.podSelector == {} and (.spec.policyTypes | sort) == [\"Egress\", \"Ingress\"] and (.spec | has(\"egress\") | not) and (.spec | has(\"ingress\") | not))"
     t "none pods use dnsPolicy None and nameserver 127.0.0.1" jqt ex '[.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-none") | .spec.template.spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["127.0.0.1"])] | length == 1'
 }
 
 check_network_policy_allow_reaches_only_the_proxy() {
     section "network policy allow: only the proxy pods of the egress namespace, TCP on the proxy port"
-    t "allow has default-deny and egress-allow" test "$(policy_names sbx-alpha-allow)" = "default-deny,egress-allow"
-    t "egress-allow has one rule: proxy pods of the egress namespace in the same item, TCP 8888, nothing else" jqt ex "${NP} | select(.metadata.name == \"egress-allow\") | select(.spec.policyTypes == [\"Egress\"] and (.spec.egress | length) == 1 and .spec.egress[0].to == [{\"namespaceSelector\": {\"matchLabels\": {\"kubernetes.io/metadata.name\": \"sbx-alpha-allow-egress\"}}, \"podSelector\": {\"matchLabels\": {\"br.sandbox/role\": \"proxy\"}}}] and .spec.egress[0].ports == [{\"protocol\": \"TCP\", \"port\": 8888}])"
-    t "egress-allow selects the sandbox pods by role, not by pool" jqt ex "${NP} | select(.metadata.name == \"egress-allow\") | .spec.podSelector == {\"matchLabels\": {\"br.sandbox/role\": \"sandbox\"}}"
+    t "allow has br-sandbox-default-deny and br-sandbox-egress-allow" test "$(policy_names sbx-alpha-allow)" = "br-sandbox-default-deny,br-sandbox-egress-allow"
+    t "br-sandbox-egress-allow has one rule: proxy pods of the egress namespace in the same item, TCP 8888, nothing else" jqt ex "${NP} | select(.metadata.name == \"br-sandbox-egress-allow\") | select(.spec.policyTypes == [\"Egress\"] and (.spec.egress | length) == 1 and .spec.egress[0].to == [{\"namespaceSelector\": {\"matchLabels\": {\"kubernetes.io/metadata.name\": \"sbx-alpha-allow-egress\"}}, \"podSelector\": {\"matchLabels\": {\"br.sandbox/role\": \"proxy\"}}}] and .spec.egress[0].ports == [{\"protocol\": \"TCP\", \"port\": 8888}])"
+    t "br-sandbox-egress-allow selects the sandbox pods by role, not by pool" jqt ex "${NP} | select(.metadata.name == \"br-sandbox-egress-allow\") | .spec.podSelector == {\"matchLabels\": {\"br.sandbox/role\": \"sandbox\"}}"
     render port -f "$EXAMPLE" --set egress.proxy.port=9999
-    t "the proxy port is a value" jqt port '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-allow") | .spec.egress[0].ports[0].port == 9999'
+    t "the proxy port is a value" jqt port '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-allow") | .spec.egress[0].ports[0].port == 9999'
 }
 
 check_network_policy_full_opens_public_addresses_only() {
     section "network policy full: public addresses except every internal list, no cluster DNS"
-    t "full has default-deny and egress-full" test "$(policy_names sbx-alpha-full)" = "default-deny,egress-full"
-    t "single stack: one rule, one ipBlock 0.0.0.0/0, no pod or namespace selector" jqt ex "${NP} | select(.metadata.name == \"egress-full\") | select((.spec.egress | length) == 1 and (.spec.egress[0].to | length) == 1 and .spec.egress[0].to[0].ipBlock.cidr == \"0.0.0.0/0\" and (.spec.egress[0].to[0] | has(\"podSelector\") or has(\"namespaceSelector\") | not) and (.spec.egress[0] | has(\"ports\") | not))"
+    t "full has br-sandbox-default-deny and br-sandbox-egress-full" test "$(policy_names sbx-alpha-full)" = "br-sandbox-default-deny,br-sandbox-egress-full"
+    t "single stack: one rule, one ipBlock 0.0.0.0/0, no pod or namespace selector" jqt ex "${NP} | select(.metadata.name == \"br-sandbox-egress-full\") | select((.spec.egress | length) == 1 and (.spec.egress[0].to | length) == 1 and .spec.egress[0].to[0].ipBlock.cidr == \"0.0.0.0/0\" and (.spec.egress[0].to[0] | has(\"podSelector\") or has(\"namespaceSelector\") | not) and (.spec.egress[0] | has(\"ports\") | not))"
     t "full pods resolve through the public resolvers only" jqt ex '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == "sbx-alpha-full") | .spec.template.spec | select(.dnsPolicy == "None" and .dnsConfig.nameservers == ["198.51.100.53", "198.51.100.54"])'
     render dual -f "$EXAMPLE" --set network.ipv6=dual_stack
-    t "dual stack adds ::/0 without fc00::/7 and fe80::/10" jqt dual '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-full") | .spec.egress[1].to[0].ipBlock | select(.cidr == "::/0" and (.except | index("fc00::/7")) != null and (.except | index("fe80::/10")) != null)'
+    t "dual stack adds ::/0 without fc00::/7 and fe80::/10" jqt dual '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-full") | .spec.egress[1].to[0].ipBlock | select(.cidr == "::/0" and (.except | index("fc00::/7")) != null and (.except | index("fe80::/10")) != null)'
 }
 
 check_network_policy_mode_is_unknown_or_from_values() {
@@ -38,18 +38,18 @@ check_network_policy_mode_is_unknown_or_from_values() {
 }
 
 check_one_namespace_per_client_and_mode() {
-    section "namespaces per client and mode, default-deny in each"
+    section "namespaces per client and mode, br-sandbox-default-deny in each"
     t "four sandbox namespaces, the egress namespace of mode allow and the system namespace" test "$(jqv ex '[.[] | select(.kind == "Namespace") | .metadata.name] | sort | join(",")')" = "sbx-alpha-allow,sbx-alpha-allow-egress,sbx-alpha-full,sbx-alpha-none,sbx-beta-none,sbx-system"
-    t "every sandbox namespace has default-deny on both directions" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.name] as $n | [.[] | select(.kind == "NetworkPolicy" and .metadata.name == "default-deny" and (.spec.policyTypes | sort) == ["Egress", "Ingress"]) | .metadata.namespace] as $d | ($n - $d) == []'
+    t "every sandbox namespace has br-sandbox-default-deny on both directions" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.name] as $n | [.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-default-deny" and (.spec.policyTypes | sort) == ["Egress", "Ingress"]) | .metadata.namespace] as $d | ($n - $d) == []'
     t "no policy of a sandbox or system namespace has an ingress rule" jqt ex "[${NP} | select((.metadata.namespace | endswith(\"-egress\") | not) and (.spec | has(\"ingress\")))] | length == 0"
     fails_with "BR_SANDBOX_SHARED_NAMESPACE{client_a=system,client_b=alpha,namespace=sbx-alpha-none}" -f "$(vals shared '.installation.system_namespace = "sbx-alpha-none"')"
 }
 
 check_network_check_except_lists_hold_every_internal_range() {
     section "the network check except lists hold internal, pod, service, node, node public and load balancer"
-    t "full except list has every configured range" jqt ex '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-full") | .spec.egress[0].to[0].ipBlock.except as $e | ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16", "127.0.0.0/8", "10.42.0.0/16", "10.43.0.0/16", "10.0.0.11/32", "10.0.0.12/32", "203.0.113.11/32", "203.0.113.12/32", "203.0.113.20/32"] - $e == []'
+    t "full except list has every configured range" jqt ex '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-full") | .spec.egress[0].to[0].ipBlock.except as $e | ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16", "127.0.0.0/8", "10.42.0.0/16", "10.43.0.0/16", "10.0.0.11/32", "10.0.0.12/32", "203.0.113.11/32", "203.0.113.12/32", "203.0.113.20/32"] - $e == []'
     render v6 -f "$EXAMPLE" --set network.ipv6=dual_stack --set 'network.node_public_addresses={203.0.113.11,2001:db8::5}'
-    t "an IPv6 node address is excepted in the IPv6 rule only" jqt v6 '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "egress-full") | (.spec.egress[1].to[0].ipBlock.except | index("2001:db8::5/128")) != null and (.spec.egress[0].to[0].ipBlock.except | index("2001:db8::5/128")) == null'
+    t "an IPv6 node address is excepted in the IPv6 rule only" jqt v6 '.[] | select(.kind == "NetworkPolicy" and .metadata.name == "br-sandbox-egress-full") | (.spec.egress[1].to[0].ipBlock.except | index("2001:db8::5/128")) != null and (.spec.egress[0].to[0].ipBlock.except | index("2001:db8::5/128")) == null'
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.node_addresses}" -f "$(vals nonode 'del(.network.node_addresses)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.node_public_addresses}" -f "$(vals nopublic 'del(.network.node_public_addresses)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network.load_balancer_addresses}" -f "$(vals nolb 'del(.network.load_balancer_addresses)')"
@@ -68,6 +68,18 @@ check_no_project_value_in_the_chart() {
     t "the only registry name of the values is the default repository of the proxy image" test "$(grep -cE 'docker\.io|ghcr|quay\.io' "$CHART/values.yaml")" -eq 1
     t "the fixtures hold only example.test hosts" test -z "$(cd "$CHART/ci" && hosts_of ./*.yaml | grep -v 'example\.test$' || true)"
     t "the render holds no host that is not a value or a Kubernetes name" test -z "$(hosts_of "$WORK/mirror_yaml.yaml" | grep -vE "$allowed" || true)"
+}
+
+CLOSED_NETWORK_POLICY_NAMES='["br-sandbox-default-deny", "br-sandbox-egress-allow", "br-sandbox-egress-full"]'
+
+check_the_network_policy_names_of_a_sandbox_namespace_are_the_closed_list() {
+    section "the network policy names of a sandbox namespace are the closed list, every policy of the chart has the prefix"
+    local render
+    for render in ex cred egress_keeper; do
+        t "render ${render}: every NetworkPolicy of the render is named with the prefix br-sandbox-" jqt "$render" '[.[] | select(.kind == "NetworkPolicy") | .metadata.name | select(startswith("br-sandbox-") | not)] | length == 0'
+        t "render ${render}: the policies of the sandbox namespaces are inside the closed list" jqt "$render" --argjson closed "$CLOSED_NETWORK_POLICY_NAMES" '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-config") | .metadata.namespace] as $managed | [.[] | select(.kind == "NetworkPolicy" and (.metadata.namespace | IN($managed[]))) | .metadata.name] | unique | length > 0 and (. - $closed) == []'
+    done
+    t "the policies of the sandbox namespaces of the renders with and without a proxy, together, are the closed list and no other name" test "$(jq -rs --argjson closed "$CLOSED_NETWORK_POLICY_NAMES" '[.[] | .[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-config") | .metadata.namespace] as $managed | [.[] | .[] | select(.kind == "NetworkPolicy" and (.metadata.namespace | IN($managed[]))) | .metadata.name] | unique == $closed' "$WORK/ex.json" "$WORK/cred.json")" = true
 }
 
 limit_range_is() {

@@ -41,13 +41,13 @@ check_the_proxy_config_has_the_two_transforms_in_order_and_the_standalone_shape(
 check_the_deny_list_equals_the_policy_deny_list() {
     section "upstream_deny_cidrs: the deny list of the policy, plus loopback, nothing else"
     local want
-    want="$(jqv cred '.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-allow-egress" and .metadata.name == "egress-proxy") | .spec.egress[0].to[0].ipBlock.except' | jq -c '. + ["::1/128"]')"
+    want="$(jqv cred '.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-allow-egress" and .metadata.name == "br-sandbox-egress-proxy") | .spec.egress[0].to[0].ipBlock.except' | jq -c '. + ["::1/128"]')"
     t "the config deny list is exactly that list, in that order" cfgt cred sbx-alpha-allow-egress ".proxy.upstream_deny_cidrs == ${want}"
     t "the deny list holds the internal ranges, the pod and service ranges, the node, public node and load balancer addresses" cfgt cred sbx-alpha-allow-egress '.proxy.upstream_deny_cidrs | contains(["10.0.0.0/8", "10.42.0.0/16", "10.43.0.0/16", "10.0.0.11/32", "203.0.113.11/32", "203.0.113.20/32", "127.0.0.0/8"])'
     t "dual stack adds the IPv6 ranges of the policy" cfgt egressdual6 sbx-alpha-allow-egress '.proxy.upstream_deny_cidrs | contains(["fc00::/7", "fe80::/10", "::1/128"])'
     t "single stack has no IPv6 range but the loopback" cfgt cred sbx-alpha-allow-egress '[.proxy.upstream_deny_cidrs[] | select(contains(":"))] == ["::1/128"]'
     t "an internal_cidrs override changes the deny list of the proxy the same way as the policy" cfgt ipliteral sbx-alpha-allow-egress '(.proxy.upstream_deny_cidrs | index("172.16.0.0/12")) == null and (.proxy.upstream_deny_cidrs | index("10.0.0.0/8")) != null and (.proxy.upstream_deny_cidrs | index("127.0.0.0/8")) != null'
-    t "the same override drops the range from the policy except list" jqt ipliteral '.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-allow-egress" and .metadata.name == "egress-proxy") | .spec.egress[0].to[0].ipBlock.except | index("172.16.0.0/12") == null and index("10.0.0.0/8") != null'
+    t "the same override drops the range from the policy except list" jqt ipliteral '.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-alpha-allow-egress" and .metadata.name == "br-sandbox-egress-proxy") | .spec.egress[0].to[0].ipBlock.except | index("172.16.0.0/12") == null and index("10.0.0.0/8") != null'
 }
 
 check_the_allowlist_renders_domains_and_cidrs_of_the_mode() {
