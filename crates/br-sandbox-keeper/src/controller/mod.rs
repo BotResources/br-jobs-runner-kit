@@ -3,6 +3,7 @@ mod events;
 mod expiry;
 mod observation;
 mod reconcile;
+mod refusals;
 mod resource;
 mod rollout;
 mod serving;
@@ -23,7 +24,9 @@ use crate::facts::PodFacts;
 use crate::leader::Leadership;
 use crate::metrics::Metrics;
 use crate::rules::{ClaimWindow, ScaleState};
+
 use crate::time::{earliest, until};
+use refusals::Refusals;
 
 pub type PodId = (String, String);
 
@@ -58,6 +61,7 @@ pub struct Engine {
     pub(crate) pending_notified: HashSet<String>,
     pub(crate) unreadable: HashSet<String>,
     pub(crate) unhashed: HashMap<String, HashSet<String>>,
+    pub(crate) refusals: Refusals,
     pub(crate) synced: HashSet<String>,
     pub(crate) seen: HashSet<String>,
     pub(crate) next_tick: Timestamp,
@@ -92,6 +96,7 @@ impl Engine {
             pending_notified: HashSet::new(),
             unreadable: HashSet::new(),
             unhashed: HashMap::new(),
+            refusals: Refusals::default(),
             synced: HashSet::new(),
             seen: HashSet::new(),
             next_tick,

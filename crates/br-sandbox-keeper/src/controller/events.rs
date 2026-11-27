@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::cluster::{Notice, ViewEvent, Watched};
+use crate::cluster::{DELETE_POD, Notice, ViewEvent, Watched};
 use crate::facts::{Mark, Phase, PodFacts, PoolState};
 use crate::rules::{ClaimWindow, pod_failure};
 use crate::time::elapsed;
@@ -164,6 +164,7 @@ impl Engine {
             return;
         };
         self.unreadable.remove(&tracked.facts.uid);
+        self.refusals.clear(&id.0, DELETE_POD, &id.1);
         self.pending_notified.remove(&tracked.facts.uid);
         if let Some(unhashed) = self.unhashed.get_mut(&id.0) {
             unhashed.remove(&tracked.facts.uid);

@@ -99,7 +99,14 @@ async fn a_failed_write_of_the_condition_is_counted_and_tried_again() {
     bed.kube.put_pod(old_warm("w0", 10));
     bed.kube.fail("apply_condition");
     bed.sync().await;
-    assert!(bed.errors() >= 1);
+    let attempts = bed
+        .kube
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, Call::Condition { .. }))
+        .count();
+    assert!(attempts >= 1);
+    assert_eq!(bed.errors(), u64::try_from(attempts).unwrap());
     assert!(bed.rs_conditions().is_empty());
     bed.kube.heal("apply_condition");
     bed.pass(3).await;

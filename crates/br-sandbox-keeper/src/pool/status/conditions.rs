@@ -26,6 +26,17 @@ impl Fields {
 }
 
 pub(super) fn ready_fields(observation: Option<&Observation>, min_replicas: Option<u32>) -> Fields {
+    let fields = ready_of(observation, min_replicas);
+    match observation.and_then(|observed| observed.refused.as_deref()) {
+        Some(named) => Fields {
+            message: format!("{}; {named}", fields.message),
+            ..fields
+        },
+        None => fields,
+    }
+}
+
+fn ready_of(observation: Option<&Observation>, min_replicas: Option<u32>) -> Fields {
     let Some(observation) = observation else {
         return Fields::new(
             "Unknown",

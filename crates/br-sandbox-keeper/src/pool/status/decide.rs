@@ -37,6 +37,7 @@ pub struct Observation {
     pub replica_set: ReplicaSetView,
     pub failing: PoolJudgement,
     pub at: Timestamp,
+    pub refused: Option<String>,
 }
 
 impl Counts {
@@ -62,7 +63,13 @@ impl Observation {
             replica_set,
             failing,
             at,
+            refused: None,
         }
+    }
+
+    pub fn refused(mut self, naming: Option<String>) -> Self {
+        self.refused = naming;
+        self
     }
 }
 

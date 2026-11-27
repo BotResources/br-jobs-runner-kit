@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::cluster::DeleteOutcome;
+use crate::cluster::{DELETE_POD, DeleteOutcome};
 use crate::rules::{Action, DeleteReason, ExpiryRules, judge_pod};
 
 use super::events::pool_of;
@@ -45,6 +45,7 @@ impl Engine {
             match judgment.action {
                 Action::Keep => {
                     self.unreadable.remove(&facts.uid);
+                    self.refusals.clear(&id.0, DELETE_POD, &id.1);
                     if let Some(due) =
                         pool_of(&facts).and_then(|pool| self.pending_due.get_mut(&pool))
                     {
@@ -101,7 +102,9 @@ impl Engine {
             return false;
         }
         let version = tracked.facts.version();
-        match self.writer.delete_pod(&id.0, &id.1, &version).await {
+        let result = self.writer.delete_pod(&id.0, &id.1, &version).await;
+        self.note_write(&id.0, DELETE_POD, &id.1, &result);
+        match result {
             Ok(DeleteOutcome::Deleted) => {
                 tracing::info!(pod = id.1, reason = reason.label(), "a pod was deleted");
                 self.metrics.pod_deleted(reason.label());

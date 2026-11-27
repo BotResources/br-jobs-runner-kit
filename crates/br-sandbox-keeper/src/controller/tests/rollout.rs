@@ -4,13 +4,13 @@ use super::*;
 
 const STALE: &str = "stale";
 
-fn with_step(bed: &mut Bed, step: i64) {
+pub(super) fn with_step(bed: &mut Bed, step: i64) {
     let mut document = testing::document();
     document["scale_down_step"] = step.into();
     bed.engine.config = Arc::new(testing::config_of(&document));
 }
 
-fn stale(name: &str, age: u64, ready: bool) -> PodFacts {
+pub(super) fn stale(name: &str, age: u64, ready: bool) -> PodFacts {
     PodFacts {
         ready,
         template_hash: Mark::Value(STALE.to_owned()),
@@ -18,7 +18,7 @@ fn stale(name: &str, age: u64, ready: bool) -> PodFacts {
     }
 }
 
-fn current(bed: &Bed, name: &str, ready: bool) -> PodFacts {
+pub(super) fn current(bed: &Bed, name: &str, ready: bool) -> PodFacts {
     PodFacts {
         ready,
         template_hash: Mark::Value(bed.template_hash().unwrap()),
@@ -26,7 +26,7 @@ fn current(bed: &Bed, name: &str, ready: bool) -> PodFacts {
     }
 }
 
-async fn stale_bed(step: i64) -> Bed {
+pub(super) async fn stale_bed(step: i64) -> Bed {
     let mut bed = bed(true);
     bed.kube.put_replica_set(owned_replica_set(NS, 4));
     with_step(&mut bed, step);
@@ -168,4 +168,40 @@ async fn a_conflict_on_a_stale_pod_that_a_claim_changed_is_judged_again_as_a_cla
     });
     bed.sync().await;
     assert!(bed.kube.pod(NS, "w0").is_some());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_warm_pod_with_an_absent_or_unreadable_template_hash_is_counted_and_never_deleted() {
+    for (name, hash) in [("a0", Mark::Absent), ("u0", Mark::Unreadable)] {
+        let mut bed = bed(true);
+        bed.sync().await;
+        bed.kube.put_pod(PodFacts {
+            template_hash: hash,
+            ..old_warm(name, 40)
+        });
+        bed.settle().await;
+        bed.pass(bed.bucket() * 2).await;
+        assert!(
+            bed.has_metric("br_sandbox_keeper_unreadable_pods 1"),
+            "{name}"
+        );
+        assert!(bed.deletes().is_empty(), "{name}");
+        assert!(bed.kube.pod(NS, name).is_some(), "{name}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_count_of_unreadable_template_hashes_falls_when_the_pod_goes() {
+    let mut bed = bed(true);
+    bed.sync().await;
+    bed.kube.put_pod(PodFacts {
+        template_hash: Mark::Absent,
+        ..old_warm("a0", 40)
+    });
+    bed.settle().await;
+    bed.pass(bed.bucket() * 2).await;
+    assert!(bed.has_metric("br_sandbox_keeper_unreadable_pods 1"));
+    bed.kube.remove_pod(NS, "a0");
+    bed.pass(bed.bucket() * 2).await;
+    assert!(bed.has_metric("br_sandbox_keeper_unreadable_pods 0"));
 }

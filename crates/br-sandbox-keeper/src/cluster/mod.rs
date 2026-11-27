@@ -23,6 +23,10 @@ pub use observe::{FenceInputs, FenceObservation, Observer, ReplicaSetRead};
 pub use pool_api::{CreateOutcome, PoolApi};
 pub use view::{Read, View, ViewEvent};
 pub use views::Views;
+pub(crate) use writer::{
+    APPLY_CONDITION, APPLY_REPLICAS, APPLY_TEMPLATE, CREATE_REPLICA_SET, DELETE_POD,
+    DELETE_REPLICA_SET,
+};
 pub use writer::{Change, PoolWriter, WriteError};
 
 pub const FIELD_MANAGER: &str = "br-sandbox-keeper";

@@ -139,7 +139,7 @@ async fn a_failed_pod_watch_is_logged_at_error_level_with_its_reason_and_counted
         bed.kube.break_watch("pods", NS, reason);
         bed.pass(30).await;
     }
-    assert!(bed.errors() >= before + 2);
+    assert_eq!(bed.errors(), before + 2);
     let lines: Vec<serde_json::Value> = logs
         .text()
         .lines()

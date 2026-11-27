@@ -1,6 +1,6 @@
 use k8s_openapi::api::apps::v1::ReplicaSet;
 
-use crate::cluster::{EventTarget, PoolEvent};
+use crate::cluster::{APPLY_CONDITION, EventTarget, PoolEvent};
 use crate::convert::replica_set_facts;
 use crate::pool::{Owner, replicaset_name};
 use crate::rules::{PoolJudgement, condition_write};
@@ -43,12 +43,15 @@ impl Engine {
     ) {
         let held = replica_set_facts(replica_set);
         let Some(write) = condition_write(&held.conditions, judged, self.clock.now()) else {
+            self.refusals.clear(namespace, APPLY_CONDITION, "");
             return;
         };
         if !self.leadership.is_leader() {
             return;
         }
-        if let Err(error) = self.writer.set_condition(namespace, owner, &write).await {
+        let result = self.writer.set_condition(namespace, owner, &write).await;
+        self.note_write(namespace, APPLY_CONDITION, "", &result);
+        if let Err(error) = result {
             tracing::warn!(pool = namespace, %error, "the condition will be written again");
             self.retry_soon(namespace);
         }

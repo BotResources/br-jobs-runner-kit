@@ -1,4 +1,4 @@
-use crate::cluster::{EventTarget, PoolEvent};
+use crate::cluster::{APPLY_REPLICAS, EventTarget, PoolEvent};
 use crate::pool::{Owner, PoolSettings, replicaset_name};
 use crate::rules::{ClaimWindow, Desired, ScaleDownRules, damp, desired_size, floor_now};
 
@@ -45,14 +45,19 @@ impl Engine {
         if let Some(at) = damped.wake_at {
             self.wake_by(namespace, at);
         }
-        if damped.replicas == current || !self.leadership.is_leader() {
+        if damped.replicas == current {
+            self.refusals.clear(namespace, APPLY_REPLICAS, "");
             return current;
         }
-        match self
+        if !self.leadership.is_leader() {
+            return current;
+        }
+        let result = self
             .writer
             .set_replicas(namespace, owner, damped.replicas)
-            .await
-        {
+            .await;
+        self.note_write(namespace, APPLY_REPLICAS, "", &result);
+        match result {
             Ok(_) => {
                 tracing::info!(
                     pool = namespace,

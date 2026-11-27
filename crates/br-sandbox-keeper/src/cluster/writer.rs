@@ -14,6 +14,13 @@ use crate::rules::ConditionWrite;
 
 use super::{ApiError, CreateOutcome, DeleteOutcome, PoolApi};
 
+pub(crate) const CREATE_REPLICA_SET: &str = "create_replica_set";
+pub(crate) const APPLY_REPLICAS: &str = "apply_replicas";
+pub(crate) const APPLY_TEMPLATE: &str = "apply_template";
+pub(crate) const APPLY_CONDITION: &str = "apply_condition";
+pub(crate) const DELETE_REPLICA_SET: &str = "delete_replica_set";
+pub(crate) const DELETE_POD: &str = "delete_pod";
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum WriteError {
@@ -115,7 +122,7 @@ impl PoolWriter {
         self.api
             .create_replica_set(namespace, &body)
             .await
-            .map_err(|error| self.failed("create_replica_set", namespace, error))
+            .map_err(|error| self.failed(CREATE_REPLICA_SET, namespace, error))
     }
 
     pub async fn set_replicas(
@@ -124,7 +131,7 @@ impl PoolWriter {
         owner: &Owner,
         desired: u32,
     ) -> Result<Change, WriteError> {
-        let call = "apply_replicas";
+        let call = APPLY_REPLICAS;
         let wanted = replicas_of(desired)?;
         let current = self
             .owned(call, namespace, owner)
@@ -146,7 +153,7 @@ impl PoolWriter {
         owner: &Owner,
         rendered: &RenderedTemplate,
     ) -> Result<Change, WriteError> {
-        let call = "apply_template";
+        let call = APPLY_TEMPLATE;
         let current = self
             .owned(call, namespace, owner)
             .await?
@@ -175,7 +182,7 @@ impl PoolWriter {
         owner: &Owner,
         write: &ConditionWrite,
     ) -> Result<(), WriteError> {
-        let call = "apply_condition";
+        let call = APPLY_CONDITION;
         let name = replicaset_name(namespace);
         self.owned(call, namespace, owner)
             .await?
@@ -191,7 +198,7 @@ impl PoolWriter {
         namespace: &str,
         owner: &Owner,
     ) -> Result<DeleteOutcome, WriteError> {
-        let call = "delete_replica_set";
+        let call = DELETE_REPLICA_SET;
         let Some(current) = self.owned(call, namespace, owner).await? else {
             return Ok(DeleteOutcome::Gone);
         };
@@ -217,7 +224,7 @@ impl PoolWriter {
         self.api
             .delete_pod(namespace, name, version)
             .await
-            .map_err(|error| self.failed("delete_pod", namespace, error))
+            .map_err(|error| self.failed(DELETE_POD, namespace, error))
     }
 
     pub async fn patch_status(

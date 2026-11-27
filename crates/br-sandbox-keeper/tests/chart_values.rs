@@ -1,5 +1,7 @@
+use br_sandbox_keeper::KeeperConfig;
 use serde_json::Value;
 use std::path::PathBuf;
+use std::time::Duration;
 
 mod common;
 
@@ -102,6 +104,62 @@ fn the_values_of_the_overlay_are_not_the_defaults() {
 fn keeper_values() -> Value {
     let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
     serde_json::from_str(&keeper_document(&objects)).expect("the keeper document is JSON")
+}
+
+fn seconds(values: &Value, path: &str) -> Duration {
+    Duration::from_secs(number(values, path))
+}
+
+fn keeper_wide_document() -> String {
+    let mut document = keeper_values();
+    let keys = document.as_object_mut().expect("the document is an object");
+    keys.remove("pools");
+    keys.insert("agent_container".to_owned(), "agent".into());
+    document.to_string()
+}
+
+#[test]
+fn the_typed_config_carries_the_keeper_wide_values_of_the_overlay() {
+    let overlay = overlay();
+    let config = KeeperConfig::from_json(&keeper_wide_document()).expect("a valid document");
+
+    assert_eq!(config.store.bucket, text(&overlay, "store.bucket"));
+    assert_eq!(config.store.region, text(&overlay, "store.region"));
+    assert_eq!(
+        config.store.endpoint.as_str().trim_end_matches('/'),
+        text(&overlay, "store.endpoint")
+    );
+    assert_eq!(
+        config.store.path_style,
+        lookup(&overlay, "store.path_style")
+            .as_bool()
+            .expect("a bool")
+    );
+    assert_eq!(config.save_ttl, seconds(&overlay, "save.ttl_seconds"));
+    assert_eq!(
+        config.tombstone_ttl,
+        Duration::from_secs(number(&overlay, "save.tombstone_ttl_days") * 86_400)
+    );
+    assert_eq!(
+        config.warm_max_age,
+        seconds(&overlay, "warm_max_age_seconds")
+    );
+    assert_eq!(
+        config.lease.duration,
+        seconds(&overlay, "keeper.lease.duration_seconds")
+    );
+    assert_eq!(
+        config.lease.renew_deadline,
+        seconds(&overlay, "keeper.lease.renew_deadline_seconds")
+    );
+    assert_eq!(
+        config.lease.retry_period,
+        seconds(&overlay, "keeper.lease.retry_period_seconds")
+    );
+    assert_eq!(
+        config.listen_address.to_string(),
+        format!("0.0.0.0:{}", number(&overlay, "keeper.port"))
+    );
 }
 
 #[test]

@@ -242,3 +242,53 @@ fn metric_of(sweeper: &Sweeper, line: &str) -> bool {
         .lines()
         .any(|text| text == line)
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_restarted_sweeper_finishes_the_work_from_the_store_alone_and_keeps_a_live_save() {
+    let harness = harness(true, 100);
+    let (expired, live) = (save_key(), save_key());
+    let (old_attempt, new_attempt) = (AttemptId::mint(), AttemptId::mint());
+    put_save(
+        &harness.bucket,
+        &expired,
+        &[old_attempt],
+        old_attempt,
+        NOW - 5000,
+    );
+    put_save(
+        &harness.bucket,
+        &live,
+        &[new_attempt],
+        new_attempt,
+        NOW - 10,
+    );
+    harness.bucket.fail_delete(&manifest_key(&expired));
+    harness.sweeper.sweep_once().await;
+    assert!(harness.bucket.contains(&tombstone_key(&expired)));
+    let kept = Arc::new(FakeBucket::default());
+    for name in harness.bucket.keys() {
+        kept.insert(&name, &harness.bucket.body(&name).unwrap(), NOW - 5000);
+    }
+    let clock: Arc<dyn Clock> = Arc::new(TokioClock::starting_at(at(NOW)));
+    let leadership = Leadership::new(clock.clone());
+    leadership.renewed(at(NOW + 1_000_000));
+    let restarted = Sweeper {
+        bucket: Arc::new(GuardedBucket::new(kept.clone())),
+        clock,
+        leadership,
+        metrics: Arc::new(Metrics::new()),
+        ..harness_sweeper(&harness)
+    };
+    restarted.sweep_once().await;
+    assert!(!kept.contains(&manifest_key(&expired)));
+    assert!(!kept.contains(&part_object(&expired, old_attempt)));
+    assert!(kept.contains(&manifest_key(&live)));
+    assert!(kept.contains(&part_object(&live, new_attempt)));
+    assert!(
+        restarted
+            .metrics
+            .render(true)
+            .lines()
+            .any(|text| text == "br_sandbox_keeper_sweep_errors_total 0")
+    );
+}

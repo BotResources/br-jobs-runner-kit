@@ -1,10 +1,13 @@
 mod bed;
+mod bound;
 mod condition;
 mod expiry;
 mod faults;
 mod fence;
 mod lifecycle;
 mod metrics;
+mod refusals;
+mod restart;
 mod rollout;
 mod run;
 mod served;
@@ -92,6 +95,10 @@ pub(super) fn bare_with(leader: bool, config: crate::config::KeeperConfig) -> Be
     kube.put_quota(NS, quota());
     kube.put_network_policies(NS, vec![deny_all()]);
     kube.put_template(NS, template_map(&template_json(NS)));
+    over(kube, leader, config)
+}
+
+pub(super) fn over(kube: Arc<FakeKube>, leader: bool, config: crate::config::KeeperConfig) -> Bed {
     let clock: Arc<dyn Clock> = Arc::new(TokioClock::starting_at(at(START)));
     let leadership = Leadership::new(clock.clone());
     if leader {

@@ -1,6 +1,8 @@
 use k8s_openapi::api::apps::v1::ReplicaSet;
 
-use crate::cluster::{DeleteOutcome, ReplicaSetRead};
+use crate::cluster::{
+    APPLY_TEMPLATE, CREATE_REPLICA_SET, DELETE_REPLICA_SET, DeleteOutcome, ReplicaSetRead,
+};
 use crate::pool::{
     Acceptance, FenceVerdict, Owner, PoolSettings, PoolTemplate, RenderedTemplate, TemplateFault,
     judge_acceptance, template_hash_key, validate,
@@ -84,6 +86,8 @@ impl Engine {
             let target = target_of(namespace, replica_set);
             self.pending_events(namespace, &target).await;
         }
+        let observation =
+            observation.map(|observed| observed.refused(self.refusals.naming(namespace)));
         self.write_status(namespace, pool, &acceptance, observation.as_ref(), minimum)
             .await;
     }
@@ -125,7 +129,10 @@ impl Engine {
                 self.create_replica_set(namespace, owner, desired.clamped, &rendered)
                     .await
             }
-            other => other,
+            other => {
+                self.refusals.clear(namespace, CREATE_REPLICA_SET, "");
+                other
+            }
         };
         let hash = Some(rendered.hash.clone());
         let Some(ReplicaSetRead::Owned(replica_set)) = &held else {
@@ -157,11 +164,12 @@ impl Engine {
         if !self.leadership.is_leader() {
             return Some(ReplicaSetRead::Absent);
         }
-        match self
+        let result = self
             .writer
             .create_replica_set(namespace, owner, replicas, rendered)
-            .await
-        {
+            .await;
+        self.note_write(namespace, CREATE_REPLICA_SET, "", &result);
+        match result {
             Ok(outcome) => {
                 tracing::info!(
                     pool = namespace,
@@ -186,12 +194,15 @@ impl Engine {
         rendered: &RenderedTemplate,
     ) -> bool {
         if self.held_hash(replica_set).as_deref() == Some(rendered.hash.as_str()) {
+            self.refusals.clear(namespace, APPLY_TEMPLATE, "");
             return true;
         }
         if !self.leadership.is_leader() {
             return false;
         }
-        match self.writer.set_template(namespace, owner, rendered).await {
+        let result = self.writer.set_template(namespace, owner, rendered).await;
+        self.note_write(namespace, APPLY_TEMPLATE, "", &result);
+        match result {
             Ok(_) => {
                 tracing::info!(
                     pool = namespace,
@@ -214,10 +225,16 @@ impl Engine {
         owner: &Owner,
         held: Option<ReplicaSetRead>,
     ) -> Option<ReplicaSetRead> {
-        if !matches!(held, Some(ReplicaSetRead::Owned(_))) || !self.leadership.is_leader() {
+        if !matches!(held, Some(ReplicaSetRead::Owned(_))) {
+            self.refusals.clear(namespace, DELETE_REPLICA_SET, "");
             return held;
         }
-        match self.writer.delete_replica_set(namespace, owner).await {
+        if !self.leadership.is_leader() {
+            return held;
+        }
+        let result = self.writer.delete_replica_set(namespace, owner).await;
+        self.note_write(namespace, DELETE_REPLICA_SET, "", &result);
+        match result {
             Ok(DeleteOutcome::Deleted | DeleteOutcome::Gone) => {
                 tracing::warn!(
                     pool = namespace,

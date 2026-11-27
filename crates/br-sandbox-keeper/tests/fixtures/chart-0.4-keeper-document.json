@@ -1,0 +1,19 @@
+{
+  "label_prefix": "br.sandbox",
+  "managed_namespace_selector": "br.sandbox/managed=true",
+  "store_bucket": "saves",
+  "store_endpoint": "https://store.example.test",
+  "store_region": "example-1",
+  "store_path_style": true,
+  "listen_address": "0.0.0.0:8080",
+  "save_ttl_seconds": 60,
+  "tombstone_ttl_seconds": 31536000,
+  "warm_max_age_seconds": 1800,
+  "scale_down_cooldown_seconds": 120,
+  "lease_duration_seconds": 15,
+  "renew_deadline_seconds": 10,
+  "retry_period_seconds": 2,
+  "idle_ttl_seconds": 120,
+  "idle_keep_min_state_bytes": 10000000,
+  "agent_container": "agent"
+}
