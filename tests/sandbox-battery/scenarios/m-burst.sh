@@ -96,7 +96,7 @@ hold_size() {
   done
 }
 
-lock_timed
+lock_timed || scenario_end
 keeper_pause
 for pns in "${NSS[@]}"; do echo "$pns $(pool_replicas "$pns")" >> "$state_file"; done
 deadline=$(($(date +%s) + budget))

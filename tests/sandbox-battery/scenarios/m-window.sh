@@ -215,7 +215,7 @@ loop_reached=$(grep -c ' R$' <<< "$loop_lines")
 loop_recorded=$(($(conn_docker "$PROBE_CONTAINER") - loop_before))
 verdict m-window-loop-control "the probe loop run for 2 s from an unrestricted pod: $loop_reached of $(count_lines <<< "$loop_lines") connects read R, the probe container recorded $loop_recorded connections" \
   test "$loop_reached" -gt 0 -a "$loop_recorded" -ge "$loop_reached"
-lock_timed
+lock_timed || scenario_end
 
 printf 'kind\tsample\tpod\tready_ms\tfirst_exec_ms\tenforced_ms\tenforced_from\texec_before_enforced\tprobe_connections\tobserver_reached\tflips_back\tlast_exec_result\tlast_start_result\trules_ms\tagent_start_ms\tload_at_start\n' > "$samples"
 : > "$watch_file"

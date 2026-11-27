@@ -11,7 +11,7 @@ render_with_mirror() {
 }
 
 pods_without_pull_secret() {
-  k apply --dry-run=client --validate=false -o json -f - < "$rendered_file" | jq -s '[.[] | (if .kind == "List" then .items[] else . end)
+  k create --dry-run=client --validate=false -o json -f - < "$rendered_file" | jq -s '[.[] | (if .kind == "List" then .items[] else . end)
     | (if .kind == "Pod" then .spec elif .spec.template.spec then .spec.template.spec elif .spec.jobTemplate.spec.template.spec then .spec.jobTemplate.spec.template.spec else empty end)
     | select((.imagePullSecrets // []) | length == 0)] | length'
 }
@@ -23,7 +23,15 @@ foreign_images=$(grep -E '^[[:space:]]*-?[[:space:]]*image:' "$rendered_file" | 
 verdict closed-cluster-all-images-via-mirror "$foreign_images image fields outside the mirror" test "$foreign_images" = 0
 unpulled=$(pods_without_pull_secret)
 verdict closed-cluster-pull-secrets-everywhere "$unpulled pod templates without imagePullSecrets" test "$unpulled" = 0
-vendor_hits=$(grep -c -i -E "$VENDOR_HOST_REGEX" "$rendered_file")
+vendor_pattern="(^|[^[:alnum:]._/:@-])([[:alnum:]-]+\\.)*($VENDOR_HOST_REGEX)(:[0-9]+)?/|://([^/\"' ]*[.@])?($VENDOR_HOST_REGEX)([:/\"' ]|\$)"
+vendor_sample_hits() { printf '%s\n' "$1" | grep -c -i -E "$vendor_pattern"; }
+verdict closed-cluster-vendor-search-finds-image-host "an image reference with a vendor host in the host position is found" \
+  test "$(vendor_sample_hits 'image: "ghcr.io/example/tool:1"')" = 1
+verdict closed-cluster-vendor-search-finds-url-host "a URL with a vendor host is found" \
+  test "$(vendor_sample_hits 'url: https://api.iron.sh/v1')" = 1
+verdict closed-cluster-vendor-search-skips-mirror-path "a vendor host after the mirror host is not found" \
+  test "$(vendor_sample_hits "image: \"$CLOSED_MIRROR_HOST/ghcr.io/example/tool:1\"")" = 0
+vendor_hits=$(grep -c -i -E "$vendor_pattern" "$rendered_file")
 record closed-cluster-vendor-host-hits "$vendor_hits" hits
 verdict closed-cluster-no-vendor-host-rendered "$vendor_hits vendor or upstream registry hosts in the rendered objects" test "$vendor_hits" = 0
 token_hits=$(grep -c -E "$VENDOR_TOKEN_REGEX" "$rendered_file")

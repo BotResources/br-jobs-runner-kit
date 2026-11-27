@@ -5,6 +5,7 @@ use battery::adapter::{self, request};
 use battery::common::{record_stats, state_turn, timed_open, work_hash};
 use battery::error::Res;
 use battery::evidence::Checks;
+use battery::guards::PodReaper;
 use battery::ids::Lane;
 use battery::prng::{Prng, Stats};
 use battery::saves::Saves;
@@ -20,8 +21,10 @@ async fn a_missing_save_never_stops_a_run() -> Res {
     let sandbox = adapter::standard(env).await?;
     let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     let set = seeds::standard()?;
     let lane = Lane::new()?;
+    reaper.track_thread(lane.thread.to_string());
     let (k1, _) = state_turn(&sandbox, &lane, None, 41, 30_000_000).await?;
     saves
         .delete_manifest_and_part(&saves.key(lane.thread, lane.agent, k1))
@@ -72,7 +75,9 @@ async fn a_delete_during_the_restore_never_gives_an_error_or_a_half_restored_tre
     let sandbox = adapter::standard(env).await?;
     let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     let lane = Lane::new()?;
+    reaper.track_thread(lane.thread.to_string());
     let (k1, _) = state_turn(&sandbox, &lane, None, 42, 100_000_000).await?;
     let key = saves.key(lane.thread, lane.agent, k1);
     let manifest = saves
@@ -92,7 +97,9 @@ async fn a_delete_during_the_restore_never_gives_an_error_or_a_half_restored_tre
     let restore_ms = control.elapsed().as_millis() as u64;
     adapter::release(&sandbox, &probe.box_id).await?;
     let empty = {
-        let (_, turn) = Lane::new()?.first()?;
+        let blank_lane = Lane::new()?;
+        reaper.track_thread(blank_lane.thread.to_string());
+        let (_, turn) = blank_lane.first()?;
         let blank = adapter::open(&sandbox, turn, Seed::empty()).await?;
         let hash = work_hash(&sandbox, &blank.box_id).await?;
         adapter::release(&sandbox, &blank.box_id).await?;

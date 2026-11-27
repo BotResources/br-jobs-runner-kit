@@ -29,7 +29,7 @@ run_one() {
 }
 
 run_timed() {
-  lock_timed
+  lock_timed || return 0
   export TIMING_LOCK_HELD=1
   run_one "$1"
   unset TIMING_LOCK_HELD

@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use br_runner_sandbox::LABEL_THREAD;
 use serde_json::Value;
 
 use crate::env::Env;
@@ -180,6 +181,7 @@ pub struct PodReaper {
     context: String,
     namespace: String,
     pods: Vec<String>,
+    threads: Vec<String>,
     evidence: PathBuf,
 }
 
@@ -189,6 +191,7 @@ impl PodReaper {
             context: env.context.clone(),
             namespace: env.namespace(),
             pods: Vec::new(),
+            threads: Vec::new(),
             evidence: env.evidence.clone(),
         }
     }
@@ -196,27 +199,49 @@ impl PodReaper {
     pub fn track(&mut self, pod: impl Into<String>) {
         self.pods.push(pod.into());
     }
+
+    pub fn track_thread(&mut self, thread: impl Into<String>) {
+        self.threads.push(thread.into());
+    }
+}
+
+impl PodReaper {
+    fn delete_args(&self, target: &[String]) -> Vec<String> {
+        let mut args: Vec<String> = [
+            "--context",
+            &self.context,
+            "-n",
+            &self.namespace,
+            "delete",
+            "pod",
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned())
+        .collect();
+        args.extend_from_slice(target);
+        args.extend(
+            ["--ignore-not-found", "--wait=false", "--grace-period=1"]
+                .iter()
+                .map(|arg| (*arg).to_owned()),
+        );
+        args
+    }
 }
 
 impl Drop for PodReaper {
     fn drop(&mut self) {
-        let failures: Vec<String> = self
-            .pods
-            .iter()
-            .filter_map(|pod| {
-                attempt_restore(Command::new("kubectl").args([
-                    "--context",
-                    &self.context,
-                    "-n",
-                    &self.namespace,
-                    "delete",
-                    "pod",
-                    pod,
-                    "--ignore-not-found",
-                    "--wait=false",
-                    "--grace-period=1",
-                ]))
-                .map(|detail| format!("{pod}: {detail}"))
+        let by_name = self.pods.iter().map(|pod| (pod.clone(), vec![pod.clone()]));
+        let by_thread = self.threads.iter().map(|thread| {
+            (
+                format!("thread {thread}"),
+                vec!["-l".to_owned(), format!("{LABEL_THREAD}={thread}")],
+            )
+        });
+        let failures: Vec<String> = by_name
+            .chain(by_thread)
+            .filter_map(|(what, target)| {
+                attempt_restore(Command::new("kubectl").args(self.delete_args(&target)))
+                    .map(|detail| format!("{what}: {detail}"))
             })
             .collect();
         settle(&self.evidence, "pod-reap", &failures);

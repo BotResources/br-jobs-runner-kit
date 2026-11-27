@@ -23,7 +23,15 @@ with_timeout() {
 lock_timed() {
   if [ -n "${TIMING_LOCK_HELD:-}" ]; then return 0; fi
   mkdir -p "$(dirname "$TIMING_LOCK")"
-  until mkdir "$TIMING_LOCK" 2> /dev/null; do sleep 2; done
+  local waited=0 limit=${TIMING_LOCK_WAIT_SECONDS:-21600}
+  until mkdir "$TIMING_LOCK" 2> /dev/null; do
+    if [ "$waited" -ge "$limit" ]; then
+      check timing-lock fail "the lock $TIMING_LOCK is still held after $limit s; if no test is running, remove the folder by hand"
+      return 1
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
   TIMING_LOCK_OWNED=1
 }
 

@@ -28,14 +28,21 @@ fn holder_of(lock: &Path) -> Option<u32> {
 }
 
 fn is_alive(pid: u32) -> bool {
-    Command::new("kill")
+    let Ok(output) = Command::new("kill")
         .args(["-0", &pid.to_string()])
+        .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(true)
+        .output()
+    else {
+        return true;
+    };
+    if output.status.success() {
+        return true;
+    }
+    !String::from_utf8_lossy(&output.stderr)
+        .to_ascii_lowercase()
+        .contains("no such process")
 }
 
 fn remove_lock(lock: &Path) {
@@ -106,5 +113,60 @@ impl TimingLock {
 impl Drop for TimingLock {
     fn drop(&mut self) {
         remove_lock(&self.path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lock_folder(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("battery-lock-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn dead_pid() -> u32 {
+        let mut child = Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    }
+
+    #[test]
+    fn a_lock_whose_holder_is_gone_is_taken_over() {
+        let lock = lock_folder("dead");
+        let pid = dead_pid();
+        std::fs::write(lock.join(PID_FILE), pid.to_string()).unwrap();
+        assert!(take_over_if_dead(&lock));
+        assert!(!lock.exists());
+    }
+
+    #[test]
+    fn a_lock_whose_holder_is_alive_is_not_taken_over() {
+        let lock = lock_folder("alive");
+        std::fs::write(lock.join(PID_FILE), std::process::id().to_string()).unwrap();
+        assert!(!take_over_if_dead(&lock));
+        assert_eq!(holder_of(&lock), Some(std::process::id()));
+        remove_lock(&lock);
+    }
+
+    #[test]
+    fn a_lock_without_a_pid_file_is_never_taken_over() {
+        let lock = lock_folder("nopid");
+        assert!(!take_over_if_dead(&lock));
+        assert!(lock.exists());
+        remove_lock(&lock);
+    }
+
+    #[test]
+    fn a_live_process_of_another_user_does_not_count_as_gone() {
+        assert!(is_alive(1));
+    }
+
+    #[test]
+    fn a_process_that_does_not_exist_counts_as_gone() {
+        assert!(!is_alive(dead_pid()));
     }
 }

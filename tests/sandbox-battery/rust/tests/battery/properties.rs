@@ -7,6 +7,8 @@ use battery::ids::Lane;
 use battery::tree;
 use br_agentic_harness_contract::Seed;
 
+const IMAGE_FILES: [&str; 2] = ["/home/agent/image-two.txt", "/work/image-one.txt"];
+
 #[tokio::test(flavor = "multi_thread")]
 async fn hard_links_and_the_executable_bit_survive_save_and_restore() -> Res {
     let session = Session::start().await?;
@@ -77,11 +79,13 @@ async fn an_image_file_deleted_by_the_agent_comes_back_only_if_it_is_in_the_save
     )
     .await?;
     let files: Vec<&str> = listing.lines().collect();
-    if files.len() < 2 {
+    if files != IMAGE_FILES {
         checks.expect(
             "image-file-deleted-by-the-agent-stays-deleted",
             false,
-            "the pool image holds fewer than two files in the save scope (/work, /home/agent): the property cannot be proven; put two files there in the image",
+            format!(
+                "the pool image must hold exactly {IMAGE_FILES:?} in the save scope (/work, /home/agent) and holds {files:?}"
+            ),
         );
         adapter::release(&sandbox, &opened.box_id).await?;
         return checks.finish();

@@ -68,7 +68,7 @@ pullable() {
   esac
 }
 
-lock_timed
+lock_timed || scenario_end
 for image in "$big_image" "$tools_image"; do
   size=$(docker exec "$NODE" crictl inspecti "$image" 2> /dev/null | jq -r '.status.size // empty')
   label=$([ "$image" = "$big_image" ] && echo big || echo small)

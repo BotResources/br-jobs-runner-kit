@@ -70,7 +70,7 @@ gate_delay() {
 k create namespace "$gate_ns" > /dev/null 2>&1
 start_gate_objects || { check m-netpol-objects fail "test pods not ready in $gate_ns"; scenario_end; }
 target_ip=$(k -n "$gate_ns" get pod $target -o jsonpath='{.status.podIP}')
-lock_timed
+lock_timed || scenario_end
 
 open_from_start=
 open_from_return=

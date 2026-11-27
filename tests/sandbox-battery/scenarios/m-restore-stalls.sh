@@ -42,7 +42,7 @@ stall_context() {
 }
 
 [ -f "$state_file" ] || make_state "$state_file" "$state_mb"
-lock_timed
+lock_timed || scenario_end
 claim_failures=0
 printf 'run\tclaim_ms\ttrue_ms\tstream_ms\ttotal_ms\trc\tload\n' > "$table"
 
