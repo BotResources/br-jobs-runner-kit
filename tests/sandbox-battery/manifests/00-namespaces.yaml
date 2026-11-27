@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${NS_TESTSVC}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${NS_STORE}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${NS_TOOLS}

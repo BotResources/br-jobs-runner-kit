@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe
+  namespace: ${NS_NETPOL_PROBE}
+spec:
+  containers:
+    - name: probe
+      image: ${GITEA_IMAGE}
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "600"]
