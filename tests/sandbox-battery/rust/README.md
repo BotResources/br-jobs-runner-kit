@@ -56,18 +56,18 @@ Variables that only some tests need (the test fails with the variable name when 
 | List, delete, path style | `store_client::list_delete_and_path_style_work_on_the_real_store` |
 | System roots only | `store_client::store_client_trusts_system_roots_only` |
 | A read of a 50 MB file and a foreground run with 20 MB on stdout or on stderr never lose bytes without an error (lines `ok`, `error-reported`, `LOSS-WITHOUT-ERROR`) | `bytes_under_load::a_read_of_a_50_mb_file_never_loses_bytes_without_an_error`, `bytes_under_load::a_foreground_run_never_loses_output_bytes_without_an_error` |
-| Exec: stdin close, true exit code | `exec_layer::exec_gives_true_exit_codes_and_ends_stdin_on_request` |
-| Stream with no status is a fault | `exec_layer::a_stream_with_no_status_is_a_fault` |
+| Exec: stdin close, true exit code | `exec_layer::process::exec_gives_true_exit_codes_and_ends_stdin_on_request` |
+| Stream with no status is a fault | `exec_layer::stream::a_stream_with_no_status_is_a_fault` |
 | Pod watch: changes and snapshot after a break | `open_cluster::the_warm_pod_watch_survives_a_break_of_the_api_connection`, `open_release::the_watch_follows_deleted_and_new_warm_pods` |
 | Stale patch is a conflict | `open_pool::two_opens_that_race_for_one_warm_pod_give_it_to_one_only` |
 | Cold pod from the template | `open_pool::a_cold_pod_from_the_template_starts_like_a_warm_pod_and_stays_out_of_the_replica_set` |
 | Pool condition read as it is | `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` |
-| bsdtar argument lists | `exec_layer::bsdtar_takes_the_argument_lists_of_the_crate` |
+| bsdtar argument lists | `exec_layer::tools::bsdtar_takes_the_argument_lists_of_the_crate` |
 | Save then restore: files, modes, owners, dirs, times; no other owner | `save_restore::save_then_restore_gives_back_files_modes_owners_dirs_and_times`, `save_restore::the_agent_user_cannot_write_files_owned_by_another_user` |
 | Save of a missing scope path | `save_restore::a_save_of_a_missing_scope_path_is_a_fault_with_the_record_failed` |
-| Background command and its id | `exec_layer::a_background_command_survives_and_its_id_is_right` |
-| Scripts of the exec layer | `exec_layer::the_scripts_of_the_exec_layer_work_in_the_agent_image_shell` |
-| Exec timeout and save timeout | `exec_layer::a_command_over_exec_timeout_stops_near_the_limit`, `save_restore::a_save_over_save_timeout_stops_with_the_record_timeout` |
+| Background command and its id | `exec_layer::process::a_background_command_survives_and_its_id_is_right` |
+| Scripts of the exec layer | `exec_layer::tools::the_scripts_of_the_exec_layer_work_in_the_agent_image_shell` |
+| Exec timeout and save timeout | `exec_layer::process::a_command_over_exec_timeout_stops_near_the_limit`, `save_restore::a_save_over_save_timeout_stops_with_the_record_timeout` |
 | Seed root-owned and read-only | `save_restore::the_seed_is_root_owned_and_read_only_for_the_agent` |
 | No TLS crypto provider set | `crypto_provider` (own test binary, fresh process) |
 | Two opens race for one warm pod | `open_pool::two_opens_that_race_for_one_warm_pod_give_it_to_one_only` |
@@ -80,13 +80,13 @@ Variables that only some tests need (the test fails with the variable name when 
 | Erase | `open_drop_erase::an_erase_of_a_thread_leaves_nothing_in_the_store_and_the_cluster` |
 | Only the rights of the intent | `open_release::the_adapter_works_with_only_the_rights_of_the_intent` |
 | Slow or lost kube API gives a fault, not a stuck call | `open_cluster::a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call` |
-| Check 5: fresh start within 500 ms with the seed | `start_times::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
+| Check 5: fresh start within 500 ms with the seed | `start_times::fresh::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
 | Check 6: save, failed turn, tree equal, go back | `failed_turns`, `tree_equal`, `go_back`, `save_keys`, `missing_save`, `crash_save` |
 | Check 7: expiry after 60 s, named start results | `expiry`, `start_results` |
 | Check 8: second image by value, same tag within `warm_max_age_seconds`, two image errors | `images`, `open_images` |
 | Check 9: harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
 | Hard links, executable bit, image file deleted by the agent | `properties` |
-| Restore ladder 10, 30, 50, 100 MB, stalls, cold start effect | `start_times::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split`, `start_times::cold_start_effect_of_the_init_container_and_the_image_size` |
+| Restore ladder 10, 30, 50, 100 MB, stalls, cold start effect | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split`, `start_times::cold::cold_start_effect_of_the_init_container_and_the_image_size` |
 
 ## Harness suite with the adapter
 
