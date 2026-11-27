@@ -155,8 +155,7 @@ fn the_binary_that_serves_ends_with_code_0_on_sigterm() {
             "lease_namespace": "sys",
             "save_ttl_seconds": 1000,
             "skew_margin_seconds": 60,
-            "pools": [{"id": "p", "namespace": "sbx", "replicaset": "warm-p",
-                "min_replicas": 1, "max_replicas": 20}]
+            "agent_container": "agent"
         })
         .to_string(),
     );

@@ -44,6 +44,7 @@ pub enum DeleteReason {
     Idle,
     Stuck,
     Failed,
+    Rollout,
 }
 
 impl DeleteReason {
@@ -53,6 +54,7 @@ impl DeleteReason {
             DeleteReason::Idle => "idle",
             DeleteReason::Stuck => "stuck",
             DeleteReason::Failed => "failed",
+            DeleteReason::Rollout => "rollout",
         }
     }
 }
@@ -129,23 +131,38 @@ fn claimed(pod: &PodFacts, rules: &ExpiryRules, now: Timestamp) -> Judgment {
     }
 }
 
-fn warm(pod: &PodFacts, rules: &ExpiryRules, now: Timestamp) -> Judgment {
-    let deadline = pod.created_at.plus(rules.warm_max_age);
-    let judged = at_deadline(deadline, DeleteReason::WarmMaxAge, now);
-    let alarmable = pod.phase == Phase::Pending && pod_failure(pod).is_none();
-    if !alarmable || matches!(judged.action, Action::Delete(_)) {
-        return judged;
+fn warm(pod: &PodFacts, rules: &ExpiryRules, selected: bool, now: Timestamp) -> Judgment {
+    if selected {
+        return Judgment {
+            action: Action::Delete(DeleteReason::Rollout),
+            recheck_at: None,
+        };
+    }
+    let pending = pod.phase == Phase::Pending;
+    let held = pending && pod.unschedulable;
+    let deadline = (!held).then(|| pod.created_at.plus(rules.warm_max_age));
+    if deadline.is_some_and(|deadline| deadline.has_passed(now)) {
+        return Judgment {
+            action: Action::Delete(DeleteReason::WarmMaxAge),
+            recheck_at: None,
+        };
+    }
+    if !pending || pod_failure(pod).is_some() {
+        return Judgment {
+            action: Action::Keep,
+            recheck_at: deadline,
+        };
     }
     let alarm_at = pod.created_at.plus(rules.pending_alarm);
     if alarm_at.has_passed(now) {
         Judgment {
             action: Action::PendingAlarm,
-            recheck_at: Some(deadline),
+            recheck_at: deadline,
         }
     } else {
         Judgment {
             action: Action::Keep,
-            recheck_at: Some(alarm_at.min(deadline)),
+            recheck_at: Some(deadline.map_or(alarm_at, |deadline| alarm_at.min(deadline))),
         }
     }
 }
@@ -154,6 +171,7 @@ pub fn judge_pod(
     pod: &PodFacts,
     rules: &ExpiryRules,
     failed_since: Option<Timestamp>,
+    rollout_selected: bool,
     now: Timestamp,
 ) -> Judgment {
     if pod.deleting {
@@ -167,7 +185,7 @@ pub fn judge_pod(
         return at_deadline(seen.plus(rules.failed_pod_ttl), DeleteReason::Failed, now);
     }
     match pod.pool_state {
-        PoolState::Warm => warm(pod, rules, now),
+        PoolState::Warm => warm(pod, rules, rollout_selected, now),
         PoolState::Claimed => claimed(pod, rules, now),
     }
 }

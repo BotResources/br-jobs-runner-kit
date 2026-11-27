@@ -13,13 +13,22 @@ use futures::stream::{BoxStream, SelectAll};
 use tokio_util::sync::CancellationToken;
 
 use crate::cluster::{KubeApi, PodEvent};
-use crate::config::{KeeperConfig, PoolConfig};
+use crate::config::KeeperConfig;
 use crate::facts::PodFacts;
 use crate::leader::Leadership;
 use crate::metrics::Metrics;
+use crate::pool::PoolSettings;
 use crate::readiness::Readiness;
 use crate::rules::{ClaimWindow, ScaleState};
 use crate::time::{earliest, until};
+
+#[derive(Debug, Clone)]
+pub struct PoolTarget {
+    pub namespace: String,
+    pub id: String,
+    pub replicaset: String,
+    pub settings: PoolSettings,
+}
 
 pub type PoolId = (String, String);
 pub type PodId = (String, String);
@@ -38,6 +47,7 @@ pub struct Engine {
     pub(crate) metrics: Arc<Metrics>,
     pub(crate) readiness: Arc<Readiness>,
     pub(crate) config: Arc<KeeperConfig>,
+    pub(crate) pools: Vec<PoolTarget>,
     pub(crate) pods: HashMap<PodId, Tracked>,
     pub(crate) claims: HashMap<PoolId, ClaimWindow>,
     pub(crate) scale: HashMap<PoolId, ScaleState>,
@@ -60,7 +70,7 @@ async fn next_event(events: &mut NamespacedEvents) -> Option<(String, PodEvent)>
     }
 }
 
-pub fn pool_id(pool: &PoolConfig) -> PoolId {
+pub fn pool_id(pool: &PoolTarget) -> PoolId {
     (pool.namespace.clone(), pool.id.clone())
 }
 
@@ -82,6 +92,7 @@ impl Engine {
             metrics,
             readiness,
             config,
+            pools: Vec::new(),
             pods: HashMap::new(),
             claims: HashMap::new(),
             scale: HashMap::new(),

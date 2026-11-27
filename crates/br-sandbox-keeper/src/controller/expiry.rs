@@ -1,8 +1,5 @@
 use std::collections::HashSet;
-use std::time::Duration;
-
 use crate::cluster::DeleteOutcome;
-use crate::config::{DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, DEFAULT_IDLE_TTL_SECONDS};
 use crate::facts::PodFacts;
 use crate::rules::{Action, DeleteReason, ExpiryRules, judge_pod};
 
@@ -11,28 +8,22 @@ use super::{Engine, PodId, PoolId};
 const CONFLICT_ATTEMPTS: usize = 4;
 
 impl Engine {
-    fn expiry_rules(&self, facts: &PodFacts) -> ExpiryRules {
-        let pool = self
-            .configured_pool(facts)
-            .and_then(|(namespace, id)| self.config.pool(&namespace, &id));
+    fn expiry_rules(&self) -> ExpiryRules {
         ExpiryRules {
             warm_max_age: self.config.warm_max_age,
             stuck_ttl: self.config.stuck_ttl,
             failed_pod_ttl: self.config.failed_pod_ttl,
             pending_alarm: self.config.pending_alarm,
-            idle_ttl: pool.map_or(Duration::from_secs(DEFAULT_IDLE_TTL_SECONDS), |pool| {
-                pool.idle_ttl
-            }),
-            idle_keep_min_state_bytes: pool.map_or(DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, |pool| {
-                pool.idle_keep_min_state_bytes
-            }),
+            idle_ttl: self.config.idle_ttl,
+            idle_keep_min_state_bytes: self.config.idle_keep_min_state_bytes,
         }
     }
 
     pub(crate) fn configured_pool(&self, facts: &PodFacts) -> Option<PoolId> {
         let id = facts.pool_id.as_ref()?;
-        self.config
-            .pool(&facts.namespace, id)
+        self.pools
+            .iter()
+            .find(|pool| pool.namespace == facts.namespace && &pool.id == id)
             .map(|_| (facts.namespace.clone(), id.clone()))
     }
 
@@ -44,9 +35,9 @@ impl Engine {
             };
             let facts = tracked.facts.clone();
             let failed_since = tracked.failed_since;
-            let rules = self.expiry_rules(&facts);
+            let rules = self.expiry_rules();
             let now = self.clock.now();
-            let judgment = judge_pod(&facts, &rules, failed_since, now);
+            let judgment = judge_pod(&facts, &rules, failed_since, false, now);
             if let Some(tracked) = self.pods.get_mut(id) {
                 tracked.recheck_at = judgment.recheck_at;
             }

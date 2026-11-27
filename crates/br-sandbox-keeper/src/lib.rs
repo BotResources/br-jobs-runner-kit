@@ -15,6 +15,7 @@ mod fakes;
 mod http;
 mod leader;
 mod metrics;
+pub mod pool;
 mod readiness;
 pub mod resource;
 pub mod rights;
@@ -27,10 +28,7 @@ mod testing;
 mod time;
 mod tls;
 
-pub use config::{
-    ConfigError, FloorInput, FloorWindow, KeeperConfig, KeeperConfigInput, LeaseSettings,
-    PoolConfig, PoolInput, StoreSettings,
-};
+pub use config::{ConfigError, KeeperConfig, KeeperConfigInput, LeaseSettings, StoreSettings};
 pub use environment::{
     ACCESS_KEY_VARIABLE, CONFIG_VARIABLE, POD_NAMESPACE_FILE, SECRET_KEY_VARIABLE, StoreCredential,
     config_path, own_namespace,

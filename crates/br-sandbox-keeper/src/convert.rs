@@ -3,15 +3,19 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use br_runner_sandbox::{CLEAN_FALSE, CLEAN_TRUE, POOL_CLAIMED, POOL_WARM, PodKeys, Timestamp};
 use k8s_openapi::api::apps::v1::ReplicaSet;
-use k8s_openapi::api::core::v1::{ContainerStatus, Pod};
+use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
+use crate::pool::template_hash_key;
 use crate::facts::{
     ConditionFacts, ContainerFacts, Mark, Phase, PodFacts, PoolState, ReplicaSetFacts, Terminated,
 };
 
 const READY: &str = "Ready";
 const TRUE: &str = "True";
+const FALSE: &str = "False";
+const POD_SCHEDULED: &str = "PodScheduled";
+const UNSCHEDULABLE: &str = "Unschedulable";
 
 pub(crate) fn timestamp_of(time: &Time) -> Timestamp {
     let millis = time.0.as_millisecond();
@@ -22,6 +26,20 @@ pub(crate) fn timestamp_of(time: &Time) -> Timestamp {
         base - Duration::from_millis(millis.unsigned_abs())
     };
     Timestamp::from_system_time(moment)
+}
+
+pub(crate) fn instant(time: Timestamp) -> jiff::Timestamp {
+    let millis = time
+        .to_system_time()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        });
+    jiff::Timestamp::from_millisecond(millis).unwrap_or(jiff::Timestamp::UNIX_EPOCH)
+}
+
+pub(crate) fn time_of(time: Timestamp) -> Time {
+    Time(instant(time))
 }
 
 fn mark<T>(
@@ -73,6 +91,18 @@ fn container_facts(status: &ContainerStatus) -> ContainerFacts {
                 reason: terminated.reason.clone(),
             }),
     }
+}
+
+fn is_unschedulable(status: Option<&PodStatus>) -> bool {
+    status
+        .and_then(|status| status.conditions.as_ref())
+        .is_some_and(|conditions| {
+            conditions.iter().any(|condition| {
+                condition.type_ == POD_SCHEDULED
+                    && condition.status == FALSE
+                    && condition.reason.as_deref() == Some(UNSCHEDULABLE)
+            })
+        })
 }
 
 pub fn pod_facts(pod: &Pod, keys: &PodKeys) -> Option<PodFacts> {
@@ -129,6 +159,10 @@ pub fn pod_facts(pod: &Pod, keys: &PodKeys) -> Option<PodFacts> {
             Timestamp::parse(text).ok()
         }),
         state_bytes: mark(&annotations, &keys.state_bytes(), parse_bytes),
+        template_hash: mark(&annotations, &template_hash_key(keys.prefix()), |text| {
+            (!text.is_empty()).then(|| text.to_owned())
+        }),
+        unschedulable: is_unschedulable(status),
         containers: statuses.map(container_facts).collect(),
     })
 }

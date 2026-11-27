@@ -1,16 +1,15 @@
 use crate::cluster::{EventTarget, PoolEvent};
-use crate::config::PoolConfig;
 use crate::facts::{PodFacts, PoolState};
 use crate::rules::{
     ClaimWindow, ScaleDownRules, condition_write, damp, desired_size, floor_now, judge_pool,
 };
 
-use super::{Engine, PoolId, pool_id};
+use super::{Engine, PoolId, PoolTarget, pool_id};
 
 impl Engine {
     fn pool_pods<'a>(
         &'a self,
-        pool: &'a PoolConfig,
+        pool: &'a PoolTarget,
         state: PoolState,
     ) -> impl Iterator<Item = &'a PodFacts> {
         self.pods
@@ -24,20 +23,25 @@ impl Engine {
     }
 
     pub(crate) async fn evaluate_all(&mut self) {
-        let ids: Vec<PoolId> = self.config.pools.iter().map(pool_id).collect();
+        let ids: Vec<PoolId> = self.pools.iter().map(pool_id).collect();
         for id in ids {
             self.evaluate_pool_id(&id).await;
         }
     }
 
     pub(crate) async fn evaluate_pool_id(&mut self, id: &PoolId) {
-        let Some(pool) = self.config.pool(&id.0, &id.1).cloned() else {
+        let Some(pool) = self
+            .pools
+            .iter()
+            .find(|pool| pool.namespace == id.0 && pool.id == id.1)
+            .cloned()
+        else {
             return;
         };
         self.evaluate_pool(&pool).await;
     }
 
-    pub(super) fn refresh_pool_metrics(&self, pool: &PoolConfig) {
+    pub(super) fn refresh_pool_metrics(&self, pool: &PoolTarget) {
         let ready = self
             .pool_pods(pool, PoolState::Warm)
             .filter(|pod| pod.ready)
@@ -46,7 +50,7 @@ impl Engine {
             .set_pool_warm_ready(&pool.id, u32::try_from(ready).unwrap_or(u32::MAX));
     }
 
-    async fn evaluate_pool(&mut self, pool: &PoolConfig) {
+    async fn evaluate_pool(&mut self, pool: &PoolTarget) {
         let id = pool_id(pool);
         if !self.synced.contains(&pool.namespace) {
             self.pool_wake.remove(&id);
@@ -84,14 +88,14 @@ impl Engine {
             }
         };
         let now = self.clock.now();
-        let floor = floor_now(pool, now, &self.config.timezone);
+        let floor = floor_now(&pool.settings, now, &self.config.timezone);
         let (window, bucket) = (self.config.rate_window, self.config.rate_bucket);
         let rate = self
             .claims
             .entry(id.clone())
             .or_insert_with(|| ClaimWindow::new(window, bucket))
             .peak(now);
-        let desired = desired_size(rate, pool, floor);
+        let desired = desired_size(rate, &pool.settings, floor);
         self.metrics.set_pool_desired(&pool.id, desired.clamped);
         self.metrics
             .set_claims_per_second(&pool.id, rate.per_second());
@@ -120,7 +124,7 @@ impl Engine {
             name: pool.replicaset.clone(),
             uid: replica_set.uid.clone(),
         };
-        self.at_max_event(pool, &id, &target, desired.above_max(pool), desired.raw)
+        self.at_max_event(pool, &id, &target, desired.above_max(&pool.settings), desired.raw)
             .await;
         let judged = judge_pool(self.pool_pods(pool, PoolState::Warm));
         if let Some(write) = condition_write(&replica_set.conditions, &judged, now)
@@ -141,7 +145,7 @@ impl Engine {
         self.pending_events(pool, &id, &target).await;
     }
 
-    async fn write_replicas(&mut self, pool: &PoolConfig, id: &PoolId, replicas: u32) {
+    async fn write_replicas(&mut self, pool: &PoolTarget, id: &PoolId, replicas: u32) {
         let value = i32::try_from(replicas).unwrap_or(i32::MAX);
         match self
             .api
@@ -163,7 +167,7 @@ impl Engine {
 
     async fn at_max_event(
         &mut self,
-        pool: &PoolConfig,
+        pool: &PoolTarget,
         id: &PoolId,
         target: &EventTarget,
         above: bool,
@@ -178,7 +182,7 @@ impl Engine {
         }
         let message = format!(
             "the size {raw} that the claim rate asks for is above max_replicas {}",
-            pool.max_replicas
+            pool.settings.max_replicas
         );
         if let Err(error) = self
             .api
@@ -190,7 +194,7 @@ impl Engine {
         }
     }
 
-    async fn pending_events(&mut self, pool: &PoolConfig, id: &PoolId, target: &EventTarget) {
+    async fn pending_events(&mut self, pool: &PoolTarget, id: &PoolId, target: &EventTarget) {
         let due: Vec<(String, String)> = self
             .pending_due
             .get(id)

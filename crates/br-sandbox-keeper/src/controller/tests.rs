@@ -39,7 +39,7 @@ pub(super) fn bed(leader: bool) -> Bed {
     }
     let metrics = Arc::new(Metrics::new());
     let readiness = Arc::new(Readiness::new([NS.to_owned()]));
-    let engine = Engine::new(
+    let mut engine = Engine::new(
         kube.clone(),
         clock,
         leadership.clone(),
@@ -47,6 +47,7 @@ pub(super) fn bed(leader: bool) -> Bed {
         readiness.clone(),
         Arc::new(testing::config()),
     );
+    engine.pools = vec![testing::target()];
     Bed {
         kube,
         engine,

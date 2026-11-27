@@ -70,16 +70,23 @@ async fn it_does_not_start_when_the_api_is_unreachable() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn it_does_not_start_when_a_pool_namespace_is_not_managed() {
+async fn a_cluster_with_no_managed_namespace_and_no_resource_is_a_normal_state_and_the_keeper_is_ready()
+ {
     let rig = rig();
-    rig.kube.set_namespaces(&["other"]);
-    assert_eq!(
-        start_error(&rig).await,
-        KeeperError::PoolNamespaceNotManaged {
-            pool: "p".to_owned(),
-            namespace: "sbx".to_owned()
-        }
-    );
+    rig.kube.set_namespaces(&[]);
+    let (listener, address) = listener().await;
+    let shutdown = CancellationToken::new();
+    let handle = tokio::spawn(run_on(
+        listener,
+        testing::config(),
+        parts(&rig, "a"),
+        shutdown.clone(),
+    ));
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(request(address, "GET", "/readyz").await.0, 200);
+    assert!(rig.bucket.writes().is_empty());
+    shutdown.cancel();
+    assert_eq!(handle.await.unwrap(), Ok(()));
 }
 
 #[tokio::test(start_paused = true)]
@@ -148,7 +155,7 @@ async fn the_leader_serves_the_health_endpoints_expires_pods_and_saves_and_stops
 }
 
 #[tokio::test(start_paused = true)]
-async fn every_managed_namespace_is_served_also_one_with_no_configured_pool() {
+async fn every_managed_namespace_is_served_also_one_with_no_resource() {
     let rig = rig();
     rig.kube.set_namespaces(&["sbx", "other"]);
     rig.kube.put_pod(crate::facts::PodFacts {

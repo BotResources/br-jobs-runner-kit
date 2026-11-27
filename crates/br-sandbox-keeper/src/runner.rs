@@ -114,16 +114,6 @@ async fn start(shared: &Shared, parts: &Parts) -> Result<Vec<String>, KeeperErro
         .managed_namespaces(&config.managed_namespace_selector)
         .await
         .map_err(|error| KeeperError::ApiUnreachable(error.to_string()))?;
-    if let Some(pool) = config
-        .pools
-        .iter()
-        .find(|pool| !managed.contains(&pool.namespace))
-    {
-        return Err(KeeperError::PoolNamespaceNotManaged {
-            pool: pool.id.clone(),
-            namespace: pool.namespace.clone(),
-        });
-    }
     match parts.bucket.check().await {
         Ok(()) => {}
         Err(BucketError::Absent) => {

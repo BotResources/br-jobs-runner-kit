@@ -60,7 +60,6 @@ impl Engine {
             self.remove(&id, touched);
         }
         for pool in self
-            .config
             .pools
             .iter()
             .filter(|pool| pool.namespace == namespace)

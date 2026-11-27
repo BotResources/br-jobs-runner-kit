@@ -83,10 +83,10 @@ async fn after_a_restart_a_pod_that_was_ready_before_and_now_crashes_is_judged_n
 }
 
 #[tokio::test(start_paused = true)]
-async fn the_pods_of_a_pool_that_is_not_configured_expire_with_the_default_pool_values() {
+async fn the_idle_values_are_those_of_the_keeper_for_every_pod_in_a_pool_or_outside_of_one() {
     let mut bed = bed(true);
     let mut document = testing::document();
-    document["pools"][0]["idle_ttl_seconds"] = 600.into();
+    document["idle_ttl_seconds"] = 600.into();
     bed.engine.config = Arc::new(testing::config_of(&document));
     bed.sync().await;
     let keep_big = |name: &str, pod: PodFacts| PodFacts {
@@ -123,13 +123,13 @@ async fn the_pods_of_a_pool_that_is_not_configured_expire_with_the_default_pool_
     assert!(bed.kube.pod(OTHER, "g-warm").is_none());
     assert!(bed.kube.pod(OTHER, "g-nopool").is_none());
     assert!(bed.kube.pod(OTHER, "g-big").is_some());
-    bed.pass(20).await;
-    assert!(bed.kube.pod(OTHER, "g-big").is_none());
     assert!(bed.kube.pod(NS, "p-big").is_some());
-    assert!(bed.kube.pod(OTHER, "g-dirty").is_some());
-    bed.pass(80).await;
+    bed.pass(200).await;
     assert!(bed.kube.pod(OTHER, "g-dirty").is_none());
-    bed.pass(400).await;
+    assert!(bed.kube.pod(OTHER, "g-big").is_some());
+    assert!(bed.kube.pod(NS, "p-big").is_some());
+    bed.pass(300).await;
+    assert!(bed.kube.pod(OTHER, "g-big").is_none());
     assert!(bed.kube.pod(NS, "p-big").is_none());
     assert!(bed.has_metric("br_sandbox_keeper_pods_deleted_total{reason=\"idle\"} 3"));
     for call in bed.kube.calls() {

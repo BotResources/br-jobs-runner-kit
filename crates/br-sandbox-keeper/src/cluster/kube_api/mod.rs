@@ -1,6 +1,5 @@
-use std::time::UNIX_EPOCH;
 
-use br_runner_sandbox::{PodKeys, Timestamp};
+use br_runner_sandbox::PodKeys;
 use futures::StreamExt;
 use futures::stream::{self, BoxStream};
 use k8s_openapi::api::apps::v1::ReplicaSet;
@@ -37,15 +36,7 @@ fn call_error(error: kube::Error) -> ApiError {
     }
 }
 
-pub(super) fn instant(time: Timestamp) -> jiff::Timestamp {
-    let millis = time
-        .to_system_time()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| {
-            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
-        });
-    jiff::Timestamp::from_millisecond(millis).unwrap_or(jiff::Timestamp::UNIX_EPOCH)
-}
+pub(super) use crate::convert::instant;
 
 impl KubeCluster {
     pub fn new(client: Client, keys: PodKeys) -> Self {

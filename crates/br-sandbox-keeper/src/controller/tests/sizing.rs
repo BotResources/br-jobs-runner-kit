@@ -118,11 +118,8 @@ async fn a_scale_down_waits_for_the_cooldown_then_falls_by_steps_and_reaches_the
 
 #[tokio::test(start_paused = true)]
 async fn the_floor_of_the_day_holds_the_replicas_up() {
-    let mut document = testing::document();
-    document["pools"][0]["floors"] =
-        serde_json::json!([{"from": "00:00", "to": "24:00", "floor": 9}]);
     let mut bed = bed(true);
-    bed.engine.config = Arc::new(testing::config_of(&document));
+    bed.engine.pools[0].settings.floors = vec![crate::pool::FloorWindow::new(0, 86_400, 9)];
     bed.sync().await;
     assert_eq!(bed.replicas(), Some(9));
 }

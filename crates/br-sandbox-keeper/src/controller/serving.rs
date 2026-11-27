@@ -58,7 +58,6 @@ impl Engine {
             self.remove(&id, &mut touched);
         }
         let pools: Vec<_> = self
-            .config
             .pools
             .iter()
             .filter(|pool| pool.namespace == namespace)
