@@ -164,3 +164,16 @@ check_the_label_table_says_who_sets_the_namespace_labels() {
     t "an egress namespace carries the mode set by the chart and no managed label" jqt egress_keeper '[.[] | select(.kind == "Namespace" and (.metadata.labels | has("br.sandbox/egress"))) | (.metadata.labels | has("br.sandbox/mode") and (has("br.sandbox/managed") | not))] | length > 0 and all'
     t "the policy refuses a project that changes the mode of a managed namespace, and the same change by a writer is admitted" test "$(ns_verdict grants UPDATE "$(namespace_object sbx-alpha-new true allow)" "$(namespace_object sbx-alpha-new true none)" "$PROJECT_USER" "$(grants_of grants)")" = BR_SANDBOX_LABEL_IMMUTABLE -a "$(ns_verdict grants UPDATE "$(namespace_object sbx-alpha-new true allow)" "$(namespace_object sbx-alpha-new true none)" "$WRITER_USER" "$(grants_of grants)")" = admit
 }
+
+check_the_warm_age_row_states_the_held_pod() {
+    section "README and CHANGELOG: a Pending and Unschedulable warm pod is held, as stated by the keeper 0.2 text"
+    local row
+    row="$(grep '^| `warm_max_age_seconds` |' "$CHART/README.md")"
+    t "the README has one warm_max_age_seconds row" test "$(grep -c '^| `warm_max_age_seconds` |' "$CHART/README.md")" -eq 1
+    t "the row keeps the rule and names the exception: Pending, Unschedulable, held, no age deadline, not deleted at this age" grep -qF 'The keeper deletes a warm pod older than this, except a warm pod that is Pending and that the scheduler marks Unschedulable: that pod is held, has no age deadline and is not deleted at this age (keeper 0.1.x deleted it)' <<<"$row"
+    t "the row says that the Pending alarm still applies when the pod is not failing" grep -qF 'the Pending alarm still applies when the pod is not failing' <<<"$row"
+    t "the row marks the exception as stated by the keeper 0.2 text and not tested by this chart" grep -qF 'The exception is stated by the keeper 0.2 text and is not tested by this chart.' <<<"$row"
+    t "the paragraph on a new push under one tag names the held pod" grep -qF 'except a held Pending and Unschedulable pod (row `warm_max_age_seconds`)' "$CHART/README.md"
+    t "the CHANGELOG 0.4.0 holds the held pod line, marked as stated by the keeper 0.2 text and not tested" grep -qF 'is held by keeper 0.2: it has no age deadline and is not deleted at `warm_max_age_seconds` (keeper 0.1.x deleted it). Stated by the keeper 0.2 text; not tested by this chart.' <<<"$(changelog_040)"
+    t "the keeper document still carries the key warm_max_age_seconds at its default" test "$(jq -r '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .warm_max_age_seconds][0]' "$WORK/keeper.json")" = 1800
+}

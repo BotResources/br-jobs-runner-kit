@@ -14,6 +14,7 @@ Breaking minor. The chart has two parts: an operator part, installed once per cl
 - `registry_mirror` does not apply to the image of a pool: the agent of a pod runs exactly the `image` of its `SandboxPool`, as written.
 - Not proved offline, and not tested on a cluster: that the CEL of the three policies compiles, that the API server takes the `SandboxPool` as the parameter of the pod policy, the grants and the fence-object control, the stamper, and the rights on the API server. The rows of the battery hold them.
 - Tests: the offline suite checks each sentence above (`test-sandbox-chart-operator-docs.sh`) and the objects, the rights, the policies and the stamper (`test-sandbox-chart-operator-parts.sh`, `-operator-rights.sh`, `-operator-template.sh`, `-operator-crd.sh`, `-pod-policy.sh`, `-namespace-policy.sh`, `-fence-policy.sh`, `-stamper.sh`, `-scopes.sh`). The lint loop of the CI covers the new fixtures.
+- A warm pod that is Pending and that the scheduler marks Unschedulable is held by keeper 0.2: it has no age deadline and is not deleted at `warm_max_age_seconds` (keeper 0.1.x deleted it). Stated by the keeper 0.2 text; not tested by this chart.
 
 ## 0.3.0
 
