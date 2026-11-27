@@ -110,7 +110,7 @@ no_pod_refers_to_the_adapter_config() {
 
 check_no_pod_refers_to_the_adapter_config_map() {
     section "no Pod, ReplicaSet, Job or CronJob of the render mounts or reads the ConfigMap br-sandbox-config"
-    render refs_keeper -f "$EXAMPLE" -f "$KEEPER_VALUES" --set network_check.cron='0 * * * *'
+    render refs_keeper -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.cron='0 * * * *'
     t "the query finds the ConfigMaps that the pods of the render use, so the check is not empty" test " $(config_maps_of_pods refs_keeper) " = " br-sandbox-keeper-config br-sandbox-netcheck "
     t "the document ConfigMap exists in the render, so a pod could have named it" test "$(adapter_namespaces refs_keeper | grep -c .)" -ge 3
     t "no workload of the renders of the example, the keeper, the egress and the mirror refers to br-sandbox-config" no_pod_refers_to_the_adapter_config refs_keeper cred ex mirror egress_keeper keeper nondefault

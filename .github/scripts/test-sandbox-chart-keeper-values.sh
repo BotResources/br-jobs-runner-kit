@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-NONDEFAULT_VALUES="$CHART/ci/keeper-nondefault-values.yaml"
+NONDEFAULT_VALUES="$CHART/ci/operator-nondefault-values.yaml"
 SANDBOX_NAMESPACES="sbx-alpha-allow sbx-alpha-full sbx-alpha-none sbx-beta-none"
 
 flat() {
@@ -80,16 +80,16 @@ check_the_keeper_only_values_reach_the_keeper_document_as_set() {
     want="$(overlay_value '.warm_max_age_seconds')"
     t ".warm_max_age_seconds is not the default" test "$want" != "$(base_value '.warm_max_age_seconds')"
     t "the keeper document holds the warm age as set" test "$(keeper_json nondefault '.warm_max_age_seconds')" = "$want"
-    for pair in .keeper.lease.duration_seconds:lease_duration_seconds .keeper.lease.renew_deadline_seconds:renew_deadline_seconds .keeper.lease.retry_period_seconds:retry_period_seconds; do
+    for pair in .operator.lease.duration_seconds:lease_duration_seconds .operator.lease.renew_deadline_seconds:renew_deadline_seconds .operator.lease.retry_period_seconds:retry_period_seconds; do
         path="${pair%%:*}"
         key="${pair##*:}"
         want="$(overlay_value "$path")"
         t "${path} is not the default" test "$want" != "$(base_value "$path")"
         t "${key} is the value of ${path}" test "$(keeper_json nondefault ".${key}")" = "$want"
     done
-    want="$(overlay_value '.keeper.port')"
-    t ".keeper.port is not the default" test "$want" != "$(base_value '.keeper.port')"
-    t "the listen address is all addresses on keeper.port" test "$(keeper_json nondefault '.listen_address')" = "0.0.0.0:${want}"
+    want="$(overlay_value '.operator.port')"
+    t ".operator.port is not the default" test "$want" != "$(base_value '.operator.port')"
+    t "the listen address is all addresses on operator.port" test "$(keeper_json nondefault '.listen_address')" = "0.0.0.0:${want}"
     want="$(overlay_value '.save.tombstone_ttl_days')"
     t ".save.tombstone_ttl_days is not the default" test "$want" != "$(base_value '.save.tombstone_ttl_days')"
     t "the tombstone age is the days of save.tombstone_ttl_days times 86400" test "$(keeper_json nondefault '.tombstone_ttl_seconds')" = "$((want * 86400))"

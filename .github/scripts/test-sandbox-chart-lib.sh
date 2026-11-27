@@ -9,7 +9,7 @@ ROOT="$(cd "$SCRIPTS/../.." && pwd)"
 export CHART="$ROOT/charts/br-sandbox-chart"
 export EXAMPLE="$CHART/ci/example-values.yaml"
 export MIRROR_VALUES="$CHART/ci/mirror-values.yaml"
-export KEEPER_VALUES="$CHART/ci/keeper-values.yaml"
+export OPERATOR_VALUES="$CHART/ci/operator-values.yaml"
 export EGRESS_VALUES="$CHART/ci/egress-values.yaml"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/test-sandbox-chart.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT

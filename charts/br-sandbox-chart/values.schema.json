@@ -262,7 +262,7 @@
         }
       }
     },
-    "keeper": {
+    "keeper": {}, "operator": {
       "type": "object",
       "additionalProperties": false,
       "properties": {

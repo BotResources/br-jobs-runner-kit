@@ -13,7 +13,7 @@ data:
   config.json: |
     {{- include "br-sandbox-chart.adapter.document" (dict "root" $ "ns" $ns) | nindent 4 }}
 {{- end }}
-{{- if .Values.keeper.enabled }}
+{{- if .Values.operator.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap

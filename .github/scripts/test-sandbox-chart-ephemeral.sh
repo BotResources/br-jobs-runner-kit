@@ -36,7 +36,7 @@ check_the_ephemeral_containers_detector_flags_every_reaching_rule() {
 check_no_role_of_the_chart_reaches_pods_ephemeralcontainers() {
     section "no Role and no ClusterRole of any render holds a verb on pods/ephemeralcontainers"
     render ephemeral_nocheck -f "$EXAMPLE" --set network_check.enabled=false
-    render ephemeral_keeper_nocheck -f "$EXAMPLE" -f "$KEEPER_VALUES" --set network_check.enabled=false
+    render ephemeral_keeper_nocheck -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.enabled=false
     local name
     for name in ex mirror keeper cred two egressdual tunnel ephemeral_nocheck ephemeral_keeper_nocheck; do
         t "render ${name}: the render holds Roles with rules" jqt "$name" "$ROLES_AND_RULES_OF_THE_RENDER"

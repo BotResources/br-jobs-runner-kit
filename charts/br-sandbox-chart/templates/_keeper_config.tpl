@@ -27,15 +27,15 @@
   "store_endpoint" $values.store.endpoint
   "store_region" $values.store.region
   "store_path_style" $values.store.path_style
-  "listen_address" (printf "0.0.0.0:%d" ($values.keeper.port | int64))
+  "listen_address" (printf "0.0.0.0:%d" ($values.operator.port | int64))
   "save_ttl_seconds" ($values.save.ttl_seconds | int64)
   "tombstone_ttl_seconds" (mul ($values.save.tombstone_ttl_days | int64) 86400)
   "warm_max_age_seconds" ($values.warm_max_age_seconds | int64)
-  "lease_duration_seconds" ($values.keeper.lease.duration_seconds | int64)
-  "renew_deadline_seconds" ($values.keeper.lease.renew_deadline_seconds | int64)
-  "retry_period_seconds" ($values.keeper.lease.retry_period_seconds | int64)
+  "lease_duration_seconds" ($values.operator.lease.duration_seconds | int64)
+  "renew_deadline_seconds" ($values.operator.lease.renew_deadline_seconds | int64)
+  "retry_period_seconds" ($values.operator.lease.retry_period_seconds | int64)
   "pools" $pools -}}
-{{- range $key, $setting := $values.keeper.settings -}}
+{{- range $key, $setting := $values.operator.settings -}}
 {{- if hasKey $document $key -}}
 {{- fail (printf "BR_SANDBOX_KEEPER_SETTING_COMPUTED{key=%s}" $key) -}}
 {{- end -}}

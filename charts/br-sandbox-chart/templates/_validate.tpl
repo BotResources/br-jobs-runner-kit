@@ -15,6 +15,9 @@
 
 {{- define "br-sandbox-chart.validate" -}}
 {{- $root := . -}}
+{{- if hasKey .Values "keeper" -}}
+{{- fail "BR_SANDBOX_KEEPER_VALUES_REMOVED{key=keeper}" -}}
+{{- end -}}
 {{- range $path := list "installation.namespace_prefix" "image" "tools.image.repository" "tools.image.digest" "save.ttl_seconds" "store.endpoint" "store.bucket" "store.region" "store.path_style" "store.credentials_secret" "network.pod_cidr" "network.service_cidr" "network.node_addresses" "network.node_public_addresses" "network.load_balancer_addresses" "clients" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
@@ -28,8 +31,8 @@
 {{- if or (lt ($execTimeout | float64) 1.0) (ne ($execTimeout | float64) (floor ($execTimeout | float64))) -}}
 {{- fail "BR_SANDBOX_EXEC_TIMEOUT_INVALID{key=exec_timeout_seconds}" -}}
 {{- end -}}
-{{- if .Values.keeper.enabled -}}
-{{- range $path := list "keeper.image" "network.api_server_addresses" "network.store_cidrs" -}}
+{{- if .Values.operator.enabled -}}
+{{- range $path := list "operator.image" "network.api_server_addresses" "network.store_cidrs" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
 {{- end -}}

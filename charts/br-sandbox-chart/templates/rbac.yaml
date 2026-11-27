@@ -38,7 +38,7 @@ subjects:
   - kind: ServiceAccount
     name: {{ $ns.runner.service_account }}
     namespace: {{ $ns.runner.namespace }}
-{{- if $.Values.keeper.enabled }}
+{{- if $.Values.operator.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -111,7 +111,7 @@ subjects:
     namespace: {{ $system }}
 {{- end }}
 {{- end }}
-{{- if .Values.keeper.enabled }}
+{{- if .Values.operator.enabled }}
 ---
 apiVersion: v1
 kind: ServiceAccount

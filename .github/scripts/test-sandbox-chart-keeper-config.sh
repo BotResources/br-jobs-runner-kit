@@ -23,20 +23,20 @@ check_keeper_document() {
     t "one pool entry for each ReplicaSet, with its namespace, name and pool id" test "$(keeper_doc keeper '[.pools[] | [.namespace, .replicaset, .id] | join(" ")] | sort | join(",")')" = "sbx-alpha-allow warm-alpha-allow alpha-allow,sbx-alpha-full warm-alpha-full alpha-full,sbx-alpha-none warm-alpha-none alpha-none,sbx-beta-none warm-beta-none beta-none"
     t "each pool entry names a ReplicaSet and a namespace that the render holds" test "$(jq -r --argjson pools "$(keeper_doc keeper '.pools')" '[.[] | select(.kind == "ReplicaSet") | .metadata.namespace + "/" + .metadata.name] | sort == ([$pools[] | .namespace + "/" + .replicaset] | sort)' "$WORK/keeper.json")" = true
     t "the floor and the maximum of a pool are min_replicas and max_replicas" test "$(keeper_doc keeper '.pools[] | select(.id == "alpha-full") | [.min_replicas, .max_replicas] | join("/")')" = "1/10"
-    t "the lease keys are the values of keeper.lease" test "$(keeper_doc keeper '[.lease_duration_seconds, .renew_deadline_seconds, .retry_period_seconds] | join("/")')" = "15/10/2"
+    t "the lease keys are the values of operator.lease" test "$(keeper_doc keeper '[.lease_duration_seconds, .renew_deadline_seconds, .retry_period_seconds] | join("/")')" = "15/10/2"
     t "the tombstone age is save.tombstone_ttl_days in seconds" test "$(keeper_doc keeper '.tombstone_ttl_seconds')" = 31536000
     t "the warm pod age is the value warm_max_age_seconds" test "$(keeper_doc keeper '.warm_max_age_seconds')" = 1800
 }
 
 check_keeper_port() {
     section "the keeper port"
-    t "the listen address is all addresses on keeper.port" test "$(keeper_doc keeper '.listen_address')" = "0.0.0.0:8080"
+    t "the listen address is all addresses on operator.port" test "$(keeper_doc keeper '.listen_address')" = "0.0.0.0:8080"
     t "the container port, the probes and the listen address use one port" jqt keeper '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.spec.containers[0] | .ports == [{"name": "http", "containerPort": 8080, "protocol": "TCP"}] and .livenessProbe.httpGet == {"path": "/livez", "port": "http"} and .readinessProbe.httpGet == {"path": "/readyz", "port": "http"}'
-    render port_set -f "$EXAMPLE" -f "$KEEPER_VALUES" --set keeper.port=9100
-    t "another keeper.port moves the listen address and the container port" test "$(keeper_doc port_set '.listen_address')" = "0.0.0.0:9100" -a "$(jqv port_set '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.spec.containers[0].ports[0].containerPort')" = 9100
+    render port_set -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set operator.port=9100
+    t "another operator.port moves the listen address and the container port" test "$(keeper_doc port_set '.listen_address')" = "0.0.0.0:9100" -a "$(jqv port_set '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.spec.containers[0].ports[0].containerPort')" = 9100
     local port
     for port in 0 65536; do
-        t "keeper.port ${port} fails the schema" test "$(helm template t "$CHART" -f "$EXAMPLE" -f "$KEEPER_VALUES" --set "keeper.port=${port}" 2>&1 | grep -c 'keeper')" -ge 1
+        t "operator.port ${port} fails the schema" test "$(helm template t "$CHART" -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set "operator.port=${port}" 2>&1 | grep -c 'operator')" -ge 1
     done
 }
 
@@ -44,9 +44,9 @@ check_keeper_settings() {
     section "the keeper settings"
     local key
     for key in label_prefix managed_namespace_selector store_bucket store_endpoint store_region store_path_style listen_address save_ttl_seconds tombstone_ttl_seconds warm_max_age_seconds lease_duration_seconds renew_deadline_seconds retry_period_seconds pools; do
-        fails_with "BR_SANDBOX_KEEPER_SETTING_COMPUTED{key=${key}}" -f "$EXAMPLE" -f "$KEEPER_VALUES" --set "keeper.settings.${key}=1"
+        fails_with "BR_SANDBOX_KEEPER_SETTING_COMPUTED{key=${key}}" -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set "operator.settings.${key}=1"
     done
-    render lease_ns -f "$EXAMPLE" -f "$KEEPER_VALUES" --set keeper.settings.lease_namespace=other
+    render lease_ns -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set operator.settings.lease_namespace=other
     t "a key that the chart does not compute passes to the document" test "$(keeper_doc lease_ns '.lease_namespace')" = other
     t "the config checksum of the keeper pod is the checksum of the document" test "$(jqv keeper '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.metadata.annotations["br.sandbox/keeper-config-sha256"]')" = "$(keeper_map keeper | tr -d '\n' | sha256sum | cut -d' ' -f1)"
     t "a changed setting changes the checksum of the keeper pod" test "$(jqv lease_ns '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.metadata.annotations["br.sandbox/keeper-config-sha256"]')" != "$(jqv keeper '.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-keeper") | .spec.template.metadata.annotations["br.sandbox/keeper-config-sha256"]')"

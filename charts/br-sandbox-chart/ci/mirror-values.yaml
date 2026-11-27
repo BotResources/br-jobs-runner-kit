@@ -1,7 +1,7 @@
 registry_mirror: mirror.example.test
 pull_secrets:
   - mirror-pull
-keeper:
+operator:
   enabled: true
   image: registry.example.test/keeper/br-sandbox-keeper:0.1.0
 network_check:

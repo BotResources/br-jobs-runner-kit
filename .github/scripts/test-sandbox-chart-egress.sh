@@ -9,7 +9,7 @@ render_egress_fixtures() {
     render two -f "$(valsx two '.clients.beta.modes.allow = .clients.beta.modes.none | .clients.beta.modes.allow.allow.domains = ["git.example.test"] | .clients.beta.modes.allow.proxy = .clients.alpha.modes.allow.proxy | .clients.beta.modes.allow.proxy.cluster_ip = "10.43.0.60" | .clients.beta.modes.allow.proxy.ca.key_secret = "sbx-beta-allow-ca-key"')"
     render egressdual -f "$(vals dualegress '.network.ipv6 = "dual_stack"')"
     render tunnel -f "$EXAMPLE" --set egress.proxy.port=9999 --set egress.quota.pods=7
-    render keeperegress -f "$EXAMPLE" -f "$KEEPER_VALUES" -f "$EGRESS_VALUES"
+    render keeperegress -f "$EXAMPLE" -f "$OPERATOR_VALUES" -f "$EGRESS_VALUES"
 }
 
 policy_json() {

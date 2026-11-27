@@ -101,7 +101,7 @@ egress:
       - CURL_CA_BUNDLE
   quota:
     pods: 4
-keeper:
+operator:
   enabled: false
   replicas: 2
   port: 8080
