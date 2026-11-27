@@ -15,7 +15,7 @@
 {{- if $values.tools.seed_container.enabled -}}
 {{- $regular = printf "%s || (c.name == %s && c.image == %s && has(c.securityContext) && has(c.securityContext.runAsUser) && c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports))" $nonRoot ($values.tools.seed_container.name | toJson) (include "br-sandbox-chart.image.tools" . | toJson) -}}
 {{- end -}}
-{{- $lists := printf "object.spec.containers.all(c, %s) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, %s)) && (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c, %s))" $regular $nonRoot $nonRoot -}}
+{{- $lists := printf "object.spec.containers.all(c, %s) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, %s))" $regular $nonRoot -}}
 {{- if $values.network_check.enabled -}}
 {{- $user := printf "system:serviceaccount:%s:br-sandbox-netcheck" (include "br-sandbox-chart.system_namespace" .) -}}
 {{- $lists = printf "request.userInfo.username == %s || (%s)" ($user | toJson) $lists -}}

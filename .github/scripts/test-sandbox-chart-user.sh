@@ -80,8 +80,7 @@ check_non_root_rule_accepts_the_pods_of_the_chart() {
     t "the init container alone passes" test "$(pool_runas ex sbx-alpha-none '.spec.containers = [.spec.containers[0]] | .spec.initContainers = [.spec.initContainers[0]]')" = true
     t "the pool pod passes with a mirror, the seed image is the mirrored tools image" test "$(pool_runas mirror sbx-alpha-none '.')" = true
     t "the probe pod passes with a mirror" test "$(probe_runas mirror sbx-alpha-none "$CHECK_USER" '.')" = true
-    t "the real seed container of the regular list passes next to a non-root init container and a non-root ephemeral container" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')" = true
-    t "a non-root ephemeral container passes" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')" = true
+    t "the real seed container of the regular list passes next to a non-root init container" test "$(pool_runas ex sbx-alpha-none '.')" = true
     t "a process namespace set to false passes" test "$(pool_runas ex sbx-alpha-none '.spec.shareProcessNamespace = false')" = true
 }
 
@@ -94,15 +93,12 @@ check_non_root_rule_refuses() {
     t "the agent container without a security context is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.containers[0].securityContext)')" = false
     t "the init container as uid 0 is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers[0].securityContext.runAsUser = 0')" = false
     t "the init container without runAsNonRoot is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.initContainers[0].securityContext.runAsNonRoot)')" = false
-    t "an ephemeral container as uid 0 is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 0}}]')" = false
-    t "an ephemeral container without a security context is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x"}]')" = false
     t "the seed name with another image is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "registry.example.test/agents/base:1.0"')" = false
     t "the seed name with an image of another repository is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "other.example.test/x:1"')" = false
     t "the seed name with the tools repository and another digest is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "registry.example.test/tools/br-sandbox-tools@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"')" = false
     t "the tools image under another name is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].name = "writer"')" = false
     t "an init container with the seed name and the tools image that is not root is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers[0].name = "seed" | del(.spec.initContainers[0].securityContext.runAsNonRoot) | .spec.initContainers[0].securityContext.runAsUser = 5')" = false
     t "an init container with the seed name, the tools image, root, a read-only root file system and no port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers += [.spec.containers[1]]')" = false
-    t "an ephemeral container with the seed name, the tools image, root, a read-only root file system and no port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [.spec.containers[1]]')" = false
     t "the seed container with a writable root file system is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.containers[1].securityContext.readOnlyRootFilesystem)')" = false
     t "the seed container with a port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].ports = [{"containerPort": 8080}]')" = false
     t "the seed container without runAsUser 0 and without runAsNonRoot is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.containers[1].securityContext.runAsUser)')" = false
@@ -127,8 +123,8 @@ check_non_root_rule_text() {
     t "the seed exception pins root, the read-only root file system and no port" expression_holds ex 'c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports)'
     t "the rule refuses a shared process namespace" expression_holds ex '!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)'
     t "the seed exception applies to the regular container list only" expression_holds ex 'object.spec.containers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0) || (c.name == "seed"'
-    t "the init and ephemeral lists hold the plain non-root condition only" test "$(policy_expression ex | grep -o 'c.name ==' | wc -l | tr -d ' ')" = 1
-    t "the rule reads the three container lists" expression_holds ex 'object.spec.ephemeralContainers.all(c,'
+    t "the init list holds the plain non-root condition only" test "$(policy_expression ex | grep -o 'c.name ==' | wc -l | tr -d ' ')" = 1
+    t "the rule reads the two container lists and not the ephemeral containers" expression_holds_not ex 'ephemeralContainers'
     t "the pods of the chart set runAsNonRoot true on the agent and the init container, not on the root containers" jqt ex "${SANDBOX_PODS} | all(.spec | (.containers[0].securityContext.runAsNonRoot == true) and (.initContainers[0].securityContext.runAsNonRoot == true) and (.containers[1:] | all(.securityContext.runAsUser == 0 and (.securityContext | has(\"runAsNonRoot\") | not))))"
     t "the probe pods run as uid 0, which is why the check identity is an exception" test "$(probe_pod ex sbx-alpha-none | jq -c '.spec.containers[0].securityContext | [.runAsUser, has("runAsNonRoot")]')" = '[0,false]'
     t "the policy watches the ephemeral containers subresource on update" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.matchConstraints.resourceRules[1] | select(.resources == ["pods/ephemeralcontainers"] and .operations == ["UPDATE"])] | length == 1'
@@ -150,4 +146,40 @@ check_user_zero_render_fails() {
     fails_with "/runAsUser': minimum: got 0, want 1" -f "$EXAMPLE" --set runAsUser=0
     fails_with "/runAsGroup': minimum: got 0, want 1" -f "$EXAMPLE" --set runAsGroup=0
     t "the schema holds the minimum 1 for runAsUser" jq -e '.properties.runAsUser.minimum == 1' "$CHART/values.schema.json"
+}
+
+check_the_non_root_rule_gives_the_same_verdicts_without_its_ephemeral_branch() {
+    section "non-root rule: the ephemeral branch changes no verdict of the policy"
+    local branch='(!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0)))'
+    local init='object.spec.initContainers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0))'
+    jq --arg init "$init" --arg branch "$branch" '
+      map(if .kind == "ValidatingAdmissionPolicy" then .spec.validations |= map(if (.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:")) then .expression |= (split($init + ")") | join($init + ") && " + $branch)) else . end) else . end)' "$WORK/ex.json" > "$WORK/with_branch.json"
+    t "the render with the branch put back holds the branch and the render of the chart holds none" test "$(jq -r '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:")) | .expression | contains("ephemeralContainers")] | .[0]' "$WORK/with_branch.json")/$(jq -r '[.[] | select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:")) | .expression | contains("ephemeralContainers")] | .[0]' "$WORK/ex.json")" = true/false
+    local mutation refused_with refused_without
+    for mutation in \
+        '.spec.ephemeralContainers = [{"name": "debug", "image": "x"}]' \
+        '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]' \
+        '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 0}}]' \
+        '.spec.ephemeralContainers = [.spec.containers[1]]' \
+        '.spec.ephemeralContainers = []' \
+        'del(.spec.ephemeralContainers)'; do
+        refused_with="$(refused_with_branch "$mutation")"
+        refused_without="$(refused_without_branch "$mutation")"
+        t "the verdict of the whole policy is the same with and without the ephemeral branch: ${mutation}" test "${refused_with}" = "${refused_without}"
+    done
+    t "every pod with one ephemeral container is refused with and without the branch" test "$(refused_without_branch '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')/$(refused_with_branch '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')" = true/true
+}
+
+refused_without_branch() {
+    local pod verdict
+    pod="$(pool_pod ex sbx-alpha-none | jq -c "$1")"
+    verdict="$(created ex sbx-alpha-none "$1")"
+    if [[ "$verdict" != admit || "$(runas_result ex "$pod" "$RUNNER_USER" '.')" == false ]]; then echo true; else echo false; fi
+}
+
+refused_with_branch() {
+    local pod verdict
+    pod="$(pool_pod ex sbx-alpha-none | jq -c "$1")"
+    verdict="$(created ex sbx-alpha-none "$1")"
+    if [[ "$verdict" != admit || "$(runas_result with_branch "$pod" "$RUNNER_USER" '.')" == false ]]; then echo true; else echo false; fi
 }
