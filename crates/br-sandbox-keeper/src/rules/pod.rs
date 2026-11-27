@@ -17,6 +17,7 @@ pub struct ExpiryRules {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DeleteReason {
     WarmMaxAge,
     Idle,
@@ -36,6 +37,7 @@ impl DeleteReason {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Action {
     Keep,
     Delete(DeleteReason),

@@ -18,6 +18,7 @@ mod metrics;
 mod readiness;
 pub mod rules;
 mod runner;
+mod sealed;
 mod sweep;
 #[cfg(test)]
 mod testing;

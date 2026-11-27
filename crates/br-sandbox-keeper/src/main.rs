@@ -39,13 +39,13 @@ async fn parts(config: &KeeperConfig) -> Result<Parts, KeeperError> {
         .or_else(|| config.lease.namespace.clone())
         .ok_or_else(|| environment_error("lease_namespace", "no namespace for the lease"))?;
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-    Ok(Parts {
-        api: Arc::new(api),
-        bucket: Arc::new(bucket),
+    Ok(Parts::new(
+        Arc::new(api),
+        Arc::new(bucket),
         clock,
-        identity: format!("{hostname}-{}", Uuid::now_v7()),
+        format!("{hostname}-{}", Uuid::now_v7()),
         own_namespace,
-    })
+    ))
 }
 
 fn stop_signal() -> Result<CancellationToken, KeeperError> {

@@ -1,6 +1,7 @@
 use crate::config::ConfigError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum KeeperError {
     #[error(transparent)]
     Config(#[from] ConfigError),

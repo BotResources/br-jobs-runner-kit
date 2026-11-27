@@ -19,6 +19,7 @@ pub struct ObjectInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum BucketError {
     #[error("the bucket is absent")]
     Absent,
@@ -32,7 +33,7 @@ pub enum BucketError {
 
 pub type BucketFuture<'a, T> = BoxFuture<'a, Result<T, BucketError>>;
 
-pub trait Bucket: Send + Sync {
+pub trait Bucket: crate::sealed::Sealed + Send + Sync {
     fn check(&self) -> BucketFuture<'_, ()>;
 
     fn list_page<'a>(

@@ -166,3 +166,14 @@ fn the_pool_lookup_needs_the_namespace_and_the_id() {
     assert!(config.pool("sbx-other", "acme-none").is_none());
     assert!(config.pool("sbx-acme-none", "other").is_none());
 }
+
+#[test]
+fn a_key_that_the_library_does_not_know_is_a_fault_at_every_level_of_the_document() {
+    let floor = json!([{"from": "08:00", "to": "09:00", "floor": 1, "colour": "red"}]);
+    let result = load(&with_pool("floors", floor));
+    assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("colour")));
+    let known = json!([{"from": "08:00", "to": "09:00", "floor": 1}]);
+    assert!(load(&with_pool("floors", known)).is_ok());
+    let result = load(&with_pool("margin_seconds", json!(1)));
+    assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("margin_seconds")));
+}

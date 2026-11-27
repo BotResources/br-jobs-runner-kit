@@ -55,6 +55,8 @@ impl S3Bucket {
     }
 }
 
+impl crate::sealed::Sealed for S3Bucket {}
+
 impl Bucket for S3Bucket {
     fn check(&self) -> BucketFuture<'_, ()> {
         Box::pin(async move {
@@ -121,3 +123,6 @@ impl Bucket for S3Bucket {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

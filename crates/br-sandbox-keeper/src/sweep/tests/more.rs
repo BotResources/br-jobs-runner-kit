@@ -130,11 +130,9 @@ async fn the_logs_of_a_sweep_hold_the_key_of_an_object_and_never_its_content() {
     harness
         .bucket
         .insert(&record_key(&key), br#"{"state":"SECRET-CONTENT-2"}"#, 10);
-    harness.bucket.insert(
-        &tombstone_key(&key),
-        br#"{"turn":"SECRET-CONTENT-3"}"#,
-        10,
-    );
+    harness
+        .bucket
+        .insert(&tombstone_key(&key), br#"{"turn":"SECRET-CONTENT-3"}"#, 10);
     harness.sweeper.sweep_once().await;
     let text = logs.text();
     assert!(text.contains(&record_key(&key)));
@@ -145,6 +143,8 @@ async fn the_logs_of_a_sweep_hold_the_key_of_an_object_and_never_its_content() {
 struct LeaseRunsOutAfterPut {
     inner: Arc<FakeBucket>,
 }
+
+impl crate::sealed::Sealed for LeaseRunsOutAfterPut {}
 
 impl Bucket for LeaseRunsOutAfterPut {
     fn check(&self) -> crate::bucket::BucketFuture<'_, ()> {
@@ -199,7 +199,10 @@ async fn a_leader_whose_lease_runs_out_between_two_steps_of_a_save_writes_and_de
     let attempt = AttemptId::mint();
     put_save(&bucket, &key, &[attempt], attempt, NOW - 5000);
     sweeper.sweep_once().await;
-    assert_eq!(bucket.writes(), vec![format!("put {}", tombstone_key(&key))]);
+    assert_eq!(
+        bucket.writes(),
+        vec![format!("put {}", tombstone_key(&key))]
+    );
     assert!(bucket.contains(&tombstone_key(&key)));
     assert!(bucket.contains(&manifest_key(&key)));
     assert!(bucket.contains(&part_object(&key, attempt)));

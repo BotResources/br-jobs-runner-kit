@@ -18,11 +18,29 @@ use crate::rules::SweepRules;
 use crate::sweep::Sweeper;
 
 pub struct Parts {
-    pub api: Arc<dyn KubeApi>,
-    pub bucket: Arc<dyn Bucket>,
-    pub clock: Arc<dyn Clock>,
-    pub identity: String,
-    pub own_namespace: String,
+    api: Arc<dyn KubeApi>,
+    bucket: Arc<dyn Bucket>,
+    clock: Arc<dyn Clock>,
+    identity: String,
+    own_namespace: String,
+}
+
+impl Parts {
+    pub fn new(
+        api: Arc<dyn KubeApi>,
+        bucket: Arc<dyn Bucket>,
+        clock: Arc<dyn Clock>,
+        identity: String,
+        own_namespace: String,
+    ) -> Self {
+        Self {
+            api,
+            bucket,
+            clock,
+            identity,
+            own_namespace,
+        }
+    }
 }
 
 struct Shared {

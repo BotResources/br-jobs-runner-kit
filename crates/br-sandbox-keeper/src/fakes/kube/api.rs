@@ -11,6 +11,8 @@ use crate::rules::ConditionWrite;
 
 use super::{Call, FakeKube, failure};
 
+impl crate::sealed::Sealed for FakeKube {}
+
 impl KubeApi for FakeKube {
     fn managed_namespaces<'a>(&'a self, _selector: &'a str) -> ApiFuture<'a, Vec<String>> {
         Box::pin(async move {

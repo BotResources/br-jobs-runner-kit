@@ -79,6 +79,8 @@ impl FakeBucket {
     }
 }
 
+impl crate::sealed::Sealed for FakeBucket {}
+
 impl Bucket for FakeBucket {
     fn check(&self) -> BucketFuture<'_, ()> {
         Box::pin(async move {

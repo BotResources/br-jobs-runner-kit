@@ -221,8 +221,10 @@ async fn an_event_names_the_replica_set_and_carries_the_reason() {
 
 #[tokio::test]
 async fn the_managed_namespaces_are_the_ones_that_match_the_selector() {
-    let wire = Wire::ok(json!({"apiVersion": "v1", "kind": "NamespaceList", "metadata": {},
-        "items": [{"metadata": {"name": "a"}}, {"metadata": {"name": "b"}}]}));
+    let wire = Wire::ok(
+        json!({"apiVersion": "v1", "kind": "NamespaceList", "metadata": {},
+        "items": [{"metadata": {"name": "a"}}, {"metadata": {"name": "b"}}]}),
+    );
     let found = wire
         .cluster()
         .managed_namespaces("br.sandbox/managed=true")

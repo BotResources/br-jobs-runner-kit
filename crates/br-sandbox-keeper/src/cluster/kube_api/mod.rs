@@ -68,6 +68,8 @@ mod watch;
 use lease::{lease_facts, lease_object};
 use watch::{Phase, Watch, pod_selector};
 
+impl crate::sealed::Sealed for KubeCluster {}
+
 impl KubeApi for KubeCluster {
     fn managed_namespaces<'a>(&'a self, selector: &'a str) -> ApiFuture<'a, Vec<String>> {
         Box::pin(async move {

@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     #[error("the document is not a valid keeper configuration: {0}")]
     Document(String),

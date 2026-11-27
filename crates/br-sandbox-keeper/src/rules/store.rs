@@ -88,6 +88,7 @@ impl TurnGrouper {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ManifestRead {
     NotNeeded,
     Absent,
@@ -96,6 +97,7 @@ pub enum ManifestRead {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StoreStep {
     PutTombstone { key: String, body: Vec<u8> },
     DeleteManifest { key: String },

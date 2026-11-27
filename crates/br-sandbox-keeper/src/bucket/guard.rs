@@ -30,6 +30,8 @@ impl GuardedBucket {
     }
 }
 
+impl crate::sealed::Sealed for GuardedBucket {}
+
 impl Bucket for GuardedBucket {
     fn check(&self) -> BucketFuture<'_, ()> {
         self.inner.check()

@@ -1,6 +1,10 @@
 use std::collections::HashSet;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
+fn held<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
+    lock.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 pub struct Readiness {
     expected: Mutex<Option<HashSet<String>>>,
@@ -25,11 +29,11 @@ impl Readiness {
     }
 
     pub fn expect(&self, namespaces: impl IntoIterator<Item = String>) {
-        *self.expected.lock().unwrap() = Some(namespaces.into_iter().collect());
+        *held(&self.expected) = Some(namespaces.into_iter().collect());
     }
 
     pub fn namespace_synced(&self, namespace: &str) {
-        self.synced.lock().unwrap().insert(namespace.to_owned());
+        held(&self.synced).insert(namespace.to_owned());
     }
 
     pub fn store_ready(&self) {
@@ -37,11 +41,11 @@ impl Readiness {
     }
 
     pub fn is_ready(&self) -> bool {
-        let expected = self.expected.lock().unwrap();
+        let expected = held(&self.expected);
         self.store_ready.load(Ordering::SeqCst)
             && expected
                 .as_ref()
-                .is_some_and(|expected| self.synced.lock().unwrap().is_superset(expected))
+                .is_some_and(|expected| held(&self.synced).is_superset(expected))
     }
 }
 
@@ -70,6 +74,22 @@ mod tests {
         readiness.store_ready();
         assert!(!readiness.is_ready());
         readiness.expect([]);
+        assert!(readiness.is_ready());
+    }
+
+    #[test]
+    fn a_panic_while_a_lock_is_held_does_not_take_the_answer_down() {
+        let readiness = std::sync::Arc::new(readiness());
+        let poisoner = readiness.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.synced.lock().unwrap();
+            let _other = poisoner.expected.lock().unwrap();
+            panic!("a panic that poisons both locks");
+        })
+        .join();
+        readiness.namespace_synced("a");
+        readiness.namespace_synced("b");
+        readiness.store_ready();
         assert!(readiness.is_ready());
     }
 

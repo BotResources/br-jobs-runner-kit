@@ -16,6 +16,7 @@ pub const EVENT_POOL_AT_MAX: &str = "PoolAtMax";
 pub const EVENT_WARM_PODS_PENDING: &str = "WarmPodsPending";
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ApiError {
     #[error("the object is gone")]
     NotFound,
@@ -28,6 +29,7 @@ pub enum ApiError {
 pub type ApiFuture<'a, T> = BoxFuture<'a, Result<T, ApiError>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DeleteOutcome {
     Deleted,
     Gone,
@@ -35,6 +37,7 @@ pub enum DeleteOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PodEvent {
     Snapshot(Vec<PodFacts>),
     Applied(Box<PodFacts>),
@@ -67,6 +70,7 @@ pub struct EventTarget {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PoolEvent {
     AtMax,
     WarmPodsPending,
@@ -81,7 +85,7 @@ impl PoolEvent {
     }
 }
 
-pub trait KubeApi: Send + Sync {
+pub trait KubeApi: crate::sealed::Sealed + Send + Sync {
     fn managed_namespaces<'a>(&'a self, selector: &'a str) -> ApiFuture<'a, Vec<String>>;
 
     fn watch_pods(&self, namespace: &str) -> BoxStream<'static, PodEvent>;

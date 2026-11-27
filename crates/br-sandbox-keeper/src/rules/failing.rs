@@ -12,6 +12,7 @@ const STATUS_TRUE: &str = "True";
 const STATUS_FALSE: &str = "False";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FailureKind {
     ImagePull,
     Crash,
