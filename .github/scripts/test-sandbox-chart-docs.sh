@@ -81,7 +81,7 @@ check_the_check_image_lists_every_tool_the_script_calls() {
     t "the section says the probe reads the reply until the proxy closes" grep -qF 'keeps reading the reply until the proxy closes the connection' <<<"$paragraph"
     t "the section says -w is an idle timeout" grep -qF '`-w` is an idle timeout' <<<"$paragraph"
     t "the section says nc exits when the proxy closes" grep -qF 'it exits when the proxy closes the connection' <<<"$paragraph"
-    t "the section names the one build exercised and says no other was" grep -qF 'One build was exercised, a BSD `nc`; no other build' <<<"$paragraph"
+    t "the section says the suite uses a stub of nc, no real nc build is exercised, the probe image was not run, and what the first cluster run must confirm" grep -qF 'The suite uses a stub of `nc`; no real `nc` build is exercised by the suite. The real probe image and its `nc` were not run at this version. The first cluster run must confirm that the tools the probe needs exist there and that `nc` behaves as the probe expects (it reads until the proxy closes, `-w` is an idle timeout, it exits on close).' <<<"$paragraph"
 }
 
 check_the_docs_state_what_was_and_was_not_measured() {
