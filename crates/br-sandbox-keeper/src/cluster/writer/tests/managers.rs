@@ -100,14 +100,22 @@ async fn a_pool_that_never_had_a_template_write_scales_and_keeps_scaling_after_o
 }
 
 #[tokio::test]
-async fn an_unchanged_template_on_a_replica_set_that_the_keeper_made_is_not_written() {
+async fn an_unchanged_template_on_a_replica_set_that_the_keeper_made_is_written_once_and_then_not_again()
+ {
     let rig = rig();
     let first = created(&rig, 2, "img:1").await;
     assert_eq!(
         rig.writer.set_template("sbx", &owner(), &first).await,
-        Ok(Change::Unchanged)
+        Ok(Change::Written)
     );
-    assert!(rig.kube.calls().is_empty());
+    assert_eq!(rig.kube.calls().len(), 1);
+    for _ in 0..3 {
+        assert_eq!(
+            rig.writer.set_template("sbx", &owner(), &first).await,
+            Ok(Change::Unchanged)
+        );
+    }
+    assert_eq!(rig.kube.calls().len(), 1);
 }
 
 #[tokio::test]

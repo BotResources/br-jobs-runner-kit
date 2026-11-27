@@ -1,7 +1,7 @@
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ManagedFieldsEntry;
 
-use super::{FIELD_MANAGER, TEMPLATE_FIELD_MANAGER};
+use super::TEMPLATE_FIELD_MANAGER;
 
 const APPLY: &str = "Apply";
 
@@ -26,6 +26,14 @@ fn template_held_by(replica_set: &ReplicaSet, manager: &str) -> bool {
         .any(|entry| holds_template(entry, manager))
 }
 
+fn managed_fields_are_readable(replica_set: &ReplicaSet) -> bool {
+    replica_set
+        .metadata
+        .managed_fields
+        .as_ref()
+        .is_some_and(|entries| !entries.is_empty())
+}
+
 fn template_hash_of<'a>(replica_set: &'a ReplicaSet, key: &str) -> Option<&'a str> {
     replica_set
         .spec
@@ -43,7 +51,7 @@ fn template_hash_of<'a>(replica_set: &'a ReplicaSet, key: &str) -> Option<&'a st
 pub(crate) fn template_in_place(replica_set: &ReplicaSet, key: &str, hash: &str) -> bool {
     template_hash_of(replica_set, key) == Some(hash)
         && (template_held_by(replica_set, TEMPLATE_FIELD_MANAGER)
-            || !template_held_by(replica_set, FIELD_MANAGER))
+            || !managed_fields_are_readable(replica_set))
 }
 
 #[cfg(test)]

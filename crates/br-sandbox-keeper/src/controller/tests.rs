@@ -8,6 +8,7 @@ mod lifecycle;
 mod managers;
 mod metrics;
 mod refusals;
+mod repair;
 mod restart;
 mod rollout;
 mod run;
