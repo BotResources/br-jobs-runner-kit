@@ -7,7 +7,10 @@
 - A pod that is gone, not `Running` or being deleted while an exec runs is now a port fault (`Error::Cluster(ClusterError::Gone)`), never an exit code. The API ends the exec stream of a killed process with a status of 137 (or 143), and a foreground `run` gave `Ok(Finished)` with exit code 137 and empty streams. When the status of an exec of `run`, `read`, `write`, `list` or `kill` is 128 or more, the adapter reads the pod once; a pod that is not found, that has a deletion timestamp, or whose phase is not exactly `Running` (no phase, `Pending`, `Unknown`, `Failed`, `Succeeded`), is the fault `Gone`. A pod that is `Running` and not being deleted keeps the status as it was: a command that really ends with 137 (`kill -9`, the out-of-memory killer) is still `Ok` with exit code 137, and a `read` of a file that cannot be read is still a refusal.
 - When the read of the pod fails, the operation is a port fault (`ClusterError::Call`), never an exit code. A status below 128 reads no pod.
 - `save` needed no change: any status other than 0 of the `bsdtar` of a save is already a port fault.
-- The virtual-host style of the store (`store_path_style` false) put a double slash between the host and the key (`http://bucket.host:port//key`) when the endpoint was given with a trailing slash, and an S3-compatible store answered 405. The endpoint is now taken without its trailing slash, so one slash separates the host and the key. The path style is unchanged (`/{bucket}/{key}`).
+
+### Known issues
+
+- The virtual-host style of the store (`store_path_style` false, the default) builds the object URL with a double slash before the key, which a strict store refuses and a store that keeps the empty segment reads as another key; use the path style (`store_path_style` true).
 
 ## 0.1.1
 

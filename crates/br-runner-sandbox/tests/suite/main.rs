@@ -42,7 +42,6 @@ mod restore_recheck;
 mod s3_list;
 mod s3_store;
 mod s3_streams;
-mod s3_url;
 mod save_failures;
 mod save_flow;
 mod seed_archive;
