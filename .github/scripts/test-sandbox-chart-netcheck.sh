@@ -15,6 +15,7 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     esac
     case "$mode" in
         200) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;;
+        403then200) if [ "$(grep -c "CONNECT $(printf '%s\n' "$req" | sed -n '1s/^CONNECT \([^ ]*\) .*/\1/p') " "$STUB_DIR/connect.log")" -le 1 ]; then printf 'HTTP/1.1 403 Forbidden\r\n\r\n'; else printf 'HTTP/1.1 200 Connection established\r\n\r\n'; fi ;;
         403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
         502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
         404) printf 'HTTP/1.1 404 Not Found\r\n\r\n' ;;
@@ -27,14 +28,23 @@ if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
     exit 0
 fi
 printf '%s\n' "$target" >>"$STUB_DIR/nc.calls"
+if [ "$(($(wc -l <"$STUB_DIR/nc.calls")))" -gt 2000 ]; then
+    printf 'nc stub: more than 2000 calls, the script does not wait\n' >"$STUB_DIR/runaway"
+    kill "$PPID"
+    exit 1
+fi
+refuse() {
+    [ -z "${NC_DROP_SECONDS:-}" ] || printf '%s\n' "$(($(cat "$STUB_DIR/clock") + NC_DROP_SECONDS))" >"$STUB_DIR/clock"
+    exit 1
+}
 if [ -n "${NC_LATE_K:-}" ]; then
     printf x >>"$STUB_DIR/nc.late"
-    [ "$(($(wc -c <"$STUB_DIR/nc.late")))" -le "$NC_LATE_K" ] && exit 0 || exit 1
+    [ "$(($(wc -c <"$STUB_DIR/nc.late")))" -le "$NC_LATE_K" ] && exit 0 || refuse
 fi
 case "$NC_MODE" in
     all) exit 0 ;;
-    none) exit 1 ;;
-    first) [ "$target" = "$NC_FIRST" ] && exit 0 || exit 1 ;;
+    none) refuse ;;
+    first) [ "$target" = "$NC_FIRST" ] && exit 0 || refuse ;;
 esac
 STUB
     cat >"$bin/kubectl" <<'STUB'
@@ -71,7 +81,11 @@ case "$1" in
         : >"$STUB_DIR/nc.late"
         exit 0
         ;;
-    wait | delete) exit 0 ;;
+    wait)
+        printf '%s\n' "$*" >>"$STUB_DIR/wait.args"
+        exit 0
+        ;;
+    delete) exit 0 ;;
     logs)
         [ "${NO_LOG:-}" = 1 ] && exit 1
         targets="$(sed -n 's/^ *value: *//p' "$STUB_DIR/pod.yaml" | head -1 | tr -d '"')"
@@ -109,6 +123,8 @@ reset_netcheck_stub() {
     mkdir -p "$WORK/netcheckstub"
     : >"$WORK/netcheckstub/sleep.log"
     : >"$WORK/netcheckstub/nc.calls"
+    : >"$WORK/netcheckstub/wait.args"
+    : >"$WORK/netcheckstub/runaway"
     printf '1000\n' >"$WORK/netcheckstub/clock"
 }
 

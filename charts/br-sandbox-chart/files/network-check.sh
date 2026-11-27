@@ -5,6 +5,20 @@ dir="${NETCHECK_DIR:-/netcheck}"
 wait_seconds="${NETCHECK_WAIT_SECONDS:-180}"
 enforcement_wait="${NETCHECK_ENFORCEMENT_WAIT:-60}"
 
+precondition_failed() {
+  printf '{"net":"cluster","mode":"all","target":"%s","kind":"precondition","expected":"%s","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3"
+  exit 2
+}
+
+check_preconditions() {
+  case "$enforcement_wait" in
+    '' | *[!0-9]* | 0* | [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*)
+      precondition_failed NETCHECK_ENFORCEMENT_WAIT "integer from 1 to 999999999" invalid
+      ;;
+  esac
+  command -v nc >/dev/null 2>&1 || precondition_failed nc present missing
+}
+
 status_code() {
   printf '%s\n' "$1" | sed -n 1p | awk '$1 ~ /^HTTP\/[0-9]/ && $2 ~ /^[0-9][0-9][0-9]$/ {printf "%s", $2}'
 }
@@ -200,8 +214,14 @@ discover() {
 }
 
 case "${1:-discover}" in
-  probe) probe ;;
-  discover) discover ;;
+  probe)
+    check_preconditions
+    probe
+    ;;
+  discover)
+    check_preconditions
+    discover
+    ;;
   *)
     printf 'usage: network-check.sh discover|probe\n' >&2
     exit 2

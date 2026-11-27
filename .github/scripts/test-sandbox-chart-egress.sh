@@ -146,7 +146,7 @@ check_the_proxy_pod_exists_only_when_egress_is_enabled_and_only_in_an_egress_nam
         t "render ${name}: no Deployment, Service or Pod lives in a sandbox, system or mode-none namespace but the keeper's" jqt "$name" "${EGRESS_NAMESPACES} as \$e | [.[] | select((.kind == \"Deployment\" or .kind == \"Pod\" or .kind == \"Service\") and (.metadata.namespace as \$n | \$e | index(\$n) == null))] | length == 0"
     done
     t "the README says the proxy Deployment lives in the egress namespace and never in a sandbox namespace" grep -qF 'A proxy Deployment lives in an egress namespace and never in a sandbox namespace.' "$README"
-    t "the README says that with egress disabled no proxy pod exists and a sandbox of a mode with a proxy has no egress (fail closed)" grep -qF 'With `egress.enabled: false` no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all (fail closed).' "$README"
+    t "the README says that with egress disabled no proxy pod exists and a sandbox of a mode with a proxy has no egress once the policies are enforced" grep -qF 'With `egress.enabled: false` no proxy pod exists, so a sandbox of a mode with a proxy has no egress at all once the network plugin enforces the policies (fail closed in that steady state, see The enforcement window).' "$README"
 }
 
 check_the_credential_secrets_live_in_the_egress_namespace() {
