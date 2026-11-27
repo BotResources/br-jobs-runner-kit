@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+The keeper pod can start: the chart now renders the keeper a document in the keys and the format that the keeper reads. Before, the chart wrote YAML with keys such as `store`, `lease`, `settings`, `save` and `system_namespace` at `/etc/br-sandbox/config.yaml`, and the keeper refuses every unknown key and reads JSON.
+
+- New ConfigMap `br-sandbox-keeper-config` of the system namespace (only with `keeper.enabled`), key `config.json`: one JSON document with keys of the keeper only. `BR_SANDBOX_CONFIG` is `/etc/br-sandbox/config.json` and the volume `config` mounts that ConfigMap. The ConfigMap `br-sandbox-config` of the system namespace is removed: no component read it. The ConfigMaps `br-sandbox-config` of the sandbox namespaces (the adapter) are unchanged.
+- Mapping: `store.{endpoint,bucket,region,path_style}` to `store_endpoint`, `store_bucket`, `store_region`, `store_path_style`; `save.ttl_seconds` to `save_ttl_seconds`; `save.tombstone_ttl_days` to `tombstone_ttl_seconds`; `warm_max_age_seconds`; `keeper.lease.*` to `lease_duration_seconds`, `renew_deadline_seconds`, `retry_period_seconds`; `label_prefix` (`br.sandbox`) and `managed_namespace_selector` (`br.sandbox/managed=true`); each pool of each (client, mode) to an entry of `pools` with `id`, `namespace`, `replicaset`, `min_replicas` (`floor`), `max_replicas` (`max_sandboxes`), `refill_seconds`, `margin`, `idle_ttl_seconds` (`idle_ttl`) and `idle_keep_min_state_bytes`. Every value that the keeper and the adapter share is one value, rendered into both documents. The store credential is not in the document.
+- `keeper.settings` is merged at the top level of the document; it was a nested `settings` key before. A key that the chart computes from another value now fails the render with `BR_SANDBOX_KEEPER_SETTING_COMPUTED{key=...}`. Any other key goes to the keeper, which refuses an unknown key or a bad value at its start.
+- New value `keeper.port` (default `8080`, schema 1 to 65535): the document holds `listen_address` `0.0.0.0:{port}`, the keeper container declares the port `http`, and it has a `livenessProbe` on `/livez` and a `readinessProbe` on `/readyz`. The `default-deny` policy of the system namespace is not changed: a scrape of `/metrics` by a pod needs a policy of the project.
+- The pod template of the keeper carries the annotation `br.sandbox/keeper-config-sha256`, so a change of the document rolls the keeper pods.
+- Upgrade from 0.2.0: with `keeper.enabled: true`, a `keeper.settings` that holds a key that the chart computes now fails the render, and a key of the settings that the keeper does not know now stops the keeper at its start (it was never read before, since the keeper could not start). The ConfigMap `br-sandbox-config` of the system namespace is deleted by the upgrade.
+- Tests: the offline suite checks the document (`test-sandbox-chart-keeper-config.sh`). The test `crates/br-sandbox-keeper/tests/chart_config.rs` renders the chart and loads the document through `KeeperConfig::from_json`. The offline checks of the settings and of the save age that read the old system config now read the keeper document.
+
 ## 0.2.0
 
 The egress proxy. A (client, mode) that uses a proxy (mode `allow`, and mode `full` with a credential set) renders the proxy when `egress.enabled` is true.

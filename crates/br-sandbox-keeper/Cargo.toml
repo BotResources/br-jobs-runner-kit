@@ -46,5 +46,6 @@ unsafe_code = "forbid"
 
 [dev-dependencies]
 br-agentic-harness-contract = { git = "https://github.com/BotResources/br-llm-graph-rs", package = "br-agentic-harness-contract", tag = "br-agentic-harness-contract/v0.2.0", version = "0.2.0" }
+serde-saphyr = "2.2"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "test-util", "time"] }
 tower-service = "0.3"

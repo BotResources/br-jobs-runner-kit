@@ -268,6 +268,7 @@
         "enabled": {"type": "boolean"},
         "image": {"$ref": "#/definitions/imageRef"},
         "replicas": {"$ref": "#/definitions/positiveInt"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "settings": {"type": "object"},
         "resources": {"$ref": "#/definitions/resources"},
         "lease": {

@@ -11,6 +11,10 @@ headings and is released under the tag `{library}/v{version}`.
 
 ## Unreleased
 
+### Added
+
+- Test `crates/br-sandbox-keeper/tests/chart_config.rs` and the dev-dependency `serde-saphyr` of `br-sandbox-keeper` (already in the lock through `kube`): the document that `br-sandbox-chart` renders for the keeper is loaded through `KeeperConfig::from_json`. No change of the crate version or of its public surface.
+
 ### Fixed
 
 - `images-check-gates.sh` matches the status functions `always`, `cancelled`, `failure` and `success` in any letter case, as GitHub does: `Always()` or `FAILURE()` in the condition of the job `manifest list` is now refused. `test-images-gates.sh` has 16 more tests (`Always`, `FAILURE`, `Cancelled`, `SUCCESS`, each in the plain, quoted, folded and literal forms of the condition).
