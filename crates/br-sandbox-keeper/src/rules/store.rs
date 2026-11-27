@@ -119,6 +119,7 @@ pub enum StoreStep {
     DeleteManifest { key: String },
     DeleteExpiredPart { key: String },
     DeleteOrphanAttempt { keys: Vec<String> },
+    TombstoneNotSerialized { key: String },
 }
 
 pub fn save_expired(made_at: Timestamp, now: Timestamp, rules: &SweepRules) -> bool {
@@ -163,15 +164,20 @@ fn orphans(
 }
 
 fn expiry_steps(turn: &TurnListing, manifest: &Manifest, rules: &SweepRules) -> Vec<StoreStep> {
-    let mut steps = Vec::new();
-    if let Ok(body) = tombstone_for(manifest, rules.save_ttl).to_vec() {
-        steps.push(StoreStep::PutTombstone {
-            key: tombstone_key(manifest.key()),
-            body,
-        });
-    } else {
-        return steps;
-    }
+    expiry_steps_serialized(turn, manifest, rules, Tombstone::to_vec)
+}
+
+fn expiry_steps_serialized<E>(
+    turn: &TurnListing,
+    manifest: &Manifest,
+    rules: &SweepRules,
+    serialize: impl FnOnce(&Tombstone) -> Result<Vec<u8>, E>,
+) -> Vec<StoreStep> {
+    let key = tombstone_key(manifest.key());
+    let Ok(body) = serialize(&tombstone_for(manifest, rules.save_ttl)) else {
+        return vec![StoreStep::TombstoneNotSerialized { key }];
+    };
+    let mut steps = vec![StoreStep::PutTombstone { key, body }];
     if let Some(listed) = &turn.manifest {
         steps.push(StoreStep::DeleteManifest {
             key: listed.key.clone(),

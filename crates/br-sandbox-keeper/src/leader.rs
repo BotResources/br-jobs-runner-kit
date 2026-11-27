@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cluster::{ApiError, KubeApi, LeaseFacts, LeaseWrite};
 use crate::config::LeaseSettings;
+use crate::metrics::Metrics;
 use crate::time::until;
 
 pub const LEASE_NAME: &str = "br-sandbox-keeper";
@@ -98,6 +99,7 @@ pub struct Elector {
     pub namespace: String,
     pub identity: String,
     pub lease: LeaseSettings,
+    pub metrics: Arc<Metrics>,
 }
 
 impl Elector {
@@ -117,6 +119,7 @@ impl Elector {
             Ok(current) => current,
             Err(error) => {
                 tracing::warn!(%error, "the lease could not be read");
+                self.metrics.sweep_error();
                 return self.lease.retry_period;
             }
         };
@@ -179,7 +182,10 @@ impl Elector {
                     self.leadership.lost();
                 }
             }
-            Err(error) => tracing::warn!(%error, "the lease could not be written"),
+            Err(error) => {
+                tracing::warn!(%error, "the lease could not be written");
+                self.metrics.sweep_error();
+            }
         }
         self.lease.retry_period
     }

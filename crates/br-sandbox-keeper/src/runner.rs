@@ -139,6 +139,19 @@ async fn start(shared: &Shared, parts: &Parts) -> Result<Vec<String>, KeeperErro
     Ok(watched)
 }
 
+fn sweeper_of(shared: &Shared, bucket: Arc<dyn Bucket>, clock: Arc<dyn Clock>) -> Sweeper {
+    let config = &shared.config;
+    Sweeper {
+        bucket: Arc::new(GuardedBucket::new(bucket)),
+        clock,
+        leadership: shared.leadership.clone(),
+        metrics: shared.metrics.clone(),
+        rules: SweepRules::from(config.as_ref()),
+        page_size: config.sweep_page_size,
+        interval: config.sweep_interval,
+    }
+}
+
 fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: &[String]) {
     let config = &shared.config;
     let engine = Engine::new(
@@ -166,21 +179,14 @@ fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: 
             .unwrap_or(parts.default_lease_namespace),
         identity: parts.identity,
         lease: config.lease.clone(),
+        metrics: shared.metrics.clone(),
     };
     let stop = shared.shutdown.clone();
     tasks.spawn(async move {
         elector.run(stop).await;
         "elector"
     });
-    let sweeper = Sweeper {
-        bucket: Arc::new(GuardedBucket::new(parts.bucket)),
-        clock: parts.clock,
-        leadership: shared.leadership.clone(),
-        metrics: shared.metrics.clone(),
-        rules: SweepRules::from(config.as_ref()),
-        page_size: config.sweep_page_size,
-        interval: config.sweep_interval,
-    };
+    let sweeper = sweeper_of(shared, parts.bucket, parts.clock);
     let stop = shared.shutdown.clone();
     tasks.spawn(async move {
         sweeper.run(stop).await;

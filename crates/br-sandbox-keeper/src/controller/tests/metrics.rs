@@ -130,3 +130,38 @@ async fn pool_desired_and_claims_per_second_carry_the_label_pool_of_each_configu
         vec!["br_sandbox_keeper_claims_per_second{pool=\"p\"} 0"]
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_pod_watch_is_logged_at_error_level_with_its_reason_and_counted() {
+    let (logs, _guard) = crate::testing::logs::capture();
+    let mut bed = bed(true);
+    for reason in [
+        "the pod list failed: the server is down",
+        "the pod watch broke: connection reset",
+    ] {
+        bed.engine
+            .handle(
+                NS,
+                PodEvent::WatchFailed {
+                    reason: reason.to_owned(),
+                },
+            )
+            .await;
+    }
+    assert!(bed.has_metric("br_sandbox_keeper_sweep_errors_total 2"));
+    let lines: Vec<serde_json::Value> = logs
+        .text()
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .filter(|line| line["level"] == "ERROR")
+        .collect();
+    assert_eq!(lines.len(), 2);
+    for (line, reason) in lines.iter().zip([
+        "the pod list failed: the server is down",
+        "the pod watch broke: connection reset",
+    ]) {
+        assert_eq!(line["level"], "ERROR");
+        assert_eq!(line["fields"]["reason"], reason);
+        assert_eq!(line["fields"]["namespace"], NS);
+    }
+}

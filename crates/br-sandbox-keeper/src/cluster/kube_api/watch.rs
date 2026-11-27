@@ -44,26 +44,36 @@ fn non_empty(candidate: Option<&String>, previous: String) -> String {
         .unwrap_or(previous)
 }
 
+fn failure(what: &str, error: impl std::fmt::Display) -> PodEvent {
+    PodEvent::WatchFailed {
+        reason: format!("{what}: {error}"),
+    }
+}
+
 impl Watch {
     async fn open(
         &self,
         version: &str,
-    ) -> Option<BoxStream<'static, kube::Result<WatchEvent<Pod>>>> {
+    ) -> kube::Result<BoxStream<'static, kube::Result<WatchEvent<Pod>>>> {
         self.api
             .watch(&self.watch, version)
             .await
-            .ok()
             .map(StreamExt::boxed)
     }
 
-    async fn pause_then_relist(&self) -> (Vec<PodEvent>, Phase) {
+    async fn pause_then_relist(&self, failed: PodEvent) -> (Vec<PodEvent>, Phase) {
         tokio::time::sleep(WATCH_RETRY).await;
-        (Vec::new(), Phase::List)
+        (vec![failed], Phase::List)
     }
 
     async fn relist(&self) -> (Vec<PodEvent>, Phase) {
-        let Ok(list) = self.api.list(&self.list).await else {
-            return self.pause_then_relist().await;
+        let list = match self.api.list(&self.list).await {
+            Ok(list) => list,
+            Err(error) => {
+                return self
+                    .pause_then_relist(failure("the pod list failed", error))
+                    .await;
+            }
         };
         let version = list.metadata.resource_version.clone().unwrap_or_default();
         let facts = list
@@ -73,10 +83,12 @@ impl Watch {
             .collect();
         let snapshot = PodEvent::Snapshot(facts);
         match self.open(&version).await {
-            Some(events) => (vec![snapshot], Phase::Watch { version, events }),
-            None => {
-                tokio::time::sleep(WATCH_RETRY).await;
-                (vec![snapshot], Phase::List)
+            Ok(events) => (vec![snapshot], Phase::Watch { version, events }),
+            Err(error) => {
+                let (failed, phase) = self
+                    .pause_then_relist(failure("the pod watch could not be opened", error))
+                    .await;
+                (vec![snapshot].into_iter().chain(failed).collect(), phase)
             }
         }
     }
@@ -114,10 +126,24 @@ impl Watch {
                     events,
                 },
             ),
-            Some(Ok(WatchEvent::Error(_)) | Err(_)) => self.pause_then_relist().await,
+            Some(Ok(WatchEvent::Error(status))) => {
+                let what = format!(
+                    "the pod watch sent an error event ({} {})",
+                    status.code, status.reason
+                );
+                self.pause_then_relist(failure(&what, &status.message))
+                    .await
+            }
+            Some(Err(error)) => {
+                self.pause_then_relist(failure("the pod watch broke", error))
+                    .await
+            }
             None => match self.open(&version).await {
-                Some(events) => (Vec::new(), Phase::Watch { version, events }),
-                None => self.pause_then_relist().await,
+                Ok(events) => (Vec::new(), Phase::Watch { version, events }),
+                Err(error) => {
+                    self.pause_then_relist(failure("the pod watch could not be reopened", error))
+                        .await
+                }
             },
         }
     }

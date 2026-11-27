@@ -190,6 +190,14 @@ impl Sweeper {
                     })?;
                 self.metrics.tombstone_written();
             }
+            StoreStep::TombstoneNotSerialized { key } => {
+                tracing::warn!(
+                    key,
+                    "a tombstone cannot be serialized and its save is left in place"
+                );
+                self.metrics.sweep_error();
+                return Err(Stop::Failed);
+            }
             StoreStep::DeleteManifest { key } => {
                 self.bucket.delete(&key).await.map_err(|error| {
                     self.failed("a manifest could not be deleted", &key, &error)
