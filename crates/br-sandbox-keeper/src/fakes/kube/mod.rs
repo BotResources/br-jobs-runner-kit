@@ -1,91 +1,37 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Mutex;
 
-use tokio::sync::mpsc;
+use k8s_openapi::api::apps::v1::ReplicaSet;
 
 use crate::cluster::{ApiError, LeaseFacts, LeaseWrite, PodEvent};
-use crate::facts::{ConditionFacts, PodFacts, ReplicaSetFacts};
+use crate::facts::{ConditionFacts, PodFacts};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Call {
-    Delete {
-        name: String,
-        uid: String,
-        resource_version: String,
-    },
-    Replicas {
-        name: String,
-        replicas: i32,
-    },
-    Condition {
-        name: String,
-        status: String,
-        reason: String,
-        message: String,
-    },
-    Event {
-        reason: &'static str,
-        message: String,
-    },
-    LeaseCreate {
-        holder: String,
-    },
-    LeaseUpdate {
-        holder: String,
-        resource_version: String,
-    },
-}
+pub use call::Call;
+use state::{State, condition_of};
 
-#[derive(Default)]
-struct State {
-    namespaces: Vec<String>,
-    pods: BTreeMap<(String, String), PodFacts>,
-    senders: Vec<(String, mpsc::UnboundedSender<PodEvent>)>,
-    replica_sets: BTreeMap<(String, String), ReplicaSetFacts>,
-    lease: Option<LeaseFacts>,
-    lease_targets: BTreeSet<(String, String)>,
-    version: u64,
-    calls: Vec<Call>,
-    failing: HashSet<&'static str>,
-    conflicting_leases: u32,
-}
-
-#[derive(Default)]
 pub struct FakeKube {
     state: Mutex<State>,
 }
 
-impl State {
-    fn bump(&mut self) -> String {
-        self.version += 1;
-        self.version.to_string()
-    }
-
-    fn emit(&mut self, namespace: &str, event: PodEvent) {
-        self.senders
-            .retain(|(ns, sender)| ns != namespace || sender.send(event.clone()).is_ok());
-    }
-}
-
-pub(super) fn failure(operation: &'static str) -> ApiError {
-    ApiError::Call(format!("scripted {operation} failure"))
-}
-
 impl FakeKube {
-    pub fn set_namespaces(&self, namespaces: &[&str]) {
-        self.state.lock().unwrap().namespaces =
-            namespaces.iter().map(|ns| (*ns).to_owned()).collect();
+    pub fn put_replica_set(&self, replica_set: ReplicaSet) {
+        let key = (
+            replica_set.metadata.namespace.clone().unwrap_or_default(),
+            replica_set.metadata.name.clone().unwrap_or_default(),
+        );
+        self.state
+            .lock()
+            .unwrap()
+            .replica_sets
+            .insert(key, replica_set);
     }
 
-    pub fn add_replica_set(&self, namespace: &str, name: &str, replicas: Option<i32>) {
-        self.state.lock().unwrap().replica_sets.insert(
-            (namespace.to_owned(), name.to_owned()),
-            ReplicaSetFacts {
-                uid: format!("rs-{name}"),
-                replicas,
-                conditions: Vec::new(),
-            },
-        );
+    pub fn raw_replica_set(&self, namespace: &str, name: &str) -> Option<ReplicaSet> {
+        self.state
+            .lock()
+            .unwrap()
+            .replica_sets
+            .get(&(namespace.to_owned(), name.to_owned()))
+            .cloned()
     }
 
     pub fn remove_replica_set(&self, namespace: &str, name: &str) {
@@ -138,15 +84,15 @@ impl FakeKube {
         pod.resource_version = version;
     }
 
-    pub fn pods_in(&self, namespace: &str) -> Vec<PodFacts> {
-        self.state
-            .lock()
-            .unwrap()
-            .pods
-            .iter()
-            .filter(|((ns, _), _)| ns == namespace)
-            .map(|(_, pod)| pod.clone())
-            .collect()
+    pub fn remove_pod(&self, namespace: &str, name: &str) {
+        let mut state = self.state.lock().unwrap();
+        state.pods.remove(&(namespace.to_owned(), name.to_owned()));
+        state.emit(
+            namespace,
+            PodEvent::Deleted {
+                name: name.to_owned(),
+            },
+        );
     }
 
     pub fn forget_pod(&self, namespace: &str, name: &str) {
@@ -166,16 +112,6 @@ impl FakeKube {
             .cloned()
     }
 
-    pub fn replica_set(&self, namespace: &str, name: &str) -> ReplicaSetFacts {
-        self.state
-            .lock()
-            .unwrap()
-            .replica_sets
-            .get(&(namespace.to_owned(), name.to_owned()))
-            .cloned()
-            .expect("a known replica set")
-    }
-
     pub fn set_replica_set_conditions(
         &self,
         namespace: &str,
@@ -183,11 +119,12 @@ impl FakeKube {
         conditions: Vec<ConditionFacts>,
     ) {
         let mut state = self.state.lock().unwrap();
-        state
+        let set = state
             .replica_sets
             .get_mut(&(namespace.to_owned(), name.to_owned()))
-            .expect("a known replica set")
-            .conditions = conditions;
+            .expect("a known replica set");
+        set.status.get_or_insert_with(Default::default).conditions =
+            Some(conditions.iter().map(condition_of).collect());
     }
 
     pub fn calls(&self) -> Vec<Call> {
@@ -237,11 +174,28 @@ impl FakeKube {
     }
 
     fn check(&self, operation: &'static str) -> Result<(), ApiError> {
-        if self.state.lock().unwrap().failing.contains(operation) {
-            Err(failure(operation))
-        } else {
-            Ok(())
+        let mut state = self.state.lock().unwrap();
+        state.reads.push(operation);
+        match state.refusal(operation) {
+            Some(error) => Err(error),
+            None => Ok(()),
         }
+    }
+
+    pub fn forbid(&self, operation: &'static str) {
+        self.state.lock().unwrap().forbidden.insert(operation);
+    }
+
+    pub fn permit(&self, operation: &'static str) {
+        self.state.lock().unwrap().forbidden.remove(operation);
+    }
+
+    pub fn reads(&self) -> Vec<&'static str> {
+        self.state.lock().unwrap().reads.clone()
+    }
+
+    pub fn clear_reads(&self) {
+        self.state.lock().unwrap().reads.clear();
     }
 
     fn lease_from(write: &LeaseWrite, version: String) -> LeaseFacts {
@@ -257,3 +211,8 @@ impl FakeKube {
 }
 
 mod api;
+mod call;
+mod feed;
+mod pool;
+mod pool_api;
+mod state;

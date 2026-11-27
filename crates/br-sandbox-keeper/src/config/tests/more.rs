@@ -1,21 +1,6 @@
 use super::*;
 
 #[test]
-fn min_replicas_above_max_replicas_is_a_fault() {
-    let mut base = with_pool("min_replicas", json!(21));
-    base["pools"][0]["max_replicas"] = json!(20);
-    assert_eq!(
-        load(&base),
-        Err(ConfigError::MinAboveMax {
-            pool: "acme-none".to_owned()
-        })
-    );
-    let mut base = with_pool("min_replicas", json!(20));
-    base["pools"][0]["max_replicas"] = json!(20);
-    assert!(load(&base).is_ok());
-}
-
-#[test]
 fn a_scale_down_step_below_one_is_a_fault() {
     assert_eq!(
         load(&with("scale_down_step", json!(0))),
@@ -45,83 +30,6 @@ fn the_time_zone_must_be_a_known_name() {
         load(&with("timezone", json!("Mars/Olympus"))),
         Err(ConfigError::UnknownTimezone("Mars/Olympus".to_owned()))
     );
-}
-
-#[test]
-fn a_floor_window_that_ends_no_later_than_it_begins_is_a_fault() {
-    for (from, to) in [("09:00", "09:00"), ("22:00", "02:00"), ("10:00", "09:59")] {
-        let result = load(&with_pool(
-            "floors",
-            json!([{"from": from, "to": to, "floor": 5}]),
-        ));
-        assert_eq!(
-            result,
-            Err(ConfigError::WindowEndsNoLater {
-                pool: "acme-none".to_owned(),
-                index: 0
-            }),
-            "{from} {to}"
-        );
-    }
-}
-
-#[test]
-fn a_window_that_ends_at_midnight_ends_at_24_00() {
-    let config = load(&with_pool(
-        "floors",
-        json!([{"from": "22:00", "to": "24:00", "floor": 5}, {"from": "00:00", "to": "02:00", "floor": 5}]),
-    ))
-    .unwrap();
-    assert_eq!(config.pools[0].floors[0].to_second, 86_400);
-    assert_eq!(config.pools[0].floors[1].from_second, 0);
-}
-
-#[test]
-fn a_time_of_day_that_is_not_a_time_is_a_fault() {
-    for text in ["9:00", "25:00", "10:61", "10", "ten", "24:00:01"] {
-        let result = load(&with_pool(
-            "floors",
-            json!([{"from": text, "to": "24:00", "floor": 5}]),
-        ));
-        assert!(matches!(result, Err(ConfigError::Invalid { .. })), "{text}");
-    }
-    let result = load(&with_pool(
-        "floors",
-        json!([{"from": "24:00", "to": "24:00", "floor": 5}]),
-    ));
-    assert!(matches!(result, Err(ConfigError::Invalid { .. })));
-}
-
-#[test]
-fn two_pools_with_one_id_or_one_replica_set_in_one_namespace_are_a_fault() {
-    let mut base = document();
-    let mut second = base["pools"][0].clone();
-    second["replicaset"] = json!("warm-other");
-    base["pools"].as_array_mut().unwrap().push(second);
-    assert_eq!(
-        load(&base),
-        Err(ConfigError::DuplicatePoolId("acme-none".to_owned()))
-    );
-    let mut base = document();
-    let mut second = base["pools"][0].clone();
-    second["id"] = json!("other");
-    base["pools"].as_array_mut().unwrap().push(second);
-    assert_eq!(
-        load(&base),
-        Err(ConfigError::DuplicateReplicaSet {
-            namespace: "sbx-acme-none".to_owned(),
-            replicaset: "warm-acme-none".to_owned()
-        })
-    );
-    let mut second = base["pools"][1].clone();
-    second["namespace"] = json!("sbx-other");
-    base["pools"][1] = second;
-    assert!(load(&base).is_ok());
-}
-
-#[test]
-fn a_document_with_no_pool_is_a_fault() {
-    assert_eq!(load(&with("pools", json!([]))), Err(ConfigError::NoPools));
 }
 
 #[test]
@@ -166,20 +74,111 @@ fn a_blank_text_value_is_a_fault() {
 }
 
 #[test]
-fn the_pool_lookup_needs_the_namespace_and_the_id() {
-    let config = load(&document()).unwrap();
-    assert!(config.pool("sbx-acme-none", "acme-none").is_some());
-    assert!(config.pool("sbx-other", "acme-none").is_none());
-    assert!(config.pool("sbx-acme-none", "other").is_none());
+fn a_document_that_holds_the_key_pools_is_a_fault_because_pools_are_resources() {
+    for value in [json!([]), json!([{"id": "p"}]), json!(null)] {
+        let error = load(&with("pools", value)).unwrap_err();
+        assert_eq!(error, ConfigError::PoolsAreResources);
+        assert!(error.to_string().contains("resources"), "{error}");
+    }
 }
 
 #[test]
-fn a_key_that_the_library_does_not_know_is_a_fault_at_every_level_of_the_document() {
-    let floor = json!([{"from": "08:00", "to": "09:00", "floor": 1, "colour": "red"}]);
-    let result = load(&with_pool("floors", floor));
-    assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("colour")));
-    let known = json!([{"from": "08:00", "to": "09:00", "floor": 1}]);
-    assert!(load(&with_pool("floors", known)).is_ok());
-    let result = load(&with_pool("margin_seconds", json!(1)));
-    assert!(matches!(result, Err(ConfigError::Document(text)) if text.contains("margin_seconds")));
+fn the_agent_container_has_no_default_and_is_not_blank() {
+    assert_eq!(
+        load(&without("agent_container")),
+        Err(ConfigError::Missing {
+            key: "agent_container".to_owned()
+        })
+    );
+    for blank in ["", "  "] {
+        assert!(matches!(
+            load(&with("agent_container", json!(blank))),
+            Err(ConfigError::Invalid { key, .. }) if key == "agent_container"
+        ));
+    }
+    assert!(load(&with("agent_container", json!(3))).is_err());
+}
+
+#[test]
+fn the_keys_that_moved_to_the_resource_are_faults_in_the_document() {
+    for key in [
+        "min_replicas",
+        "max_replicas",
+        "refill_seconds",
+        "margin",
+        "floors",
+        "image",
+        "size",
+    ] {
+        let result = load(&with(key, json!(1)));
+        assert!(
+            matches!(&result, Err(ConfigError::Document(text)) if text.contains(key)),
+            "{key}: {result:?}"
+        );
+    }
+}
+
+fn keys_of_the_type() -> Vec<String> {
+    let Err(ConfigError::Document(text)) = load(&with("no_such_key", json!(1))) else {
+        panic!("an unknown key is accepted");
+    };
+    let listed = text.split("expected one of ").nth(1).unwrap();
+    listed
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_configuration_type_has_no_endpoint_key_other_than_the_store_endpoint() {
+    let keys = keys_of_the_type();
+    assert!(keys.iter().any(|key| key == "store_endpoint"), "{keys:?}");
+    assert!(keys.len() > 20, "{keys:?}");
+    let markers = [
+        "endpoint",
+        "url",
+        "uri",
+        "dsn",
+        "host",
+        "proxy",
+        "server",
+        "collector",
+        "telemetry",
+        "api",
+        "address",
+        "registry",
+    ];
+    let mut reaching: Vec<&str> = keys
+        .iter()
+        .map(String::as_str)
+        .filter(|key| markers.iter().any(|marker| key.contains(marker)))
+        .collect();
+    reaching.sort_unstable();
+    assert_eq!(reaching, ["listen_address", "store_endpoint"]);
+}
+
+#[test]
+fn a_key_that_would_name_another_endpoint_is_a_start_fault() {
+    for key in [
+        "kube_api_url",
+        "api_server",
+        "otlp_endpoint",
+        "telemetry_endpoint",
+        "metrics_endpoint",
+        "sentry_dsn",
+        "proxy_url",
+        "http_proxy",
+        "licence_endpoint",
+        "update_url",
+        "nats_url",
+        "registry_endpoint",
+    ] {
+        let result = load(&with(key, json!("https://other.example.test")));
+        assert!(
+            matches!(&result, Err(ConfigError::Document(text)) if text.contains(key)),
+            "{key}: {result:?}"
+        );
+    }
 }

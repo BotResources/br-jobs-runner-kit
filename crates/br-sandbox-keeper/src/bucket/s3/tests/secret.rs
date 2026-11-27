@@ -78,8 +78,7 @@ async fn a_run_whose_store_fails_after_the_start_shows_no_credential_in_logs_met
     answers.extend(refusals(50));
     let stub = Stub::serving(answers).await;
     let kube = Arc::new(FakeKube::default());
-    kube.set_namespaces(&["sbx"]);
-    kube.add_replica_set("sbx", "warm-p", Some(2));
+    kube.put_namespace(crate::cluster::fixtures::managed("sbx"));
     kube.put_pod(PodFacts {
         phase: Phase::Pending,
         ready: false,

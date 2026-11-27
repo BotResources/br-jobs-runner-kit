@@ -1,4 +1,4 @@
-use crate::facts::{Phase, PodFacts, fixtures};
+use crate::facts::{ConditionFacts, Phase, PodFacts, fixtures};
 
 use super::*;
 
@@ -22,6 +22,16 @@ fn failing(name: &str, reason: &str) -> PodFacts {
     }
 }
 
+fn held(status: &str, reason: &str, message: &str) -> ConditionFacts {
+    ConditionFacts {
+        kind: "WarmPodsFailing".to_owned(),
+        status: status.to_owned(),
+        reason: Some(reason.to_owned()),
+        message: Some(message.to_owned()),
+        last_transition_time: Some(at(START)),
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn the_first_judgement_of_a_pool_writes_false_and_the_next_ones_write_nothing() {
     let mut bed = bed(true);
@@ -31,17 +41,7 @@ async fn the_first_judgement_of_a_pool_writes_false_and_the_next_ones_write_noth
         conditions(&bed),
         vec![("False".to_owned(), "NoWarmPodFailing".to_owned())]
     );
-    bed.kube.set_replica_set_conditions(
-        NS,
-        RS,
-        vec![crate::facts::ConditionFacts {
-            kind: "WarmPodsFailing".to_owned(),
-            status: "False".to_owned(),
-            reason: Some("NoWarmPodFailing".to_owned()),
-            message: Some(String::new()),
-            last_transition_time: Some(at(START)),
-        }],
-    );
+    bed.set_pool_conditions(vec![held("False", "NoWarmPodFailing", "")]);
     bed.kube.clear_calls();
     bed.pass(30).await;
     assert!(conditions(&bed).is_empty());
@@ -50,32 +50,24 @@ async fn the_first_judgement_of_a_pool_writes_false_and_the_next_ones_write_noth
 #[tokio::test(start_paused = true)]
 async fn the_condition_goes_true_with_the_pull_reason_then_false_when_no_pod_fails() {
     let mut bed = bed(true);
-    let pod = bed.kube.put_pod(failing("w0", "ErrImagePull"));
+    bed.kube.put_pod(failing("w0", "ErrImagePull"));
     bed.sync().await;
-    let written = conditions(&bed);
     assert_eq!(
-        written,
+        conditions(&bed),
         vec![("True".to_owned(), "ImagePullFailing".to_owned())]
     );
-    bed.kube.set_replica_set_conditions(
-        NS,
-        RS,
-        vec![crate::facts::ConditionFacts {
-            kind: "WarmPodsFailing".to_owned(),
-            status: "True".to_owned(),
-            reason: Some("ImagePullFailing".to_owned()),
-            message: Some("1 warm pod(s) failing; kubelet reason: ErrImagePull".to_owned()),
-            last_transition_time: Some(at(START)),
-        }],
-    );
+    bed.set_pool_conditions(vec![held(
+        "True",
+        "ImagePullFailing",
+        "1 warm pod(s) failing; kubelet reason: ErrImagePull",
+    )]);
     bed.kube.clear_calls();
-    bed.applied(PodFacts {
-        ready: true,
-        phase: Phase::Running,
-        containers: Vec::new(),
-        ..pod
-    })
-    .await;
+    bed.kube.update_pod(NS, "w0", |pod| {
+        pod.ready = true;
+        pod.phase = Phase::Running;
+        pod.containers.clear();
+    });
+    bed.settle().await;
     assert_eq!(
         conditions(&bed),
         vec![("False".to_owned(), "NoWarmPodFailing".to_owned())]
@@ -102,13 +94,49 @@ async fn a_follower_writes_no_condition() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_failed_write_of_the_condition_is_tried_again() {
+async fn a_failed_write_of_the_condition_is_counted_and_tried_again() {
     let mut bed = bed(true);
     bed.kube.put_pod(old_warm("w0", 10));
     bed.kube.fail("apply_condition");
     bed.sync().await;
-    assert!(bed.has_metric("br_sandbox_keeper_sweep_errors_total 1"));
+    let attempts = bed
+        .kube
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, Call::Condition { .. }))
+        .count();
+    assert!(attempts >= 1);
+    assert_eq!(bed.errors(), u64::try_from(attempts).unwrap());
+    assert!(bed.rs_conditions().is_empty());
     bed.kube.heal("apply_condition");
     bed.pass(3).await;
-    assert_eq!(conditions(&bed).len(), 2);
+    assert_eq!(
+        bed.rs_conditions()
+            .iter()
+            .map(|condition| condition.status.as_str())
+            .collect::<Vec<_>>(),
+        vec!["False"]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_condition_of_the_replicaset_and_the_one_of_the_resource_are_the_same() {
+    let mut bed = bed(true);
+    bed.kube.put_pod(failing("a", "ErrImagePull"));
+    bed.sync().await;
+    let on_set = bed.rs_conditions();
+    assert_eq!(on_set.len(), 1);
+    let status = bed.status().unwrap();
+    let on_resource = status["conditions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|condition| condition["type"] == "WarmPodsFailing")
+        .unwrap();
+    assert_eq!(on_resource["status"], on_set[0].status.as_str());
+    assert_eq!(on_resource["reason"], on_set[0].reason.as_deref().unwrap());
+    assert_eq!(
+        on_resource["message"],
+        on_set[0].message.as_deref().unwrap()
+    );
 }

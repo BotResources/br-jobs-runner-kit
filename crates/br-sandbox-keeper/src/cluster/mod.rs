@@ -1,4 +1,12 @@
+#[cfg(test)]
+pub(crate) mod fixtures;
 mod kube_api;
+mod notice;
+mod observe;
+mod pool_api;
+mod view;
+mod views;
+mod writer;
 
 use std::time::Duration;
 
@@ -6,10 +14,20 @@ use br_runner_sandbox::Timestamp;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 
-use crate::facts::{PodFacts, PodVersion, ReplicaSetFacts};
+use crate::facts::{PodFacts, PodVersion};
 use crate::rules::ConditionWrite;
 
 pub use kube_api::KubeCluster;
+pub use notice::{Notice, Watched};
+pub use observe::{FenceInputs, FenceObservation, Observer, ReplicaSetRead};
+pub use pool_api::{CreateOutcome, PoolApi};
+pub use view::{Read, View, ViewEvent};
+pub use views::Views;
+pub(crate) use writer::{
+    APPLY_CONDITION, APPLY_REPLICAS, APPLY_TEMPLATE, CREATE_REPLICA_SET, DELETE_POD,
+    DELETE_REPLICA_SET,
+};
+pub use writer::{Change, PoolWriter, WriteError};
 
 pub const FIELD_MANAGER: &str = "br-sandbox-keeper";
 pub const EVENT_POOL_AT_MAX: &str = "PoolAtMax";
@@ -22,6 +40,8 @@ pub enum ApiError {
     NotFound,
     #[error("the object was changed by another writer")]
     Conflict,
+    #[error("the API server refused the call: {0}")]
+    Forbidden(String),
     #[error("the Kubernetes call failed: {0}")]
     Call(String),
 }
@@ -129,12 +149,6 @@ pub trait KubeApi: crate::sealed::Sealed + Send + Sync {
         name: &'a str,
         version: &'a PodVersion,
     ) -> ApiFuture<'a, DeleteOutcome>;
-
-    fn get_replica_set<'a>(
-        &'a self,
-        namespace: &'a str,
-        name: &'a str,
-    ) -> ApiFuture<'a, Option<ReplicaSetFacts>>;
 
     fn apply_replicas<'a>(
         &'a self,

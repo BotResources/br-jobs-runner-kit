@@ -2,13 +2,29 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use super::*;
+use crate::cluster::fixtures::Bed;
 
-async fn start(ready: bool) -> (std::net::SocketAddr, CancellationToken, Arc<Readiness>) {
-    let readiness = Arc::new(Readiness::new(["ns".to_owned()]));
-    if ready {
-        readiness.namespace_synced("ns");
+type Started = (
+    std::net::SocketAddr,
+    CancellationToken,
+    Arc<Readiness>,
+    Option<Bed>,
+);
+
+async fn start(ready: bool) -> Started {
+    let readiness = Arc::new(Readiness::starting());
+    let bed = if ready {
+        let bed = Bed::start();
+        bed.until("the views synced", |views| {
+            views.not_ready_reason().is_none()
+        })
+        .await;
+        readiness.watch(bed.views.clone());
         readiness.store_ready();
-    }
+        Some(bed)
+    } else {
+        None
+    };
     let state = Arc::new(HttpState {
         readiness: readiness.clone(),
         metrics: Box::new(|| "# TYPE x gauge\nx 1\n".to_owned()),
@@ -17,7 +33,7 @@ async fn start(ready: bool) -> (std::net::SocketAddr, CancellationToken, Arc<Rea
     let address = listener.local_addr().unwrap();
     let shutdown = CancellationToken::new();
     tokio::spawn(serve(listener, state, shutdown.clone()));
-    (address, shutdown, readiness)
+    (address, shutdown, readiness, bed)
 }
 
 pub(crate) async fn request(
@@ -37,16 +53,23 @@ pub(crate) async fn request(
 
 #[tokio::test]
 async fn livez_answers_200_while_the_process_runs_even_when_not_ready() {
-    let (address, shutdown, _) = start(false).await;
+    let (address, shutdown, _, _bed) = start(false).await;
     assert_eq!(request(address, "GET", "/livez").await.0, 200);
     shutdown.cancel();
 }
 
 #[tokio::test]
 async fn readyz_answers_503_until_ready_and_200_after() {
-    let (address, shutdown, readiness) = start(false).await;
-    assert_eq!(request(address, "GET", "/readyz").await.0, 503);
-    readiness.namespace_synced("ns");
+    let (address, shutdown, readiness, _) = start(false).await;
+    let (status, _, body) = request(address, "GET", "/readyz").await;
+    assert_eq!(status, 503);
+    assert!(body.starts_with("not ready: "), "{body}");
+    let bed = Bed::start();
+    bed.until("the views synced", |views| {
+        views.not_ready_reason().is_none()
+    })
+    .await;
+    readiness.watch(bed.views.clone());
     assert_eq!(request(address, "GET", "/readyz").await.0, 503);
     readiness.store_ready();
     assert_eq!(request(address, "GET", "/readyz").await.0, 200);
@@ -55,7 +78,7 @@ async fn readyz_answers_503_until_ready_and_200_after() {
 
 #[tokio::test]
 async fn metrics_answers_the_text_format() {
-    let (address, shutdown, _) = start(true).await;
+    let (address, shutdown, _, _bed) = start(true).await;
     let (status, head, body) = request(address, "GET", "/metrics").await;
     assert_eq!(status, 200);
     assert!(
@@ -68,7 +91,7 @@ async fn metrics_answers_the_text_format() {
 
 #[tokio::test]
 async fn another_path_is_404_and_another_method_is_405() {
-    let (address, shutdown, _) = start(true).await;
+    let (address, shutdown, _, _bed) = start(true).await;
     assert_eq!(request(address, "GET", "/other").await.0, 404);
     assert_eq!(request(address, "POST", "/metrics").await.0, 405);
     assert_eq!(request(address, "DELETE", "/livez").await.0, 405);
@@ -77,7 +100,7 @@ async fn another_path_is_404_and_another_method_is_405() {
 
 #[tokio::test]
 async fn the_server_stops_at_the_shutdown_signal() {
-    let readiness = Arc::new(Readiness::new([]));
+    let readiness = Arc::new(Readiness::starting());
     let state = Arc::new(HttpState {
         readiness,
         metrics: Box::new(String::new),

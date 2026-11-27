@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use br_runner_sandbox::Clock;
 
+mod resources;
 mod wiring;
 
 use super::*;
 use crate::bucket::BucketError;
+use crate::cluster::fixtures::{deny_all, managed, quota, template_json, template_map};
 use crate::facts::fixtures;
 use crate::fakes::{FakeBucket, FakeKube, TokioClock};
 use crate::http::tests::request;
@@ -20,10 +22,16 @@ struct Rig {
     bucket: Arc<FakeBucket>,
 }
 
+fn fence(kube: &FakeKube, namespace: &str) {
+    kube.put_namespace(managed(namespace));
+    kube.put_quota(namespace, quota());
+    kube.put_network_policies(namespace, vec![deny_all()]);
+    kube.put_template(namespace, template_map(&template_json(namespace)));
+}
+
 fn rig() -> Rig {
     let kube = Arc::new(FakeKube::default());
-    kube.set_namespaces(&["sbx"]);
-    kube.add_replica_set("sbx", "warm-p", Some(2));
+    fence(&kube, "sbx");
     Rig {
         kube,
         bucket: Arc::new(FakeBucket::default()),
@@ -70,16 +78,23 @@ async fn it_does_not_start_when_the_api_is_unreachable() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn it_does_not_start_when_a_pool_namespace_is_not_managed() {
+async fn a_cluster_with_no_managed_namespace_and_no_resource_is_a_normal_state_and_the_keeper_is_ready()
+ {
     let rig = rig();
-    rig.kube.set_namespaces(&["other"]);
-    assert_eq!(
-        start_error(&rig).await,
-        KeeperError::PoolNamespaceNotManaged {
-            pool: "p".to_owned(),
-            namespace: "sbx".to_owned()
-        }
-    );
+    rig.kube.remove_namespace("sbx");
+    let (listener, address) = listener().await;
+    let shutdown = CancellationToken::new();
+    let handle = tokio::spawn(run_on(
+        listener,
+        testing::config(),
+        parts(&rig, "a"),
+        shutdown.clone(),
+    ));
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(request(address, "GET", "/readyz").await.0, 200);
+    assert!(rig.bucket.writes().is_empty());
+    shutdown.cancel();
+    assert_eq!(handle.await.unwrap(), Ok(()));
 }
 
 #[tokio::test(start_paused = true)]
@@ -148,9 +163,9 @@ async fn the_leader_serves_the_health_endpoints_expires_pods_and_saves_and_stops
 }
 
 #[tokio::test(start_paused = true)]
-async fn every_managed_namespace_is_served_also_one_with_no_configured_pool() {
+async fn every_managed_namespace_is_served_also_one_with_no_resource() {
     let rig = rig();
-    rig.kube.set_namespaces(&["sbx", "other"]);
+    fence(&rig.kube, "other");
     rig.kube.put_pod(crate::facts::PodFacts {
         namespace: "other".to_owned(),
         pool_id: Some("ghost".to_owned()),

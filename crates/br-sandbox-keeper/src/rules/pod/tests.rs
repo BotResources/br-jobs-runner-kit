@@ -16,7 +16,7 @@ fn rules() -> ExpiryRules {
 }
 
 fn judge(pod: &PodFacts, now: u64) -> Judgment {
-    judge_pod(pod, &rules(), None, at(now))
+    judge_pod(pod, &rules(), None, false, at(now))
 }
 
 fn saved(name: &str, idle_since: u64, bytes: u64) -> PodFacts {
@@ -62,28 +62,28 @@ fn a_clean_pod_with_a_small_state_is_deleted_at_once() {
 }
 
 #[test]
-fn the_idle_ttl_and_the_threshold_are_the_ones_of_the_pool() {
+fn the_idle_ttl_and_the_threshold_are_the_ones_of_the_rules() {
     let mut custom = rules();
     custom.idle_ttl = Duration::ZERO;
     let pod = saved("c", 5000, 50_000_000);
     assert_eq!(
-        judge_pod(&pod, &custom, None, at(5000)).action,
+        judge_pod(&pod, &custom, None, false, at(5000)).action,
         Action::Delete(DeleteReason::Idle)
     );
     custom.idle_ttl = Duration::from_secs(30);
     custom.idle_keep_min_state_bytes = 100;
     let small = saved("c", 5000, 99);
     assert_eq!(
-        judge_pod(&small, &custom, None, at(5000)).action,
+        judge_pod(&small, &custom, None, false, at(5000)).action,
         Action::Delete(DeleteReason::Idle)
     );
     let big = saved("c", 5000, 100);
     assert_eq!(
-        judge_pod(&big, &custom, None, at(5029)).action,
+        judge_pod(&big, &custom, None, false, at(5029)).action,
         Action::Keep
     );
     assert_eq!(
-        judge_pod(&big, &custom, None, at(5030)).action,
+        judge_pod(&big, &custom, None, false, at(5030)).action,
         Action::Delete(DeleteReason::Idle)
     );
 }
@@ -128,15 +128,15 @@ fn a_failed_pod_is_deleted_failed_pod_ttl_after_it_was_first_seen() {
     };
     let seen = Some(at(4000));
     assert_eq!(
-        judge_pod(&pod, &rules(), seen, at(4299)).action,
+        judge_pod(&pod, &rules(), seen, false, at(4299)).action,
         Action::Keep
     );
     assert_eq!(
-        judge_pod(&pod, &rules(), seen, at(4299)).recheck_at,
+        judge_pod(&pod, &rules(), seen, false, at(4299)).recheck_at,
         Some(at(4300))
     );
     assert_eq!(
-        judge_pod(&pod, &rules(), seen, at(4300)).action,
+        judge_pod(&pod, &rules(), seen, false, at(4300)).action,
         Action::Delete(DeleteReason::Failed)
     );
 }
@@ -147,7 +147,7 @@ fn a_failed_pod_not_seen_before_gets_the_age_from_now() {
         phase: Phase::Failed,
         ..claimed("f", false, 0)
     };
-    let judged = judge_pod(&pod, &rules(), None, at(4000));
+    let judged = judge_pod(&pod, &rules(), None, false, at(4000));
     assert_eq!(judged.action, Action::Keep);
     assert_eq!(judged.recheck_at, Some(at(4300)));
 }
@@ -159,7 +159,7 @@ fn a_claimed_pod_in_the_failed_phase_follows_the_failed_rule_not_the_stuck_rule(
         ..claimed("f", false, 0)
     };
     assert_eq!(
-        judge_pod(&pod, &rules(), Some(at(0)), at(300)).action,
+        judge_pod(&pod, &rules(), Some(at(0)), false, at(300)).action,
         Action::Delete(DeleteReason::Failed)
     );
 }

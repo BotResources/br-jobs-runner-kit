@@ -104,6 +104,8 @@ pub struct PodFacts {
     pub claimed_at: Mark<Timestamp>,
     pub idle_since: Mark<Timestamp>,
     pub state_bytes: Mark<u64>,
+    pub template_hash: Mark<String>,
+    pub unschedulable: bool,
     pub containers: Vec<ContainerFacts>,
 }
 
@@ -135,6 +137,8 @@ impl PodFacts {
             claimed_at: Mark::Absent,
             idle_since: Mark::Absent,
             state_bytes: Mark::Absent,
+            template_hash: Mark::Absent,
+            unschedulable: false,
             containers: Vec::new(),
         }
     }
@@ -199,7 +203,7 @@ pub(crate) mod fixtures {
             uid: format!("uid-{name}"),
             resource_version: "1".to_owned(),
             pool_state: PoolState::Warm,
-            pool_id: Some("p".to_owned()),
+            pool_id: Some("sbx".to_owned()),
             thread: None,
             agent: None,
             phase: Phase::Running,
@@ -212,6 +216,8 @@ pub(crate) mod fixtures {
             claimed_at: Mark::Absent,
             idle_since: Mark::Absent,
             state_bytes: Mark::Absent,
+            template_hash: Mark::Absent,
+            unschedulable: false,
             containers: Vec::new(),
         }
     }

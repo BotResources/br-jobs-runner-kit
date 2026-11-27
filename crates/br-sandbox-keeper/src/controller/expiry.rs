@@ -1,42 +1,34 @@
 use std::collections::HashSet;
-use std::time::Duration;
 
-use crate::cluster::DeleteOutcome;
-use crate::config::{DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, DEFAULT_IDLE_TTL_SECONDS};
-use crate::facts::PodFacts;
+use crate::cluster::{DELETE_POD, DeleteOutcome};
 use crate::rules::{Action, DeleteReason, ExpiryRules, judge_pod};
 
-use super::{Engine, PodId, PoolId};
+use super::events::pool_of;
+use super::{Engine, PodId};
 
 const CONFLICT_ATTEMPTS: usize = 4;
 
 impl Engine {
-    fn expiry_rules(&self, facts: &PodFacts) -> ExpiryRules {
-        let pool = self
-            .configured_pool(facts)
-            .and_then(|(namespace, id)| self.config.pool(&namespace, &id));
+    fn expiry_rules(&self) -> ExpiryRules {
         ExpiryRules {
             warm_max_age: self.config.warm_max_age,
             stuck_ttl: self.config.stuck_ttl,
             failed_pod_ttl: self.config.failed_pod_ttl,
             pending_alarm: self.config.pending_alarm,
-            idle_ttl: pool.map_or(Duration::from_secs(DEFAULT_IDLE_TTL_SECONDS), |pool| {
-                pool.idle_ttl
-            }),
-            idle_keep_min_state_bytes: pool.map_or(DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, |pool| {
-                pool.idle_keep_min_state_bytes
-            }),
+            idle_ttl: self.config.idle_ttl,
+            idle_keep_min_state_bytes: self.config.idle_keep_min_state_bytes,
         }
     }
 
-    pub(crate) fn configured_pool(&self, facts: &PodFacts) -> Option<PoolId> {
-        let id = facts.pool_id.as_ref()?;
-        self.config
-            .pool(&facts.namespace, id)
-            .map(|_| (facts.namespace.clone(), id.clone()))
+    pub(crate) async fn judge(&mut self, id: &PodId) {
+        self.judge_with(id, false).await;
     }
 
-    pub(crate) async fn judge(&mut self, id: &PodId) {
+    pub(crate) async fn judge_selected(&mut self, id: &PodId) {
+        self.judge_with(id, true).await;
+    }
+
+    async fn judge_with(&mut self, id: &PodId, selected: bool) {
         let mut conflicts = 0;
         loop {
             let Some(tracked) = self.pods.get(id) else {
@@ -44,18 +36,18 @@ impl Engine {
             };
             let facts = tracked.facts.clone();
             let failed_since = tracked.failed_since;
-            let rules = self.expiry_rules(&facts);
+            let rules = self.expiry_rules();
             let now = self.clock.now();
-            let judgment = judge_pod(&facts, &rules, failed_since, now);
-            if let Some(tracked) = self.pods.get_mut(id) {
+            let judgment = judge_pod(&facts, &rules, failed_since, selected, now);
+            if !selected && let Some(tracked) = self.pods.get_mut(id) {
                 tracked.recheck_at = judgment.recheck_at;
             }
             match judgment.action {
                 Action::Keep => {
                     self.unreadable.remove(&facts.uid);
-                    if let Some(due) = self
-                        .configured_pool(&facts)
-                        .and_then(|pool| self.pending_due.get_mut(&pool))
+                    self.refusals.clear(&id.0, DELETE_POD, &id.1);
+                    if let Some(due) =
+                        pool_of(&facts).and_then(|pool| self.pending_due.get_mut(&pool))
                     {
                         due.remove(&facts.uid);
                     }
@@ -72,7 +64,7 @@ impl Engine {
                 }
                 Action::PendingAlarm => {
                     self.unreadable.remove(&facts.uid);
-                    if let Some(pool) = self.configured_pool(&facts) {
+                    if let Some(pool) = pool_of(&facts) {
                         self.pending_due
                             .entry(pool)
                             .or_default()
@@ -83,12 +75,12 @@ impl Engine {
                 Action::Delete(reason) => {
                     self.unreadable.remove(&facts.uid);
                     if !self.leadership.is_leader() {
-                        if let Some(tracked) = self.pods.get_mut(id) {
+                        if !selected && let Some(tracked) = self.pods.get_mut(id) {
                             tracked.recheck_at = None;
                         }
                         return;
                     }
-                    if !self.delete(id, reason, &mut conflicts).await {
+                    if !self.delete(id, reason, selected, &mut conflicts).await {
                         return;
                     }
                 }
@@ -96,7 +88,13 @@ impl Engine {
         }
     }
 
-    async fn delete(&mut self, id: &PodId, reason: DeleteReason, conflicts: &mut usize) -> bool {
+    async fn delete(
+        &mut self,
+        id: &PodId,
+        reason: DeleteReason,
+        selected: bool,
+        conflicts: &mut usize,
+    ) -> bool {
         let Some(tracked) = self.pods.get(id) else {
             return false;
         };
@@ -104,17 +102,17 @@ impl Engine {
             return false;
         }
         let version = tracked.facts.version();
-        match self.api.delete_pod(&id.0, &id.1, &version).await {
+        let result = self.writer.delete_pod(&id.0, &id.1, &version).await;
+        self.note_write(&id.0, DELETE_POD, &id.1, &result);
+        match result {
             Ok(DeleteOutcome::Deleted) => {
                 tracing::info!(pod = id.1, reason = reason.label(), "a pod was deleted");
                 self.metrics.pod_deleted(reason.label());
-                let mut touched: HashSet<PoolId> = HashSet::new();
-                self.remove(id, &mut touched);
+                self.forget_pod(id);
                 false
             }
             Ok(DeleteOutcome::Gone) => {
-                let mut touched: HashSet<PoolId> = HashSet::new();
-                self.remove(id, &mut touched);
+                self.forget_pod(id);
                 false
             }
             Ok(DeleteOutcome::Conflict) => {
@@ -122,44 +120,53 @@ impl Engine {
                 self.reread(id, *conflicts).await
             }
             Err(error) => {
-                self.action_failed("a pod could not be deleted", &id.1, &error);
-                let retry_at = self.clock.now().plus(self.retry_period());
-                if let Some(tracked) = self.pods.get_mut(id) {
-                    tracked.recheck_at = Some(retry_at);
-                }
+                tracing::warn!(pod = id.1, %error, "a pod delete will be tried again");
+                self.recheck_later(id, selected);
                 false
             }
         }
     }
 
+    fn forget_pod(&mut self, id: &PodId) {
+        let mut touched: HashSet<String> = HashSet::new();
+        self.remove(id, &mut touched);
+        self.wake_now(touched);
+    }
+
+    fn wake_now(&mut self, namespaces: HashSet<String>) {
+        let now = self.clock.now();
+        for namespace in namespaces {
+            self.wake_by(&namespace, now);
+        }
+    }
+
+    fn recheck_later(&mut self, id: &PodId, selected: bool) {
+        let retry_at = self.clock.now().plus(self.retry_period());
+        if !selected && let Some(tracked) = self.pods.get_mut(id) {
+            tracked.recheck_at = Some(retry_at);
+        }
+        self.wake_by(&id.0, retry_at);
+    }
+
     async fn reread(&mut self, id: &PodId, conflicts: usize) -> bool {
         match self.api.get_pod(&id.0, &id.1).await {
             Ok(None) => {
-                let mut touched: HashSet<PoolId> = HashSet::new();
-                self.remove(id, &mut touched);
+                self.forget_pod(id);
                 false
             }
             Ok(Some(fresh)) => {
-                let mut touched: HashSet<PoolId> = HashSet::new();
+                let mut touched: HashSet<String> = HashSet::new();
                 self.apply(fresh, true, &mut touched);
-                for pool in touched {
-                    self.evaluate_pool_id(&pool).await;
-                }
+                self.wake_now(touched);
                 if conflicts < CONFLICT_ATTEMPTS {
                     return true;
                 }
-                let retry_at = self.clock.now().plus(self.retry_period());
-                if let Some(tracked) = self.pods.get_mut(id) {
-                    tracked.recheck_at = Some(retry_at);
-                }
+                self.recheck_later(id, false);
                 false
             }
             Err(error) => {
                 self.action_failed("a pod could not be read again", &id.1, &error);
-                let retry_at = self.clock.now().plus(self.retry_period());
-                if let Some(tracked) = self.pods.get_mut(id) {
-                    tracked.recheck_at = Some(retry_at);
-                }
+                self.recheck_later(id, false);
                 false
             }
         }

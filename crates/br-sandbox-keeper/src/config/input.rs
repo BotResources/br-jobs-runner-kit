@@ -1,28 +1,8 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[non_exhaustive]
-pub struct FloorInput {
-    pub from: Option<String>,
-    pub to: Option<String>,
-    pub floor: Option<i64>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[non_exhaustive]
-pub struct PoolInput {
-    pub id: Option<String>,
-    pub namespace: Option<String>,
-    pub replicaset: Option<String>,
-    pub min_replicas: Option<i64>,
-    pub max_replicas: Option<i64>,
-    pub refill_seconds: Option<i64>,
-    pub margin: Option<i64>,
-    pub floors: Option<Vec<FloorInput>>,
-    pub idle_ttl_seconds: Option<i64>,
-    pub idle_keep_min_state_bytes: Option<i64>,
+fn present<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -56,5 +36,9 @@ pub struct KeeperConfigInput {
     pub renew_deadline_seconds: Option<i64>,
     pub retry_period_seconds: Option<i64>,
     pub timezone: Option<String>,
-    pub pools: Option<Vec<PoolInput>>,
+    pub idle_ttl_seconds: Option<i64>,
+    pub idle_keep_min_state_bytes: Option<i64>,
+    pub agent_container: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    pub pools: Option<Value>,
 }

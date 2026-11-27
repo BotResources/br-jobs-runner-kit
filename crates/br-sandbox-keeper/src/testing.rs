@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::config::{KeeperConfig, PoolConfig};
+use crate::config::KeeperConfig;
+use crate::pool::{PoolSettings, PoolSize, ResourceBounds};
 
 pub fn document() -> Value {
     json!({
@@ -10,13 +11,7 @@ pub fn document() -> Value {
         "listen_address": "127.0.0.1:0",
         "save_ttl_seconds": 1000,
         "skew_margin_seconds": 60,
-        "pools": [{
-            "id": "p",
-            "namespace": "sbx",
-            "replicaset": "warm-p",
-            "min_replicas": 1,
-            "max_replicas": 20
-        }]
+        "agent_container": "agent"
     })
 }
 
@@ -32,8 +27,20 @@ pub fn paris() -> jiff::tz::TimeZone {
     jiff::tz::TimeZone::get("Europe/Paris").unwrap()
 }
 
-pub fn pool() -> PoolConfig {
-    config().pools.remove(0)
+pub fn settings() -> PoolSettings {
+    PoolSettings {
+        image: "registry.example/agent:1".to_owned(),
+        size: PoolSize::new(
+            ResourceBounds::new("500m", "2"),
+            ResourceBounds::new("1Gi", "4Gi"),
+            ResourceBounds::new("1Gi", "8Gi"),
+        ),
+        min_replicas: 1,
+        max_replicas: 20,
+        refill: std::time::Duration::from_secs(3),
+        margin: 2,
+        floors: Vec::new(),
+    }
 }
 
 pub mod saves {

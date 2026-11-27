@@ -6,11 +6,18 @@ use br_sandbox_keeper::facts::{
     ConditionFacts, ContainerFacts, Mark, Phase, PodFacts, PodVersion, PoolState, ReplicaSetFacts,
     Terminated,
 };
+use br_sandbox_keeper::pool::{
+    Acceptance, Counts, FenceFacts, FenceVerdict, Observation, PoolRef, PoolTemplate,
+    ReplicaSetView, StatusInput, StatusWrite, TemplateFault, compute_status, decide_write,
+    fence_verdict, is_duplicate, judge_acceptance, replicaset_name, validate_spec,
+};
+use br_sandbox_keeper::resource::{PoolSize, SandboxPoolSpec, SizeBounds};
+use br_sandbox_keeper::rules::plan_rollout;
 use br_sandbox_keeper::rules::{
     Action, DeleteReason, ExpiryRules, ScaleDownRules, ScaleState, SweepRules, condition_write,
     damp, judge_pod, judge_pool, record_is_old,
 };
-use br_sandbox_keeper::{FloorInput, KeeperConfig, KeeperConfigInput, PoolInput};
+use br_sandbox_keeper::{ConfigError, KeeperConfig, KeeperConfigInput};
 
 fn at(seconds: u64) -> Timestamp {
     Timestamp::from_system_time(UNIX_EPOCH + Duration::from_secs(seconds))
@@ -34,7 +41,7 @@ fn an_importer_builds_the_pod_and_the_rules_with_the_constructors_and_applies_th
     pod.phase = Phase::Running;
     pod.ready = true;
     assert_eq!(
-        judge_pod(&pod, &rules, None, at(1800)).action,
+        judge_pod(&pod, &rules, None, false, at(1800)).action,
         Action::Delete(DeleteReason::WarmMaxAge)
     );
     assert_eq!(pod.version(), PodVersion::new("uid-w0", "1"));
@@ -98,26 +105,74 @@ fn the_enums_of_the_read_model_can_grow_so_an_importer_matches_them_with_a_wildc
 }
 
 #[test]
-fn an_importer_builds_the_configuration_inputs_from_their_default_and_converts_them() {
-    let mut floor = FloorInput::default();
-    floor.from = Some("08:00".to_owned());
-    floor.to = Some("18:00".to_owned());
-    floor.floor = Some(4);
-    let mut pool = PoolInput::default();
-    pool.id = Some("p".to_owned());
-    pool.namespace = Some("sbx".to_owned());
-    pool.replicaset = Some("warm-p".to_owned());
-    pool.min_replicas = Some(1);
-    pool.max_replicas = Some(20);
-    pool.floors = Some(vec![floor]);
+fn an_importer_builds_the_configuration_input_from_its_default_and_converts_it() {
     let mut input = KeeperConfigInput::default();
     input.store_bucket = Some("saves".to_owned());
     input.store_endpoint = Some("http://store.test:8333".to_owned());
     input.store_region = Some("eu".to_owned());
     input.listen_address = Some("127.0.0.1:0".to_owned());
     input.save_ttl_seconds = Some(1000);
-    input.pools = Some(vec![pool]);
-    let config = KeeperConfig::try_from(input).unwrap();
-    assert_eq!(config.pools[0].id, "p");
-    assert_eq!(config.pools[0].floors[0].floor, 4);
+    input.agent_container = Some("agent".to_owned());
+    input.idle_ttl_seconds = Some(30);
+    let config = KeeperConfig::try_from(input.clone()).unwrap();
+    assert_eq!(config.agent_container, "agent");
+    assert_eq!(config.idle_ttl, std::time::Duration::from_secs(30));
+    input.pools = Some(serde_json::json!([]));
+    assert_eq!(
+        KeeperConfig::try_from(input).unwrap_err(),
+        ConfigError::PoolsAreResources
+    );
+}
+
+#[test]
+fn an_importer_applies_the_pure_rules_of_the_resource_with_the_constructors() {
+    let size = PoolSize::new(
+        SizeBounds::new("500m", "2"),
+        SizeBounds::new("1Gi", "4Gi"),
+        SizeBounds::new("1Gi", "8Gi"),
+    );
+    let spec = SandboxPoolSpec::new("registry.example/agent:1", size, 1, 4);
+    let settings = validate_spec(&spec).unwrap();
+    assert_eq!(settings.max_replicas, 4);
+    assert_eq!(replicaset_name("sbx"), "warm-sbx");
+
+    let keys = br_runner_sandbox::PodKeys::default();
+    assert_eq!(
+        PoolTemplate::read(None, "sbx", &keys, "agent").unwrap_err(),
+        TemplateFault::Absent
+    );
+
+    let labels = std::collections::BTreeMap::new();
+    let facts = FenceFacts::new("sbx", &labels, "br.sandbox/managed=true", &[], &[], None);
+    let verdict = fence_verdict(&facts);
+    assert!(matches!(verdict, FenceVerdict::NotFenced(_)));
+
+    let older = PoolRef::new("a", Some(at(1)));
+    let newer = PoolRef::new("b", Some(at(2)));
+    assert!(is_duplicate(&newer, &[older, newer.clone()]));
+
+    let plan = plan_rollout(std::iter::empty::<&PodFacts>(), "hash", 5, 0);
+    assert!(plan.delete.is_empty());
+
+    let acceptance = judge_acceptance(Some(&verdict), Some(false), &Ok(settings), None);
+    assert!(matches!(acceptance, Acceptance::NamespaceNotFenced(_)));
+    let observation = Observation::new(
+        Counts::new(1, 1, 1, 1),
+        ReplicaSetView::Absent,
+        judge_pool(std::iter::empty::<&PodFacts>()),
+        at(10),
+    );
+    let input = StatusInput::new(
+        Some(1),
+        Some(1),
+        &acceptance,
+        Some(&observation),
+        None,
+        at(10),
+    );
+    let status = compute_status(&input);
+    assert!(matches!(
+        decide_write(status, None, None, at(10)),
+        StatusWrite::Write(_)
+    ));
 }

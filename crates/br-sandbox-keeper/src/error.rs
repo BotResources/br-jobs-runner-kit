@@ -17,8 +17,4 @@ pub enum KeeperError {
     Listen { address: String, reason: String },
     #[error("the task {0} ended before the stop signal")]
     TaskEnded(&'static str),
-    #[error(
-        "the namespace {namespace:?} of the pool {pool:?} does not match the managed namespace selector"
-    )]
-    PoolNamespaceNotManaged { pool: String, namespace: String },
 }

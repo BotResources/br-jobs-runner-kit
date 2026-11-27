@@ -4,6 +4,7 @@ use super::*;
 
 fn shared_of(clock: &Arc<dyn Clock>) -> Shared {
     Shared {
+        views: Views::new(),
         config: Arc::new(testing::config()),
         metrics: Arc::new(Metrics::new()),
         readiness: Arc::new(Readiness::starting()),
