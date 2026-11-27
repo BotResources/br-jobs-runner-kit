@@ -15,7 +15,7 @@ check_licences_in_the_readme() {
 check_README_holds_the_contract() {
     section "README contract"
     local phrase
-    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Targets named by an IP literal.**' 'the render needs no name for it' 'TLS to an IP literal does not work' '**Targets named by a name.**' 'a DNS that answers its names' '**Limit.**' 'a response body that echoed the `Authorization` header carried the real value to the client' 'in every sandbox namespace and in the system namespace' 'subordinate id ranges' 'sets `pool.node_selector`' 'greps registries and host names only' 'checked by review' 'BR_SANDBOX_RUNNER_IS_POD_IDENTITY' 'RUN_AS_NON_ROOT' 'system:serviceaccount:{system namespace}:br-sandbox-netcheck' 'No rule protects the seed against an adapter that is compromised' 'A container with the seed name and another image is refused' 'does not share its process namespace' 'runAsNonRoot: true' 'Rule 10 is the only rule that reads `ephemeralContainers`' 'holds a verb on `pods/ephemeralcontainers`' 'The seed container of the regular container list (`containers`)' 'the exception does not apply to those two lists' 'Upgrade from a pool of chart 0.1.0 to 0.1.1' 'delete the old warm pods' 'warm or claimed' 'a claimed pod is not owned by the ReplicaSet' 'let the agent finish and delete the pod' 'A cluster test of the refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role' 'is to be made; no such test exists in this repository at this version and none was executed'; do
+    for phrase in '## Values' '## Modes' '## Label contract' '## Image contract' '## Why' '## Slots' '## Images and licences' '| `none` |' '| `allow` |' '| `full` |' '/bin/sh' '`cat` and `find`' '`br-sandbox-python`' 'Python 3.12, pandas, openpyxl, python-docx, python-pptx, LibreOffice' 'warm_max_age_seconds' '`imagePullPolicy: Always`' '30 minutes' 'Name `seed`' '`/skills`' '`/sbx/bin/bsdtar`' 'the keeper slot renders nothing yet' 'no scrub exists' 'role=proxy' 'cluster-test' 'BR_SANDBOX_EGRESS_DISABLED' 'One object takes any key: `keeper.settings`' '**Keeper document.**' 'BR_SANDBOX_KEEPER_SETTING_COMPUTED' '`br-sandbox-keeper-config`' '`br.sandbox/keeper-config-sha256`' 'a change of the document rolls the keeper pods' 'The system namespace holds no ConfigMap `br-sandbox-config`.' 'The image is chosen by the project. One image was measured by hand on a test cluster, and no test of this repository proves it: the image `rancher/k3s` has no `nc`.' 'Two keys of this table are also keys of the document with the same name, `warm_max_age_seconds` and `idle_keep_min_state_bytes`' 'The three lease keys, `listen_address` and `managed_namespace_selector` are in the keeper document only.' 'which sets each of these values away from its default, and checks that both documents carry exactly those values' '**Targets named by an IP literal.**' 'the render needs no name for it' 'TLS to an IP literal does not work' '**Targets named by a name.**' 'a DNS that answers its names' '**Limit.**' 'a response body that echoed the `Authorization` header carried the real value to the client' 'in every sandbox namespace and in the system namespace' 'subordinate id ranges' 'sets `pool.node_selector`' 'greps registries and host names only' 'checked by review' 'BR_SANDBOX_RUNNER_IS_POD_IDENTITY' 'RUN_AS_NON_ROOT' 'system:serviceaccount:{system namespace}:br-sandbox-netcheck' 'No rule protects the seed against an adapter that is compromised' 'A container with the seed name and another image is refused' 'does not share its process namespace' 'runAsNonRoot: true' 'Rule 10 is the only rule that reads `ephemeralContainers`' 'holds a verb on `pods/ephemeralcontainers`' 'The seed container of the regular container list (`containers`)' 'the exception does not apply to those two lists' 'Upgrade from a pool of chart 0.1.0 to 0.1.1' 'delete the old warm pods' 'warm or claimed' 'a claimed pod is not owned by the ReplicaSet' 'let the agent finish and delete the pod' 'A cluster test of the refusals of an unlabelled pod, of a `role=proxy` pod and of a relabel of the role' 'is to be made; no such test exists in this repository at this version and none was executed'; do
         t "the README holds: ${phrase}" grep -qF -- "$phrase" "$README"
     done
     local slot
@@ -54,12 +54,13 @@ check_file_hygiene() {
 }
 
 check_lint_strict_on_every_fixture() {
-    section "helm lint --strict on the four fixtures"
+    section "helm lint --strict on the five fixtures"
     t "example" helm lint --strict "$CHART" -f "$EXAMPLE"
     t "example and mirror" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$MIRROR_VALUES"
     t "example and keeper" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$KEEPER_VALUES"
+    t "example and keeper with non-default values" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$NONDEFAULT_VALUES"
     t "example and egress" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper egress; do' "$ROOT/.github/workflows/ci.yml"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper keeper-nondefault egress; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
 
@@ -139,4 +140,33 @@ check_the_docs_state_what_the_egress_tests_do_not_prove() {
     t "the CHANGELOG does not advise narrowing internal_cidrs either" test "$(grep -cE '(narrow `network\.internal_cidrs|needs an address outside it)' "$CHART/CHANGELOG.md")" -eq 0
     t "the README marks the refusal of an address outside service_cidr as documented behaviour of Kubernetes, not measured here, and says the chart does not check the range" grep -qF 'The address must be free and inside `network.service_cidr`; the API server refuses the Service otherwise (documented behaviour of Kubernetes, not measured here). The chart does not check that the address lies in that range.' "$README"
     t "the chart validation does not compare the proxy address with service_cidr" test "$(grep -c 'service_cidr' "$CHART/templates/_validate_egress.tpl")" -eq 0
+}
+
+check_the_docs_mark_the_keeper_probes_under_default_deny_as_untested() {
+    section "the README and the CHANGELOG do not claim that the keeper probes pass under default-deny"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
+    t "the Keeper document paragraph states the port, the two probes and that the chart does not change default-deny" grep -qF 'declares the port `http` (`keeper.port`) and has a `livenessProbe` on `/livez` and a `readinessProbe` on `/readyz`; the chart does not change the `default-deny` policy of the system namespace.' <<<"$keeper"
+    t "the Keeper document paragraph says that the probes under default-deny are not tested on a cluster" grep -qF 'Not tested on a cluster: that the probes of the kubelet pass under `default-deny`' <<<"$keeper"
+    t "the Keeper document paragraph no longer says that the probes are served to the kubelet" bash -c '! grep -qF "The probes are served by the pod to the kubelet" <<<"$1"' _ "$keeper"
+    t "the CHANGELOG says that the probes under default-deny are not tested on a cluster" grep -qF 'that the probes of the kubelet pass under it is not tested on a cluster' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_who_reads_the_adapter_document_and_what_the_upgrade_does() {
+    section "the README and the CHANGELOG state who reads the adapter document, that the importer maps its keys, and what the 0.2.2 upgrade does"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
+    t "the Keeper document paragraph says who can read the adapter document and that no pod mounts it" grep -qF 'The runner identity can read each one: the Role `br-sandbox-runner` of the namespace allows `get` on that name only, and no pod mounts it. The document holds no secret.' <<<"$keeper"
+    t "the Keeper document paragraph states that the adapter keys are the chart's own and that the importer must map them" grep -qF 'The crate reads no file and no ConfigMap, so its importer must map the keys. This is a known limit of this release.' <<<"$keeper"
+    t "the Keeper document paragraph no longer says that the adapter reads the ConfigMaps" bash -c '! grep -qF "The adapter reads the ConfigMaps" <<<"$1"' _ "$keeper"
+    t "the Runner role paragraph says the runner identity can read the adapter document and the adapter crate reads no ConfigMap itself" grep -qF '`configmaps` get on `br-sandbox-config` only (the runner identity can read the adapter document; the adapter crate reads no ConfigMap itself, see Keeper document)' "$README"
+    t "the Runner role paragraph no longer says that the adapter reads the config" bash -c '! grep -qF "(the adapter reads the config)" "$1"' _ "$README"
+    t "the CHANGELOG says that the keeper Deployment rolls once at the upgrade" grep -qF 'the keeper Deployment rolls once at the upgrade, because its pod template changes' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the ConfigMap of the system namespace is deleted by the upgrade" grep -qF 'The ConfigMap `br-sandbox-config` of the system namespace is deleted by the upgrade.' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_the_keeper_port_and_the_lint_loop_overlay() {
+    section "the README states that the sandbox pods declare no port and the CHANGELOG states that the lint loop covers the keeper overlay"
+    t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
+    t "the CHANGELOG says that the lint loop covers the new overlay" grep -qF 'also covers the overlay `ci/keeper-nondefault-values.yaml`' "$CHART/CHANGELOG.md"
 }
