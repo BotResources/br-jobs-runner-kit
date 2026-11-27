@@ -55,7 +55,7 @@ pod_security_row() {
     check "$name" fail "namespace $POLICY_NS with enforce=$POD_SECURITY_LEVEL: the control pod is refused: $(first_line "$out")"
     return 0
   fi
-  if out=$(policy_submit "$(variant "$POLICY_TEMPLATE" "$(on_agent '.securityContext.privileged = true')")" 2>&1); then
+  if out=$(policy_submit "$(variant "$POLICY_TEMPLATE" "$(on_agent '.securityContext.privileged = true | .securityContext.allowPrivilegeEscalation = true')")" 2>&1); then
     check "$name" fail "namespace $POLICY_NS with enforce=$POD_SECURITY_LEVEL: the privileged pod was accepted"
     return 0
   fi
