@@ -17,7 +17,7 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Fixed
 
-- `br-runner-sandbox` 0.1.2: a pod that is gone, not `Running` or being deleted while an exec runs gives a port fault (`Gone`) and no longer `Ok` with exit code 137 (the pod is read once when the status is 128 or more; a read that fails is a port fault; a command that ends with 137 in a `Running` pod that is not being deleted stays an exit code). `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
+- `br-runner-sandbox` 0.1.2: a pod that is gone, not `Running` or being deleted while an exec runs gives a port fault (`Gone`) and no longer `Ok` with exit code 137 (the pod is read once when the status is 128 or more; a read that fails is a port fault; a command that ends with 137 in a `Running` pod that is not being deleted stays an exit code). Known issue: the virtual-host style of the store (`store_path_style` false, the default) builds the object URL with a double slash before the key; use `store_path_style` true. `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
 
 - `br-runner-sandbox` 0.1.1: the restore skips the entry of each save scope root directory, so a restore no longer fails when the agent user does not own the root (`/work`, `/home/agent`); the new `argv::tar_restore_scoped`, tests with the real `bsdtar` over a root that the user does not own, which print a skip line and pass when `bsdtar` is absent or the user owns the root, so the proof on a pod is the cluster battery. `Cargo.lock` records the new version. See `crates/br-runner-sandbox/CHANGELOG.md`.
 

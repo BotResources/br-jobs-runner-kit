@@ -44,6 +44,7 @@ mod s3_store;
 mod s3_streams;
 mod save_failures;
 mod save_flow;
+mod save_pod_gone;
 mod seed_archive;
 mod seed_flow;
 mod view_flow;
