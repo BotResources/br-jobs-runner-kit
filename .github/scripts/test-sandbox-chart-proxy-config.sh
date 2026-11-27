@@ -110,6 +110,16 @@ check_the_proxy_render_errors() {
     fails_with "BR_SANDBOX_PROXY_PORT_CONFLICT{port=9090}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.port=9090
     fails_with "BR_SANDBOX_PROXY_PORT_CONFLICT{port=9092}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.port=9092
     fails_with "BR_SANDBOX_PROXY_QUOTA{replicas=" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.proxy.replicas=50
+    fails_with "BR_SANDBOX_PROXY_QUOTA{replicas=4,pods=4}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.quota.pods=4 --set egress.proxy.replicas=4
     t "a credential set with a plain-text rule and require false renders" render plainok -f "$EXAMPLE" -f "$EGRESS_VALUES"
     t "egress disabled needs no proxy value: the example renders with no proxy key" render noegress -f "$EXAMPLE"
+}
+
+check_the_quota_guard_keeps_one_pod_for_the_surge() {
+    section "the quota guard: replicas plus one pod must fit egress.quota.pods"
+    t "a pod quota of 4 and 3 replicas renders" render quotafit3 -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.quota.pods=4 --set egress.proxy.replicas=3
+    t "a pod quota of 5 and 4 replicas renders" render quotafit4 -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.quota.pods=5 --set egress.proxy.replicas=4
+    fails_with "BR_SANDBOX_PROXY_QUOTA{replicas=5,pods=5}" -f "$EXAMPLE" -f "$EGRESS_VALUES" --set egress.quota.pods=5 --set egress.proxy.replicas=5
+    t "the README states the boundary of the quota guard" grep -qF 'with a pod quota of 4, 3 replicas render and 4 replicas fail; with a pod quota of 5, 4 replicas render.' "$README"
+    t "the CHANGELOG states the boundary of the quota guard" grep -qF 'with a pod quota of 4, 3 replicas render and 4 replicas fail; with a pod quota of 5, 4 replicas render.' "$CHART/CHANGELOG.md"
 }
