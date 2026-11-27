@@ -205,6 +205,10 @@ jobs:
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-as-node --allow br-llm-clients-core
       - name: br-runner-toolkit reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-toolkit --allow br-llm-clients-core
+      - name: br-sandbox-keeper reaches only br-llm-clients-core
+        run: bash .github/scripts/check-no-llm-clients.sh br-sandbox-keeper --allow br-llm-clients-core
+      - name: br-sandbox-keeper names no bus and no subject
+        run: bash .github/scripts/check-bus-access.sh br-sandbox-keeper --none
 
   shellcheck:
     name: shellcheck
