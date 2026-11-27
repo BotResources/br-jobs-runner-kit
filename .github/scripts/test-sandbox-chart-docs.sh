@@ -83,7 +83,7 @@ check_lint_strict_on_every_fixture() {
     t "example and the fence part alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml"
     t "example and the operator part alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/platform-values.yaml"
     t "example and the definition alone" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/crds-values.yaml"
-    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror operator operator-nondefault egress exec-timeout fence platform crds stamper netcheck-route; do' "$ROOT/.github/workflows/ci.yml"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror operator operator-nondefault egress exec-timeout fence platform crds stamper netcheck-route netcheck-route-run; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
 

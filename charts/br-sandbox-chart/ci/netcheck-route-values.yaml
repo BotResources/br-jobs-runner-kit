@@ -3,4 +3,4 @@ namespaces:
     mode: none
 render_namespace: true
 network_check:
-  enabled: true
+  enabled: false
