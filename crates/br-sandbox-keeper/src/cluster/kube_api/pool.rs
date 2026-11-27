@@ -18,7 +18,7 @@ use crate::pool::{ADMISSION_BINDING_NAME, QUOTA_NAME};
 use crate::resource::{SandboxPool, SandboxPoolStatus};
 use crate::rights::POD_TEMPLATE_CONFIGMAP;
 
-use crate::cluster::{CreateOutcome, PoolApi, ViewEvent};
+use crate::cluster::{CreateOutcome, PoolApi, TEMPLATE_FIELD_MANAGER, ViewEvent};
 
 use super::watch::watch_stream;
 use super::{ApiError, ApiFuture, DeleteOutcome, FIELD_MANAGER, KubeCluster, call_error};
@@ -161,7 +161,7 @@ impl PoolApi for KubeCluster {
             });
             api.patch(
                 name,
-                &PatchParams::apply(FIELD_MANAGER).force(),
+                &PatchParams::apply(TEMPLATE_FIELD_MANAGER).force(),
                 &Patch::Apply(body),
             )
             .await

@@ -5,14 +5,17 @@ use k8s_openapi::api::admissionregistration::v1::ValidatingAdmissionPolicyBindin
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, ResourceQuota};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
-use serde_json::Value;
+use serde_json::{Value, json};
 
-use crate::cluster::{ApiError, ApiFuture, CreateOutcome, DeleteOutcome, PoolApi, ViewEvent};
+use crate::cluster::{
+    ApiError, ApiFuture, CreateOutcome, DeleteOutcome, FIELD_MANAGER, PoolApi,
+    TEMPLATE_FIELD_MANAGER, ViewEvent,
+};
 use crate::pool::Selector;
 use crate::resource::{SandboxPool, SandboxPoolStatus};
 
 use super::feed::Filter;
-use super::{Call, FakeKube};
+use super::{Call, FakeKube, ownership};
 
 use super::pool::CLUSTER;
 
@@ -101,6 +104,7 @@ impl PoolApi for FakeKube {
             )?;
             let mut created: ReplicaSet = serde_json::from_value(body.clone())
                 .map_err(|error| ApiError::Call(error.to_string()))?;
+            ownership::record_create(&mut created, FIELD_MANAGER, body);
             let mut state = self.state.lock().unwrap();
             let key = (namespace.to_owned(), name.clone());
             if let Some(raced) = state.race.take() {
@@ -130,17 +134,16 @@ impl PoolApi for FakeKube {
                     template: template.clone(),
                 },
             )?;
-            let parsed = serde_json::from_value(template.clone())
-                .map_err(|error| ApiError::Call(error.to_string()))?;
             let mut state = self.state.lock().unwrap();
             match state
                 .replica_sets
                 .get_mut(&(namespace.to_owned(), name.to_owned()))
             {
-                Some(set) => {
-                    set.spec.get_or_insert_with(Default::default).template = Some(parsed);
-                    Ok(())
-                }
+                Some(set) => ownership::apply(
+                    set,
+                    TEMPLATE_FIELD_MANAGER,
+                    &json!({"spec": {"template": template}}),
+                ),
                 None => Err(ApiError::NotFound),
             }
         })

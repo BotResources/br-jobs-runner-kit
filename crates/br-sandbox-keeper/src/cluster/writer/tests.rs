@@ -37,6 +37,7 @@ pub(super) fn errors(rig: &Rig) -> bool {
 }
 
 mod condition;
+mod managers;
 mod more;
 
 #[tokio::test]

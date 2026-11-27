@@ -213,6 +213,7 @@ impl FakeKube {
 mod api;
 mod call;
 mod feed;
+mod ownership;
 mod pool;
 mod pool_api;
 mod state;

@@ -5,6 +5,7 @@ mod expiry;
 mod faults;
 mod fence;
 mod lifecycle;
+mod managers;
 mod metrics;
 mod refusals;
 mod restart;

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.1
+
+Upgrade from 0.2.0: no configuration change. On the first pass of the keeper, a pool whose template 0.2.0 wrote gets one more template write (see Fixed).
+
+### Fixed
+
+- After a change of the template of a pool (an edit of the image, of the size, or of the template ConfigMap), the keeper could no longer change the replicas of that pool. The API server refused each write of the replicas with 422 (`spec.template.spec.containers[0].image: Required value`) at every pass, and the pool kept its size. A later change of the template could likewise remove the replicas. Cause: the template and the replicas were written by server-side apply under one field manager, and a server-side apply removes the fields that the same manager applied before and that its new body no longer holds. The template is now applied under its own field manager `br-sandbox-keeper-template`. The apply of the replicas keeps the field manager `br-sandbox-keeper` and the one field `spec.replicas`.
+- A ReplicaSet whose template keeper 0.2.0 applied under `br-sandbox-keeper` is moved. When the template hash is the current one but the managed fields still show a template applied under `br-sandbox-keeper` and none under `br-sandbox-keeper-template`, the keeper applies the template once under the new manager. After that the hash alone decides, so the template is written only at a change, as before. A ReplicaSet that the keeper made and whose template was never applied gets no such write.
+
+### Added
+
+- `cluster::TEMPLATE_FIELD_MANAGER` (`br-sandbox-keeper-template`), the field manager of the apply of `spec.template`, next to `FIELD_MANAGER`.
+
+### Tests
+
+- The fake API server of the tests keeps the managed fields of a ReplicaSet and applies the rule of a server-side apply for each field manager: the create is an Update entry, a force apply of a different value takes the field from the other entries, a later apply of a manager removes the fields that it owned alone and no longer holds, and a ReplicaSet with a container that has no image is refused with 422 and left unchanged. Tests of the writer and of the controller hold that a pool can change its replicas after a change of the template and keep its replicas after a change of the template, that a ReplicaSet that the keeper made and never applied a template to keeps scaling, that a ReplicaSet in the state of 0.2.0 is moved by one template write and then scales, and that the template is not written again. The wire tests hold the exact field manager of each write.
+
+### Documentation
+
+- The README says what each field manager owns and describes the upgrade from 0.2.0.
+
 ## 0.2.0
 
 Keeper 0.2 does not work with chart 0.3.x or earlier: it refuses the `pools` configuration at start. Chart 0.3.x needs keeper 0.1.x.
