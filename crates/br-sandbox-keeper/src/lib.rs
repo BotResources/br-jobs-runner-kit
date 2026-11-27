@@ -3,6 +3,8 @@
 pub mod bucket;
 pub mod cluster;
 mod config;
+#[cfg(test)]
+mod contract;
 mod controller;
 mod convert;
 mod environment;
