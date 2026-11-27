@@ -76,6 +76,14 @@ case "$STUB_ANSWER" in
   other-image-not-found) echo "ERROR: ghcr.io/botresources/other:1.0.0: not found" >&2; exit 1 ;;
   other-image-manifest-unknown) echo "ERROR: ghcr.io/botresources/other:1.0.0: unexpected status from HEAD request: 404 Not Found (MANIFEST_UNKNOWN: manifest unknown)" >&2; exit 1 ;;
   other-image-name-unknown) echo "ERROR: ghcr.io/botresources/other:1.0.0: unexpected status from HEAD request: 404 Not Found (NAME_UNKNOWN: repository name not known to registry)" >&2; exit 1 ;;
+  other-image-manifest-unknown-text) echo "ERROR: ghcr.io/botresources/other:1.0.0: 404 Not Found (manifest unknown)" >&2; exit 1 ;;
+  split-lines-denied-then-other-unknown) printf '%s\n%s\n' "ERROR: ${STUB_REFERENCE}: 403 Forbidden" "ERROR: ghcr.io/botresources/other:1.0.0: 404 Not Found (MANIFEST_UNKNOWN: manifest unknown)" >&2; exit 1 ;;
+  split-lines-other-unknown-then-denied) printf '%s\n%s\n' "ERROR: ghcr.io/botresources/other:1.0.0: 404 Not Found (MANIFEST_UNKNOWN: manifest unknown)" "ERROR: ${STUB_REFERENCE}: 403 Forbidden" >&2; exit 1 ;;
+  split-lines-denied-then-other-not-found) printf '%s\n%s\n' "ERROR: ${STUB_REFERENCE}: 403 Forbidden" "ERROR: ghcr.io/botresources/other:1.0.0: not found" >&2; exit 1 ;;
+  reference-as-suffix-not-found) echo "ERROR: other/${STUB_REFERENCE}: not found" >&2; exit 1 ;;
+  reference-as-suffix-manifest-unknown) echo "ERROR: x${STUB_REFERENCE}: 404 Not Found (MANIFEST_UNKNOWN)" >&2; exit 1 ;;
+  reference-as-prefix-not-found) echo "ERROR: ${STUB_REFERENCE}-rc1: not found" >&2; exit 1 ;;
+  reference-as-prefix-manifest-unknown) echo "ERROR: ${STUB_REFERENCE}.1: 404 Not Found (MANIFEST_UNKNOWN)" >&2; exit 1 ;;
 esac
 STUB
 chmod +x "${tmp}/bin/docker"
@@ -109,7 +117,11 @@ expect_published not-found "published=false"
 for answer in manifest-unknown manifest-unknown-code manifest-unknown-text name-unknown; do
   expect_published "$answer" "published=false"
 done
-for answer in denied unauthorized unreachable rate-limited silent other-image-not-found other-image-manifest-unknown other-image-name-unknown; do
+for answer in denied unauthorized unreachable rate-limited silent \
+  other-image-not-found other-image-manifest-unknown other-image-manifest-unknown-text other-image-name-unknown \
+  split-lines-denied-then-other-unknown split-lines-other-unknown-then-denied split-lines-denied-then-other-not-found \
+  reference-as-suffix-not-found reference-as-suffix-manifest-unknown \
+  reference-as-prefix-not-found reference-as-prefix-manifest-unknown; do
   expect_published_fails "$answer"
 done
 if env -i PATH="${tmp}/bin:$PATH" bash "$here/keeper-image-published.sh" >/dev/null 2>&1; then
