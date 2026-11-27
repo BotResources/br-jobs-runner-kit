@@ -69,8 +69,13 @@ case "$STUB_ANSWER" in
   unauthorized) echo "ERROR: failed to authorize: failed to fetch anonymous token: 401 Unauthorized" >&2; exit 1 ;;
   unreachable) echo "ERROR: Head \"https://ghcr.io/v2/botresources/br-sandbox-keeper/manifests/0.1.0\": dial tcp: lookup ghcr.io: no such host" >&2; exit 1 ;;
   rate-limited) echo "ERROR: ${STUB_REFERENCE}: 429 Too Many Requests" >&2; exit 1 ;;
+  manifest-unknown-code) echo "ERROR: ${STUB_REFERENCE}: 404 Not Found (MANIFEST_UNKNOWN)" >&2; exit 1 ;;
+  manifest-unknown-text) echo "ERROR: ${STUB_REFERENCE}: 404 Not Found (manifest unknown)" >&2; exit 1 ;;
+  name-unknown) echo "ERROR: ${STUB_REFERENCE}: unexpected status from HEAD request: 404 Not Found (NAME_UNKNOWN: repository name not known to registry)" >&2; exit 1 ;;
   silent) exit 1 ;;
   other-image-not-found) echo "ERROR: ghcr.io/botresources/other:1.0.0: not found" >&2; exit 1 ;;
+  other-image-manifest-unknown) echo "ERROR: ghcr.io/botresources/other:1.0.0: unexpected status from HEAD request: 404 Not Found (MANIFEST_UNKNOWN: manifest unknown)" >&2; exit 1 ;;
+  other-image-name-unknown) echo "ERROR: ghcr.io/botresources/other:1.0.0: unexpected status from HEAD request: 404 Not Found (NAME_UNKNOWN: repository name not known to registry)" >&2; exit 1 ;;
 esac
 STUB
 chmod +x "${tmp}/bin/docker"
@@ -101,8 +106,10 @@ expect_published_fails() {
 
 expect_published found "published=true"
 expect_published not-found "published=false"
-expect_published manifest-unknown "published=false"
-for answer in denied unauthorized unreachable rate-limited silent other-image-not-found; do
+for answer in manifest-unknown manifest-unknown-code manifest-unknown-text name-unknown; do
+  expect_published "$answer" "published=false"
+done
+for answer in denied unauthorized unreachable rate-limited silent other-image-not-found other-image-manifest-unknown other-image-name-unknown; do
   expect_published_fails "$answer"
 done
 if env -i PATH="${tmp}/bin:$PATH" bash "$here/keeper-image-published.sh" >/dev/null 2>&1; then

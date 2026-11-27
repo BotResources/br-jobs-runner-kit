@@ -18,7 +18,7 @@ The binary runs as 2 replicas. The identity of a replica for the Lease is its `H
 
 ## Public surface
 
-The library has three parts, and they are the intended entry points: the configuration, the pure rules and the runner. The other public items are the library surface that the three parts are built from: the seams (`bucket`, `cluster`), the read model (`facts`) and the items that the binary reads from its environment. The binary adds nothing to the three parts. The standard derives (`Debug`, and `Clone`, `PartialEq`, `Eq`, `Hash` on the types that have them) are not named type by type, and the table names every other public item.
+The library has three parts, and they are the intended entry points: the configuration, the pure rules and the runner. The other public items are the library surface that the three parts are built from: the seams (`bucket`, `cluster`), the read model (`facts`) and the items that the binary reads from its environment. The binary adds nothing to the three parts. The standard derives (`Debug`, and `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash` on the types that have them) are not named type by type, and the table names every other public item.
 
 | Group | Items |
 |---|---|
