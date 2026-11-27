@@ -5,8 +5,10 @@ use br_sandbox_keeper::KeeperConfig;
 use serde_json::Value;
 
 mod common;
+mod keeper_config_map;
 
-use common::{chart, keeper_document, rendered};
+use common::{chart, rendered};
+use keeper_config_map::keeper_document;
 
 const SANDBOX_NAMESPACES: [&str; 4] = [
     "sbx-alpha-allow",

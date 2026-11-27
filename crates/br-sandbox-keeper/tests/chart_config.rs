@@ -5,8 +5,10 @@ use br_sandbox_keeper::{ConfigError, KeeperConfig};
 use serde_json::Value;
 
 mod common;
+mod keeper_config_map;
 
-use common::{chart, keeper_document, rendered, template};
+use common::{chart, rendered, template};
+use keeper_config_map::keeper_document;
 
 fn overlays() -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(chart().join("ci"))

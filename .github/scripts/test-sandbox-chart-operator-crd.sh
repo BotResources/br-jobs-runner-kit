@@ -38,8 +38,13 @@ check_the_definition_validates_and_reports() {
     t "the printer columns are Desired, Ready, Accepted and Age" jqt crd_on "[${CRD} | .spec.versions[0].additionalPrinterColumns | map(.name)] == [[\"Desired\", \"Ready\", \"Accepted\", \"Age\"]]"
 }
 
-check_the_definition_file_is_the_one_of_the_keeper_commit() {
-    section "the definition file is a copy of the file of the keeper commit"
+check_the_definition_file_is_the_one_of_keeper_0_2_0() {
+    section "the definition file equals the definition file of keeper 0.2.0"
+    local keeper_file="$ROOT/crates/br-sandbox-keeper/definition/sandboxpools.yaml"
+    t "the definition file of the chart equals the definition file of the keeper byte for byte" cmp "$CHART/files/sandboxpool-crd.yaml" "$keeper_file"
+    t "the README says that the file equals the file of keeper 0.2.0 and that two Rust tests hold it" grep -qF "equals, byte for byte, the file \`crates/br-sandbox-keeper/definition/sandboxpools.yaml\` of keeper 0.2.0, and that file equals what \`br_sandbox_keeper::resource::definition_yaml()\` generates; the Rust test \`crates/br-sandbox-keeper/tests/chart_definition.rs\` holds both" "$CHART/README.md"
+    t "the README no longer calls the file a copy of a commit of the keeper" test "$(grep -cE "is a copy of the definition file|the keeper release replaces it" "$CHART/README.md" "$CHART/INSTALL.md")" -eq 0
+    t "the Rust test of the definition exists" test -f "$ROOT/crates/br-sandbox-keeper/tests/chart_definition.rs"
     t "the file holds a CustomResourceDefinition of the group sandbox.botresources.ai" test "$(yq '.kind + " " + .spec.group' "$CHART/files/sandboxpool-crd.yaml")" = "CustomResourceDefinition sandbox.botresources.ai"
     yq -o=json -I0 'del(.metadata.annotations, .metadata.labels)' "$CHART/files/sandboxpool-crd.yaml" >"$WORK/crd_file.json"
     t "the rendered definition equals the file but for the annotation and the labels" jq -e --slurpfile file "$WORK/crd_file.json" "[${CRD} | del(.metadata.annotations, .metadata.labels)] == \$file" "$WORK/crd_on.json"
