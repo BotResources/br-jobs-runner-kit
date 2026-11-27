@@ -242,7 +242,7 @@
             "upstream_ca": {
               "type": "object",
               "additionalProperties": false,
-              "description": "ConfigMap of the egress namespace mounted read-only in the proxy pod; SSL_CERT_FILE of the proxy points to its key, measured on the pinned proxy image: the roots of that file are added to the roots of the certificate directory of the image, they do not replace them, so the public roots stay trusted and the file alone is enough to trust a private authority; nothing was measured about the default bundle file of the image when SSL_CERT_FILE is set", "required": ["config_map"],
+              "description": "ConfigMap of the egress namespace mounted read-only in the proxy pod; SSL_CERT_FILE of the proxy points to its key, measured on the pinned proxy image (0.61.0, arm64 only, in a container on a network with no route out): the roots of that file are added to the roots of the certificate directory of the image, they do not replace them, so the public roots stay trusted and the file alone is enough to trust a private authority; nothing was measured about the default bundle file of the image when SSL_CERT_FILE is set", "required": ["config_map"],
               "properties": {"config_map": {"$ref": "#/definitions/name"}, "key": {"type": "string", "pattern": "^[-._a-zA-Z0-9]+$"}}
             }
           }
