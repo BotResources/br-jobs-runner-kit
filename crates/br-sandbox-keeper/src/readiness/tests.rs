@@ -92,3 +92,28 @@ async fn a_watch_that_breaks_after_the_first_sync_does_not_make_it_not_ready() {
         .await;
     assert!(readiness.is_ready());
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_panic_while_the_lock_is_held_does_not_take_the_answer_down() {
+    let bed = Bed::start();
+    let readiness = std::sync::Arc::new(Readiness::starting());
+    let poisoner = readiness.clone();
+    let panicked = std::thread::spawn(move || {
+        let _guard = poisoner.views.lock().unwrap();
+        panic!("a panic that poisons the lock");
+    })
+    .join();
+    assert!(panicked.is_err());
+    assert!(readiness.views.is_poisoned());
+    assert_eq!(
+        readiness.not_ready_reason().as_deref(),
+        Some("the views are not started")
+    );
+    readiness.watch(bed.views.clone());
+    readiness.store_ready();
+    bed.until("the views synced", |views| {
+        views.not_ready_reason().is_none()
+    })
+    .await;
+    assert!(readiness.is_ready());
+}
