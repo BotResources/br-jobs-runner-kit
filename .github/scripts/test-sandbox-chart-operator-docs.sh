@@ -153,3 +153,18 @@ check_the_limits_have_their_sentences_and_their_tests() {
     t "LIMITS.md says that the proxied modes are not decided" grep -qF 'Who gives the allow list and who approves it is not decided.' <<<"$limits"
     t "the system namespace holds the egress policy of the keeper and is not a managed namespace" jqt ex '([.[] | select(.kind == "NetworkPolicy" and .metadata.namespace == "sbx-system" and .metadata.name == "br-sandbox-egress-keeper")] | length == 1) and ([.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system") | .metadata.labels | has("br.sandbox/managed")] == [false])'
 }
+
+check_the_label_table_says_who_sets_the_namespace_labels() {
+    section "README label contract: the project sets managed and mode on its own Namespace, the chart only on request"
+    local readme
+    readme="$(cat "$CHART/README.md")"
+    t "the managed row names the project, render_namespace and the immutability code" grep -qF '| `br.sandbox/managed` | namespace label | the project, on its own Namespace; the chart only with `render_namespace: true` |' <<<"$readme"
+    t "the mode row names the project, render_namespace, the egress namespaces and the immutability code" grep -qF '| `br.sandbox/mode` | namespace label | the project, on its own Namespace; the chart only with `render_namespace: true` (egress namespaces: the chart) |' <<<"$readme"
+    t "no row of the label table says that the chart sets managed or mode with no condition" test "$(grep -cE '^\| `br\.sandbox/(managed|mode)` \| namespace label \| chart \|' "$CHART/README.md")" = 0
+    t "render_namespace is false by default" test "$(yq '.render_namespace' "$CHART/values.yaml")" = false
+    render label_plain -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml" --set render_namespace=false
+    t "a render with render_namespace false holds no Namespace with the managed label" jqt label_plain '[.[] | select(.kind == "Namespace" and (.metadata.labels | has("br.sandbox/managed")))] | length == 0'
+    t "a render with render_namespace true holds the managed Namespace of each entry, with the mode of the entry" jqt ex '[.[] | select(.kind == "Namespace" and (.metadata.labels | has("br.sandbox/managed"))) | [.metadata.name, .metadata.labels["br.sandbox/mode"]]] | sort == [["sbx-alpha-allow", "allow"], ["sbx-alpha-full", "full"], ["sbx-alpha-none", "none"], ["sbx-beta-none", "none"]]'
+    t "an egress namespace carries the mode set by the chart and no managed label" jqt egress_keeper '[.[] | select(.kind == "Namespace" and (.metadata.labels | has("br.sandbox/egress"))) | (.metadata.labels | has("br.sandbox/mode") and (has("br.sandbox/managed") | not))] | length > 0 and all'
+    t "the policy refuses a project that changes the mode of a managed namespace, and the same change by a writer is admitted" test "$(ns_verdict grants UPDATE "$(namespace_object sbx-alpha-new true allow)" "$(namespace_object sbx-alpha-new true none)" "$PROJECT_USER" "$(grants_of grants)")" = BR_SANDBOX_LABEL_IMMUTABLE -a "$(ns_verdict grants UPDATE "$(namespace_object sbx-alpha-new true allow)" "$(namespace_object sbx-alpha-new true none)" "$WRITER_USER" "$(grants_of grants)")" = admit
+}

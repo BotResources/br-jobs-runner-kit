@@ -193,9 +193,9 @@ One prefix, `br.sandbox`. The adapter, the keeper and the policies use exactly t
 
 | Name | Kind | Set by | Value |
 |---|---|---|---|
-| `br.sandbox/managed` | namespace label | chart | `true`; the label of the Kyverno exclusion and of the policy binding |
+| `br.sandbox/managed` | namespace label | the project, on its own Namespace; the chart only with `render_namespace: true` | `true`; the label of the Kyverno exclusion and of the policy binding; after creation only a writer can add, change or remove it (`BR_SANDBOX_LABEL_IMMUTABLE`) |
 | `br.sandbox/egress` | namespace label | chart | `true` on an egress namespace only; never together with `br.sandbox/managed` |
-| `br.sandbox/mode` | namespace label | chart | mode (sandbox and egress namespaces) |
+| `br.sandbox/mode` | namespace label | the project, on its own Namespace; the chart only with `render_namespace: true` (egress namespaces: the chart) | mode (sandbox and egress namespaces); on a sandbox namespace, after creation only a writer can change it (`BR_SANDBOX_LABEL_IMMUTABLE`) |
 | `br.sandbox/client` | namespace label | chart | the `client_id` of the scope, on egress namespaces only; no template reads it |
 | `br.sandbox/role` | pod label | pod template | `sandbox` in a sandbox namespace, `proxy` in an egress namespace (set by the proxy Deployment); never changes |
 | `br.sandbox/pool` | pod label | template, then claim | `warm`, then `claimed` (one way); `probe` for a check pod |
