@@ -5,14 +5,16 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::{Context, Poll};
 
 use br_runner_sandbox::{
-    Cluster, ClusterError, ClusterFuture, ExecIo, ExecRequest, LabelSelector, PodEvent, PodView,
-    ReplicaSetView,
+    Cluster, ClusterError, ClusterFuture, ExecIo, ExecOut, ExecRequest, LabelSelector, PodEvent,
+    PodView, ReplicaSetView,
 };
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use serde_json::Value;
 use tokio::io::AsyncWrite;
 use tokio::sync::Notify;
+
+use super::stdout::{ModelStdout, StdoutModel};
 
 #[derive(Clone, Default)]
 pub struct Script {
@@ -22,6 +24,7 @@ pub struct Script {
     pub wait_for_stdin_close: bool,
     pub hang: bool,
     pub refuse: Option<ClusterError>,
+    pub stdout_model: Option<StdoutModel>,
 }
 
 impl Script {
@@ -57,6 +60,11 @@ impl Script {
             hang: true,
             ..Self::default()
         }
+    }
+
+    pub fn through(mut self, model: &StdoutModel) -> Self {
+        self.stdout_model = Some(model.clone());
+        self
     }
 
     pub fn with_stderr(mut self, stderr: &str) -> Self {
@@ -273,6 +281,10 @@ impl Cluster for FakeCluster {
             let wait = closed.clone();
             let (hang, wait_for_close, code) =
                 (script.hang, script.wait_for_stdin_close, script.code);
+            let stdout: ExecOut = match script.stdout_model {
+                Some(model) => Box::new(ModelStdout::new(script.stdout, model)),
+                None => Box::new(Cursor::new(script.stdout)),
+            };
             let status = Box::pin(async move {
                 if hang {
                     std::future::pending::<()>().await;
@@ -284,7 +296,7 @@ impl Cluster for FakeCluster {
             });
             Ok(ExecIo {
                 stdin: wants_stdin.then(|| Box::new(StdinCapture { capture, closed }) as _),
-                stdout: Box::new(Cursor::new(script.stdout)),
+                stdout,
                 stderr: Box::new(Cursor::new(script.stderr)),
                 status,
             })

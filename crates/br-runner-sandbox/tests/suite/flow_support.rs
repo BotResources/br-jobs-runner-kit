@@ -25,8 +25,12 @@ pub fn position(log: &[String], needle: &str) -> usize {
 }
 
 pub fn noisy_tar() -> Vec<u8> {
+    noisy_tar_of(400_000)
+}
+
+pub fn noisy_tar_of(length: usize) -> Vec<u8> {
     let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
-    let data: Vec<u8> = (0..400_000)
+    let data: Vec<u8> = (0..length)
         .map(|_| {
             seed ^= seed << 13;
             seed ^= seed >> 7;
