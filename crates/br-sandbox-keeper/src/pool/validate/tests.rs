@@ -42,7 +42,14 @@ fn a_good_spec_gives_the_settings_with_the_defaults_of_the_table() {
 
 #[test]
 fn the_image_must_not_be_blank() {
-    for image in ["", "   ", "\t"] {
+    for image in [
+        "",
+        "   ",
+        "\t",
+        "\u{000B}",
+        "\u{00A0}",
+        " \u{000B}\u{00A0}\t",
+    ] {
         let mut bad = spec();
         bad.image = image.to_owned();
         assert_eq!(refused(&bad).field, "image");
