@@ -21,7 +21,7 @@ Upgrade from 0.2.0: no configuration change. At its first evaluation of a pool, 
 
 ### Documentation
 
-- The README says what each field manager owns and describes the upgrade from 0.2.0.
+- The README names the two field managers of the writes on the ReplicaSet and describes the upgrade from 0.2.0.
 
 ## 0.2.0
 
