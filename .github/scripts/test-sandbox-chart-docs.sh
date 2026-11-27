@@ -150,10 +150,19 @@ check_the_docs_mark_the_keeper_probes_under_default_deny_as_untested() {
     t "the Keeper document paragraph says that the probes under default-deny are not tested on a cluster" grep -qF 'Not tested on a cluster: that the probes of the kubelet pass under `default-deny`' <<<"$keeper"
     t "the Keeper document paragraph no longer says that the probes are served to the kubelet" bash -c '! grep -qF "The probes are served by the pod to the kubelet" <<<"$1"' _ "$keeper"
     t "the CHANGELOG says that the probes under default-deny are not tested on a cluster" grep -qF 'that the probes of the kubelet pass under it is not tested on a cluster' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_who_reads_the_adapter_document_and_what_the_upgrade_does() {
+    section "the README and the CHANGELOG state who reads the adapter document, that the importer maps its keys, and what the 0.2.2 upgrade does"
+    local keeper
+    keeper="$(grep '^\*\*Keeper document\.\*\*' "$README")"
     t "the Keeper document paragraph says who can read the adapter document and that no pod mounts it" grep -qF 'The runner identity can read each one: the Role `br-sandbox-runner` of the namespace allows `get` on that name only, and no pod mounts it. The document holds no secret.' <<<"$keeper"
     t "the Keeper document paragraph states that the adapter keys are the chart's own and that the importer must map them" grep -qF 'The crate reads no file and no ConfigMap, so its importer must map the keys. This is a known limit of this release.' <<<"$keeper"
     t "the Keeper document paragraph no longer says that the adapter reads the ConfigMaps" bash -c '! grep -qF "The adapter reads the ConfigMaps" <<<"$1"' _ "$keeper"
+    t "the Runner role paragraph says the runner identity can read the adapter document and the adapter crate reads no ConfigMap itself" grep -qF '`configmaps` get on `br-sandbox-config` only (the runner identity can read the adapter document; the adapter crate reads no ConfigMap itself, see Keeper document)' "$README"
+    t "the Runner role paragraph no longer says that the adapter reads the config" bash -c '! grep -qF "(the adapter reads the config)" "$1"' _ "$README"
     t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
-    t "the CHANGELOG says that the keeper Deployment rolls once at the upgrade and that the system ConfigMap is deleted" grep -qF 'the keeper Deployment rolls once at the upgrade, because its pod template changes' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the keeper Deployment rolls once at the upgrade" grep -qF 'the keeper Deployment rolls once at the upgrade, because its pod template changes' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says that the ConfigMap of the system namespace is deleted by the upgrade" grep -qF 'The ConfigMap `br-sandbox-config` of the system namespace is deleted by the upgrade.' "$CHART/CHANGELOG.md"
     t "the CHANGELOG says that the lint loop covers the new overlay" grep -qF 'also covers the overlay `ci/keeper-nondefault-values.yaml`' "$CHART/CHANGELOG.md"
 }
