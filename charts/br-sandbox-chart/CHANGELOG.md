@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3
+
+Fix: the network check waited for no enforcement. On a cluster with flannel and the kube-router network policy controller, the policy started some seconds after a fresh probe pod: a probe at once reached 2 of 2 targets, the same probe 30 seconds later reached 0, so the Job failed although the policy worked.
+
+- A direct TCP probe of the probe pod is tried again every second until it is refused, for at most `network_check.enforcement_wait_seconds` (new key, integer from 1 to 999999999, default 60), counted from the start of the probe script in the pod; the limit is one budget for the whole pod, a later target gets what is left of it, and once it is spent each remaining target is tried once. Still reached at the limit: the probe is `reached` and the Job fails. The positive controls and the `CONNECT` probes are not tried again.
+- The `tcp` result object has two new fields: `refused_after_seconds` (the seconds from the start of the probe script to the first refusal, or the text `not refused`) and `limit_seconds`. No field was removed or renamed.
+- The Job waits for each probe pod for 180 seconds plus the limit, and its `activeDeadlineSeconds` (also in the CronJob) is 1800 plus the limit for each sandbox namespace (it was 1800).
+- The check image needs `sleep` and `date` besides the programs of 0.2.0; a missing `sleep` or `date` gives a `precondition` row like a missing `nc`.
+- `refused_after_seconds` is the time from the start of the script of the whole probe pod, not of one target; the `nc -w 2` wait of each dropped probe counts in it, so under a policy that drops packets the k-th target reports about 2 times k seconds, and under a policy that resets the connection a probe refused at once reports about 0. The README says so.
+- `refused` means that `nc` exited with any non-zero status (a reset, the timeout of a dropped probe, a name that does not resolve, an `nc` that fails). At the start of the script, before any probe, a missing `nc`, `sleep` or `date` (the first one missing, in that order; `target` is its name) or a `NETCHECK_ENFORCEMENT_WAIT` that is not an integer from 1 to 999999999 prints one object with the new `kind` `precondition` (`observed` `missing` or `invalid`, `control` `not_applicable`) and exits with status 2. An `nc` that exists but is broken is caught only by the positive control of the Job pod, which runs the same image as the probe pods.
+- The README no longer words the policy rules of the sandbox namespaces as a guarantee for a fresh pod: they hold once the network plugin enforces them.
+- A window exists in which a fresh pod reaches internal targets; the chart does not close it, and the report does not tell its length: `refused_after_seconds` is the time from the start of the probe script to the first refusal of the probe, and it carries the `nc -w 2` waits of the probes dropped before it. Measured with flannel and kube-router only; not reproduced by the offline suite.
+
 ## 0.2.2
 
 The keeper pod can start: the chart now renders the keeper a document in the keys and the format that the keeper reads. Before, the chart wrote YAML with keys such as `store`, `lease`, `settings`, `save` and `system_namespace` at `/etc/br-sandbox/config.yaml`, and the keeper refuses every unknown key and reads JSON.

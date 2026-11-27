@@ -170,3 +170,9 @@ check_the_docs_state_the_keeper_port_and_the_lint_loop_overlay() {
     t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
     t "the CHANGELOG says that the lint loop covers the new overlay" grep -qF 'also covers the overlay `ci/keeper-nondefault-values.yaml`' "$CHART/CHANGELOG.md"
 }
+
+check_the_changelog_states_the_budget_and_the_length_of_the_window() {
+    section "the CHANGELOG states the budget of the enforcement wait and what the report does not tell about the window"
+    t "the CHANGELOG says the limit is one budget for the whole pod and what a later target gets" grep -qF 'the limit is one budget for the whole pod, a later target gets what is left of it, and once it is spent each remaining target is tried once' "$CHART/CHANGELOG.md"
+    t "the CHANGELOG says the chart does not close the window and the report does not tell its length" grep -qF 'A window exists in which a fresh pod reaches internal targets; the chart does not close it, and the report does not tell its length: `refused_after_seconds` is the time from the start of the probe script to the first refusal of the probe, and it carries the `nc -w 2` waits of the probes dropped before it.' "$CHART/CHANGELOG.md"
+}
