@@ -11,11 +11,11 @@
 {{- define "br-sandbox-chart.vap.non_root" -}}
 {{- $values := .Values -}}
 {{- $nonRoot := "(has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0)" -}}
-{{- $container := $nonRoot -}}
+{{- $regular := $nonRoot -}}
 {{- if $values.tools.seed_container.enabled -}}
-{{- $container = printf "%s || (c.name == %s && c.image == %s && has(c.securityContext) && has(c.securityContext.runAsUser) && c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports))" $nonRoot ($values.tools.seed_container.name | toJson) (include "br-sandbox-chart.image.tools" . | toJson) -}}
+{{- $regular = printf "%s || (c.name == %s && c.image == %s && has(c.securityContext) && has(c.securityContext.runAsUser) && c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports))" $nonRoot ($values.tools.seed_container.name | toJson) (include "br-sandbox-chart.image.tools" . | toJson) -}}
 {{- end -}}
-{{- $lists := printf "variables.containers.all(c, %s) && (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c, %s))" $container $container -}}
+{{- $lists := printf "object.spec.containers.all(c, %s) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, %s)) && (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c, %s))" $regular $nonRoot $nonRoot -}}
 {{- if $values.network_check.enabled -}}
 {{- $user := printf "system:serviceaccount:%s:br-sandbox-netcheck" (include "br-sandbox-chart.system_namespace" .) -}}
 {{- $lists = printf "request.userInfo.username == %s || (%s)" ($user | toJson) $lists -}}

@@ -8,24 +8,29 @@ def rule($vap): [$vap.spec.validations[] | select(.message | startswith("BR_SAND
 def has_clause($e; $text): $e | contains($text);
 def runas($vap; $pod; $user):
   rule($vap) as $e
+  | "(has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0)" as $plain
   | ($e | [scan("c\\.name == \"([^\"]+)\" && c\\.image == \"([^\"]+)\"")] | .[0] // [null, null]) as $seed
   | ($e | [scan("request\\.userInfo\\.username == \"([^\"]+)\"")] | .[0][0]) as $check
   | has_clause($e; "!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)") as $shared_clause
   | has_clause($e; "c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0") as $user_clause
   | has_clause($e; "object.spec.ephemeralContainers.all(c,") as $ephemeral_clause
+  | has_clause($e; "object.spec.initContainers.all(c, " + $plain + ")") as $init_plain
+  | has_clause($e; "object.spec.ephemeralContainers.all(c, " + $plain + ")") as $ephemeral_plain
   | has_clause($e; "c.securityContext.runAsUser == 0") as $root_clause
   | has_clause($e; "c.securityContext.readOnlyRootFilesystem == true") as $readonly_clause
   | has_clause($e; "!has(c.ports)") as $ports_clause
-  | ($pod.spec.containers + ($pod.spec.initContainers // []) + (if $ephemeral_clause then ($pod.spec.ephemeralContainers // []) else [] end)) as $listed
-  | ((($pod.spec.shareProcessNamespace // false) | not) or ($shared_clause | not))
+  | def plain_ok: ($user_clause | not) or (.securityContext.runAsNonRoot == true and (.securityContext.runAsUser // 0) > 0);
+    def seed_ok:
+      .name == $seed[0] and .image == $seed[1]
+      and (.securityContext.runAsUser == 0 or ($root_clause | not))
+      and (.securityContext.readOnlyRootFilesystem == true or ($readonly_clause | not))
+      and ((has("ports") | not) or ($ports_clause | not));
+    def passes($plain_only): plain_ok or (($plain_only | not) and seed_ok);
+    ((($pod.spec.shareProcessNamespace // false) | not) or ($shared_clause | not))
     and (($check != null and $user == $check)
-      or ($listed | all(
-        ($user_clause | not)
-        or (.securityContext.runAsNonRoot == true and (.securityContext.runAsUser // 0) > 0)
-        or (.name == $seed[0] and .image == $seed[1]
-          and (.securityContext.runAsUser == 0 or ($root_clause | not))
-          and (.securityContext.readOnlyRootFilesystem == true or ($readonly_clause | not))
-          and ((has("ports") | not) or ($ports_clause | not))))));
+      or (($pod.spec.containers | all(passes(false)))
+        and (($pod.spec.initContainers // []) | all(passes($init_plain)))
+        and ((if $ephemeral_clause then ($pod.spec.ephemeralContainers // []) else [] end) | all(passes($ephemeral_plain)))));
 '
 
 pool_pod() {
@@ -75,6 +80,7 @@ check_non_root_rule_accepts_the_pods_of_the_chart() {
     t "the init container alone passes" test "$(pool_runas ex sbx-alpha-none '.spec.containers = [.spec.containers[0]] | .spec.initContainers = [.spec.initContainers[0]]')" = true
     t "the pool pod passes with a mirror, the seed image is the mirrored tools image" test "$(pool_runas mirror sbx-alpha-none '.')" = true
     t "the probe pod passes with a mirror" test "$(probe_runas mirror sbx-alpha-none "$CHECK_USER" '.')" = true
+    t "the real seed container of the regular list passes next to a non-root init container and a non-root ephemeral container" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')" = true
     t "a non-root ephemeral container passes" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [{"name": "debug", "image": "x", "securityContext": {"runAsNonRoot": true, "runAsUser": 20000}}]')" = true
     t "a process namespace set to false passes" test "$(pool_runas ex sbx-alpha-none '.spec.shareProcessNamespace = false')" = true
 }
@@ -95,6 +101,8 @@ check_non_root_rule_refuses() {
     t "the seed name with the tools repository and another digest is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].image = "registry.example.test/tools/br-sandbox-tools@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"')" = false
     t "the tools image under another name is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].name = "writer"')" = false
     t "an init container with the seed name and the tools image that is not root is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers[0].name = "seed" | del(.spec.initContainers[0].securityContext.runAsNonRoot) | .spec.initContainers[0].securityContext.runAsUser = 5')" = false
+    t "an init container with the seed name, the tools image, root, a read-only root file system and no port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.initContainers += [.spec.containers[1]]')" = false
+    t "an ephemeral container with the seed name, the tools image, root, a read-only root file system and no port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.ephemeralContainers = [.spec.containers[1]]')" = false
     t "the seed container with a writable root file system is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.containers[1].securityContext.readOnlyRootFilesystem)')" = false
     t "the seed container with a port is refused" test "$(pool_runas ex sbx-alpha-none '.spec.containers[1].ports = [{"containerPort": 8080}]')" = false
     t "the seed container without runAsUser 0 and without runAsNonRoot is refused" test "$(pool_runas ex sbx-alpha-none 'del(.spec.containers[1].securityContext.runAsUser)')" = false
@@ -118,6 +126,8 @@ check_non_root_rule_text() {
     t "the mirrored tools image starts with the mirror" expression_holds mirror sbx-alpha-none 'c.image == "mirror.example.test/'
     t "the seed exception pins root, the read-only root file system and no port" expression_holds ex sbx-alpha-none 'c.securityContext.runAsUser == 0 && has(c.securityContext.readOnlyRootFilesystem) && c.securityContext.readOnlyRootFilesystem == true && !has(c.ports)'
     t "the rule refuses a shared process namespace" expression_holds ex sbx-alpha-none '!(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)'
+    t "the seed exception applies to the regular container list only" expression_holds ex sbx-alpha-none 'object.spec.containers.all(c, (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true && has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0) || (c.name == "seed"'
+    t "the init and ephemeral lists hold the plain non-root condition only" test "$(policy_expression ex sbx-alpha-none | grep -o 'c.name ==' | wc -l | tr -d ' ')" = 1
     t "the rule reads the three container lists" expression_holds ex sbx-alpha-none 'object.spec.ephemeralContainers.all(c,'
     t "the pods of the chart set runAsNonRoot true on the agent and the init container, not on the root containers" jqt ex "${SANDBOX_PODS} | all(.spec | (.containers[0].securityContext.runAsNonRoot == true) and (.initContainers[0].securityContext.runAsNonRoot == true) and (.containers[1:] | all(.securityContext.runAsUser == 0 and (.securityContext | has(\"runAsNonRoot\") | not))))"
     t "the probe pods run as uid 0, which is why the check identity is an exception" test "$(probe_pod ex sbx-alpha-none | jq -c '.spec.containers[0].securityContext | [.runAsUser, has("runAsNonRoot")]')" = '[0,false]'
