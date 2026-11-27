@@ -18,6 +18,7 @@ mod open_release;
 mod properties;
 mod save_keys;
 mod save_restore;
+mod seed_bound;
 mod start_results;
 mod start_times;
 mod store_client;
