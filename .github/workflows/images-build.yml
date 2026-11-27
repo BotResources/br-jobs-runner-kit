@@ -27,6 +27,11 @@ on:
         type: string
         required: false
         default: ""
+      hold_marked:
+        description: Build and test, but never push, an image whose folder holds the file PUSH_ON_MAIN_ONLY; the caller sets it to false only for a push to main
+        type: boolean
+        required: false
+        default: true
     outputs:
       digests:
         description: JSON object, image name to registry reference with the manifest list digest; {} when nothing was pushed
@@ -41,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       images: ${{ steps.discover.outputs.images }}
+      pushed: ${{ steps.pushed.outputs.pushed }}
       revision: ${{ steps.revision.outputs.revision }}
       registry: ${{ steps.registry.outputs.registry }}
     steps:
@@ -61,6 +67,14 @@ jobs:
           IMAGE_INPUT: ${{ inputs.image }}
           IMAGES_ROOT: ${{ inputs.images_dir }}
         run: echo "images=$(bash .github/scripts/images-discover.sh "$IMAGE_INPUT")" >>"$GITHUB_OUTPUT"
+      - name: images to push
+        id: pushed
+        env:
+          IMAGES: ${{ steps.discover.outputs.images }}
+          PUSH: ${{ inputs.push }}
+          HOLD_MARKED: ${{ inputs.hold_marked }}
+          IMAGES_ROOT: ${{ inputs.images_dir }}
+        run: echo "pushed=$(bash .github/scripts/images-select-push.sh "$IMAGES")" >>"$GITHUB_OUTPUT"
       - name: revision
         id: revision
         run: echo "revision=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
@@ -72,6 +86,7 @@ jobs:
       - name: summary
         env:
           IMAGES: ${{ steps.discover.outputs.images }}
+          PUSHED: ${{ steps.pushed.outputs.pushed }}
           IMAGES_DIR: ${{ inputs.images_dir }}
           REVISION: ${{ steps.revision.outputs.revision }}
           PUSH: ${{ inputs.push }}
@@ -81,6 +96,7 @@ jobs:
             echo "### Image plan"
             echo
             echo "- images: \`${IMAGES}\` in \`${IMAGES_DIR}\`"
+            echo "- pushed: \`${PUSHED}\`"
             echo "- revision: \`${REVISION}\`"
             echo "- push: \`${PUSH}\`"
             echo "- tag: \`${TAG}\`"
@@ -105,32 +121,36 @@ jobs:
           ref: ${{ needs.plan.outputs.revision }}
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        if: inputs.push
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: names of the local image and of the cache scope
+      - name: names of the local image and of the cache scope, and whether this image is pushed
         id: names
         env:
           IMAGE: ${{ matrix.image }}
           PLATFORM: ${{ matrix.platform }}
+          PUSHED: ${{ contains(fromJSON(needs.plan.outputs.pushed), matrix.image) }}
         run: |
           arch="${PLATFORM#linux/}"
-          echo "local=local/${IMAGE}:${arch}" >>"$GITHUB_OUTPUT"
-          echo "scope=${IMAGE}-${arch}" >>"$GITHUB_OUTPUT"
+          {
+            echo "local=local/${IMAGE}:${arch}"
+            echo "scope=${IMAGE}-${arch}"
+            echo "push=${PUSHED}"
+          } >>"$GITHUB_OUTPUT"
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: steps.names.outputs.push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build
         with:
           context: .
           file: ${{ inputs.images_dir }}/${{ matrix.image }}/Dockerfile
           platforms: ${{ matrix.platform }}
-          load: ${{ !inputs.push }}
-          outputs: ${{ inputs.push && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', needs.plan.outputs.registry, matrix.image) || '' }}
+          load: ${{ steps.names.outputs.push != 'true' }}
+          outputs: ${{ steps.names.outputs.push == 'true' && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', needs.plan.outputs.registry, matrix.image) || '' }}
           provenance: false
           sbom: false
-          tags: ${{ !inputs.push && steps.names.outputs.local || '' }}
+          tags: ${{ steps.names.outputs.push != 'true' && steps.names.outputs.local || '' }}
           build-args: |
             REVISION=${{ needs.plan.outputs.revision }}
           labels: |
@@ -142,7 +162,7 @@ jobs:
       - name: image to test
         id: target
         env:
-          PUSH: ${{ inputs.push }}
+          PUSH: ${{ steps.names.outputs.push }}
           REGISTRY: ${{ needs.plan.outputs.registry }}
           IMAGE: ${{ matrix.image }}
           PLATFORM: ${{ matrix.platform }}
@@ -186,7 +206,7 @@ jobs:
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: inputs.push
+        if: steps.names.outputs.push == 'true'
         with:
           name: platform-digest-${{ steps.names.outputs.scope }}
           path: platform-digests/
@@ -195,7 +215,7 @@ jobs:
   manifest:
     name: manifest list ${{ matrix.image }}
     needs: [plan, build]
-    if: inputs.push && needs.plan.outputs.images != '[]'
+    if: inputs.push && needs.plan.outputs.pushed != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -203,7 +223,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ${{ fromJSON(needs.plan.outputs.images) }}
+        image: ${{ fromJSON(needs.plan.outputs.pushed) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
