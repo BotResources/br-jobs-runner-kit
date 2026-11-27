@@ -46,11 +46,37 @@ check() {
   name="$1"
   shift
   echo "$name" >>"$ran"
-  if "$@" >/dev/null 2>&1; then
+  if "$@" >"${scratch}/output" 2>&1; then
     echo "ok   $name" | tee -a "$results"
   else
+    tail -n 30 "${scratch}/output" | sed 's/^/     | /' | tee -a "$results" >&2
     fail "$name"
   fi
+}
+
+dockerfile="${here}/Dockerfile"
+
+instructions() {
+  awk '{ if (sub(/\\$/, "")) { buffer = buffer $0; next } print buffer $0; buffer = "" }' "$dockerfile"
+}
+
+base_is_pinned_by_digest() {
+  grep -Eq '^ARG ALPINE=alpine:[0-9.]+@sha256:[0-9a-f]{64}$' "$dockerfile" || return 1
+  [ "$(instructions | grep -c '^FROM ')" -eq 4 ] || return 1
+  [ "$(instructions | grep -Ec '^FROM (scratch AS kubectl-(amd64|arm64)|kubectl-\$\{TARGETARCH\} AS kubectl|\$\{ALPINE\})$')" -eq 4 ] || return 1
+  instructions | grep -qx 'FROM ${ALPINE}'
+}
+
+downloads_are_pinned_by_checksum() {
+  [ "$(instructions | grep -c '^ADD ')" -eq 3 ] || return 1
+  [ "$(instructions | grep -Ec '^ADD --checksum=sha256:[0-9a-f]{64} ')" -eq 3 ] || return 1
+  for arch in amd64 arm64; do
+    [ "$(instructions | grep -Fc "https://dl.k8s.io/release/v\${KUBECTL_VERSION}/bin/linux/${arch}/kubectl /kubectl")" -eq 1 ] || return 1
+  done
+}
+
+dockerfile_installs_no_package() {
+  [ -z "$(instructions | grep -Ev '^(ARG|FROM|ADD|COPY|LABEL) |^[[:space:]]*$' || true)" ] && ! grep -Eiq 'apk' "$dockerfile"
 }
 
 no_entrypoint() {
@@ -87,7 +113,14 @@ nc -lk -p 9000 -e /bin/true &
 nc -lk -p 9001 -e /bin/sh -c "printf \"HTTP/1.1 403 Forbidden\r\n\r\n\"" &
 nc -lk -p 9002 -e /bin/sh -c "printf \"HTTP/1.1 200 OK\r\n\r\n\"" &
 nc -lk -p 9003 -e /bin/sleep 20 &
-sleep 1
+for port in 2328 2329 232A 232B; do
+  tries=0
+  until cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -Eq ":${port} [0-9A-F:]+ 0A "; do
+    tries=$((tries + 1))
+    [ "$tries" -le 100 ] || { echo "the fake peer on the port 0x${port} does not listen" >&2; exit 1; }
+    sleep 0.1
+  done
+done
 '
 
 nc_reaches_a_listener() {
@@ -161,6 +194,9 @@ probe_as_probe_pod() {
 
 cat >"${scratch}/expected" <<EOF
 the image architecture is the platform
+the base image and every FROM of the Dockerfile are pinned by digest
+every file downloaded by the Dockerfile is pinned by checksum, kubectl for both platforms
+the Dockerfile installs no package and runs nothing
 the image has no entrypoint
 the four labels are set
 the Job runs as uid 10001 on a read-only root with a writable /tmp
@@ -185,6 +221,9 @@ network-check.sh probe gives its lines as the probe pod user
 EOF
 
 check "the image architecture is the platform" architecture_is_the_platform
+check "the base image and every FROM of the Dockerfile are pinned by digest" base_is_pinned_by_digest
+check "every file downloaded by the Dockerfile is pinned by checksum, kubectl for both platforms" downloads_are_pinned_by_checksum
+check "the Dockerfile installs no package and runs nothing" dockerfile_installs_no_package
 check "the image has no entrypoint" no_entrypoint
 check "the four labels are set" bash "${here}/../../.github/scripts/images-check-labels.sh" "$image"
 check "the Job runs as uid 10001 on a read-only root with a writable /tmp" job sh -c '[ "$(id -u)" = 10001 ] && ! touch /x && touch /tmp/x'

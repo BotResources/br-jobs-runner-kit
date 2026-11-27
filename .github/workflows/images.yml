@@ -56,7 +56,7 @@ jobs:
       - name: tests of the gates
         run: bash .github/scripts/test-images-gates.sh
       - name: order of the jobs of images-build.yml
-        run: bash .github/scripts/images-check-gates.sh .github/workflows/images-build.yml
+        run: bash .github/scripts/images-check-gates.sh .github/workflows/images-build.yml .github/workflows/images.yml
       - name: decide the push and the tag
         id: plan
         env:
@@ -88,7 +88,7 @@ jobs:
     with:
       image: ${{ inputs.image }}
       push: ${{ needs.plan.outputs.push == 'true' }}
-      hold_marked: ${{ needs.plan.outputs.hold_marked == 'true' }}
+      hold_marked: ${{ needs.plan.outputs.hold_marked != 'false' }}
       tag: ${{ needs.plan.outputs.tag }}
       ref: ${{ needs.plan.outputs.revision }}
 

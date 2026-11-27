@@ -1,15 +1,17 @@
 # br-sandbox-check
 
-The programs that the network check Job of `br-sandbox-chart` needs, and nothing else: an Alpine base and one pinned `kubectl`. The chart value `network_check.image` takes it.
+The programs that the network check Job of `br-sandbox-chart` needs: an Alpine base as it is, plus one pinned `kubectl`. The chart value `network_check.image` takes it.
 
-The name `br-sandbox-check` is not final. Until it is confirmed, this image is built and tested by every pull request on both platforms, but it is pushed to the registry only by a push to `main`: the folder holds the empty file `PUSH_ON_MAIN_ONLY` (see [`../README.md`](../README.md)).
+The ten programs that the check script calls come from BusyBox (nine of them) and from `kubectl`. The base brings its other BusyBox applets and its package manager `apk` too; the `Dockerfile` installs no package and runs no command (`test.sh` checks it). The content of the image is the content of the base, plus `kubectl` and its licence text.
+
+This image is published by a push to `main` only. Every pull request builds and tests it on both platforms and pushes nothing: the folder holds the empty file `PUSH_ON_MAIN_ONLY` (see [`../README.md`](../README.md)).
 
 ## Content
 
 | Part | Version |
 |---|---|
 | Base | `alpine:3.24.4`, pinned by index digest (`linux/amd64` and `linux/arm64`) |
-| `sh`, `nc`, `cat`, `sed`, `tr`, `mktemp`, `awk`, `sleep`, `date` | applets of the BusyBox 1.37.0 of the base; no other package is installed |
+| `sh`, `nc`, `cat`, `sed`, `tr`, `mktemp`, `awk`, `sleep`, `date` | applets of the BusyBox 1.37.0 of the base; the other applets and `apk` of the base stay in the image; the `Dockerfile` installs no package |
 | `kubectl` | 1.34.13, the official static binary of `dl.k8s.io`, at `/usr/local/bin/kubectl`, mode 0555; each architecture is pinned by its sha256 (`ADD --checksum`) |
 | `/usr/share/kubectl-LICENSE` | the Apache-2.0 text of Kubernetes v1.34.13, pinned by sha256 |
 
@@ -34,7 +36,7 @@ To move to another `kubectl` version, change `KUBECTL_VERSION` in the `Dockerfil
 
 | Thing | Why it is the way it is |
 |---|---|
-| Alpine base | BusyBox gives nine of the ten programs; no package is added. |
+| Alpine base | BusyBox gives nine of the ten programs; no package is added. The base also leaves its other applets and `apk` in the image: this is the simplest form, and the content is the content of the base. |
 | `kubectl` from `dl.k8s.io` with `ADD --checksum` | One pinned file for each platform, the same file for every build. The Alpine package is not used, because the package version moves with the Alpine release. |
 | `kubectl` 1.34 | `kubectl` supports a server one minor version older or newer than itself; 1.34 is chosen for servers 1.33 to 1.35. The test suite has no cluster, so it does not start `kubectl` against a real API server. |
 | One stage for each architecture, then `FROM kubectl-${TARGETARCH}` | `ADD --checksum` takes one value, and the two architectures have two files. |
@@ -64,13 +66,16 @@ docker buildx build --platform linux/arm64 \
 images/br-sandbox-check/test.sh br-sandbox-check:local linux/arm64
 ```
 
-The workflow builds each platform, loads it into the Docker of the job and executes `test.sh` on it; on a pull request nothing is pushed (see [`../README.md`](../README.md)). `test.sh` starts the image with no network, every capability dropped and `no-new-privileges`, in two shapes: the shape of the check Job (uid 10001, read-only root, `TMPDIR=/tmp` on a tmpfs, the real `charts/br-sandbox-chart/files/network-check.sh` mounted at `/netcheck`) and the shape of the probe pod (uid 0 with the seven capabilities). A fixed list of check names makes `test.sh` fail when a check did not execute or an unlisted check did.
+The workflow builds each platform, loads it into the Docker of the job and executes `test.sh` on it; on a pull request nothing is pushed (see [`../README.md`](../README.md)). `test.sh` starts the image with no network, every capability dropped and `no-new-privileges`, in two shapes: the shape of the check Job (uid 10001, read-only root, `TMPDIR=/tmp` on a tmpfs, the real `charts/br-sandbox-chart/files/network-check.sh` mounted at `/netcheck`) and the shape of the probe pod (uid 0 with the seven capabilities). A fixed list of check names makes `test.sh` fail when a check did not execute or an unlisted check did. The output of a failed check is printed. The fake peers of the network checks are started inside the container, and the test waits (at most ten seconds) until each port is in the listening state before it connects.
 
 ## Tests
 
 | Check | What it asserts |
 |---|---|
 | the image architecture is the platform | The image is built for the platform that the workflow asked for. |
+| the base image and every FROM of the Dockerfile are pinned by digest | `ARG ALPINE` holds an `alpine:<version>@sha256:<64 hex>` reference; the `Dockerfile` has four `FROM` lines and each is `scratch`, a `kubectl` stage or `${ALPINE}`: a new `FROM`, or a base with no digest, fails. |
+| every file downloaded by the Dockerfile is pinned by checksum, kubectl for both platforms | The `Dockerfile` has three `ADD` lines, each with `--checksum=sha256:<64 hex>`; one fetches `kubectl` for `linux/amd64`, one for `linux/arm64`, one the licence text. |
+| the Dockerfile installs no package and runs nothing | Every instruction is `ARG`, `FROM`, `ADD`, `COPY` or `LABEL`: no `RUN`, no `apk`. |
 | the image has no entrypoint | `Config.Entrypoint` is empty, so the `command` of a pod is the whole command. |
 | the four labels are set | `source`, `version`, `revision` and `licenses` are not empty (`images-check-labels.sh`). |
 | the Job runs as uid 10001 on a read-only root with a writable /tmp | The shape of the Job is real: uid 10001, a write to `/` fails, a write to `/tmp` works. |

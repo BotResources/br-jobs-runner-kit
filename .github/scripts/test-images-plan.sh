@@ -125,7 +125,7 @@ if [ "$main_pushed" = "$all_images" ]; then pass "a push to main pushes every im
 
 if grep -q '^  build:' "${workflows}/images-build.yml" && ! sed -n '/^  build:/,/^  manifest:/p' "${workflows}/images-build.yml" | grep -q 'inputs\.push'; then pass "the build job of images-build.yml never reads the input push"; else fail "the build job of images-build.yml reads the input push"; fi
 if sed -n '/^  manifest:/,/^  digests:/p' "${workflows}/images-build.yml" | grep -q 'fromJSON(needs.plan.outputs.pushed)'; then pass "the manifest lists are made for the pushed images only"; else fail "the manifest job does not use the pushed images"; fi
-if grep -q "hold_marked: \${{ needs.plan.outputs.hold_marked == 'true' }}" "${workflows}/images.yml"; then pass "images.yml gives hold_marked from the plan to images-build.yml"; else fail "images.yml does not give hold_marked from the plan"; fi
+if grep -q "hold_marked: \${{ needs.plan.outputs.hold_marked != 'false' }}" "${workflows}/images.yml"; then pass "images.yml gives hold_marked from the plan to images-build.yml and holds when the value is anything but false"; else fail "images.yml does not give hold_marked from the plan, or does not hold on a missing value"; fi
 if sed -n '/^      hold_marked:/,/^    outputs:/p' "${workflows}/images-build.yml" | grep -q 'default: true'; then pass "images-build.yml holds marked images back unless its caller says otherwise"; else fail "hold_marked has no default true"; fi
 
 if grep -Eq 'HEAD_REPOSITORY: .*(\|\||github\.repository)' "${workflows}/images.yml"; then fail "images.yml gives a default to the head repository"; else pass "images.yml gives no default to the head repository"; fi
