@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+mod wire;
+
 use super::lease::{lease_facts, lease_object};
 use super::watch::pod_selector;
 use super::*;

@@ -606,6 +606,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
  "url",
