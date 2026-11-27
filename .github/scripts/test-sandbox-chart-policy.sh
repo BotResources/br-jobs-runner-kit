@@ -75,11 +75,11 @@ def passes($vap; $pod):
 '
 
 model_result() {
-    local ns="$1" mutation="$2"
+    local ns="$1" mutation="$2" render="${3:-ex}"
     jq -r --arg ns "$ns" "${QTY}${MODEL}"'
       (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == ($ns + "-pod"))) as $vap
       | (.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template) as $pod
-      | passes($vap; $pod | '"${mutation}"')' "$WORK/ex.json"
+      | passes($vap; $pod | '"${mutation}"')' "$WORK/${render}.json"
 }
 
 check_VAP_model_of_the_pods() {

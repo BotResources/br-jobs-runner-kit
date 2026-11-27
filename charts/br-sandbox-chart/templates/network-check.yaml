@@ -28,12 +28,14 @@ data:
     {{- $script | nindent 4 }}
   namespaces: |
     {{- range $ns := $namespaces }}
-    {{ $ns.name }} {{ $ns.mode }}
+    {{ $ns.name }} {{ $ns.mode }}{{ if include "br-sandbox-chart.proxy.probe.active" (dict "root" $ "ns" $ns) }} proxy{{ end }}
     {{- end }}
   node-addresses: |
     {{- range concat .Values.network.node_addresses .Values.network.node_public_addresses .Values.network.load_balancer_addresses }}
     {{ . | trimSuffix "/32" | trimSuffix "/128" }}
     {{- end }}
+  offlist-host: |
+    {{ .Values.network_check.offlist_host }}:443
   extra-targets: |
     {{- range .Values.network_check.targets }}
     {{ . }}

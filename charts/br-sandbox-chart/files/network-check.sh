@@ -4,6 +4,19 @@ set -eu
 dir="${NETCHECK_DIR:-/netcheck}"
 wait_seconds="${NETCHECK_WAIT_SECONDS:-180}"
 
+status_code() {
+  printf '%s\n' "$1" | sed -n 1p | awk '$1 ~ /^HTTP\/[0-9]/ && $2 ~ /^[0-9][0-9][0-9]$/ {printf "%s", $2}'
+}
+
+connect_state() {
+  reply=$(printf 'CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' "$1" "$1" | nc -w 3 "${NETCHECK_PROXY%:*}" "${NETCHECK_PROXY##*:}" 2>/dev/null | tr -d '\r') || reply=""
+  case "$(status_code "$reply")" in
+    403 | 502) printf 'refused' ;;
+    200) printf 'reached' ;;
+    *) printf 'no_result' ;;
+  esac
+}
+
 probe() {
   for target in $NETCHECK_TARGETS; do
     if nc -w 2 "${target%:*}" "${target##*:}" </dev/null >/dev/null 2>&1; then
@@ -12,6 +25,11 @@ probe() {
       printf '%s refused\n' "$target"
     fi
   done
+  if [ -n "${NETCHECK_PROXY:-}" ]; then
+    for target in $NETCHECK_TARGETS ${NETCHECK_OFFLIST:-}; do
+      printf 'connect:%s %s\n' "$target" "$(connect_state "$target")"
+    done
+  fi
 }
 
 in_list() {
@@ -66,7 +84,7 @@ collect_targets() {
   first_service kubernetes default api_service
   first_service kube-dns kube-system dns_service
   add_target cluster_name kubernetes.default.svc.cluster.local:443
-  kubectl get pods -A -o jsonpath='{range .items[*]}{.status.podIP}{":"}{.spec.containers[0].ports[0].containerPort}{"\n"}{end}' |
+  kubectl get pods -A -l 'br.sandbox/role!=proxy' -o jsonpath='{range .items[*]}{.status.podIP}{":"}{.spec.containers[0].ports[0].containerPort}{"\n"}{end}' |
     while read -r pod; do
       case "$pod" in
         *[0-9]:[0-9]*)
@@ -116,6 +134,24 @@ report() {
   done <"$work/targets"
 }
 
+report_connect_line() {
+  printf '{"net":"%s","mode":"%s","target":"%s","kind":"connect","expected":"refused","observed":"%s","control":"not_applicable"}\n' "$1" "$2" "$3" "$4"
+  if [ "$4" != refused ]; then
+    printf '1\n' >>"$work/failures"
+  fi
+}
+
+report_connect() {
+  while read -r target; do
+    [ -n "$target" ] || continue
+    report_connect_line "$1" "$2" "$target" "$(observed "connect:$target" "$work/log-$1")"
+  done <"$work/targets"
+  if [ "$2" = allow ]; then
+    offlist=$(cat "$dir/offlist-host")
+    report_connect_line "$1" "$2" "$offlist" "$(observed "connect:$offlist" "$work/log-$1")"
+  fi
+}
+
 discover() {
   work=$(mktemp -d)
   : >"$work/failures"
@@ -128,10 +164,13 @@ discover() {
   fi
   missing_classes
   control
-  while read -r ns mode; do
+  while read -r ns mode path; do
     [ -n "$ns" ] || continue
     run_probe "$ns"
     report "$ns" "$mode"
+    if [ "$path" = proxy ]; then
+      report_connect "$ns" "$mode"
+    fi
   done <"$dir/namespaces"
   [ ! -s "$work/failures" ]
 }

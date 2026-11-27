@@ -61,22 +61,24 @@ check_label_contract() {
     t "no policy selects a pod by the pool label" jqt ex "[${NP} | .. | objects | select(has(\"matchLabels\")) | .matchLabels | keys[] | select(. == \"br.sandbox/pool\")] | length == 0"
 }
 
-check_slots_render_nothing() {
-    section "slots render nothing now"
+check_slots_hold_the_egress_proxy_and_the_keeper_slot_is_empty() {
+    section "slots: the egress slots are filled, the keeper slot renders nothing"
     local slot
     for slot in egress.env egress.volumes egress.volume_mounts egress.objects keeper.objects; do
         t "the slot ${slot} exists" grep -q "define \"br-sandbox-chart.slot.${slot}\"" "$CHART/templates/_slots.tpl"
     done
     t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "ReplicaSet", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
-    render egon -f "$EXAMPLE" --set egress.enabled=true
-    t "egress.enabled true renders no proxy object: the slot objects stay empty" jqt egon '([.[] | select(.kind == "Namespace")] | length) > 0 and ([.[] | select(.kind == "Deployment" or .kind == "Service" or .kind == "Secret")] | length) == 0'
+    t "with egress disabled the proxy slots render nothing: no Service, no proxy ConfigMap, no CA ConfigMap, no proxy env or CA mount" jqt ex '([.[] | select(.kind == "Service" or (.kind == "ConfigMap" and (.metadata.name | startswith("br-sandbox-proxy") or . == "br-sandbox-ca")))] | length == 0) and ([.[] | select(.kind == "ReplicaSet") | .spec.template.spec | (.containers[0].env | map(.name)) == ["HOME"] and (.volumes | map(.name) | index("egress-ca") == null)] | all)'
+    render egon -f "$EXAMPLE" -f "$EGRESS_VALUES"
+    t "egress.enabled true renders a Deployment and a Service in each egress namespace" jqt egon '([.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-proxy")] | length) == 2 and ([.[] | select(.kind == "Service")] | length) == 2'
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$EXAMPLE" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
 }
 
 check_egress_values_fail_while_egress_is_disabled() {
     section "a credential set or an allow list fails the render while egress is disabled"
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowdomains '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowcidrs '.clients.alpha.modes.allow.allow.cidrs = ["192.0.2.0/24"]')"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset '.clients.beta.modes.none.credential_set = {"git": "set-a"}')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset ".clients.beta.modes.none.credential_set = ${CREDENTIAL_SET}")"
     t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []} | .clients.beta.modes.none.credential_set = {}')"
 }
 
