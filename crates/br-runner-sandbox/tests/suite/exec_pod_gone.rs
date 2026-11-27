@@ -79,6 +79,15 @@ async fn fake_cluster_a_status_of_137_in_an_evicted_pod_that_has_no_deletion_mar
 {
     for phase in ["Failed", "Succeeded"] {
         let rig = rig();
+        rig.cluster.set_phase(POD, Some(phase));
+        assert_gone_fault(every_operation(&rig, KILLED).await);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn fake_cluster_a_status_of_137_in_a_pod_that_is_not_running_is_a_port_fault() {
+    for phase in [None, Some("Pending"), Some("Unknown")] {
+        let rig = rig();
         rig.cluster.set_phase(POD, phase);
         assert_gone_fault(every_operation(&rig, KILLED).await);
     }

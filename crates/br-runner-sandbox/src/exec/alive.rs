@@ -7,12 +7,10 @@ use crate::error::Error;
 use super::session::{ExecOutput, collect, expect_success};
 
 const SIGNAL_EXIT_FLOOR: i32 = 128;
-const ENDED_PHASES: [&str; 2] = ["Failed", "Succeeded"];
+const RUNNING_PHASE: &str = "Running";
 
-fn ended(view: &PodView) -> bool {
-    view.phase
-        .as_deref()
-        .is_some_and(|phase| ENDED_PHASES.contains(&phase))
+fn live(view: &PodView) -> bool {
+    !view.deleting && view.phase.as_deref() == Some(RUNNING_PHASE)
 }
 
 impl Env {
@@ -45,7 +43,7 @@ impl Env {
             return Ok(());
         }
         match self.cluster.get_pod(pod).await? {
-            Some(view) if !view.deleting && !ended(&view) => Ok(()),
+            Some(view) if live(&view) => Ok(()),
             _ => Err(ClusterError::Gone(pod.to_owned()).into()),
         }
     }
