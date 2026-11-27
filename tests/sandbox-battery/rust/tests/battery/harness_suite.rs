@@ -53,10 +53,11 @@ async fn a_completed_close_stops_the_commands_then_saves_then_releases_and_the_n
         format!("{:?}", world.spy.steps()),
     );
     let key = saves.key(world.lane.thread, world.lane.agent, first);
+    let present = saves.manifest(&key).await?.is_some();
     checks.expect(
         "harness-completed-close-leaves-a-manifest",
-        saves.manifest(&key).await?.is_some(),
-        "no manifest",
+        present,
+        format!("manifest present: {present}"),
     );
     let gone = pool::wait_gone(env, &boxed.to_string(), 60).await;
     checks.expect(
@@ -104,10 +105,11 @@ async fn a_failed_or_cancelled_close_stops_the_commands_and_releases_and_never_s
             format!("{:?}", world.spy.steps()),
         );
         let key = saves.key(world.lane.thread, world.lane.agent, first);
+        let present = saves.manifest(&key).await?.is_some();
         checks.expect(
             &format!("harness-{name}-close-leaves-no-manifest"),
-            saves.manifest(&key).await?.is_none(),
-            "a manifest exists",
+            !present,
+            format!("manifest present: {present}"),
         );
         let (_, next) = world.child(first)?;
         let again = world.open(next, Seed::empty()).await?;
@@ -194,10 +196,11 @@ async fn a_box_already_saved_by_its_own_turn_does_not_fail_the_completed_close()
         format!("{:?}", world.spy.steps()),
     );
     let key = saves.key(world.lane.thread, world.lane.agent, first);
+    let present = saves.manifest(&key).await?.is_some();
     checks.expect(
         "harness-one-manifest-after-the-double-save",
-        saves.manifest(&key).await?.is_some(),
-        "no manifest",
+        present,
+        format!("manifest present: {present}"),
     );
     checks.finish()
 }

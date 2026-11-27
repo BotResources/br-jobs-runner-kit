@@ -71,6 +71,8 @@ $CA_PEM_YAML
         runner: {service_account: sbx-runner, namespace: sbx-runner}
   cb:
     modes:
+      none:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
       allow:
         runner: {service_account: sbx-runner, namespace: sbx-runner}
         allow:
@@ -81,6 +83,8 @@ $CA_PEM_YAML
             certificate: |
 $CA_PEM_YAML
             key_secret: proxy-ca-key
+      full:
+        runner: {service_account: sbx-runner, namespace: sbx-runner}
   canary:
     modes:
       allow:

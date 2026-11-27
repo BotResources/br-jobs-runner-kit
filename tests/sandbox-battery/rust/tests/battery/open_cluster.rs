@@ -76,6 +76,7 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     for (name, mode) in [("lost", GateMode::Refuse), ("stalled", GateMode::Stall)] {
         let (gate, context) = api_gate(env, &format!("battery-api-{name}")).await?;
         let mut tunables = Tunables::standard(env);
@@ -84,7 +85,9 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
         let sandbox = tunables.connect(env).await?;
         pool::wait_warm(env, 1, 120).await?;
         let prime = adapter::open(&sandbox, Lane::new()?.first()?.1, Seed::empty()).await?;
+        reaper.track(prime.box_id.to_string());
         adapter::release(&sandbox, &prime.box_id).await?;
+        let claimed_before = pool::claimed_list(env).await?;
         gate.set(mode);
         let req = request(Lane::new()?.first()?.1, Seed::empty(), None)?;
         let limit = Duration::from_secs(10 + 60);
@@ -96,6 +99,9 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
             format!("{seconds:.2}"),
             "s",
         );
+        if let Ok(Ok(opened)) = &outcome {
+            reaper.track(opened.box_id.to_string());
+        }
         match outcome {
             Ok(result) => checks.expect(
                 &format!("kube-api-{name}-gives-a-fault-within-the-open-timeout"),
@@ -109,6 +115,11 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
             ),
         }
         gate.set(GateMode::Open);
+        for pod in pool::claimed_list(env).await? {
+            if !claimed_before.contains(&pod) {
+                reaper.track(pod);
+            }
+        }
         pool::wait_warm(env, 1, 120).await?;
     }
     checks.finish()

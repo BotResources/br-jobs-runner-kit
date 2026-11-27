@@ -6,6 +6,7 @@ use battery::adapter;
 use battery::common::{restored, wait_until, work_hash};
 use battery::error::{Res, data};
 use battery::evidence::Checks;
+use battery::guards::PodReaper;
 use battery::ids::Lane;
 use battery::pool;
 use battery::saves::Saves;
@@ -59,6 +60,7 @@ async fn a_crash_after_the_parts_and_before_the_manifest_leaves_no_save() -> Res
     let sandbox = adapter::standard(env).await?;
     let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     let lane = Lane::new()?;
     let (k1, h1) = prepare(&sandbox, &lane).await?;
     let gate = Gate::start(
@@ -91,6 +93,9 @@ async fn a_crash_after_the_parts_and_before_the_manifest_leaves_no_save() -> Res
         .await
         .map_err(|e| data("kill child", e.to_string()))?;
     gate.set(GateMode::Open);
+    for pod in pool::pods_of_thread(env, &lane.thread.to_string()).await? {
+        reaper.track(pod);
+    }
     let key = saves.key(lane.thread, lane.agent, k2);
     checks.expect(
         "crash-before-manifest-has-no-manifest",
@@ -145,6 +150,7 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
     let sandbox = adapter::standard(env).await?;
     let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
+    let mut reaper = PodReaper::new(env);
     let lane = Lane::new()?;
     let (k1, _) = prepare(&sandbox, &lane).await?;
     let (gate, context) = api_gate(env, "battery-crash-api").await?;
@@ -185,6 +191,9 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
     gate.set(GateMode::Refuse);
     let thread = lane.thread.to_string();
     let pods = pool::pods_of_thread(env, &thread).await?;
+    for pod in &pods {
+        reaper.track(pod.clone());
+    }
     let mut claimed = 0;
     let mut marked = 0;
     for name in &pods {

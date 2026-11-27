@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use br_runner_sandbox::{LABEL_POOL, LABEL_POOL_ID, LABEL_THREAD};
+use br_runner_sandbox::{LABEL_POOL, LABEL_POOL_ID, LABEL_THREAD, POOL_CLAIMED};
 use serde_json::Value;
 
 use crate::env::Env;
@@ -36,6 +36,17 @@ pub async fn warm_list(env: &Env, only_ready: bool) -> Res<Vec<String>> {
         .json(&["get", "pods", "-l", &selector])
         .await?;
     Ok(names(&list, only_ready))
+}
+
+pub async fn claimed_list(env: &Env) -> Res<Vec<String>> {
+    let selector = format!(
+        "{LABEL_POOL}={POOL_CLAIMED},{LABEL_POOL_ID}={}",
+        env.pool_id()
+    );
+    let list = Kube::of(env)
+        .json(&["get", "pods", "-l", &selector])
+        .await?;
+    Ok(names(&list, false))
 }
 
 pub async fn wait_warm(env: &Env, want: usize, seconds: u64) -> Res {
@@ -171,5 +182,84 @@ pub async fn wait_gone_all(env: &Env) -> Res {
             });
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+fn holds_image(pod: &Value, image: &str) -> bool {
+    pod["spec"]["containers"]
+        .as_array()
+        .is_some_and(|all| all.iter().any(|c| c["image"] == image))
+}
+
+fn namespace_of(pod: &Value) -> Option<&str> {
+    pod["metadata"]["namespace"].as_str()
+}
+
+async fn managed_warm_pods(env: &Env) -> Res<Vec<Value>> {
+    let selector = format!("{LABEL_POOL}=warm");
+    let list = Kube::cluster_wide(env)
+        .json(&["get", "pods", "-A", "-l", &selector])
+        .await?;
+    let prefix = format!("{}-", env.ns_prefix);
+    Ok(list["items"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter(|pod| namespace_of(pod).is_some_and(|ns| ns.starts_with(&prefix)))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+pub async fn replace_warm_with_image(env: &Env, image: &str, seconds: u64) -> Res {
+    let mut expected: Vec<(String, usize)> = Vec::new();
+    for pod in managed_warm_pods(env)
+        .await?
+        .iter()
+        .filter(|pod| holds_image(pod, image))
+    {
+        let (Some(namespace), Some(name)) = (namespace_of(pod), pod["metadata"]["name"].as_str())
+        else {
+            continue;
+        };
+        Kube::cluster_wide(env)
+            .in_namespace(namespace)
+            .run(&[
+                "delete",
+                "pod",
+                name,
+                "--ignore-not-found",
+                "--grace-period=0",
+                "--force",
+                "--wait=false",
+            ])
+            .await?;
+        match expected.iter_mut().find(|(ns, _)| ns == namespace) {
+            Some((_, count)) => *count += 1,
+            None => expected.push((namespace.to_owned(), 1)),
+        }
+    }
+    let start = Instant::now();
+    loop {
+        let pods = managed_warm_pods(env).await?;
+        let stale = pods.iter().any(|pod| holds_image(pod, image));
+        let short = expected.iter().find(|(namespace, count)| {
+            pods.iter()
+                .filter(|pod| namespace_of(pod) == Some(namespace.as_str()) && ready(pod))
+                .count()
+                < *count
+        });
+        if !stale && short.is_none() {
+            return Ok(());
+        }
+        if start.elapsed() > Duration::from_secs(seconds) {
+            return Err(BatteryError::NotReached {
+                what: format!("the warm pods with the image {image} to be replaced"),
+                seconds,
+            });
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
     }
 }

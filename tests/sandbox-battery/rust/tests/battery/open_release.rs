@@ -108,15 +108,18 @@ async fn the_adapter_works_with_only_the_rights_of_the_intent() -> Res {
     tunables.context = context.name.clone();
     tunables.idle_keep_min = 1;
     let sandbox = tunables.connect(env).await?;
+    let mut reaper = PodReaper::new(env);
     pool::wait_warm(env, 1, 120).await?;
     let lane = Lane::new()?;
     let (first, turn) = lane.first()?;
     let opened = adapter::open(&sandbox, turn, Seed::empty()).await?;
+    reaper.track(opened.box_id.to_string());
     sh_ok(&sandbox, &opened.box_id, "printf rights > /work/r").await?;
     adapter::save(&sandbox, &opened.box_id).await?;
     adapter::release(&sandbox, &opened.box_id).await?;
     let (_, next) = lane.child(first)?;
     let again = adapter::open(&sandbox, next, Seed::empty()).await?;
+    reaper.track(again.box_id.to_string());
     adapter::release(&sandbox, &again.box_id).await?;
     let erased = sandbox.erase(lane.thread).await;
     checks.expect(

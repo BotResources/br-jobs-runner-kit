@@ -97,7 +97,6 @@ async fn go_back_to_turn_one_per_agent_by_turn_id() -> Res {
             format!("{:?} {foreign_listing:?}", foreign.start),
         );
         adapter::release(&sandbox, &foreign.box_id).await?;
-        battery::common::settle().await?;
         adapter::release(&sandbox, &after.box_id).await?;
         battery::common::settle().await?;
         let still = saves

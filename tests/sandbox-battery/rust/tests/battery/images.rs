@@ -228,6 +228,7 @@ async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age(
     }
     drop(guard);
     refresh_pool(env).await?;
+    pool::replace_warm_with_image(env, &image, 600).await?;
     checks.finish()
 }
 
