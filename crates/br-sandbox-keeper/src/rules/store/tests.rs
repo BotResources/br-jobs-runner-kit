@@ -1,7 +1,7 @@
 use super::*;
 use crate::testing::saves::{manifest, save_key};
 use crate::time::at;
-use br_runner_sandbox::{AttemptId, Record, SaveKey, Tombstone, part_key, record_key};
+use br_runner_sandbox::{AttemptId, SaveKey, Tombstone, part_key};
 
 mod more;
 

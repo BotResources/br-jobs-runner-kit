@@ -19,6 +19,7 @@ pub enum FailureKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PodFailure {
     pub kind: FailureKind,
     pub kubelet_reason: String,
@@ -69,6 +70,7 @@ pub fn pod_failure(pod: &PodFacts) -> Option<PodFailure> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PoolJudgement {
     pub failing: bool,
     pub reason: &'static str,
@@ -107,6 +109,7 @@ pub fn judge_pool<'a>(warm_pods: impl IntoIterator<Item = &'a PodFacts>) -> Pool
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ConditionWrite {
     pub status: &'static str,
     pub reason: &'static str,

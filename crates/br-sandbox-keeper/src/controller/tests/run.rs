@@ -65,3 +65,42 @@ async fn a_namespace_that_gets_the_managed_label_after_the_start_is_served_at_th
     shutdown.cancel();
     handle.await.unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_namespace_that_loses_the_managed_label_is_no_longer_served_at_the_next_discovery() {
+    let Bed { kube, engine, .. } = bed(true);
+    kube.put_pod(old_warm("w0", 1000));
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    let handle = tokio::spawn(async move { engine.run(&[NS.to_owned()], stop).await });
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(!kube.calls().is_empty());
+    kube.set_namespaces(&[]);
+    tokio::time::sleep(Duration::from_secs(70)).await;
+    kube.clear_calls();
+    tokio::time::sleep(Duration::from_secs(1000)).await;
+    assert!(kube.pod(NS, "w0").is_some());
+    assert!(kube.calls().is_empty());
+    assert!(!handle.is_finished());
+    shutdown.cancel();
+    handle.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_namespace_that_gets_the_label_back_is_served_again_from_a_new_sync() {
+    let Bed { kube, engine, .. } = bed(true);
+    kube.put_pod(old_warm("w0", 1000));
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    let handle = tokio::spawn(async move { engine.run(&[NS.to_owned()], stop).await });
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    kube.set_namespaces(&[]);
+    tokio::time::sleep(Duration::from_secs(70)).await;
+    tokio::time::sleep(Duration::from_secs(1000)).await;
+    assert!(kube.pod(NS, "w0").is_some());
+    kube.set_namespaces(&[NS]);
+    tokio::time::sleep(Duration::from_secs(70)).await;
+    assert!(kube.pod(NS, "w0").is_none());
+    shutdown.cancel();
+    handle.await.unwrap();
+}

@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use br_runner_sandbox::{
-    FormatError, Manifest, Record, Timestamp, Tombstone, manifest_key, tombstone_key,
-};
+use br_runner_sandbox::{Manifest, Timestamp, Tombstone, manifest_key, tombstone_key};
 
 use crate::bucket::ObjectInfo;
 use crate::time::elapsed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SweepRules {
     pub save_ttl: Duration,
     pub skew_margin: Duration,
@@ -16,13 +15,31 @@ pub struct SweepRules {
     pub tombstone_ttl: Duration,
 }
 
+impl SweepRules {
+    pub fn new(
+        save_ttl: Duration,
+        skew_margin: Duration,
+        attempt_ttl: Duration,
+        tombstone_ttl: Duration,
+    ) -> Self {
+        Self {
+            save_ttl,
+            skew_margin,
+            attempt_ttl,
+            tombstone_ttl,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AttemptListing {
     pub keys: Vec<String>,
     pub newest: Timestamp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TurnListing {
     pub dir: String,
     pub manifest: Option<ObjectInfo>,
@@ -186,34 +203,6 @@ pub fn plan_turn(
         }
         ManifestRead::Absent => orphans(turn, None, now, rules),
     }
-}
-
-pub fn needs_read(info: &ObjectInfo, now: Timestamp, rules: &SweepRules) -> bool {
-    elapsed(now, info.last_modified) >= rules.tombstone_ttl
-}
-
-pub fn record_is_old(
-    bytes: &[u8],
-    now: Timestamp,
-    rules: &SweepRules,
-) -> Result<bool, FormatError> {
-    let record = Record::parse(bytes)?;
-    Ok(record
-        .age_anchor()
-        .plus(rules.tombstone_ttl)
-        .has_passed(now))
-}
-
-pub fn tombstone_is_old(
-    bytes: &[u8],
-    now: Timestamp,
-    rules: &SweepRules,
-) -> Result<bool, FormatError> {
-    let tombstone = Tombstone::parse(bytes)?;
-    Ok(tombstone
-        .expired_at()
-        .plus(rules.tombstone_ttl)
-        .has_passed(now))
 }
 
 #[cfg(test)]

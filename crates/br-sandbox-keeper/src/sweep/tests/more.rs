@@ -140,13 +140,13 @@ async fn the_logs_of_a_sweep_hold_the_key_of_an_object_and_never_its_content() {
     assert!(!text.contains("SECRET-CONTENT"));
 }
 
-struct LeaseRunsOutAfterPut {
+struct LeaseRunsOutAfterAWrite {
     inner: Arc<FakeBucket>,
 }
 
-impl crate::sealed::Sealed for LeaseRunsOutAfterPut {}
+impl crate::sealed::Sealed for LeaseRunsOutAfterAWrite {}
 
-impl Bucket for LeaseRunsOutAfterPut {
+impl Bucket for LeaseRunsOutAfterAWrite {
     fn check(&self) -> crate::bucket::BucketFuture<'_, ()> {
         self.inner.check()
     }
@@ -173,19 +173,21 @@ impl Bucket for LeaseRunsOutAfterPut {
     }
 
     fn delete<'a>(&'a self, key: &'a str) -> crate::bucket::BucketFuture<'a, ()> {
-        self.inner.delete(key)
+        Box::pin(async move {
+            self.inner.delete(key).await?;
+            tokio::time::advance(Duration::from_secs(10)).await;
+            Ok(())
+        })
     }
 }
 
-#[tokio::test(start_paused = true)]
-async fn a_leader_whose_lease_runs_out_between_two_steps_of_a_save_writes_and_deletes_nothing_more()
-{
+fn leader_for_five_seconds() -> (Arc<FakeBucket>, Sweeper) {
     let bucket = Arc::new(FakeBucket::default());
     let clock: Arc<dyn Clock> = Arc::new(TokioClock::starting_at(at(NOW)));
     let leadership = Leadership::new(clock.clone());
     leadership.renewed(at(NOW + 5));
     let sweeper = Sweeper {
-        bucket: Arc::new(GuardedBucket::new(Arc::new(LeaseRunsOutAfterPut {
+        bucket: Arc::new(GuardedBucket::new(Arc::new(LeaseRunsOutAfterAWrite {
             inner: bucket.clone(),
         }))),
         clock,
@@ -195,6 +197,13 @@ async fn a_leader_whose_lease_runs_out_between_two_steps_of_a_save_writes_and_de
         page_size: 100,
         interval: Duration::from_secs(60),
     };
+    (bucket, sweeper)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_leader_whose_lease_runs_out_between_two_steps_of_a_save_writes_and_deletes_nothing_more()
+{
+    let (bucket, sweeper) = leader_for_five_seconds();
     let key = save_key();
     let attempt = AttemptId::mint();
     put_save(&bucket, &key, &[attempt], attempt, NOW - 5000);
@@ -206,4 +215,30 @@ async fn a_leader_whose_lease_runs_out_between_two_steps_of_a_save_writes_and_de
     assert!(bucket.contains(&tombstone_key(&key)));
     assert!(bucket.contains(&manifest_key(&key)));
     assert!(bucket.contains(&part_object(&key, attempt)));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_leader_whose_lease_runs_out_between_two_parts_of_an_orphan_attempt_deletes_no_more_part()
+{
+    let (bucket, sweeper) = leader_for_five_seconds();
+    let key = save_key();
+    let first = part_object(&key, AttemptId::mint());
+    let second = first.replace("part-0", "part-1");
+    bucket.insert(&first, b"part", NOW - 5000);
+    bucket.insert(&second, b"part", NOW - 5000);
+    sweeper.sweep_once().await;
+    assert_eq!(bucket.writes(), vec![format!("delete {first}")]);
+    assert!(bucket.contains(&second));
+    assert!(!metric_of(
+        &sweeper,
+        "br_sandbox_keeper_orphans_deleted_total 1"
+    ));
+}
+
+fn metric_of(sweeper: &Sweeper, line: &str) -> bool {
+    sweeper
+        .metrics
+        .render(true)
+        .lines()
+        .any(|text| text == line)
 }

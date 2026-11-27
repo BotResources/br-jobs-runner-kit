@@ -1,92 +1,11 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
-
-use bytes::Bytes;
-use http::{Request, Response, StatusCode};
-use http_body_util::{BodyExt, Full};
-use kube::client::Body;
+use http::StatusCode;
 use serde_json::{Value, json};
-use tower_service::Service;
 
+use super::stub::Wire;
 use super::*;
 use crate::cluster::{DeleteOutcome, EventTarget, KubeApi, PoolEvent};
 use crate::facts::PodVersion;
 use crate::rules::ConditionWrite;
-
-#[derive(Debug, Clone)]
-struct Seen {
-    method: String,
-    path: String,
-    query: String,
-    content_type: Option<String>,
-    body: Value,
-}
-
-#[derive(Clone)]
-struct Wire {
-    seen: Arc<Mutex<Vec<Seen>>>,
-    status: StatusCode,
-    reply: Arc<Value>,
-}
-
-impl Wire {
-    fn answering(status: StatusCode, reply: Value) -> Self {
-        Self {
-            seen: Arc::default(),
-            status,
-            reply: Arc::new(reply),
-        }
-    }
-
-    fn ok(reply: Value) -> Self {
-        Self::answering(StatusCode::OK, reply)
-    }
-
-    fn cluster(&self) -> KubeCluster {
-        KubeCluster::new(Client::new(self.clone(), "default"), PodKeys::default())
-    }
-
-    fn only(&self) -> Seen {
-        let seen = self.seen.lock().unwrap();
-        assert_eq!(seen.len(), 1, "{seen:?}");
-        seen[0].clone()
-    }
-}
-
-impl Service<Request<Body>> for Wire {
-    type Response = Response<Full<Bytes>>;
-    type Error = std::convert::Infallible;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, request: Request<Body>) -> Self::Future {
-        let (seen, status, reply) = (self.seen.clone(), self.status, self.reply.clone());
-        Box::pin(async move {
-            let (parts, body) = request.into_parts();
-            let bytes = body.collect().await.unwrap().to_bytes();
-            seen.lock().unwrap().push(Seen {
-                method: parts.method.to_string(),
-                path: parts.uri.path().to_owned(),
-                query: parts.uri.query().unwrap_or_default().to_owned(),
-                content_type: parts
-                    .headers
-                    .get("content-type")
-                    .map(|value| value.to_str().unwrap().to_owned()),
-                body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-            });
-            Ok(Response::builder()
-                .status(status)
-                .header("content-type", "application/json")
-                .body(Full::new(Bytes::from(reply.to_string())))
-                .unwrap())
-        })
-    }
-}
 
 fn replica_set_reply() -> Value {
     json!({"apiVersion": "apps/v1", "kind": "ReplicaSet", "metadata": {"name": "warm-p"}})

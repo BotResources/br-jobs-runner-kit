@@ -1,12 +1,14 @@
 use br_runner_sandbox::Timestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PoolState {
     Warm,
     Claimed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Phase {
     Pending,
     Running,
@@ -16,6 +18,7 @@ pub enum Phase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Mark<T> {
     Absent,
     Unreadable,
@@ -29,24 +32,59 @@ impl<T> Mark<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Terminated {
     pub exit_code: i32,
     pub reason: Option<String>,
 }
 
+impl Terminated {
+    pub fn new(exit_code: i32, reason: Option<String>) -> Self {
+        Self { exit_code, reason }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ContainerFacts {
     pub waiting_reason: Option<String>,
     pub terminated: Option<Terminated>,
 }
 
+impl ContainerFacts {
+    pub fn waiting(reason: impl Into<String>) -> Self {
+        Self {
+            waiting_reason: Some(reason.into()),
+            terminated: None,
+        }
+    }
+
+    pub fn terminated(terminated: Terminated) -> Self {
+        Self {
+            waiting_reason: None,
+            terminated: Some(terminated),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PodVersion {
     pub uid: String,
     pub resource_version: String,
 }
 
+impl PodVersion {
+    pub fn new(uid: impl Into<String>, resource_version: impl Into<String>) -> Self {
+        Self {
+            uid: uid.into(),
+            resource_version: resource_version.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PodFacts {
     pub namespace: String,
     pub name: String,
@@ -70,6 +108,37 @@ pub struct PodFacts {
 }
 
 impl PodFacts {
+    pub fn new(
+        namespace: impl Into<String>,
+        name: impl Into<String>,
+        uid: impl Into<String>,
+        resource_version: impl Into<String>,
+        pool_state: PoolState,
+        created_at: Timestamp,
+    ) -> Self {
+        Self {
+            namespace: namespace.into(),
+            name: name.into(),
+            uid: uid.into(),
+            resource_version: resource_version.into(),
+            pool_state,
+            pool_id: None,
+            thread: None,
+            agent: None,
+            phase: Phase::Unknown,
+            created_at,
+            ready: false,
+            been_ready: false,
+            owned: false,
+            deleting: false,
+            clean: Mark::Absent,
+            claimed_at: Mark::Absent,
+            idle_since: Mark::Absent,
+            state_bytes: Mark::Absent,
+            containers: Vec::new(),
+        }
+    }
+
     pub fn version(&self) -> PodVersion {
         PodVersion {
             uid: self.uid.clone(),
@@ -79,6 +148,7 @@ impl PodFacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ConditionFacts {
     pub kind: String,
     pub status: String,
@@ -87,11 +157,34 @@ pub struct ConditionFacts {
     pub last_transition_time: Option<Timestamp>,
 }
 
+impl ConditionFacts {
+    pub fn new(kind: impl Into<String>, status: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            status: status.into(),
+            reason: None,
+            message: None,
+            last_transition_time: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ReplicaSetFacts {
     pub uid: String,
     pub replicas: Option<i32>,
     pub conditions: Vec<ConditionFacts>,
+}
+
+impl ReplicaSetFacts {
+    pub fn new(uid: impl Into<String>, replicas: Option<i32>) -> Self {
+        Self {
+            uid: uid.into(),
+            replicas,
+            conditions: Vec::new(),
+        }
+    }
 }
 
 #[cfg(test)]

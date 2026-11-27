@@ -4,6 +4,7 @@ use std::time::Duration;
 use br_runner_sandbox::Timestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ClaimRate {
     pub claims: u32,
     pub bucket: Duration,

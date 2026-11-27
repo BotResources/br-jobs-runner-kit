@@ -12,8 +12,8 @@ use crate::config::KeeperConfig;
 use crate::leader::Leadership;
 use crate::metrics::Metrics;
 use crate::rules::{
-    ManifestRead, StoreStep, SweepRules, TurnGrouper, TurnListing, needs_read, plan_turn,
-    read_manifest, record_is_old, tombstone_is_old,
+    ManifestRead, StoreStep, SweepRules, TurnGrouper, TurnListing, plan_turn, read_manifest,
+    record_is_old, record_needs_read, tombstone_is_old, tombstone_needs_read,
 };
 
 impl From<&KeeperConfig> for SweepRules {
@@ -42,6 +42,27 @@ enum Stop {
     Failed,
 }
 
+type NeedsRead = fn(&ObjectInfo, Timestamp, &SweepRules) -> bool;
+type IsOld = fn(&[u8], Timestamp, &SweepRules) -> Result<bool, br_runner_sandbox::FormatError>;
+
+struct Aged {
+    prefix: &'static str,
+    needs_read: NeedsRead,
+    is_old: IsOld,
+}
+
+const RECORDS: Aged = Aged {
+    prefix: RECORDS_PREFIX,
+    needs_read: record_needs_read,
+    is_old: record_is_old,
+};
+
+const TOMBSTONES: Aged = Aged {
+    prefix: TOMBSTONES_PREFIX,
+    needs_read: tombstone_needs_read,
+    is_old: tombstone_is_old,
+};
+
 impl Sweeper {
     pub async fn run(self, shutdown: CancellationToken) {
         loop {
@@ -59,9 +80,8 @@ impl Sweeper {
         let now = self.clock.now();
         for result in [
             self.sweep_saves(now).await,
-            self.sweep_aged(RECORDS_PREFIX, now, record_is_old).await,
-            self.sweep_aged(TOMBSTONES_PREFIX, now, tombstone_is_old)
-                .await,
+            self.sweep_aged(&RECORDS, now).await,
+            self.sweep_aged(&TOMBSTONES, now).await,
         ] {
             match result {
                 Ok(()) | Err(Stop::NotLeader) => {}
@@ -154,8 +174,10 @@ impl Sweeper {
         }
         for step in plan_turn(turn, &read, now, &self.rules) {
             self.require_leader()?;
-            if self.run_step(step).await.is_err() {
-                return Ok(());
+            match self.run_step(step).await {
+                Ok(()) => {}
+                Err(Stop::NotLeader) => return Err(Stop::NotLeader),
+                Err(Stop::Failed) => return Ok(()),
             }
         }
         Ok(())
@@ -186,6 +208,7 @@ impl Sweeper {
             }
             StoreStep::DeleteOrphanAttempt { keys } => {
                 for key in keys {
+                    self.require_leader()?;
                     self.bucket.delete(&key).await.map_err(|error| {
                         self.failed("an orphan part could not be deleted", &key, &error)
                     })?;
@@ -196,19 +219,14 @@ impl Sweeper {
         Ok(())
     }
 
-    async fn sweep_aged(
-        &self,
-        prefix: &str,
-        now: Timestamp,
-        is_old: fn(&[u8], Timestamp, &SweepRules) -> Result<bool, br_runner_sandbox::FormatError>,
-    ) -> Result<(), Stop> {
+    async fn sweep_aged(&self, kind: &Aged, now: Timestamp) -> Result<(), Stop> {
         let mut after: Option<String> = None;
         loop {
-            let Some(page) = self.next_page(prefix, &mut after).await? else {
+            let Some(page) = self.next_page(kind.prefix, &mut after).await? else {
                 return Ok(());
             };
             for info in page {
-                self.sweep_aged_object(&info, now, is_old).await?;
+                self.sweep_aged_object(&info, now, kind).await?;
             }
             if after.is_none() {
                 return Ok(());
@@ -220,9 +238,9 @@ impl Sweeper {
         &self,
         info: &ObjectInfo,
         now: Timestamp,
-        is_old: fn(&[u8], Timestamp, &SweepRules) -> Result<bool, br_runner_sandbox::FormatError>,
+        kind: &Aged,
     ) -> Result<(), Stop> {
-        if !needs_read(info, now, &self.rules) {
+        if !(kind.needs_read)(info, now, &self.rules) {
             return Ok(());
         }
         let bytes = match self.bucket.get(&info.key).await {
@@ -233,7 +251,7 @@ impl Sweeper {
                 return Ok(());
             }
         };
-        match is_old(&bytes, now, &self.rules) {
+        match (kind.is_old)(&bytes, now, &self.rules) {
             Ok(true) => {
                 self.require_leader()?;
                 if let Err(error) = self.bucket.delete(&info.key).await {

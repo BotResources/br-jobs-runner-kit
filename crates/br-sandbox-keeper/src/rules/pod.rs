@@ -7,6 +7,7 @@ use crate::facts::{Mark, Phase, PodFacts, PoolState};
 use super::failing::pod_failure;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExpiryRules {
     pub warm_max_age: Duration,
     pub stuck_ttl: Duration,
@@ -14,6 +15,26 @@ pub struct ExpiryRules {
     pub pending_alarm: Duration,
     pub idle_ttl: Duration,
     pub idle_keep_min_state_bytes: u64,
+}
+
+impl ExpiryRules {
+    pub fn new(
+        warm_max_age: Duration,
+        stuck_ttl: Duration,
+        failed_pod_ttl: Duration,
+        pending_alarm: Duration,
+        idle_ttl: Duration,
+        idle_keep_min_state_bytes: u64,
+    ) -> Self {
+        Self {
+            warm_max_age,
+            stuck_ttl,
+            failed_pod_ttl,
+            pending_alarm,
+            idle_ttl,
+            idle_keep_min_state_bytes,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,6 +67,7 @@ pub enum Action {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Judgment {
     pub action: Action,
     pub recheck_at: Option<Timestamp>,

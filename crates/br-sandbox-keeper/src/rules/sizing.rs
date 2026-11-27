@@ -7,6 +7,7 @@ use crate::time::seconds_of_day;
 use super::rate::ClaimRate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Desired {
     pub raw: u64,
     pub clamped: u32,

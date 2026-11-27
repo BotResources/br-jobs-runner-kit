@@ -45,6 +45,7 @@ pub enum PodEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LeaseFacts {
     pub holder: Option<String>,
     pub acquire_time: Option<Timestamp>,
@@ -55,6 +56,7 @@ pub struct LeaseFacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LeaseWrite {
     pub holder: String,
     pub acquire_time: Timestamp,
@@ -63,10 +65,38 @@ pub struct LeaseWrite {
     pub transitions: i32,
 }
 
+impl LeaseWrite {
+    pub fn new(
+        holder: impl Into<String>,
+        acquire_time: Timestamp,
+        renew_time: Timestamp,
+        duration: Duration,
+        transitions: i32,
+    ) -> Self {
+        Self {
+            holder: holder.into(),
+            acquire_time,
+            renew_time,
+            duration,
+            transitions,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct EventTarget {
     pub name: String,
     pub uid: String,
+}
+
+impl EventTarget {
+    pub fn new(name: impl Into<String>, uid: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            uid: uid.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

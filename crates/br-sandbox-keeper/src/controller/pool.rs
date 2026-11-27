@@ -37,7 +37,7 @@ impl Engine {
         self.evaluate_pool(&pool).await;
     }
 
-    fn refresh_pool_metrics(&self, pool: &PoolConfig) {
+    pub(super) fn refresh_pool_metrics(&self, pool: &PoolConfig) {
         let ready = self
             .pool_pods(pool, PoolState::Warm)
             .filter(|pod| pod.ready)

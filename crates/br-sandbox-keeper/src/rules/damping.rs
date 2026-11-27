@@ -5,10 +5,21 @@ use br_runner_sandbox::Timestamp;
 use crate::time::elapsed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ScaleDownRules {
     pub cooldown: Duration,
     pub step: u32,
     pub interval: Duration,
+}
+
+impl ScaleDownRules {
+    pub fn new(cooldown: Duration, step: u32, interval: Duration) -> Self {
+        Self {
+            cooldown,
+            step,
+            interval,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -18,6 +29,7 @@ pub struct ScaleState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Damped {
     pub replicas: u32,
     pub state: ScaleState,

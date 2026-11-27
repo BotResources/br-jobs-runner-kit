@@ -90,18 +90,39 @@ fn lock_graph() -> std::collections::BTreeMap<String, Vec<String>> {
     graph
 }
 
-#[test]
-fn the_dependency_tree_of_the_keeper_has_no_webpki_roots() {
-    let graph = lock_graph();
+fn reach(
+    graph: &std::collections::BTreeMap<String, Vec<String>>,
+    root: &str,
+) -> std::collections::BTreeSet<String> {
     let mut seen = std::collections::BTreeSet::new();
-    let mut queue = vec!["br-sandbox-keeper".to_owned()];
+    let mut queue = vec![root.to_owned()];
     while let Some(name) = queue.pop() {
         if !seen.insert(name.clone()) {
             continue;
         }
         queue.extend(graph.get(&name).cloned().unwrap_or_default());
     }
+    seen
+}
+
+const SYSTEM_VERIFIER: &str = "rustls-platform-verifier";
+
+#[test]
+fn the_dependency_tree_of_the_keeper_has_no_webpki_roots() {
+    let seen = reach(&lock_graph(), "br-sandbox-keeper");
     assert!(seen.contains("kube"));
     assert!(seen.contains("object_store"));
     assert!(!seen.contains("webpki-roots"), "{seen:?}");
+}
+
+#[test]
+fn the_clients_of_the_api_server_and_of_the_store_verify_with_the_verifier_of_the_system() {
+    let graph = lock_graph();
+    for client in ["kube-client", "reqwest"] {
+        assert!(
+            graph[client].iter().any(|name| name == SYSTEM_VERIFIER),
+            "{client} has no direct dependency on {SYSTEM_VERIFIER}"
+        );
+    }
+    assert!(reach(&graph, SYSTEM_VERIFIER).contains("rustls-native-certs"));
 }

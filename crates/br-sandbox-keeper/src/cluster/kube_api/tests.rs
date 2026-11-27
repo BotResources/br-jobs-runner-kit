@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+mod reads;
+mod rights;
+mod stub;
 mod wire;
 
 use super::lease::{lease_facts, lease_object};

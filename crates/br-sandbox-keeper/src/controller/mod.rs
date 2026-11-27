@@ -1,6 +1,7 @@
 mod events;
 mod expiry;
 mod pool;
+mod serving;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -45,10 +46,18 @@ pub struct Engine {
     pub(crate) pending_due: HashMap<PoolId, HashMap<String, String>>,
     pub(crate) pending_notified: HashSet<String>,
     pub(crate) unreadable: HashSet<String>,
-    pub(crate) watched: HashSet<String>,
+    pub(crate) watched: HashMap<String, CancellationToken>,
     pub(crate) synced: HashSet<String>,
     pub(crate) next_tick: Timestamp,
     pub(crate) next_discovery: Timestamp,
+}
+
+async fn next_event(events: &mut NamespacedEvents) -> Option<(String, PodEvent)> {
+    if events.is_empty() {
+        std::future::pending().await
+    } else {
+        events.next().await
+    }
 }
 
 pub fn pool_id(pool: &PoolConfig) -> PoolId {
@@ -81,26 +90,11 @@ impl Engine {
             pending_due: HashMap::new(),
             pending_notified: HashSet::new(),
             unreadable: HashSet::new(),
-            watched: HashSet::new(),
+            watched: HashMap::new(),
             synced: HashSet::new(),
             next_tick,
             next_discovery,
         }
-    }
-
-    fn watch(api: &dyn KubeApi, namespace: &str) -> BoxStream<'static, (String, PodEvent)> {
-        let owned = namespace.to_owned();
-        api.watch_pods(namespace)
-            .map(move |event| (owned.clone(), event))
-            .boxed()
-    }
-
-    pub fn watches(api: &dyn KubeApi, namespaces: &[String]) -> NamespacedEvents {
-        futures::stream::select_all(
-            namespaces
-                .iter()
-                .map(|namespace| Self::watch(api, namespace)),
-        )
     }
 
     async fn rediscover(&mut self, events: &mut NamespacedEvents) {
@@ -114,13 +108,7 @@ impl Engine {
             .managed_namespaces(&self.config.managed_namespace_selector)
             .await;
         match found {
-            Ok(namespaces) => {
-                for namespace in namespaces {
-                    if self.watched.insert(namespace.clone()) {
-                        events.push(Self::watch(self.api.as_ref(), &namespace));
-                    }
-                }
-            }
+            Ok(namespaces) => self.follow(&namespaces, events),
             Err(error) => self.action_failed(
                 "the managed namespaces could not be listed",
                 &self.config.managed_namespace_selector,
@@ -184,16 +172,19 @@ impl Engine {
     }
 
     pub async fn run(mut self, namespaces: &[String], shutdown: CancellationToken) {
-        let mut events = Self::watches(self.api.as_ref(), namespaces);
-        self.watched.extend(namespaces.iter().cloned());
+        let mut events = NamespacedEvents::new();
+        self.follow(namespaces, &mut events);
         loop {
             let pause = until(self.clock.now(), self.next_wake());
             tokio::select! {
                 () = shutdown.cancelled() => return,
-                event = events.next() => match event {
-                    Some((namespace, event)) => self.handle(&namespace, event).await,
-                    None => return,
-                },
+                event = next_event(&mut events) => {
+                    if let Some((namespace, event)) = event
+                        && self.watched.contains_key(&namespace)
+                    {
+                        self.handle(&namespace, event).await;
+                    }
+                }
                 () = self.leadership.gained() => self.gained_leadership().await,
                 () = tokio::time::sleep(pause) => {
                     self.wake().await;

@@ -1,12 +1,13 @@
 use super::*;
 use crate::bucket::GuardedBucket;
 use crate::fakes::{FakeBucket, TokioClock};
-use crate::testing::saves::{manifest, part_object, save_key};
+use crate::testing::saves::{manifest, part_object, save_key, save_key_born};
 use crate::time::at;
 use br_runner_sandbox::{
     AttemptId, Record, SaveKey, Tombstone, manifest_key, record_key, tombstone_key,
 };
 
+mod aged;
 mod more;
 
 const NOW: u64 = 100_000;
@@ -223,7 +224,8 @@ async fn a_follower_writes_and_deletes_nothing() {
 #[tokio::test(start_paused = true)]
 async fn an_old_record_goes_and_a_young_or_unreadable_record_stays_and_is_not_read_when_young() {
     let harness = harness(true, 100);
-    let (old_key, young_key, bad_key) = (save_key(), save_key(), save_key());
+    let (old_key, bad_key) = (save_key(), save_key());
+    let young_key = save_key_born(NOW - 10);
     let old = Record::started(AttemptId::mint(), at(100)).done(at(200));
     let young = Record::started(AttemptId::mint(), at(NOW - 10));
     harness
@@ -248,7 +250,7 @@ async fn an_old_record_goes_and_a_young_or_unreadable_record_stays_and_is_not_re
 #[tokio::test(start_paused = true)]
 async fn an_old_tombstone_goes_and_a_young_one_stays() {
     let harness = harness(true, 100);
-    let (old_key, young_key) = (save_key(), save_key());
+    let (old_key, young_key) = (save_key(), save_key_born(NOW - 100));
     let old = Tombstone::new(old_key.turn(), at(10), at(20));
     let young = Tombstone::new(young_key.turn(), at(NOW - 100), at(NOW - 50));
     harness

@@ -44,12 +44,19 @@ pub mod saves {
     };
     use uuid::Uuid;
 
+    pub const EARLY_TURN: u64 = 1_000;
+
     pub fn save_key() -> SaveKey {
+        save_key_born(EARLY_TURN)
+    }
+
+    pub fn save_key_born(seconds: u64) -> SaveKey {
+        let born = uuid::Timestamp::from_unix(uuid::NoContext, seconds, 0);
         SaveKey::new(
             ClientId::new("acme").unwrap(),
             ThreadRef::from_uuid(Uuid::now_v7()).unwrap(),
             AgentId::from_uuid(Uuid::now_v7()).unwrap(),
-            TurnId::from_uuid(Uuid::now_v7()).unwrap(),
+            TurnId::from_uuid(Uuid::new_v7(born)).unwrap(),
         )
     }
 

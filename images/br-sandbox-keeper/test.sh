@@ -59,6 +59,10 @@ case "$output" in
   *BR_SANDBOX_CONFIG*) pass "the keeper names the missing configuration variable" ;;
   *) fail "the keeper names the missing configuration variable" ;;
 esac
+case "$output" in
+  '{'*'"level":"ERROR"'*'}') pass "the keeper writes its error as a JSON line" ;;
+  *) fail "the keeper writes its error as a JSON line" ;;
+esac
 
 printf '%s' '{"save_ttl_seconds": 1, "unknown_key": true}' >"${scratch}/config/config.json"
 chmod 0644 "${scratch}/config/config.json"

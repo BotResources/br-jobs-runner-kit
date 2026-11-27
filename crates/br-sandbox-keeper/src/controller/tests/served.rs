@@ -68,6 +68,21 @@ async fn a_pod_that_has_been_ready_and_then_crashes_does_not_make_the_pool_faili
 }
 
 #[tokio::test(start_paused = true)]
+async fn after_a_restart_a_pod_that_was_ready_before_and_now_crashes_is_judged_never_ready() {
+    let mut bed = bed(true);
+    bed.kube.put_pod(PodFacts {
+        ready: false,
+        containers: vec![fixtures::waiting("CrashLoopBackOff")],
+        ..old_warm("w0", 10)
+    });
+    bed.sync().await;
+    assert!(bed.kube.calls().iter().any(|call| matches!(
+        call,
+        Call::Condition { status, reason, .. } if status == "True" && reason == "StartCrashing"
+    )));
+}
+
+#[tokio::test(start_paused = true)]
 async fn the_pods_of_a_pool_that_is_not_configured_expire_with_the_default_pool_values() {
     let mut bed = bed(true);
     let mut document = testing::document();

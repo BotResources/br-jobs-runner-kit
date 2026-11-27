@@ -13,9 +13,19 @@ pub const RECORDS_PREFIX: &str = "records/";
 pub const TOMBSTONES_PREFIX: &str = "tombstones/";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ObjectInfo {
     pub key: String,
     pub last_modified: Timestamp,
+}
+
+impl ObjectInfo {
+    pub fn new(key: impl Into<String>, last_modified: Timestamp) -> Self {
+        Self {
+            key: key.into(),
+            last_modified,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
