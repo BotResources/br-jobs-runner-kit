@@ -47,7 +47,7 @@ async fn a_missing_save_never_stops_a_run() -> Res {
         adapter::release(&sandbox, &opened.box_id).await?;
         battery::pool::wait_warm(env, 1, 120).await?;
     }
-    let stats = Stats::of(&times, 500.0);
+    let stats = Stats::of(&times, 500.0)?;
     record_stats(env, "missing_save_start", &stats);
     checks.expect(
         "missing-save-open-is-ok-and-fresh-every-time",

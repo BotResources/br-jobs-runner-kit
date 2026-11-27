@@ -18,9 +18,11 @@ cargo clippy --all-targets -- -D warnings
 cargo test -- --test-threads=1
 ```
 
-Tests that change the cluster (scale the pool, stop the keeper, cordon the node, change helm values) restore it when they end, also on failure. Timed tests take the lock `TIMING_LOCK` (a `mkdir` lock, the same one as the shell scripts), so they never overlap with a shell scenario. Run one at a time: `--test-threads=1`.
+Tests that change the cluster (scale the pool, stop the keeper, cordon the node, change helm values) restore it when they end, also on failure. A restore that fails is written to `checks.tsv` as a failed check and fails the test. Timed tests take the lock `TIMING_LOCK` (a `mkdir` lock, the same one as the shell scripts), so they never overlap with a shell scenario. Run one at a time: `--test-threads=1`.
 
-Results go to `$EVIDENCE/checks.tsv` (name, pass or fail, detail, time) and `$EVIDENCE/measurements.tsv` (name, value, unit, load 1 min, load 5 min, time), in the format of `../lib.sh`. A test ends with an error when one of its checks failed, so the exit code of `cargo test` is the verdict.
+Results go to `$EVIDENCE/checks.tsv` (name, pass or fail, detail, time) and `$EVIDENCE/measurements.tsv` (name, value, unit, load 1 min, load 5 min, time), in the format of `../lib.sh`. A test ends with an error when one of its checks failed, when it recorded no check, or when an evidence file cannot be written, so the exit code of `cargo test` is the verdict.
+
+No CI job of this repository compiles or runs this project: it is outside the kit workspace and its tests need a live cluster, a store and the images. The checks above (`cargo fmt --check`, `cargo clippy`, `cargo test`) are run by hand.
 
 ## Variables
 
@@ -41,10 +43,11 @@ Variables that only some tests need (the test fails with the variable name when 
 |---|---|---|
 | `SECOND_IMAGE` | `images` | image reference for the second image, set by value |
 | `FIRST_VERSION_COMMAND`, `SECOND_VERSION_COMMAND` | `images` | a command in the pod that prints the version of the first and of the second image |
-| `MOVING_IMAGE`, `MOVING_PUSH` | `images` | a tag that is pushed again, and the command that pushes a new content under it. The pull policy of the pool must be `Always` for this image |
+| `MOVING_IMAGE`, `MOVING_PUSH` | `images` | the image reference of a tag that is pushed again, as the pool pulls it (`MOVING_IMAGE`), and the image reference that the test builds and pushes to the registry as the host reaches it (`MOVING_PUSH`). The pull policy of the pool must be `Always` for this image |
 | `BASE_IMAGE` | `images` | base image used to build the moving image |
 | `CRASHING_IMAGE` | `images` | an image that starts and ends at once |
-| `BYTES_SERIES`, `BYTES_ITERATIONS` | `bytes_under_load` | label printed on each line of the series (default `unlabelled`) and number of iterations (default 10) |
+| `BYTES_SERIES`, `BYTES_ITERATIONS` | `bytes_under_load` | label printed on each line of the series (default `unlabelled`) and number of iterations (default 10; a value that is not a whole number of 1 or more fails the test, and a series with no `ok` line fails the check) |
+| `LBL_MANAGED` | `adapter_document` | label (from `scenarios/names-chart.env`) that marks the namespaces of a sandbox pool; the test builds the adapter configuration from the document of each of them |
 | `TLS_TRUSTED_ENDPOINT` | `store_client` | optional, https endpoint with a public root, default `https://s3.amazonaws.com` |
 
 ## Coverage
@@ -63,11 +66,11 @@ Variables that only some tests need (the test fails with the variable name when 
 | Cold pod from the template | `open_pool::a_cold_pod_from_the_template_starts_like_a_warm_pod_and_stays_out_of_the_replica_set` |
 | Pool condition read as it is | `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` |
 | bsdtar argument lists | `exec_layer::tools::bsdtar_takes_the_argument_lists_of_the_crate` |
-| Save then restore: files, modes, owners, dirs, times; no other owner | `save_restore::save_then_restore_gives_back_files_modes_owners_dirs_and_times`, `save_restore::the_agent_user_cannot_write_files_owned_by_another_user` |
+| Save then restore: files, modes, owners, dirs, times; a file written through the port belongs to the agent user (a file of another owner is not made: the seed rows cover root-owned files) | `save_restore::save_then_restore_gives_back_files_modes_owners_dirs_and_times`, `save_restore::a_file_written_through_the_port_belongs_to_the_agent_user` |
 | Save of a missing scope path | `save_restore::a_save_of_a_missing_scope_path_is_a_fault_with_the_record_failed` |
 | Background command and its id | `exec_layer::process::a_background_command_survives_and_its_id_is_right` |
 | Scripts of the exec layer | `exec_layer::tools::the_scripts_of_the_exec_layer_work_in_the_agent_image_shell` |
-| Exec timeout and save timeout | `exec_layer::process::a_command_over_exec_timeout_stops_near_the_limit`, `save_restore::a_save_over_save_timeout_stops_with_the_record_timeout` |
+| Exec timeout (the call returns a fault near the limit; whether the command still runs in the pod is recorded, not asserted) and save timeout | `exec_layer::process::a_command_over_exec_timeout_returns_a_fault_near_the_limit`, `save_restore::a_save_over_save_timeout_stops_with_the_record_timeout` |
 | Seed root-owned and read-only | `save_restore::the_seed_is_root_owned_and_read_only_for_the_agent` |
 | No TLS crypto provider set | `crypto_provider` (own test binary, fresh process) |
 | Two opens race for one warm pod | `open_pool::two_opens_that_race_for_one_warm_pod_give_it_to_one_only` |
@@ -80,17 +83,17 @@ Variables that only some tests need (the test fails with the variable name when 
 | Erase | `open_drop_erase::an_erase_of_a_thread_leaves_nothing_in_the_store_and_the_cluster` |
 | Only the rights of the intent | `open_release::the_adapter_works_with_only_the_rights_of_the_intent` |
 | Slow or lost kube API gives a fault, not a stuck call | `open_cluster::a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call` |
-| Check 5: fresh start within 500 ms with the seed | `start_times::fresh::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
-| Check 6: save, failed turn, tree equal, go back | `failed_turns`, `tree_equal`, `go_back`, `save_keys`, `missing_save`, `crash_save` |
-| Check 7: expiry after 60 s, named start results | `expiry`, `start_results` |
-| Check 8: second image by value, same tag within `warm_max_age_seconds`, two image errors | `images`, `open_images` |
-| Check 9: harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
+| Fresh start within 500 ms with the seed (and the stress seed: limit reported, at least one sample) | `start_times::fresh::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
+| Save, failed turn, tree equal, go back | `failed_turns`, `tree_equal`, `go_back`, `save_keys`, `missing_save`, `crash_save` |
+| Expiry after 60 s, named start results | `expiry`, `start_results` |
+| Second image by value, same tag reaches a new warm pod within `warm_max_age_seconds` (no box is opened while waiting, so the pool is not renewed by claims), two image errors | `images`, `open_images` |
+| Harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
 | Hard links, executable bit, image file deleted by the agent | `properties` |
 | Restore ladder 10, 30, 50, 100 MB, stalls, cold start effect | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split`, `start_times::cold::cold_start_effect_of_the_init_container_and_the_image_size` |
 
 ## Harness suite with the adapter
 
-The upstream tests of the harness crates drive `MemorySandbox` and read its test hooks (`script`, `fail_save`, `expire_save`, `saved`, `running`, `is_released`, and others) or wrap it in a rig that records the steps. The adapter has none of these hooks, so those tests cannot run unchanged. `harness_excluded.txt` lists each of them by its exact upstream test name, with the hooks that make it need the double (the list is checked by `harness_excluded`).
+The upstream tests of the harness crates drive `MemorySandbox` and read its test hooks (`script`, `fail_save`, `expire_save`, `saved`, `running`, `is_released`, and others) or wrap it in a rig that records the steps. The adapter has none of these hooks, so those tests cannot run unchanged. `harness_excluded.txt` lists each of them by its exact upstream test name, with the hooks that make it need the double (`harness_excluded` checks that every row has four fields and a reason, that no name is listed twice, and that each name is a test function of the named file in the upstream source at the revision pinned in `Cargo.lock`; it reads that source in the cargo git checkouts).
 
 The tests that use the port only are run again against the adapter, and the others are replaced by tests that use a real `Harness` with the adapter behind a recording wrapper (`src/spy.rs`) and observe the cluster and the store.
 
@@ -98,7 +101,7 @@ The tests that use the port only are run again against the adapter, and the othe
 |---|---|
 | Close `Completed`: stop commands, save, release; next turn restored | `harness_suite::a_completed_close_stops_the_commands_then_saves_then_releases_and_the_next_turn_restores` |
 | Close `Failed` or `Cancelled`: stop commands, release, no save | `harness_suite::a_failed_or_cancelled_close_stops_the_commands_and_releases_and_never_saves` |
-| A process that cannot be killed does not stop save and release | `harness_suite::a_process_that_cannot_be_killed_does_not_stop_the_save_and_the_release` |
+| A process that cannot be killed (an id that is not a process number: the adapter refuses it, while it takes a missing process number as killed) does not stop save and release, and the close returns the failure | `harness_suite::a_process_that_cannot_be_killed_does_not_stop_the_save_and_the_release` |
 | `AlreadySaved` is tolerated | `harness_suite::a_box_already_saved_by_its_own_turn_does_not_fail_the_completed_close` |
 | Close with no open box | `harness_suite::a_close_of_an_instance_with_no_open_box_is_a_success_and_touches_nothing` |
 | An open instance is refused until its box is released | `harness_open::an_instance_with_an_open_box_is_refused_until_the_box_is_released` |
@@ -106,7 +109,7 @@ The tests that use the port only are run again against the adapter, and the othe
 | The seed reaches the box | `harness_open::a_seed_given_to_the_harness_open_reaches_the_box` |
 | Web access goes to the port unchanged; mode `none` | `harness_open::web_access_that_reaches_nothing_opens_and_web_access_that_reaches_a_site_is_refused_in_mode_none` |
 | A secret in a seed, a write and a command stays out of the records | `harness_open::a_canary_in_a_seed_file_a_write_and_a_command_stays_out_of_the_pod_metadata_and_the_save_record` |
-| Each start kind comes back unchanged | `start_results`, and the first and next turn checks of `harness_suite` |
+| Each start kind comes back from the adapter (the harness itself is not between the two, except for the first and the next turn of `harness_suite`) | `start_results`, and the first and next turn checks of `harness_suite` |
 
 Tests of the harness crates that use no sandbox, or a harness with no sandbox port, are not changed by the swap and are not run again here.
 

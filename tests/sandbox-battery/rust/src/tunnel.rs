@@ -18,6 +18,7 @@ pub enum GateMode {
     Stall,
     DenyManifestWrite,
     HoldManifestWrite,
+    PauseManifestWrite,
 }
 
 impl GateMode {
@@ -28,6 +29,7 @@ impl GateMode {
             Self::Stall => 2,
             Self::DenyManifestWrite => 3,
             Self::HoldManifestWrite => 4,
+            Self::PauseManifestWrite => 5,
         }
     }
 
@@ -37,6 +39,7 @@ impl GateMode {
             2 => Self::Stall,
             3 => Self::DenyManifestWrite,
             4 => Self::HoldManifestWrite,
+            5 => Self::PauseManifestWrite,
             _ => Self::Open,
         }
     }
@@ -97,14 +100,20 @@ async fn serve(state: Arc<State>, mut client: TcpStream, upstream: String, parse
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }
-        GateMode::Open | GateMode::DenyManifestWrite | GateMode::HoldManifestWrite => {
+        GateMode::Open
+        | GateMode::DenyManifestWrite
+        | GateMode::HoldManifestWrite
+        | GateMode::PauseManifestWrite => {
             let Ok(mut server) = TcpStream::connect(&upstream).await else {
                 return;
             };
+            let mut epoch = epoch;
             if parse
                 && matches!(
                     mode,
-                    GateMode::DenyManifestWrite | GateMode::HoldManifestWrite
+                    GateMode::DenyManifestWrite
+                        | GateMode::HoldManifestWrite
+                        | GateMode::PauseManifestWrite
                 )
             {
                 let Some(head) = read_head(&mut client).await else {
@@ -113,14 +122,24 @@ async fn serve(state: Arc<State>, mut client: TcpStream, upstream: String, parse
                 let first = String::from_utf8_lossy(&head);
                 let line = first.lines().next().unwrap_or("");
                 if line.starts_with("PUT ") && line.contains("manifest.json") {
-                    if mode == GateMode::HoldManifestWrite {
-                        while state.epoch.load(Ordering::SeqCst) == epoch {
-                            tokio::time::sleep(Duration::from_millis(50)).await;
+                    match mode {
+                        GateMode::HoldManifestWrite => {
+                            while state.epoch.load(Ordering::SeqCst) == epoch {
+                                tokio::time::sleep(Duration::from_millis(50)).await;
+                            }
+                            return;
                         }
-                    } else {
-                        let _ = client.write_all(DENIED).await;
+                        GateMode::PauseManifestWrite => {
+                            while state.epoch.load(Ordering::SeqCst) == epoch {
+                                tokio::time::sleep(Duration::from_millis(50)).await;
+                            }
+                            epoch = state.epoch.load(Ordering::SeqCst);
+                        }
+                        _ => {
+                            let _ = client.write_all(DENIED).await;
+                            return;
+                        }
                     }
-                    return;
                 }
                 if server.write_all(&closing(&head)).await.is_err() {
                     return;

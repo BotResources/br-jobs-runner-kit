@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use battery::Session;
 use battery::adapter::{self, Tunables, sh_ok};
-use battery::common::{state_turn, wait_until};
+use battery::common::wait_until;
 use battery::error::Res;
 use battery::evidence::Checks;
 use battery::guards::PodReaper;
@@ -32,16 +32,16 @@ async fn a_release_deletes_a_small_box_and_keeps_a_large_saved_one_idle() -> Res
     adapter::save(&sandbox, &large.box_id).await?;
     let released = std::time::SystemTime::now();
     adapter::release(&sandbox, &large.box_id).await?;
-    wait_until("the small pod to be deleted", 60, || async {
+    let small_gone = wait_until("the small pod to be deleted", 60, || async {
         Ok(pool::pod(env, small.box_id.as_str())
             .await?
             .is_none_or(|p| !p["metadata"]["deletionTimestamp"].is_null()))
     })
-    .await?;
+    .await;
     checks.expect(
         "release-deletes-the-pod-of-a-small-save",
-        true,
-        small.box_id.to_string(),
+        small_gone.is_ok(),
+        format!("{}: {small_gone:?}", small.box_id),
     );
     let pod = pool::pod(env, large.box_id.as_str()).await?;
     let idle = pod
@@ -131,7 +131,9 @@ async fn the_adapter_works_with_only_the_rights_of_the_intent() -> Res {
 async fn the_watch_follows_deleted_and_new_warm_pods() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
-    let sandbox = adapter::standard(env).await?;
+    let mut tunables = Tunables::standard(env);
+    tunables.cold_create = false;
+    let sandbox = tunables.connect(env).await?;
     let mut checks = Checks::new(env);
     pool::wait_warm(env, 1, 120).await?;
     let prime = adapter::open(&sandbox, Lane::new()?.first()?.1, Seed::empty()).await?;
@@ -149,10 +151,9 @@ async fn the_watch_follows_deleted_and_new_warm_pods() -> Res {
         .and_then(|p| pool::label(&p, LABEL_POOL));
     checks.expect(
         "watch-claims-a-pod-made-after-the-deletes",
-        fresh && claimed.as_deref() == Some(POOL_CLAIMED),
+        fresh && !pool::is_cold(opened.box_id.as_str()) && claimed.as_deref() == Some(POOL_CLAIMED),
         format!("{} {claimed:?}", opened.box_id),
     );
     adapter::release(&sandbox, &opened.box_id).await?;
-    let _ = state_turn;
     checks.finish()
 }

@@ -105,7 +105,7 @@ async fn a_second_image_comes_by_a_change_of_the_image_value_only() -> Res {
     checks.finish()
 }
 
-async fn build_and_push(env: &Env, base: &str, push: &str, version: u32) -> Res {
+async fn build_and_push(base: &str, push: &str, version: u32) -> Res {
     let dockerfile = format!("FROM {base}\nRUN echo {version} > /etc/image-version\n");
     let args = strings(&["build", "--no-cache", "-t", push, "-"]);
     let built = proc::run("docker", &args, Some(dockerfile.into_bytes()), proc::LONG).await?;
@@ -113,7 +113,6 @@ async fn build_and_push(env: &Env, base: &str, push: &str, version: u32) -> Res 
     let args = strings(&["push", push]);
     let pushed = proc::run("docker", &args, None, proc::LONG).await?;
     proc::succeeded("docker", &args, pushed)?;
-    let _ = env;
     Ok(())
 }
 
@@ -134,7 +133,7 @@ async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age(
     let mut checks = Checks::new(env);
     let mut guard = ValueGuard::new(env);
     let limit = 120u64;
-    build_and_push(env, &base, &push, 1).await?;
+    build_and_push(&base, &push, 1).await?;
     guard
         .set(&[
             (env.image_key.clone(), json!(image)),
@@ -164,32 +163,11 @@ async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age(
         .to_owned();
     let (first, _) = read_version(&sandbox).await?;
     checks.expect("moving-tag-first-box-reads-1", first == "1", first);
-    build_and_push(env, &base, &push, 2).await?;
+    build_and_push(&base, &push, 2).await?;
     let pushed = Instant::now();
-    let mut seen = None;
-    while pushed.elapsed() < Duration::from_secs(limit + 120) {
-        let (version, name) = read_version(&sandbox).await?;
-        if version == "2" {
-            seen = Some((pushed.elapsed().as_secs_f64(), name));
-            break;
-        }
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    }
-    let delay = seen.as_ref().map(|s| s.0);
-    env.record(
-        "moving_tag_delay_to_new_content",
-        delay.map_or_else(|| "never".to_owned(), |d| format!("{d:.0}")),
-        "s",
-    );
-    env.record("moving_tag_warm_max_age_seconds", limit, "s");
-    checks.expect(
-        "moving-tag-new-content-within-warm-max-age",
-        delay.is_some_and(|d| d <= limit as f64),
-        format!("{delay:?} against {limit}"),
-    );
     let mut new_id = String::new();
-    let waited = Instant::now();
-    while waited.elapsed() < Duration::from_secs(limit + 60) {
+    let mut warm_delay = None;
+    while pushed.elapsed() < Duration::from_secs(limit + 120) {
         for name in pool::warm_list(env, true).await? {
             if let Some(pod) = pool::pod(env, &name).await? {
                 let id = pod["status"]["containerStatuses"][0]["imageID"]
@@ -202,16 +180,43 @@ async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age(
             }
         }
         if !new_id.is_empty() {
+            warm_delay = Some(pushed.elapsed().as_secs_f64());
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+    env.record(
+        "moving_tag_delay_to_new_warm_pod",
+        warm_delay.map_or_else(|| "never".to_owned(), |d| format!("{d:.0}")),
+        "s",
+    );
+    env.record("moving_tag_warm_max_age_seconds", limit, "s");
+    checks.expect(
+        "moving-tag-new-warm-pod-within-warm-max-age",
+        warm_delay.is_some_and(|d| d <= limit as f64),
+        format!("{warm_delay:?} against {limit}"),
+    );
+    checks.expect(
+        "moving-tag-new-warm-pods-have-another-image-id",
+        !new_id.is_empty() && new_id != old_id,
+        format!("{old_id} then {new_id}"),
+    );
+    let reading = Instant::now();
+    let mut seen = None;
+    while reading.elapsed() < Duration::from_secs(limit) {
+        let (version, name) = read_version(&sandbox).await?;
+        if version == "2" {
+            seen = Some(name);
             break;
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
     checks.expect(
-        "moving-tag-new-warm-pods-have-another-image-id",
-        new_id != old_id,
-        format!("{old_id} then {new_id}"),
+        "moving-tag-a-box-opened-after-the-new-warm-pod-reads-the-new-content",
+        seen.is_some(),
+        format!("{seen:?}"),
     );
-    if let Some((_, name)) = seen {
+    if let Some(name) = seen {
         let gone = pool::pod(env, &name)
             .await?
             .is_none_or(|p| pool::label(&p, "br.sandbox/pool").as_deref() != Some("warm"));

@@ -1,14 +1,55 @@
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde_json::Value;
 
 use crate::env::Env;
 use crate::error::Res;
+use crate::evidence::{append, now_utc};
 use crate::proc::{Helm, Kube, value_at};
+
+fn restore_failed(evidence: &Path, what: &str, detail: &str) {
+    let line = format!(
+        "{}\tfail\t{}\t{}\n",
+        what,
+        detail.replace(['\t', '\n', '\r'], " "),
+        now_utc()
+    );
+    append(evidence, "checks.tsv", &line);
+    eprintln!("restore {what}: fail {detail}");
+    if !std::thread::panicking() {
+        panic!("the restore {what} failed: {detail}");
+    }
+}
+
+fn run_restore(evidence: &Path, what: &str, command: &mut Command) {
+    match command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+    {
+        Ok(output) if output.status.success() => {}
+        Ok(output) => restore_failed(
+            evidence,
+            what,
+            &format!(
+                "exit {:?}: {}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr)
+                    .chars()
+                    .take(300)
+                    .collect::<String>()
+            ),
+        ),
+        Err(error) => restore_failed(evidence, what, &error.to_string()),
+    }
+}
 
 pub struct ValueGuard {
     helm: Helm,
+    evidence: PathBuf,
     snapshot: Option<Value>,
 }
 
@@ -16,6 +57,7 @@ impl ValueGuard {
     pub fn new(env: &Env) -> Self {
         Self {
             helm: Helm::of(env),
+            evidence: env.evidence.clone(),
             snapshot: None,
         }
     }
@@ -39,19 +81,42 @@ impl Drop for ValueGuard {
             return;
         };
         let args = self.helm.reset_args();
-        let Ok(mut child) = Command::new("helm")
+        let mut child = match Command::new("helm")
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-        else {
-            return;
+        {
+            Ok(child) => child,
+            Err(error) => {
+                restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
+                return;
+            }
         };
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(snapshot.to_string().as_bytes());
+        if let Some(mut stdin) = child.stdin.take()
+            && let Err(error) = stdin.write_all(snapshot.to_string().as_bytes())
+        {
+            restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
         }
-        let _ = child.wait();
+        match child.wait_with_output() {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => restore_failed(
+                &self.evidence,
+                "helm-values-restore",
+                &format!(
+                    "exit {:?}: {}",
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr)
+                        .chars()
+                        .take(300)
+                        .collect::<String>()
+                ),
+            ),
+            Err(error) => {
+                restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
+            }
+        }
     }
 }
 
@@ -60,6 +125,7 @@ pub struct ScaleGuard {
     namespace: String,
     deploy: String,
     original: u64,
+    evidence: PathBuf,
 }
 
 impl ScaleGuard {
@@ -74,6 +140,7 @@ impl ScaleGuard {
             namespace: env.system_ns.clone(),
             deploy: env.keeper_deploy.clone(),
             original,
+            evidence: env.evidence.clone(),
         };
         kube.run(&[
             "scale",
@@ -88,8 +155,10 @@ impl ScaleGuard {
 
 impl Drop for ScaleGuard {
     fn drop(&mut self) {
-        let _ = Command::new("kubectl")
-            .args([
+        run_restore(
+            &self.evidence,
+            "keeper-scale-restore",
+            Command::new("kubectl").args([
                 "--context",
                 &self.context,
                 "-n",
@@ -98,11 +167,8 @@ impl Drop for ScaleGuard {
                 "deployment",
                 &self.deploy,
                 &format!("--replicas={}", self.original),
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+            ]),
+        );
     }
 }
 
@@ -110,6 +176,7 @@ pub struct PodReaper {
     context: String,
     namespace: String,
     pods: Vec<String>,
+    evidence: PathBuf,
 }
 
 impl PodReaper {
@@ -118,6 +185,7 @@ impl PodReaper {
             context: env.context.clone(),
             namespace: env.namespace(),
             pods: Vec::new(),
+            evidence: env.evidence.clone(),
         }
     }
 
@@ -129,8 +197,10 @@ impl PodReaper {
 impl Drop for PodReaper {
     fn drop(&mut self) {
         for pod in &self.pods {
-            let _ = Command::new("kubectl")
-                .args([
+            run_restore(
+                &self.evidence,
+                "pod-reap",
+                Command::new("kubectl").args([
                     "--context",
                     &self.context,
                     "-n",
@@ -141,11 +211,8 @@ impl Drop for PodReaper {
                     "--ignore-not-found",
                     "--wait=false",
                     "--grace-period=1",
-                ])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+                ]),
+            );
         }
     }
 }
@@ -153,30 +220,27 @@ impl Drop for PodReaper {
 pub struct CordonGuard {
     context: String,
     node: String,
+    evidence: PathBuf,
 }
 
 impl CordonGuard {
     pub async fn cordon(env: &Env) -> Res<Self> {
-        let kube = Kube::cluster_wide(env);
-        let node = kube
-            .run(&["get", "nodes", "-o", "jsonpath={.items[0].metadata.name}"])
-            .await?;
         let guard = Self {
             context: env.context.clone(),
-            node: node.clone(),
+            node: env.node.clone(),
+            evidence: env.evidence.clone(),
         };
-        kube.run(&["cordon", &node]).await?;
+        Kube::cluster_wide(env).run(&["cordon", &env.node]).await?;
         Ok(guard)
     }
 }
 
 impl Drop for CordonGuard {
     fn drop(&mut self) {
-        let _ = Command::new("kubectl")
-            .args(["--context", &self.context, "uncordon", &self.node])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        run_restore(
+            &self.evidence,
+            "node-uncordon",
+            Command::new("kubectl").args(["--context", &self.context, "uncordon", &self.node]),
+        );
     }
 }

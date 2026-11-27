@@ -131,7 +131,7 @@ async fn a_process_that_cannot_be_killed_does_not_stop_the_save_and_the_release(
     for (end, saved) in ENDS {
         let world = HarnessWorld::new(adapter::standard(env).await?, None)?;
         let (first, _, _) = open_with_state(&world, 73).await?;
-        world.track(ProcessId::new("999999"))?;
+        world.track(ProcessId::new("not-a-process-number"))?;
         let closed = world.close(end).await;
         let name = format!("{end:?}").to_lowercase();
         let expected: Vec<&str> = if saved {
@@ -139,6 +139,14 @@ async fn a_process_that_cannot_be_killed_does_not_stop_the_save_and_the_release(
         } else {
             vec!["open", "kill", "release"]
         };
+        checks.expect(
+            &format!("harness-unkillable-{name}-the-kill-failed-and-close-returned-the-failure"),
+            world.spy.failed_kills() == 1 && closed.is_err(),
+            format!(
+                "{} failed kills, close gave {closed:?}",
+                world.spy.failed_kills()
+            ),
+        );
         checks.expect(
             &format!("harness-unkillable-{name}-close-still-saves-as-needed-and-releases"),
             world.spy.steps() == expected,

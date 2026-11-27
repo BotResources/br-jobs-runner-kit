@@ -55,7 +55,7 @@ async fn save_then_restore_gives_back_files_modes_owners_dirs_and_times() -> Res
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_agent_user_cannot_write_files_owned_by_another_user() -> Res {
+async fn a_file_written_through_the_port_belongs_to_the_agent_user() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
     let sandbox = adapter::standard(env).await?;
@@ -72,10 +72,14 @@ async fn the_agent_user_cannot_write_files_owned_by_another_user() -> Res {
     let owner = sh_ok(
         &sandbox,
         &opened.box_id,
-        "[ \"$(stat -c %u /work/owned.txt)\" = \"$(id -u)\" ] && echo same",
+        "[ \"$(stat -c %u /work/owned.txt)\" = \"$(id -u)\" ] && [ \"$(id -u)\" != 0 ] && echo same",
     )
     .await?;
-    checks.expect("write-uses-no-same-owner", owner.trim() == "same", owner);
+    checks.expect(
+        "write-file-is-owned-by-the-non-root-agent-user",
+        owner.trim() == "same",
+        owner,
+    );
     adapter::release(&sandbox, &opened.box_id).await?;
     checks.finish()
 }

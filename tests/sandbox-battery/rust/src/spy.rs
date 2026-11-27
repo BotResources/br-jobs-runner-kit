@@ -12,6 +12,7 @@ pub struct Spy {
     inner: Sandbox,
     steps: Arc<Mutex<Vec<&'static str>>>,
     boxes: Arc<Mutex<Vec<BoxId>>>,
+    kills: Arc<Mutex<Vec<bool>>>,
 }
 
 impl Spy {
@@ -20,6 +21,7 @@ impl Spy {
             inner,
             steps: Arc::default(),
             boxes: Arc::default(),
+            kills: Arc::default(),
         }
     }
 
@@ -43,6 +45,15 @@ impl Spy {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    pub fn failed_kills(&self) -> usize {
+        self.kills
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|done| !**done)
+            .count()
     }
 
     pub fn last_box(&self) -> Option<BoxId> {
@@ -114,7 +125,14 @@ impl SandboxPort for Spy {
         process: &'a ProcessId,
     ) -> PortFuture<'a, Result<(), PortError>> {
         self.step("kill");
-        SandboxPort::kill(&self.inner, sandbox, process)
+        Box::pin(async move {
+            let result = SandboxPort::kill(&self.inner, sandbox, process).await;
+            self.kills
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(result.is_ok());
+            result
+        })
     }
 
     fn save<'a>(&'a self, sandbox: &'a BoxId) -> PortFuture<'a, Result<SaveReceipt, PortError>> {

@@ -6,7 +6,6 @@ use battery::common::wait_until;
 use battery::error::Res;
 use battery::evidence::Checks;
 use battery::ids::Lane;
-use battery::proc::{Kube, SHORT};
 use br_agentic_harness_contract::{SandboxPort, Seed};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -99,20 +98,24 @@ async fn a_background_command_survives_and_its_id_is_right() -> Res {
         format!("{}", alive.exit_code),
     );
     sandbox.kill(boxed, &process).await?;
-    wait_until("the killed process to be gone", 10, || async {
+    let ended = wait_until("the killed process to be gone", 10, || async {
         Ok(sh(&sandbox, boxed, &format!("[ -d /proc/{id} ]"))
             .await?
             .exit_code
             != 0)
     })
-    .await?;
-    checks.expect("background-kill-ends-the-process", true, id);
+    .await;
+    checks.expect(
+        "background-kill-ends-the-process",
+        ended.is_ok(),
+        format!("{id}: {ended:?}"),
+    );
     adapter::release(&sandbox, boxed).await?;
     checks.finish()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_command_over_exec_timeout_stops_near_the_limit() -> Res {
+async fn a_command_over_exec_timeout_returns_a_fault_near_the_limit() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
     let mut tunables = Tunables::standard(env);
@@ -130,9 +133,17 @@ async fn a_command_over_exec_timeout_stops_near_the_limit() -> Res {
         outcome.is_err() && (4.5..=8.0).contains(&seconds),
         format!("{seconds:.2} s, {outcome:?}"),
     );
-    let _ = Kube::of(env)
-        .try_run(&["get", "pod", opened.box_id.as_str()], None, SHORT)
-        .await;
+    let remaining = sh(
+        &sandbox,
+        &opened.box_id,
+        "for p in /proc/[0-9]*; do tr '\\0' ' ' < $p/cmdline 2>/dev/null; echo; done | grep -c 'sleep 99[9]'",
+    )
+    .await;
+    env.record(
+        "exec_timeout_command_still_in_the_pod_after_the_return",
+        format!("{remaining:?}"),
+        "text",
+    );
     adapter::release(&sandbox, &opened.box_id).await?;
     checks.finish()
 }

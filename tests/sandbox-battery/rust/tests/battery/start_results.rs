@@ -13,7 +13,7 @@ use battery::saves::Saves;
 use battery::tunnel::{Gate, GateMode};
 use br_agentic_harness_contract::{FreshReason, Seed, StartKind};
 use br_runner_sandbox::{
-    AttemptId, Error, Record, Sandbox, Store, Timestamp, manifest_key, record_key, tombstone_key,
+    AttemptId, Error, Record, Sandbox, Store, Timestamp, record_key, tombstone_key,
 };
 use bytes::Bytes;
 
@@ -102,7 +102,7 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
     let (k1, _) = state_turn(&long_sandbox, &lane, None, 52, 1000).await?;
     let key = saves.key(lane.thread, lane.agent, k1);
     saves.delete_manifest_and_part(&key).await?;
-    let _ = saves.store.delete(&tombstone_key(&key)).await;
+    saves.store.delete(&tombstone_key(&key)).await?;
     let (start, _) = start_of(&long_sandbox, &lane, Some(k1)).await?;
     checks.expect(
         "start-save-expired-without-a-time-when-only-the-record-is-left",
@@ -169,7 +169,7 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
                 .put(&part, Bytes::from(Prng::new(5).bytes(2_000_000)))
                 .await?;
         }
-        let (start, pod) = start_of(&long_sandbox, &lane, Some(k1)).await?;
+        let (start, _) = start_of(&long_sandbox, &lane, Some(k1)).await?;
         let reason = fresh(start);
         checks.expect(
             &format!("start-restore-failed-{name}"),
@@ -181,7 +181,6 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
         {
             results.push(("RestoreFailed", reason));
         }
-        let _ = pod;
         let thread = lane.thread.to_string();
         let live = pool::pods_of_thread(env, &thread).await?;
         let mut leftover = 0;
@@ -236,7 +235,6 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
         fresh(start) == Some(FreshReason::NoSaveEver) && objects.total() == 0,
         format!("{start:?}, {} objects", objects.total()),
     );
-    let _ = manifest_key;
     env.record(
         "record_lifetime_scenario",
         "save.tombstone_ttl_days (days only; not tested through the chart)",

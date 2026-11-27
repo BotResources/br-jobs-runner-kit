@@ -8,7 +8,7 @@ use battery::evidence::Checks;
 use battery::ids::Lane;
 use battery::pool;
 use battery::saves::Saves;
-use br_agentic_harness_contract::{Command, RunMode, SandboxPort, Seed, TurnId};
+use br_agentic_harness_contract::{Command, CommandResult, RunMode, SandboxPort, Seed, TurnId};
 use br_runner_sandbox::{Sandbox, Store, record_key};
 
 async fn first_turn(sandbox: &Sandbox, lane: &Lane) -> Res<(TurnId, String)> {
@@ -73,10 +73,11 @@ async fn a_killed_sandbox_gives_an_error_never_an_exit_code_and_no_save() -> Res
     let session = Session::start().await?;
     let env = &session.env;
     let sandbox = adapter::standard(env).await?;
+    let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
     let lane = Lane::new()?;
     let (k1, h1) = first_turn(&sandbox, &lane).await?;
-    let (_, turn) = lane.child(k1)?;
+    let (k2, turn) = lane.child(k1)?;
     let opened = adapter::open(&sandbox, turn, Seed::empty()).await?;
     background(&sandbox, &opened.box_id, "sleep 300").await?;
     let runner = sandbox.clone();
@@ -89,6 +90,12 @@ async fn a_killed_sandbox_gives_an_error_never_an_exit_code_and_no_save() -> Res
             .map_err(BatteryError::from)
     });
     tokio::time::sleep(Duration::from_secs(3)).await;
+    let before = pool::pod(env, opened.box_id.as_str()).await?;
+    checks.expect(
+        "killed-sandbox-pod-existed-and-was-claimed-before-the-kill",
+        before.is_some_and(|pod| pod["metadata"]["deletionTimestamp"].is_null()),
+        opened.box_id.to_string(),
+    );
     pool::delete_now(env, opened.box_id.as_str()).await?;
     let outcome = tokio::time::timeout(Duration::from_secs(60), running)
         .await
@@ -99,14 +106,36 @@ async fn a_killed_sandbox_gives_an_error_never_an_exit_code_and_no_save() -> Res
         .map_err(|e| BatteryError::Port(e.to_string()))?;
     checks.expect(
         "killed-sandbox-run-is-an-error-never-an-exit-code",
-        outcome.is_err(),
+        matches!(&outcome, Err(BatteryError::Port(_))),
         format!("{outcome:?}"),
+    );
+    let gone = pool::wait_gone(env, opened.box_id.as_str(), 60).await;
+    checks.expect(
+        "killed-sandbox-pod-is-gone",
+        gone.is_ok(),
+        format!("{gone:?}"),
     );
     let released = sandbox.release(&opened.box_id).await;
     checks.expect(
         "killed-sandbox-release-without-save-is-accepted",
         released.is_ok(),
         format!("{released:?}"),
+    );
+    let key = saves.key(lane.thread, lane.agent, k2);
+    checks.expect(
+        "killed-sandbox-has-no-manifest",
+        saves.manifest(&key).await?.is_none(),
+        "manifest of the killed turn",
+    );
+    checks.expect(
+        "killed-sandbox-has-no-save-object",
+        saves
+            .objects(lane.thread)
+            .await?
+            .saves
+            .iter()
+            .all(|object| !object.contains(&k2.to_string())),
+        "objects of the killed turn",
     );
     next_is_the_last_good_save(&mut checks, "killed-sandbox", &sandbox, &lane, k1, &h1).await?;
     let (_, turn) = lane.child(k1)?;
@@ -118,12 +147,21 @@ async fn a_killed_sandbox_gives_an_error_never_an_exit_code_and_no_save() -> Res
         "text",
     );
     let after = adapter::sh(&sandbox, &second.box_id, "true").await;
+    let no_false_code = |result: &Result<CommandResult, BatteryError>, expected: i32| match result {
+        Err(_) => true,
+        Ok(done) => done.exit_code == expected,
+    };
     checks.expect(
         "killed-pid-one-never-gives-a-false-exit-code-as-a-fault",
-        true,
+        no_false_code(&pid_one, 0) && no_false_code(&after, 0),
         format!("kill: {pid_one:?}; next run: {after:?}"),
     );
-    let _ = sandbox.release(&second.box_id).await;
+    let second_release = sandbox.release(&second.box_id).await;
+    env.record(
+        "killed_pid_one_release_result",
+        format!("{second_release:?}"),
+        "text",
+    );
     next_is_the_last_good_save(&mut checks, "killed-pid-one", &sandbox, &lane, k1, &h1).await?;
     checks.finish()
 }

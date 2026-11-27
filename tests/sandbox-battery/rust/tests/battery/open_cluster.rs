@@ -12,6 +12,7 @@ use battery::proc::Helm;
 use battery::tree;
 use battery::tunnel::{Gate, GateMode, api_gate};
 use br_agentic_harness_contract::{Seed, StartKind};
+use br_runner_sandbox::Error;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
@@ -21,6 +22,7 @@ async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
     let mut tunables = Tunables::standard(env);
     tunables.context = context.name.clone();
     tunables.open_timeout = 20;
+    tunables.cold_create = false;
     let sandbox = tunables.connect(env).await?;
     let mut checks = Checks::new(env);
     pool::wait_warm(env, 1, 120).await?;
@@ -44,7 +46,7 @@ async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
     );
     checks.expect(
         "api-cut-open-during-the-cut-is-a-fault-not-an-empty-pool",
-        cut_result.is_err(),
+        cut_result.is_err() && !matches!(&cut_result, Err(Error::Image(_))),
         format!("{cut_result:?}"),
     );
     gate.set(GateMode::Open);
@@ -52,11 +54,14 @@ async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
     tokio::time::sleep(Duration::from_secs(10)).await;
     let after = adapter::open(&sandbox, Lane::new()?.first()?.1, Seed::empty()).await;
     let exists = match &after {
-        Ok(opened) => pool::pod(env, opened.box_id.as_str()).await?.is_some(),
+        Ok(opened) => {
+            !pool::is_cold(opened.box_id.as_str())
+                && pool::pod(env, opened.box_id.as_str()).await?.is_some()
+        }
         Err(_) => false,
     };
     checks.expect(
-        "api-cut-open-after-the-restore-finds-the-warm-pods",
+        "api-cut-open-after-the-restore-claims-a-warm-pod",
         exists,
         format!("{after:?}"),
     );

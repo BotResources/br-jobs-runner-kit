@@ -111,8 +111,8 @@ async fn the_document_of_the_chart_builds_the_adapter_and_runs_one_flow() -> Res
     with_extra["store_credentials"] = json!({"access_key_id": "a", "secret_access_key": "b"});
     let extra: Result<SandboxConfigInput, _> = serde_json::from_value(with_extra);
     checks.expect(
-        "document-with-an-unknown-key-is-accepted-or-refused-by-the-input-type",
-        true,
+        "document-with-an-unknown-key-is-ignored-by-the-input-type",
+        extra.is_ok(),
         match &extra {
             Ok(_) => "accepted".to_owned(),
             Err(error) => format!("refused: {error}"),
@@ -125,8 +125,8 @@ async fn the_document_of_the_chart_builds_the_adapter_and_runs_one_flow() -> Res
     document["kube_context"] = json!(env.context);
     let written_endpoint = document["store_endpoint"].as_str().unwrap_or("").to_owned();
     checks.expect(
-        "document-store-endpoint-is-the-chart-value-and-the-host-reaches-the-store-by-another-address",
-        written_endpoint == "http://store.sbx-teststore.svc.cluster.local:8333",
+        "document-store-endpoint-is-a-cluster-address-and-the-host-reaches-the-store-by-another-address",
+        written_endpoint.starts_with("http") && written_endpoint.contains(".svc.") && written_endpoint != env.s3.endpoint,
         format!("document {written_endpoint:?}, host address {:?}", env.s3.endpoint),
     );
     document["store_endpoint"] = json!(env.s3.endpoint);

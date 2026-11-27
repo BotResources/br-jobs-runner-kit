@@ -3,7 +3,7 @@ use std::time::Duration;
 use battery::Session;
 use battery::adapter::{self, path};
 use battery::env::Env;
-use battery::error::Res;
+use battery::error::{BatteryError, Res};
 use battery::evidence::{Checks, load_now};
 use battery::guards::PodReaper;
 use battery::ids::Lane;
@@ -108,11 +108,18 @@ fn series() -> String {
     std::env::var("BYTES_SERIES").unwrap_or_else(|_| "unlabelled".to_owned())
 }
 
-fn iterations() -> usize {
-    std::env::var("BYTES_ITERATIONS")
-        .ok()
-        .and_then(|text| text.parse().ok())
-        .unwrap_or(10)
+fn iterations() -> Res<usize> {
+    let Ok(text) = std::env::var("BYTES_ITERATIONS") else {
+        return Ok(10);
+    };
+    match text.parse::<usize>() {
+        Ok(count) if count >= 1 => Ok(count),
+        _ => Err(BatteryError::BadVariable {
+            name: "BYTES_ITERATIONS",
+            value: text,
+            expected: "a whole number of 1 or more",
+        }),
+    }
 }
 
 fn digest(bytes: &[u8]) -> [u8; 32] {
@@ -147,8 +154,9 @@ async fn a_read_of_a_50_mb_file_never_loses_bytes_without_an_error() -> Res {
             .await?)
     })
     .await?;
+    let count = iterations()?;
     let mut tally = Tally::new(&series(), "read");
-    for iteration in 1..=iterations() {
+    for iteration in 1..=count {
         let outcome = adapter::bounded("the read of the 50 MB file", BOUND, async {
             Ok(sandbox.read(&opened.box_id, &target).await)
         })
@@ -178,7 +186,7 @@ async fn a_read_of_a_50_mb_file_never_loses_bytes_without_an_error() -> Res {
     let text = tally.summary(env);
     checks.expect(
         "read-never-loses-bytes-without-an-error",
-        tally.losses == 0,
+        tally.losses == 0 && tally.ok >= 1,
         text,
     );
     adapter::release(&sandbox, &opened.box_id).await?;
@@ -197,12 +205,13 @@ async fn a_foreground_run_never_loses_output_bytes_without_an_error() -> Res {
     reaper.track(opened.box_id.to_string());
     let expected_bytes = pattern(OUTPUT_BYTES);
     let expected = digest(&expected_bytes);
+    let count = iterations()?;
     let body = format!("yes '{}' | head -c {OUTPUT_BYTES}", LINE.trim_end());
     for (kind, text) in [("stdout", body.clone()), ("stderr", format!("{body} >&2"))] {
         let command =
             Command::new(text).map_err(|e| battery::error::data("command", e.to_string()))?;
         let mut tally = Tally::new(&series(), kind);
-        for iteration in 1..=iterations() {
+        for iteration in 1..=count {
             let outcome = adapter::bounded("running the large output", BOUND, async {
                 Ok(sandbox
                     .run(&opened.box_id, &command, RunMode::Foreground)
@@ -258,7 +267,7 @@ async fn a_foreground_run_never_loses_output_bytes_without_an_error() -> Res {
         let text = tally.summary(env);
         checks.expect(
             &format!("run-{kind}-never-loses-bytes-without-an-error"),
-            tally.losses == 0,
+            tally.losses == 0 && tally.ok >= 1,
             text,
         );
     }

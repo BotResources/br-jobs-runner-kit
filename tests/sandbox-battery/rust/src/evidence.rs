@@ -17,14 +17,22 @@ fn clean(text: &str) -> String {
         .collect()
 }
 
-fn append(dir: &Path, file: &str, line: &str) {
-    let _ = std::fs::create_dir_all(dir);
-    if let Ok(mut handle) = std::fs::OpenOptions::new()
+fn try_append(dir: &Path, file: &str, line: &str) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let mut handle = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join(file))
-    {
-        let _ = handle.write_all(line.as_bytes());
+        .open(dir.join(file))?;
+    handle.write_all(line.as_bytes())
+}
+
+pub fn append(dir: &Path, file: &str, line: &str) {
+    if let Err(error) = try_append(dir, file, line) {
+        panic!(
+            "the evidence file {} in {} cannot be written: {error}",
+            file,
+            dir.display()
+        );
     }
 }
 
@@ -85,6 +93,7 @@ impl Env {
 
 pub struct Checks<'a> {
     env: &'a Env,
+    seen: usize,
     failed: Vec<String>,
 }
 
@@ -92,11 +101,13 @@ impl<'a> Checks<'a> {
     pub fn new(env: &'a Env) -> Self {
         Self {
             env,
+            seen: 0,
             failed: Vec::new(),
         }
     }
 
     pub fn expect(&mut self, name: &str, pass: bool, detail: impl AsRef<str>) {
+        self.seen += 1;
         self.env.check(name, pass, detail.as_ref());
         if !pass {
             self.failed
@@ -105,7 +116,9 @@ impl<'a> Checks<'a> {
     }
 
     pub fn finish(self) -> Res {
-        if self.failed.is_empty() {
+        if self.seen == 0 {
+            Err(BatteryError::NoChecks)
+        } else if self.failed.is_empty() {
             Ok(())
         } else {
             Err(BatteryError::Failed {

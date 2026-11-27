@@ -13,6 +13,8 @@ use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use uuid::Uuid;
 
+const UNFINISHED_CHUNKS: usize = 12;
+
 fn probe_prefix(label: &str) -> String {
     format!("battery-probe/{label}-{}", Uuid::now_v7())
 }
@@ -69,9 +71,23 @@ async fn multipart_part_has_its_size_and_abort_leaves_nothing() -> Res {
         size == Some(written),
         format!("written {written}, read back {size:?}"),
     );
+    let control = format!("{prefix}/control");
+    let mut open_upload = saves.store.start_upload(&control).await?;
+    for _ in 0..UNFINISHED_CHUNKS {
+        open_upload
+            .write(Bytes::from(prng.bytes(1_000_000)))
+            .await?;
+    }
+    let control_pending = pending_uploads(env, &control).await?;
+    checks.expect(
+        "store-multipart-an-unfinished-upload-shows-as-pending",
+        control_pending == 1,
+        format!("{control_pending} pending uploads for an unfinished upload"),
+    );
+    open_upload.abort().await?;
     let aborted = format!("{prefix}/aborted");
     let mut upload = saves.store.start_upload(&aborted).await?;
-    for _ in 0..2 {
+    for _ in 0..UNFINISHED_CHUNKS {
         upload.write(Bytes::from(prng.bytes(1_000_000))).await?;
     }
     upload.abort().await?;
@@ -130,20 +146,26 @@ async fn list_delete_and_path_style_work_on_the_real_store() -> Res {
             continue;
         }
         let mut keys = saves.store.list(&format!("{prefix}/")).await?;
+        let listed = keys.len();
         keys.sort();
         keys.dedup();
         checks.expect(
             &format!("store-{name}-lists-every-key-once"),
-            keys.len() == 1500,
-            format!("listed {} distinct keys of 1500", keys.len()),
+            listed == 1500 && keys.len() == 1500,
+            format!("listed {listed} keys, {} distinct, of 1500", keys.len()),
         );
         let first = format!("{prefix}/k0000");
         let deleted = saves.store.delete(&first).await;
         let missing = saves.store.delete(&format!("{prefix}/never-there")).await;
+        let rest = saves.store.list(&format!("{prefix}/")).await?;
         checks.expect(
             &format!("store-{name}-delete-of-present-and-missing-key"),
-            deleted.is_ok() && missing.is_ok(),
-            format!("{deleted:?} and {missing:?}"),
+            deleted.is_ok() && missing.is_ok() && rest.len() == 1499 && !rest.contains(&first),
+            format!(
+                "{deleted:?} and {missing:?}, {} keys left, first still listed {}",
+                rest.len(),
+                rest.contains(&first)
+            ),
         );
         for key in saves.store.list(&format!("{prefix}/")).await? {
             saves.store.delete(&key).await?;
@@ -160,6 +182,23 @@ fn tls_failure(text: &str) -> bool {
         "handshake",
         "unknown issuer",
         "invalid peer",
+    ]
+    .iter()
+    .any(|word| lower.contains(word))
+}
+
+fn server_answered(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    [
+        "403",
+        "401",
+        "404",
+        "accessdenied",
+        "invalidaccesskeyid",
+        "signaturedoesnotmatch",
+        "forbidden",
+        "unauthorized",
+        "nosuchbucket",
     ]
     .iter()
     .any(|word| lower.contains(word))
@@ -185,7 +224,7 @@ async fn store_client_trusts_system_roots_only() -> Res {
     let text = format!("{answer:?}");
     checks.expect(
         "store-tls-system-root-is-trusted",
-        !tls_failure(&text),
+        !tls_failure(&text) && (answer.is_ok() || server_answered(&text)),
         text.clone(),
     );
     std::fs::create_dir_all(&env.work)?;

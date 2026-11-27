@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use battery::Session;
 use battery::adapter::{self, Tunables, sh_ok};
-use battery::common::work_hash;
+use battery::common::{wait_until, work_hash};
 use battery::error::Res;
 use battery::evidence::Checks;
 use battery::guards::{ScaleGuard, ValueGuard};
@@ -14,6 +14,7 @@ use br_runner_sandbox::{ConfigError, SandboxConfig, Store, tombstone_key};
 use serde_json::json;
 
 const TTL_KEY: &str = "save.ttl_seconds";
+const CHART_ERROR: &str = "BR_SANDBOX_SAVE_AGE_INVALID";
 
 async fn turn(
     sandbox: &br_runner_sandbox::Sandbox,
@@ -70,7 +71,8 @@ async fn a_save_expires_after_60_seconds_and_a_later_save_is_a_whole_image() -> 
         "bytes",
     );
     let key1 = saves.key(lane.thread, lane.agent, k1);
-    let limit = 60 + 60 + 60 + 60;
+    let limit = 60 + 60 + 60;
+    let part1 = saves.part_of(&key1).await?;
     let mut latest = k3;
     let mut latest_hash = h3;
     let mut count = 3;
@@ -102,6 +104,23 @@ async fn a_save_expires_after_60_seconds_and_a_later_save_is_a_whole_image() -> 
         "expiry-manifest-of-k1-is-gone-within-ttl-skew-and-sweep",
         gone,
         format!("{delay:.0} s"),
+    );
+    let part_gone = wait_until("the part of k1 to be deleted", 60, || async {
+        Ok(saves.store.size(&part1).await?.is_none())
+    })
+    .await;
+    checks.expect(
+        "expiry-part-of-k1-is-gone",
+        part_gone.is_ok(),
+        format!("{part1}: {part_gone:?}"),
+    );
+    let latest_part = saves
+        .part_of(&saves.key(lane.thread, lane.agent, latest))
+        .await?;
+    checks.expect(
+        "expiry-part-of-the-latest-save-still-exists",
+        saves.store.size(&latest_part).await?.is_some(),
+        latest_part.clone(),
     );
     checks.expect(
         "expiry-tombstone-exists-for-k1",
@@ -172,23 +191,30 @@ async fn a_save_age_of_zero_or_less_is_refused_by_the_chart_and_the_adapter() ->
     let env = &session.env;
     let mut checks = Checks::new(env);
     let helm = Helm::of(env);
+    let base = strings(&[
+        "--kube-context",
+        &env.context,
+        "template",
+        &env.helm_release,
+        &helm.chart,
+        "-f",
+        &env.values_file.display().to_string(),
+    ]);
+    let control = proc::run("helm", &base, None, proc::LONG).await?;
+    checks.expect(
+        "save-age-helm-template-succeeds-without-the-override",
+        control.code == 0,
+        control.stderr.chars().take(200).collect::<String>(),
+    );
     for value in [0, -1] {
-        let mut args = strings(&[
-            "--kube-context",
-            &env.context,
-            "template",
-            &env.helm_release,
-            &helm.chart,
-            "-f",
-            &env.values_file.display().to_string(),
-        ]);
+        let mut args = base.clone();
         args.push("--set-json".to_owned());
         args.push(format!("{TTL_KEY}={value}"));
         let output = proc::run("helm", &args, None, proc::LONG).await?;
         checks.expect(
-            &format!("save-age-{value}-helm-template-fails"),
-            output.code != 0,
-            output.stderr.chars().take(200).collect::<String>(),
+            &format!("save-age-{value}-helm-template-fails-with-the-chart-error"),
+            output.code != 0 && output.stderr.contains(CHART_ERROR),
+            output.stderr.chars().take(300).collect::<String>(),
         );
     }
     let mut tunables = Tunables::standard(env);

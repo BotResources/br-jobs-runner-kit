@@ -5,7 +5,7 @@ use battery::error::Res;
 use battery::evidence::Checks;
 use battery::ids::{self, Lane};
 use battery::saves::Saves;
-use br_agentic_harness_contract::{Seed, TurnId};
+use br_agentic_harness_contract::{FreshReason, Seed, StartKind, TurnId};
 use br_runner_sandbox::Sandbox;
 
 async fn run_turn(
@@ -37,8 +37,9 @@ async fn go_back_to_turn_one_per_agent_by_turn_id() -> Res {
     let saves = Saves::of(env)?;
     let mut checks = Checks::new(env);
     let first = Lane::new()?;
-    let lanes = [("a1", first), ("a2", first.with_agent()?)];
-    for (name, lane) in &lanes {
+    let second = first.with_agent()?;
+    let lanes = [("a1", first, second), ("a2", second, first)];
+    for (name, lane, other_lane) in &lanes {
         let k2 = ids::turn()?;
         let k1 = ids::turn()?;
         let k3 = ids::turn()?;
@@ -82,12 +83,21 @@ async fn go_back_to_turn_one_per_agent_by_turn_id() -> Res {
                 && !listing.contains("three"),
             listing.clone(),
         );
-        let other = if *name == "a1" { "a2" } else { "a1" };
+        let foreign = adapter::open(
+            &sandbox,
+            other_lane.turn(ids::turn()?, Some(k1)),
+            Seed::empty(),
+        )
+        .await?;
+        let foreign_listing = sh_ok(&sandbox, &foreign.box_id, "ls /work").await?;
         checks.expect(
-            &format!("go-back-{name}-never-sees-the-other-agent"),
-            !listing.contains(other),
-            "listing",
+            &format!("go-back-{name}-parent-of-the-other-agent-is-never-restored"),
+            foreign.start == StartKind::Fresh(FreshReason::NoSaveEver)
+                && foreign_listing.trim().is_empty(),
+            format!("{:?} {foreign_listing:?}", foreign.start),
         );
+        adapter::release(&sandbox, &foreign.box_id).await?;
+        battery::common::settle().await?;
         adapter::release(&sandbox, &after.box_id).await?;
         battery::common::settle().await?;
         let still = saves
@@ -103,7 +113,6 @@ async fn go_back_to_turn_one_per_agent_by_turn_id() -> Res {
             still,
             "manifests",
         );
-        let _ = h3;
     }
     checks.finish()
 }

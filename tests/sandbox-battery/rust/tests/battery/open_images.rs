@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use battery::Session;
 use battery::adapter::{self, Tunables, request};
-use battery::common::{image_of_pool, wait_until};
+use battery::common::wait_until;
 use battery::error::Res;
 use battery::evidence::Checks;
 use battery::guards::{CordonGuard, ValueGuard};
@@ -125,7 +125,7 @@ async fn a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout
     checks.expect(
         "image-unavailable-ends-near-the-open-timeout",
         matches!(&outcome, Err(Error::Image(ImageError::Unavailable { .. })))
-            && (9.0..=14.0).contains(&seconds),
+            && (9.0..=11.0).contains(&seconds),
         format!("{seconds:.2} s {outcome:?}"),
     );
     let condition = pool::replica_set(env).await?["status"]["conditions"]
@@ -164,6 +164,5 @@ async fn a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout
     if let Ok(opened) = retry {
         adapter::release(&sandbox, &opened.box_id).await?;
     }
-    let _ = image_of_pool;
     checks.finish()
 }

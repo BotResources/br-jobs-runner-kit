@@ -1,3 +1,5 @@
+use crate::error::{Res, data};
+
 pub struct Prng(u64);
 
 impl Prng {
@@ -46,15 +48,18 @@ pub struct Stats {
 }
 
 impl Stats {
-    pub fn of(values: &[f64], limit: f64) -> Self {
+    pub fn of(values: &[f64], limit: f64) -> Res<Self> {
+        if values.is_empty() {
+            return Err(data("the statistics", "there is no sample"));
+        }
         let mut sorted = values.to_vec();
         sorted.sort_by(f64::total_cmp);
-        Self {
+        Ok(Self {
             count: sorted.len(),
             median: percentile(&sorted, 0.5),
             p95: percentile(&sorted, 0.95),
             slowest: sorted.last().copied().unwrap_or(0.0),
             within: sorted.iter().filter(|value| **value <= limit).count(),
-        }
+        })
     }
 }

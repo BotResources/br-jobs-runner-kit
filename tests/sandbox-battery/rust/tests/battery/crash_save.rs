@@ -7,11 +7,13 @@ use battery::common::{restored, wait_until, work_hash};
 use battery::error::{Res, data};
 use battery::evidence::Checks;
 use battery::ids::Lane;
-use battery::kubeconfig::TempContext;
+use battery::pool;
 use battery::saves::Saves;
-use battery::tunnel::{Gate, GateMode};
+use battery::tunnel::{Gate, GateMode, api_gate};
 use br_agentic_harness_contract::{Seed, TurnId};
-use br_runner_sandbox::{Sandbox, Store};
+use br_runner_sandbox::{
+    ANNOTATION_CLAIMED_AT, ANNOTATION_SAVED_AT, ANNOTATION_STATE_TURN, Sandbox, Store,
+};
 
 const STATE_BYTES: u64 = 60_000_000;
 const SWEEP_WAIT_SECONDS: u64 = 900;
@@ -145,38 +147,60 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
     let mut checks = Checks::new(env);
     let lane = Lane::new()?;
     let (k1, _) = prepare(&sandbox, &lane).await?;
-    let raw = battery::proc::Kube::cluster_wide(env)
-        .run(&[
-            "config",
-            "view",
-            "--raw",
-            "--minify",
-            "--context",
-            &env.context,
-            "-o",
-            "jsonpath={.clusters[0].cluster.server}",
-        ])
-        .await?;
-    let gate = Gate::start(
-        raw.trim_start_matches("https://")
-            .replace("0.0.0.0", "127.0.0.1"),
-        false,
+    let (gate, context) = api_gate(env, "battery-crash-api").await?;
+    let store_gate = Gate::start(
+        env.s3.endpoint.trim_start_matches("http://").to_owned(),
+        true,
     )
     .await?;
-    let context = TempContext::through_gate(env, "battery-crash-api", gate.port()).await?;
+    store_gate.set(GateMode::PauseManifestWrite);
     let (k2, _) = lane.child(k1)?;
-    let mut process = child(&lane, k2, k1, &env.s3.endpoint, &context.name)?;
+    let mut process = child(
+        &lane,
+        k2,
+        k1,
+        &format!("http://127.0.0.1:{}", store_gate.port()),
+        &context.name,
+    )?;
     let key = saves.key(lane.thread, lane.agent, k2);
+    let prefix = format!(
+        "saves/{}/{}/{}/{}/",
+        saves.client, lane.thread, lane.agent, k2
+    );
+    wait_until("the part of the save to be uploaded", 300, || async {
+        Ok(!saves.store.list(&prefix).await?.is_empty())
+    })
+    .await?;
+    gate.set(GateMode::Stall);
+    store_gate.set(GateMode::Open);
     wait_until("the manifest of the save", 300, || async {
         Ok(saves.manifest(&key).await?.is_some())
     })
     .await?;
-    gate.set(GateMode::Stall);
+    tokio::time::sleep(Duration::from_secs(2)).await;
     process
         .kill()
         .await
         .map_err(|e| data("kill child", e.to_string()))?;
     gate.set(GateMode::Refuse);
+    let thread = lane.thread.to_string();
+    let pods = pool::pods_of_thread(env, &thread).await?;
+    let mut claimed = 0;
+    let mut marked = 0;
+    for name in &pods {
+        if let Some(pod) = pool::pod(env, name).await? {
+            claimed += usize::from(pool::annotation(&pod, ANNOTATION_CLAIMED_AT).is_some());
+            marked += usize::from(
+                pool::annotation(&pod, ANNOTATION_STATE_TURN).is_some()
+                    || pool::annotation(&pod, ANNOTATION_SAVED_AT).is_some(),
+            );
+        }
+    }
+    checks.expect(
+        "crash-after-manifest-the-pod-was-never-marked-as-saved",
+        claimed >= 1 && marked == 0,
+        format!("{claimed} claimed pods, {marked} marked as saved, of {pods:?}"),
+    );
     let (_, turn) = lane.child(k2)?;
     let again = adapter::open(&sandbox, turn, Seed::empty()).await?;
     let content = adapter::sh_ok(&sandbox, &again.box_id, "cat /work/one; ls /work").await?;

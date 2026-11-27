@@ -49,9 +49,9 @@ async fn cold_start_effect_of_the_init_container_and_the_image_size() -> Res {
         adapter::release(&sandbox, &opened.box_id).await?;
         battery::pool::wait_gone_all(env).await?;
     }
-    let stats = Stats::of(&ready_times, LIMIT_MS);
+    let stats = Stats::of(&ready_times, LIMIT_MS)?;
     record_stats(env, "cold_start_to_first_true", &stats);
-    let init = Stats::of(&init_seconds, LIMIT_MS);
+    let init = Stats::of(&init_seconds, LIMIT_MS)?;
     env.record(
         "cold_start_init_container_median",
         format!("{:.0}", init.median),

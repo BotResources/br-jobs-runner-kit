@@ -26,14 +26,14 @@ async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
     let set = seeds::standard()?;
     let sandbox = adapter::standard(env).await?;
     let claim_times = fresh_series(env, &seeds::make(1, 0, 0, 0)?, 10, 4).await?;
-    let claim = Stats::of(&claim_times, LIMIT_MS);
+    let claim = Stats::of(&claim_times, LIMIT_MS)?;
     env.record(
         "split_claim_and_first_true_median",
         format!("{:.0}", claim.median),
         "ms",
     );
     let seed_times = fresh_series(env, &set, 10, 4).await?;
-    let seeded = Stats::of(&seed_times, LIMIT_MS);
+    let seeded = Stats::of(&seed_times, LIMIT_MS)?;
     env.record(
         "split_seed_copy_in_median",
         format!("{:.0}", seeded.median - claim.median),
@@ -110,7 +110,7 @@ async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
             adapter::release(&sandbox, &opened.box_id).await?;
             battery::pool::wait_warm(env, 4, 120).await?;
         }
-        let stats = Stats::of(&times, LIMIT_MS);
+        let stats = Stats::of(&times, LIMIT_MS)?;
         record_stats(env, &format!("restored_start_{megabytes}mb"), &stats);
         env.record(
             &format!("restore_stalls_{megabytes}mb_count"),
@@ -130,7 +130,7 @@ async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
             adapter::release(&sandbox, &opened.box_id).await?;
             battery::pool::wait_warm(env, 4, 120).await?;
         }
-        let split = Stats::of(&only_restore, LIMIT_MS);
+        let split = Stats::of(&only_restore, LIMIT_MS)?;
         env.record(
             &format!("split_restore_stream_{megabytes}mb_median"),
             format!("{:.0}", split.median - claim.median),

@@ -58,10 +58,21 @@ pub async fn pod(env: &Env, name: &str) -> Res<Option<Value>> {
     let output = Kube::of(env)
         .try_run(&["get", "pod", name, "-o", "json"], None, SHORT)
         .await?;
-    if output.code != 0 {
+    if output.code == 0 {
+        return Ok(Some(serde_json::from_slice(&output.stdout)?));
+    }
+    if output.stderr.contains("NotFound") {
         return Ok(None);
     }
-    Ok(Some(serde_json::from_slice(&output.stdout)?))
+    Err(BatteryError::Command {
+        command: format!("kubectl get pod {name}"),
+        code: output.code,
+        detail: output.stderr.chars().take(400).collect(),
+    })
+}
+
+pub fn is_cold(name: &str) -> bool {
+    name.contains("-cold-")
 }
 
 pub async fn pods_of_thread(env: &Env, thread: &str) -> Res<Vec<String>> {

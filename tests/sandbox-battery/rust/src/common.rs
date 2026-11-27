@@ -94,6 +94,7 @@ pub async fn pending_uploads(env: &Env, prefix: &str) -> Res<usize> {
     );
     let args = strings(&[
         "-sS",
+        "--fail",
         "--aws-sigv4",
         &format!("aws:amz:{}:s3", env.s3.region),
         "--user",
@@ -137,13 +138,6 @@ where
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-}
-
-pub fn image_of_pool(replica_set: &Value) -> Res<String> {
-    replica_set["spec"]["template"]["spec"]["containers"][0]["image"]
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| data("replica set", "the template holds no container image"))
 }
 
 pub fn seed_standard() -> Res<seeds::SeedSet> {
