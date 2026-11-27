@@ -72,7 +72,7 @@ The harness drives the order of open, save and release through the `RunLifecycle
 - A volume of kind `emptyDir` is mounted at `seed_root` (`/skills` by default): read-write in the seed container, read-only in the agent container.
 - The static `bsdtar` is at `seed_tools_path` (`/sbx/bin/bsdtar` by default) in the seed container and at `tools_path` (`/opt/sbx/bin/bsdtar` by default) in the agent container.
 - `/work` and `/home/agent` are writable by the agent user. The image of the agent container has `/bin/sh`, `cat` and `find`.
-- The rights of the adapter in its namespace: on `pods` get, list, watch, patch, create and delete; on `pods/exec` create; on `replicasets` get, list and watch. The adapter needs no right on secrets and no right in another namespace.
+- The rights of the adapter in its namespace: on `pods` get, list, watch, patch, create and delete; on `pods/exec` get and create; on `replicasets` get, list and watch. The adapter needs no right on secrets and no right in another namespace.
 
 ## What the adapter expects from the component that manages the pool
 
