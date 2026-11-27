@@ -11,21 +11,22 @@ use serde_json::json;
 
 const EMPTY_LISTING: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Name>saves</Name><Prefix></Prefix><KeyCount>0</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated></ListBucketResult>";
 
-fn reply(target: &str) -> (u16, &'static str, String) {
-    let (path, query) = target.split_once('?').unwrap_or((target, ""));
+fn reply(method: &str, target: &str) -> (u16, &'static str, String) {
+    let path = target.split_once('?').map_or(target, |(path, _)| path);
     if path.starts_with("/saves") {
         (200, "application/xml", EMPTY_LISTING.to_owned())
     } else if path == "/api/v1/namespaces" {
         let namespaces = json!({"apiVersion": "v1", "kind": "NamespaceList",
             "metadata": {"resourceVersion": "1"}, "items": [{"metadata": {"name": "sbx"}}]});
         (200, "application/json", namespaces.to_string())
-    } else if path.ends_with("/pods") && query.contains("watch=true") {
-        thread::sleep(Duration::from_secs(3600));
-        (200, "application/json", String::new())
     } else if path.ends_with("/pods") {
         let pods = json!({"apiVersion": "v1", "kind": "PodList",
             "metadata": {"resourceVersion": "1"}, "items": []});
         (200, "application/json", pods.to_string())
+    } else if path.contains("/leases") && method == "POST" {
+        let lease = json!({"apiVersion": "coordination.k8s.io/v1", "kind": "Lease",
+            "metadata": {"name": "br-sandbox-keeper", "namespace": "sys"}});
+        (201, "application/json", lease.to_string())
     } else {
         let status = json!({"apiVersion": "v1", "kind": "Status", "status": "Failure",
             "message": "not found", "reason": "NotFound", "code": 404});
@@ -43,13 +44,17 @@ fn answer(mut stream: TcpStream) {
         }
     }
     let text = String::from_utf8_lossy(&head).into_owned();
-    let target = text
-        .lines()
-        .next()
-        .and_then(|line| line.split(' ').nth(1))
-        .unwrap_or_default()
-        .to_owned();
-    let (status, kind, body) = reply(&target);
+    let mut request_line = text.lines().next().unwrap_or_default().split(' ');
+    let method = request_line.next().unwrap_or_default();
+    let target = request_line.next().unwrap_or_default();
+    if method == "GET" && target.contains("/pods?") && target.contains("watch=true") {
+        let opened = "HTTP/1.1 200 X\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n";
+        if stream.write_all(opened.as_bytes()).is_ok() {
+            thread::sleep(Duration::from_secs(3600));
+        }
+        return;
+    }
+    let (status, kind, body) = reply(method, target);
     let message = format!(
         "HTTP/1.1 {status} X\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()

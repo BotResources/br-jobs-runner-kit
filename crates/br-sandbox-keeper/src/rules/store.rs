@@ -116,10 +116,10 @@ pub enum ManifestRead {
 #[non_exhaustive]
 pub enum StoreStep {
     PutTombstone { key: String, body: Vec<u8> },
-    TombstoneNotSerialized { key: String },
     DeleteManifest { key: String },
     DeleteExpiredPart { key: String },
     DeleteOrphanAttempt { keys: Vec<String> },
+    TombstoneNotSerialized { key: String },
 }
 
 pub fn save_expired(made_at: Timestamp, now: Timestamp, rules: &SweepRules) -> bool {

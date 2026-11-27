@@ -25,7 +25,7 @@
 
 ### Documentation
 
-- README: the "Pod watch" bullet, the new `PodEvent` and `StoreStep` variants, and the limit of the repair of a part after a crash in "Not guaranteed".
+- README: the "Pod watch" bullet and the new `PodEvent` and `StoreStep` variants. "Not guaranteed" states the limit of the repair of a part after a crash, the `force` of the server-side apply, and that no test covers the outbound connections of the keeper. "Rights" states that no test of the crate checks the TLS verification of `kube` in a handshake.
 
 ## 0.1.0
 
