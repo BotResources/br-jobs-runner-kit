@@ -1,17 +1,19 @@
 use br_agentic_harness_contract::{SaveReceipt, TurnId};
 use bytes::Bytes;
-use tokio::io::AsyncReadExt;
+use tokio::sync::mpsc;
 
-use crate::cluster::{ExecIo, ExecOut};
+use crate::cluster::ExecIo;
 use crate::decide::saved_patch;
 use crate::env::Env;
 use crate::error::Error;
-use crate::exec::{CHUNK, ExecError, argv, bounded, drain, exit_code, expect_success};
+use crate::exec::{ExecError, argv, bounded, drain, exit_code, expect_success};
 use crate::formats::{FormatError, Manifest, PartReport, Record, RecordError};
 use crate::ids::{AttemptId, SaveKey};
 use crate::keys::{manifest_key, part_key, record_key};
 use crate::save::PartEncoder;
 use crate::store::{PartUpload, PutOutcome};
+
+use super::tar_stream::{encode_and_upload, read_at_full_speed};
 
 const OPERATION: &str = "save";
 
@@ -26,27 +28,6 @@ fn record_error(error: &Error) -> RecordError {
         Error::Store(_) | Error::Format(FormatError::StoredSize { .. }) => RecordError::Store,
         Error::Exec(ExecError::TimedOut { .. }) => RecordError::Timeout,
         _ => RecordError::Exec,
-    }
-}
-
-async fn pump(
-    mut stdout: ExecOut,
-    encoder: &mut PartEncoder,
-    upload: &mut dyn PartUpload,
-) -> Result<(), Error> {
-    let mut buffer = vec![0u8; CHUNK];
-    loop {
-        let read = stdout
-            .read(&mut buffer)
-            .await
-            .map_err(|error| ExecError::io(OPERATION, error))?;
-        if read == 0 {
-            return Ok(());
-        }
-        let stored = encoder.push(&buffer[..read])?;
-        if !stored.is_empty() {
-            upload.write(Bytes::from(stored)).await?;
-        }
     }
 }
 
@@ -171,9 +152,11 @@ impl Env {
             ..
         } = io;
         let mut encoder = PartEncoder::new(self.config.save_zstd_level())?;
-        let (code, (), ()) = tokio::try_join!(
+        let (chunks, received) = mpsc::unbounded_channel();
+        let (code, (), (), ()) = tokio::try_join!(
             async { Ok::<_, Error>(exit_code(OPERATION, status).await?) },
-            async { pump(stdout, &mut encoder, upload).await },
+            async { Ok::<_, Error>(read_at_full_speed(OPERATION, stdout, chunks).await?) },
+            async { encode_and_upload(received, &mut encoder, upload).await },
             async { Ok::<_, Error>(drain(OPERATION, stderr).await?) },
         )?;
         expect_success(OPERATION, code)?;

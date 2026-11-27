@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.3
+
+### Fixed
+
+- The save now reads the exec output of its `bsdtar` at full speed, which avoids the condition that cut the stream (a slow reader). Before, one read of at most 64 KiB was followed by the hashes, the tar count, the compression and an awaited upload write before the next read. Now one future reads the output and sends each chunk to a queue in memory, and a second future receives the chunks, hashes, counts, compresses and uploads them; the status of the exec and the standard error are read at the same time, as before. A failure of the second future (the store, the compression, the tar count) ends the save as before and stops the read; a closed queue stops the read with an error. The save keeps the sentences of the intent: zstd in the runner, one part, the two SHA-256 and the counts, the record states, `save_timeout_seconds`. The check of the count of the tar entries stays: a cut that still occurs fails closed (`Error::Format` with the record `failed` and the error `exec`) and no manifest is written. The adapter does not retry a cut stream.
+- The breach about the cut of a large save is open until the rows of the cluster battery pass; this version does not claim that the cut is fixed.
+- `read` and `run` were not changed.
+
+### Known issues
+
+- The virtual-host style of the store (`store_path_style` false, the default) builds the object URL with a double slash before the key. A test store refused the request with a 405; the effect on a store that keeps the empty segment was not tested. Use the path style (`store_path_style` true).
+- A background `run` returns the id of the shell that runs the command text, not always the id of the command itself: a `kill` with that id may leave the command running, and the processes that the killed process started are not killed by `kill`.
+- A save of a large tree can fail on a node under heavy load; the failure is a port fault and no manifest is written, so no save exists (an uploaded part may remain in the store until the sweep).
+- The output of the save that is read and not yet compressed and uploaded is held in memory, and nothing is written to disk by the adapter: when the upload is slower than the read, the runner holds up to all the raw bytes of the tar of the save scope, plus the encoder. This version sets no limit on the size of a save and keeps no spool on disk.
+- `read` and `run` already read the exec output with a fast reader and have no check of the count of bytes. A loss of output with no error for a slow reader of `read` or `run` is a known open point.
+
 ## 0.1.2
 
 ### Fixed
