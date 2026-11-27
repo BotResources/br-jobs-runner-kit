@@ -91,6 +91,9 @@ impl Engine {
         let Some(tracked) = self.pods.get(id) else {
             return false;
         };
+        if !self.leadership.is_leader() {
+            return false;
+        }
         let version = tracked.facts.version();
         match self.api.delete_pod(&id.0, &id.1, &version).await {
             Ok(DeleteOutcome::Deleted) => {

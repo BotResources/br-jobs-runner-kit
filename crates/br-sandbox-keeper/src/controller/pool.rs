@@ -113,7 +113,7 @@ impl Engine {
             Some(at) => self.pool_wake.insert(id.clone(), at),
             None => self.pool_wake.remove(&id),
         };
-        if damped.replicas != current {
+        if damped.replicas != current && self.leadership.is_leader() {
             self.write_replicas(pool, &id, damped.replicas).await;
         }
         let target = EventTarget {
@@ -124,6 +124,7 @@ impl Engine {
             .await;
         let judged = judge_pool(self.pool_pods(pool, PoolState::Warm));
         if let Some(write) = condition_write(&replica_set.conditions, &judged, now)
+            && self.leadership.is_leader()
             && let Err(error) = self
                 .api
                 .apply_condition(&pool.namespace, &pool.replicaset, &write)
@@ -172,7 +173,7 @@ impl Engine {
             self.at_max.remove(id);
             return;
         }
-        if !self.at_max.insert(id.clone()) {
+        if !self.leadership.is_leader() || !self.at_max.insert(id.clone()) {
             return;
         }
         let message = format!(
@@ -200,7 +201,7 @@ impl Engine {
             })
             .unwrap_or_default();
         for (uid, name) in due {
-            if self.pending_notified.contains(&uid) {
+            if self.pending_notified.contains(&uid) || !self.leadership.is_leader() {
                 continue;
             }
             let message = format!("the warm pod {name} is Pending and no container is failing");

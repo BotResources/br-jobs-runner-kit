@@ -61,20 +61,29 @@ impl Leadership {
     }
 
     pub fn is_leader(&self) -> bool {
-        let held = *self.held_until.lock().unwrap();
+        let held = *self
+            .held_until
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         held.is_some_and(|until| !until.has_passed(self.clock.now()))
     }
 
     pub fn renewed(&self, until: Timestamp) {
         let was_leader = self.is_leader();
-        *self.held_until.lock().unwrap() = Some(until);
+        *self
+            .held_until
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(until);
         if !was_leader {
             self.gained.notify_one();
         }
     }
 
     pub fn lost(&self) {
-        *self.held_until.lock().unwrap() = None;
+        *self
+            .held_until
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     pub async fn gained(&self) {

@@ -194,3 +194,15 @@ async fn a_deleted_pod_event_forgets_the_pod() {
         .await;
     assert!(bed.has_metric("br_sandbox_keeper_pool_warm_ready{pool=\"p\"} 0"));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_leader_whose_lease_passed_the_renew_deadline_refuses_every_write() {
+    let mut bed = bed(false);
+    bed.leadership.renewed(at(START + 5));
+    let pod = bed.kube.put_pod(old_warm("w0", 2000));
+    tokio::time::advance(Duration::from_secs(10)).await;
+    bed.applied(pod).await;
+    bed.engine.evaluate_all().await;
+    assert!(bed.kube.calls().is_empty());
+    assert!(bed.kube.pod(NS, "w0").is_some());
+}
