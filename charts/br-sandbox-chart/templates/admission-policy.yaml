@@ -15,6 +15,10 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
   variables:
     - name: role
       expression: {{ "(has(object.metadata.labels) && 'br.sandbox/role' in object.metadata.labels) ? object.metadata.labels['br.sandbox/role'] : ''" | include "br-sandbox-chart.json_string" }}

@@ -6,10 +6,46 @@ stub_tools() {
     cat >"$bin/nc" <<'STUB'
 #!/bin/sh
 target="$3:$4"
+if [ "${CONNECT_MODE:-}" ] && [ "$2" = 3 ]; then
+    req="$(cat | tr -d '\r')"
+    printf '%s %s\n' "$target" "$(printf '%s\n' "$req" | sed -n 1p)" >>"$STUB_DIR/connect.log"
+    case "$3" in
+        10.43.0.50) mode="${CONNECT_MODE_ALLOW:-$CONNECT_MODE}" ;;
+        *) mode="$CONNECT_MODE" ;;
+    esac
+    case "$mode" in
+        200) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;;
+        403then200) if [ "$(grep -c "CONNECT $(printf '%s\n' "$req" | sed -n '1s/^CONNECT \([^ ]*\) .*/\1/p') " "$STUB_DIR/connect.log")" -le 1 ]; then printf 'HTTP/1.1 403 Forbidden\r\n\r\n'; else printf 'HTTP/1.1 200 Connection established\r\n\r\n'; fi ;;
+        403) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;;
+        502) printf 'HTTP/1.1 502 Bad Gateway\r\n\r\n' ;;
+        404) printf 'HTTP/1.1 404 Not Found\r\n\r\n' ;;
+        garbled) printf 'garbage\r\n' ;;
+        connect200x403) printf 'HTTP/1.1 200 x 403 y\r\n\r\n' ;;
+        connect403x200) printf 'HTTP/1.1 403 x 200 y\r\n\r\n' ;;
+        nocode) printf 'HTTP/1.1 OK\r\n\r\n' ;;
+        offlist) case "$req" in *offlist.invalid*) printf 'HTTP/1.1 403 Forbidden\r\n\r\n' ;; *) printf 'HTTP/1.1 200 Connection established\r\n\r\n' ;; esac ;;
+    esac
+    exit 0
+fi
+printf '%s\n' "$target" >>"$STUB_DIR/nc.calls"
+printf '%s %s\n' "${NC_ROLE:-control}" "$*" >>"$STUB_DIR/nc.args"
+if [ "$(($(wc -l <"$STUB_DIR/nc.calls")))" -gt 2000 ]; then
+    printf 'nc stub: more than 2000 calls, the script does not wait\n' >"$STUB_DIR/runaway"
+    kill "$PPID"
+    exit 1
+fi
+refuse() {
+    [ -z "${NC_DROP_SECONDS:-}" ] || printf '%s\n' "$(($(cat "$STUB_DIR/clock") + NC_DROP_SECONDS))" >"$STUB_DIR/clock"
+    exit "${NC_REFUSE_STATUS:-1}"
+}
+if [ -n "${NC_LATE_K:-}" ]; then
+    printf x >>"$STUB_DIR/nc.late"
+    [ "$(($(wc -c <"$STUB_DIR/nc.late")))" -le "$NC_LATE_K" ] && exit 0 || refuse
+fi
 case "$NC_MODE" in
     all) exit 0 ;;
-    none) exit 1 ;;
-    first) [ "$target" = "$NC_FIRST" ] && exit 0 || exit 1 ;;
+    none) refuse ;;
+    first) [ "$target" = "$NC_FIRST" ] && exit 0 || refuse ;;
 esac
 STUB
     cat >"$bin/kubectl" <<'STUB'
@@ -32,6 +68,8 @@ case "$1" in
                 exit 0
                 ;;
             pods)
+                printf '%s\n' "$*" >"$STUB_DIR/pods.args"
+                case "$*" in *"br.sandbox/role!=proxy"*) ;; *) printf '10.42.0.9:8888\n' ;; esac
                 [ "${NO_POD_PORT:-}" = 1 ] && { printf '10.42.0.5:\n:\n'; exit 0; }
                 printf '10.42.0.5:8080\n:\n'
                 exit 0
@@ -40,32 +78,87 @@ case "$1" in
         ;;
     create)
         cat >"$STUB_DIR/pod.yaml"
+        ns="$(sed -n 's/^ *namespace: *//p' "$STUB_DIR/pod.yaml" | head -1)"
+        case " ${LEFTOVER_NS:-} " in
+            *" $ns "*)
+                if [ ! -e "$STUB_DIR/deleted.$ns" ]; then
+                    printf 'Error from server (AlreadyExists): pods "br-sandbox-netcheck-probe" already exists\n' >&2
+                    exit 1
+                fi
+                ;;
+        esac
+        printf 'create %s\n' "$ns" >>"$STUB_DIR/events.log"
+        printf '1000\n' >"$STUB_DIR/clock"
+        : >"$STUB_DIR/nc.late"
         exit 0
         ;;
-    wait | delete) exit 0 ;;
+    wait)
+        printf '%s\n' "$*" >>"$STUB_DIR/wait.args"
+        exit 0
+        ;;
+    delete)
+        printf '%s\n' "$*" >>"$STUB_DIR/events.log"
+        case "$*" in
+            *--wait=true*)
+                case " ${STUCK_NS:-} " in
+                    *" $4 "*)
+                        printf 'error: timed out waiting for the condition on pods/br-sandbox-netcheck-probe\n' >&2
+                        exit 1
+                        ;;
+                esac
+                : >"$STUB_DIR/deleted.$4"
+                ;;
+        esac
+        exit 0
+        ;;
     logs)
         [ "${NO_LOG:-}" = 1 ] && exit 1
         targets="$(sed -n 's/^ *value: *//p' "$STUB_DIR/pod.yaml" | head -1 | tr -d '"')"
-        NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "$NETCHECK_DIR/network-check.sh" probe
+        proxy="$(awk '/name: NETCHECK_PROXY/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        offlist="$(awk '/name: NETCHECK_OFFLIST/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        wait="$(awk '/name: NETCHECK_ENFORCEMENT_WAIT/ {getline; print $2}' "$STUB_DIR/pod.yaml" | tr -d '"')"
+        NC_ROLE=probe NETCHECK_ENFORCEMENT_WAIT="$wait" NC_LATE_K="$PROBE_LATE_K" NETCHECK_PROXY="$proxy" NETCHECK_OFFLIST="$offlist" NETCHECK_TARGETS="$targets" NC_MODE="$PROBE_MODE" NETCHECK_DIR="$NETCHECK_DIR" sh "${NETCHECK_PROBE_SCRIPT:-$NETCHECK_DIR/network-check.sh}" probe
         exit 0
         ;;
 esac
 exit 1
 STUB
-    chmod +x "$bin/nc" "$bin/kubectl"
+    cat >"$bin/sleep" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$1" >>"$STUB_DIR/sleep.log"
+printf '%s\n' "$(($(cat "$STUB_DIR/clock") + $1))" >"$STUB_DIR/clock"
+STUB
+    cat >"$bin/date" <<'STUB'
+#!/bin/sh
+cat "$STUB_DIR/clock"
+STUB
+    chmod +x "$bin/nc" "$bin/kubectl" "$bin/sleep" "$bin/date"
 }
 
 netcheck_dir() {
-    local dir="$WORK/netcheckdir"
+    local source="${1:-ex_yaml}" dir="$WORK/netcheckdir-${1:-ex_yaml}"
     mkdir -p "$dir"
-    yq -r 'select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-netcheck" and .metadata.namespace == "sbx-system") | .data | to_entries | .[] | .key' "$WORK/ex_yaml.yaml" | while read -r key; do
-        yq -r "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-netcheck\" and .metadata.namespace == \"sbx-system\") | .data[\"${key}\"]" "$WORK/ex_yaml.yaml" >"$dir/$key"
+    yq -r 'select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-netcheck" and .metadata.namespace == "sbx-system") | .data | to_entries | .[] | .key' "$WORK/${source}.yaml" | while read -r key; do
+        yq -r "select(.kind == \"ConfigMap\" and .metadata.name == \"br-sandbox-netcheck\" and .metadata.namespace == \"sbx-system\") | .data[\"${key}\"]" "$WORK/${source}.yaml" >"$dir/$key"
     done
     printf '%s' "$dir"
 }
 
+reset_netcheck_stub() {
+    mkdir -p "$WORK/netcheckstub"
+    : >"$WORK/netcheckstub/sleep.log"
+    : >"$WORK/netcheckstub/nc.calls"
+    : >"$WORK/netcheckstub/nc.args"
+    : >"$WORK/netcheckstub/wait.args"
+    : >"$WORK/netcheckstub/runaway"
+    : >"$WORK/netcheckstub/events.log"
+    rm -f "$WORK"/netcheckstub/deleted.*
+    printf '1000\n' >"$WORK/netcheckstub/clock"
+}
+
 run_netcheck() {
-    NETCHECK_DIR="$(netcheck_dir)" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "$CHART/files/network-check.sh" discover
+    reset_netcheck_stub
+    NETCHECK_ENFORCEMENT_WAIT="$(yq -r 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name == "NETCHECK_ENFORCEMENT_WAIT") | .value' "$WORK/${NETCHECK_SOURCE:-ex_yaml}.yaml")" NETCHECK_DIR="$(netcheck_dir "${NETCHECK_SOURCE:-ex_yaml}")" STUB_DIR="$WORK/netcheckstub" PATH="$WORK/netcheckbin:$PATH" NETCHECK_WAIT_SECONDS=1 "$@" sh "${NETCHECK_SCRIPT:-$CHART/files/network-check.sh}" discover
 }
 
 check_network_check_script_against_stubs() {

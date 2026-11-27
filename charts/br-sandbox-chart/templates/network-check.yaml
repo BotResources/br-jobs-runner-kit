@@ -28,12 +28,14 @@ data:
     {{- $script | nindent 4 }}
   namespaces: |
     {{- range $ns := $namespaces }}
-    {{ $ns.name }} {{ $ns.mode }}
+    {{ $ns.name }} {{ $ns.mode }}{{ if include "br-sandbox-chart.proxy.probe.active" (dict "root" $ "ns" $ns) }} proxy{{ end }}
     {{- end }}
   node-addresses: |
     {{- range concat .Values.network.node_addresses .Values.network.node_public_addresses .Values.network.load_balancer_addresses }}
     {{ . | trimSuffix "/32" | trimSuffix "/128" }}
     {{- end }}
+  offlist-host: |
+    {{ .Values.network_check.offlist_host }}:443
   extra-targets: |
     {{- range .Values.network_check.targets }}
     {{ . }}
@@ -47,12 +49,13 @@ data:
 {{- $name := printf "br-sandbox-netcheck-%s" (default "initial" .Values.network_check.run_id) }}
 {{- $pullSecrets := include "br-sandbox-chart.pull_secrets" . | fromJsonArray }}
 {{- $image := include "br-sandbox-chart.image.mirrored" (dict "root" . "ref" .Values.network_check.image) }}
-{{- $container := dict "name" "netcheck" "image" $image "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" . "ref" .Values.network_check.image)) "command" (list "sh" "/netcheck/network-check.sh" "discover") "env" (list (dict "name" "TMPDIR" "value" "/tmp")) "securityContext" (include "br-sandbox-chart.system.security" . | fromJson) "volumeMounts" (list (dict "name" "netcheck" "mountPath" "/netcheck" "readOnly" true) (dict "name" "tmp" "mountPath" "/tmp")) "resources" (dict "requests" (dict "cpu" "50m" "memory" "64Mi") "limits" (dict "cpu" "500m" "memory" "256Mi")) }}
+{{- $container := dict "name" "netcheck" "image" $image "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" . "ref" .Values.network_check.image)) "command" (list "sh" "/netcheck/network-check.sh" "discover") "env" (list (dict "name" "TMPDIR" "value" "/tmp") (dict "name" "NETCHECK_ENFORCEMENT_WAIT" "value" (.Values.network_check.enforcement_wait_seconds | int64 | toString))) "securityContext" (include "br-sandbox-chart.system.security" . | fromJson) "volumeMounts" (list (dict "name" "netcheck" "mountPath" "/netcheck" "readOnly" true) (dict "name" "tmp" "mountPath" "/tmp")) "resources" (dict "requests" (dict "cpu" "50m" "memory" "64Mi") "limits" (dict "cpu" "500m" "memory" "256Mi")) }}
 {{- $podSpec := dict "serviceAccountName" "br-sandbox-netcheck" "restartPolicy" "Never" "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) "containers" (list $container) "volumes" (list (dict "name" "netcheck" "configMap" (dict "name" "br-sandbox-netcheck")) (dict "name" "tmp" "emptyDir" (dict))) }}
 {{- if $pullSecrets }}
 {{- $_ := set $podSpec "imagePullSecrets" $pullSecrets }}
 {{- end }}
 {{- $podLabels := dict "br.sandbox/system" "netcheck" }}
+{{- $deadline := add 1800 (mul (len $namespaces) (.Values.network_check.enforcement_wait_seconds | int64)) }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -63,7 +66,7 @@ metadata:
     {{- include "br-sandbox-chart.labels" . | nindent 4 }}
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 1800
+  activeDeadlineSeconds: {{ $deadline }}
   template:
     metadata:
       labels:
@@ -85,7 +88,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: {{ $deadline }}
       template:
         metadata:
           labels:

@@ -1,0 +1,107 @@
+name: keeper-image
+
+on:
+  pull_request:
+    paths:
+      - "crates/br-sandbox-keeper/**"
+      - "crates/br-runner-sandbox/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "images/br-sandbox-keeper/**"
+      - ".github/workflows/keeper-image.yml"
+      - ".github/scripts/keeper-image-plan.sh"
+      - ".github/scripts/keeper-image-published.sh"
+      - ".github/scripts/test-keeper-image-plan.sh"
+  push:
+    branches: [main]
+    paths:
+      - "crates/br-sandbox-keeper/Cargo.toml"
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push the image of the version in crates/br-sandbox-keeper/Cargo.toml (main only; an existing tag is never replaced)
+        type: boolean
+        default: false
+
+concurrency:
+  group: keeper-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: plan keeper image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      push: ${{ steps.plan.outputs.push }}
+      tag: ${{ steps.plan.outputs.tag }}
+      revision: ${{ steps.plan.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: tests of the plan
+        run: bash .github/scripts/test-keeper-image-plan.sh
+      - name: versions
+        id: versions
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          echo "version=$(bash .github/scripts/crate-version.sh br-sandbox-keeper)" >>"$GITHUB_OUTPUT"
+          previous=""
+          if [ -n "${BEFORE:-}" ] && [ "${BEFORE//0/}" != "" ]; then
+            previous="$(bash .github/scripts/crate-version.sh br-sandbox-keeper "$BEFORE" 2>/dev/null || true)"
+          fi
+          echo "previous=${previous}" >>"$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: is the tag already published
+        id: published
+        env:
+          VERSION: ${{ steps.versions.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/keeper-image-published.sh "ghcr.io/${OWNER,,}/br-sandbox-keeper:${VERSION}" >>"$GITHUB_OUTPUT"
+      - name: decide the push and the tag
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          VERSION: ${{ steps.versions.outputs.version }}
+          PREVIOUS_VERSION: ${{ steps.versions.outputs.previous }}
+          PUBLISHED: ${{ steps.published.outputs.published }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSH_INPUT: ${{ inputs.push }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/keeper-image-plan.sh >plan.txt
+          grep -E '^(push|tag|revision)=' plan.txt >>"$GITHUB_OUTPUT"
+          {
+            echo "### Keeper image"
+            echo
+            sed 's/^/- /' plan.txt
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: keeper image
+    needs: plan
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images-build.yml
+    with:
+      image: br-sandbox-keeper
+      push: ${{ needs.plan.outputs.push == 'true' }}
+      tag: ${{ needs.plan.outputs.tag }}
+      ref: ${{ needs.plan.outputs.revision }}

@@ -10,6 +10,7 @@ export CHART="$ROOT/charts/br-sandbox-chart"
 export EXAMPLE="$CHART/ci/example-values.yaml"
 export MIRROR_VALUES="$CHART/ci/mirror-values.yaml"
 export KEEPER_VALUES="$CHART/ci/keeper-values.yaml"
+export EGRESS_VALUES="$CHART/ci/egress-values.yaml"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/test-sandbox-chart.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -70,6 +71,14 @@ jqv() {
 vals() {
     local name="$1" expr="$2"
     yq "$expr" "$EXAMPLE" >"$WORK/$name.yaml"
+    printf '%s' "$WORK/$name.yaml"
+}
+
+export CREDENTIAL_SET='{"secret_ref": "set-a-credentials", "secrets": [{"placeholder": "placeholder-a", "env_name": "SET_A_ACCESS", "key": "a", "hosts": ["git.example.test"]}]}'
+
+valsx() {
+    local name="$1" expr="$2"
+    yq ea 'select(fileIndex == 0) * select(fileIndex == 1)' "$EXAMPLE" "$EGRESS_VALUES" | yq "$expr" - >"$WORK/$name.yaml"
     printf '%s' "$WORK/$name.yaml"
 }
 

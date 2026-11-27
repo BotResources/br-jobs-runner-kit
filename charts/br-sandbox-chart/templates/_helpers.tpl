@@ -8,6 +8,26 @@ app.kubernetes.io/part-of: br-sandbox
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
+{{- define "br-sandbox-chart.label_prefix" -}}
+br.sandbox
+{{- end -}}
+
+{{- define "br-sandbox-chart.agent_container" -}}
+agent
+{{- end -}}
+
+{{- define "br-sandbox-chart.seed_root" -}}
+/skills
+{{- end -}}
+
+{{- define "br-sandbox-chart.seed_tools_path" -}}
+/sbx/bin/bsdtar
+{{- end -}}
+
+{{- define "br-sandbox-chart.replicaset_name" -}}
+{{- printf "warm-%s-%s" .client .mode -}}
+{{- end -}}
+
 {{- define "br-sandbox-chart.namespaces" -}}
 {{- include "br-sandbox-chart.validate" . -}}
 {{- $root := . -}}
@@ -20,7 +40,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
 {{- $egress = include "br-sandbox-chart.egress.namespace" $name -}}
 {{- end -}}
-{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) -}}
+{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) "credential_set" ($modeValues.credential_set | default dict) "proxy" ($modeValues.proxy | default dict) -}}
 {{- $out = append $out $item -}}
 {{- end -}}
 {{- end -}}
@@ -145,55 +165,6 @@ Always
 
 {{- define "br-sandbox-chart.json_string" -}}
 {{- . | toJson | replace "\\u0026" "&" | replace "\\u003c" "<" | replace "\\u003e" ">" -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.common" -}}
-{{- $values := .Values -}}
-{{- toYaml (dict
-  "label_prefix" "br.sandbox"
-  "tools" (dict "mount_path" $values.tools.mount_path "bsdtar_path" (printf "%s/bin/bsdtar" $values.tools.mount_path) "seed_container" (dict "enabled" $values.tools.seed_container.enabled "name" $values.tools.seed_container.name) "seed_root" "/skills" "seed_container_bsdtar_path" "/sbx/bin/bsdtar")
-  "restore_timeout_seconds" $values.restore_timeout_seconds
-  "idle_ttl" $values.idle_ttl
-  "idle_keep_min_state_bytes" $values.idle_keep_min_state_bytes
-  "warm_max_age_seconds" $values.warm_max_age_seconds
-  "save" $values.save
-  "store" $values.store
-  "work_size_limit" (toString $values.work.size_limit)
-  "home_size_limit" (toString $values.home.size_limit)) -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.pool" -}}
-{{- $ns := .ns -}}
-{{- toYaml (dict
-  "client" $ns.client
-  "mode" $ns.mode
-  "namespace" $ns.name
-  "pool_id" $ns.poolId
-  "replicaset" (printf "warm-%s-%s" $ns.client $ns.mode)
-  "floor" $ns.pool.floor
-  "max_sandboxes" $ns.pool.max_sandboxes
-  "refill_seconds" $ns.pool.refill_seconds
-  "margin" $ns.pool.margin
-  "size" $ns.pool.size) -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.system" -}}
-{{- $config := include "br-sandbox-chart.config.common" . | fromYaml -}}
-{{- $pools := list -}}
-{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray -}}
-{{- $pools = append $pools (include "br-sandbox-chart.config.pool" (dict "ns" $ns) | fromYaml) -}}
-{{- end -}}
-{{- $_ := set $config "system_namespace" (include "br-sandbox-chart.system_namespace" .) -}}
-{{- $_ := set $config "lease" .Values.keeper.lease -}}
-{{- $_ := set $config "settings" .Values.keeper.settings -}}
-{{- $_ := set $config "pools" $pools -}}
-{{- toYaml $config -}}
-{{- end -}}
-
-{{- define "br-sandbox-chart.config.namespace" -}}
-{{- $config := include "br-sandbox-chart.config.common" .root | fromYaml -}}
-{{- $_ := set $config "pool" (include "br-sandbox-chart.config.pool" (dict "ns" .ns) | fromYaml) -}}
-{{- toYaml $config -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.system.security" -}}

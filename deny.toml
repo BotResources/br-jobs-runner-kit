@@ -17,10 +17,10 @@ ignore = [
     # chrono's next advisory, a vulnerability included, still fails this
     # check.
     # Remove once chrono leaves this build graph, with the move to jiff
-    # tracked across every Rust repo in the epic
-    # https://github.com/BotResources/botresources.ai-claude-workspace/issues/341
+    # tracked across every Rust repo of the organization.
     # Review by 2027-02-17.
     { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, every version affected, no fixed release; move to jiff; review by 2027-02-17" },
+    { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained, every version affected, no fixed release; reached only through object_store; review by 2027-02-17" },
 ]
 
 [licenses]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 VAP='.[] | select(.kind == "ValidatingAdmissionPolicy")'
-CODES='BR_SANDBOX_ROLE BR_SANDBOX_ROLE_IMMUTABLE BR_SANDBOX_USERNS_REQUIRED BR_SANDBOX_HOST_NAMESPACE BR_SANDBOX_VOLUME_FORBIDDEN BR_SANDBOX_CAPABILITY BR_SANDBOX_PRIVILEGE BR_SANDBOX_RESOURCES BR_SANDBOX_IMAGE BR_SANDBOX_TOKEN_OR_RUNTIME BR_SANDBOX_IMMUTABLE BR_SANDBOX_LABELS'
+CODES='BR_SANDBOX_ROLE BR_SANDBOX_ROLE_IMMUTABLE BR_SANDBOX_USERNS_REQUIRED BR_SANDBOX_HOST_NAMESPACE BR_SANDBOX_VOLUME_FORBIDDEN BR_SANDBOX_CAPABILITY BR_SANDBOX_PRIVILEGE BR_SANDBOX_RESOURCES BR_SANDBOX_IMAGE BR_SANDBOX_TOKEN_OR_RUNTIME BR_SANDBOX_IMMUTABLE BR_SANDBOX_RUN_AS_NON_ROOT BR_SANDBOX_LABELS'
 
 rule() {
     printf '(%s) | .spec.validations[] | select(.message | startswith("%s:")) | .expression' "$1" "$2"
@@ -12,7 +12,7 @@ has_rule_text() {
 }
 
 check_VAP_every_rule_exists_per_namespace() {
-    section "VAP rules 1 to 9, the role rules and the label rules exist for every namespace"
+    section "VAP rules 1 to 10, the role rules and the label rules exist for every namespace"
     local code
     t "one policy and one binding per namespace" jqt ex '([.[] | select(.kind == "ValidatingAdmissionPolicy")] | length) == 4 and ([.[] | select(.kind == "ValidatingAdmissionPolicyBinding")] | length) == 4'
     for code in $CODES; do
@@ -31,7 +31,7 @@ check_VAP_every_rule_exists_per_namespace() {
     t "rule 7 inlines the allowed repositories" has_rule_text sbx-alpha-none BR_SANDBOX_IMAGE "'registry.example.test/agents/base'"
     t "rule 8 requires no token and the chart runtime class" has_rule_text sbx-alpha-none BR_SANDBOX_TOKEN_OR_RUNTIME "object.spec.runtimeClassName : '') == \"\""
     t "rule 9 compares security contexts and resources on update" has_rule_text sbx-alpha-none BR_SANDBOX_IMMUTABLE "oldObject.spec.containers.map(c, c.securityContext)"
-    t "every isolation rule applies to role=sandbox pods only" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE)\")) | .expression | startswith(\"variables.role != 'sandbox' || \")] | all"
+    t "every isolation rule applies to role=sandbox pods only" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|RUN_AS_NON_ROOT)\")) | .expression | startswith(\"variables.role != 'sandbox' || \")] | all"
 }
 
 check_VAP_role_rules() {
@@ -40,7 +40,7 @@ check_VAP_role_rules() {
     t "a pod with a role other than sandbox is refused: the role rule has one case only" has_rule_text sbx-alpha-none BR_SANDBOX_ROLE "variables.role == 'sandbox'"
     t "the role rule is exactly the one case" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_ROLE:\")) | .expression] | all(. == \"variables.role == 'sandbox'\")"
     t "the role rule names no proxy case and no creator" jqt ex "[${VAP} | .spec.validations[] | select(.message | startswith(\"BR_SANDBOX_ROLE:\")) | (.expression, .message) | select(test(\"proxy\"))] | length == 0"
-    t "the policy has no proxy creator variable and no expression reads the user" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | (.spec.variables[].name | select(. == "proxyCreator")), (.spec.validations[].expression | select(test("userInfo|proxyCreator")))] | length == 0'
+    t "the policy has no proxy creator variable and only the non-root rule reads the user" jqt ex '[.[] | select(.kind == "ValidatingAdmissionPolicy") | (.spec.variables[].name | select(. == "proxyCreator")), (.spec.validations[] | select(.message | startswith("BR_SANDBOX_RUN_AS_NON_ROOT:") | not) | .expression | select(test("userInfo|proxyCreator")))] | length == 0'
     t "the proxy controller value no longer exists" test "$(helm template t "$CHART" -f "$EXAMPLE" --set admission.proxy_controller_user=system:serviceaccount:example:other-controller 2>&1 | grep -c 'admission')" -ge 1
     t "the role cannot change on update" has_rule_text sbx-alpha-none BR_SANDBOX_ROLE_IMMUTABLE "request.operation == 'CREATE' || variables.role == variables.oldRole"
     t "role and pool-id are immutable, other labels are frozen" has_rule_text sbx-alpha-none BR_SANDBOX_LABELS "['br.sandbox/role', 'br.sandbox/pool-id'].all(k"
@@ -75,11 +75,11 @@ def passes($vap; $pod):
 '
 
 model_result() {
-    local ns="$1" mutation="$2"
+    local ns="$1" mutation="$2" render="${3:-ex}"
     jq -r --arg ns "$ns" "${QTY}${MODEL}"'
       (.[] | select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == ($ns + "-pod"))) as $vap
       | (.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template) as $pod
-      | passes($vap; $pod | '"${mutation}"')' "$WORK/ex.json"
+      | passes($vap; $pod | '"${mutation}"')' "$WORK/${render}.json"
 }
 
 check_VAP_model_of_the_pods() {
@@ -122,11 +122,11 @@ check_VAP_every_expression_is_the_exact_text() {
     for code in $CODES; do
         t "the expression of ${code} equals the expected text" expression_is_exactly sbx-alpha-none "$code"
     done
-    t "the policy holds exactly the twelve rules and no other" jqt ex "[${VAP} | select(.metadata.name == \"sbx-alpha-none-pod\") | [.spec.validations[].message | split(\":\")[0]] | . == (\"${CODES}\" | split(\" \"))] | all"
+    t "the policy holds exactly the thirteen rules and no other" jqt ex "[${VAP} | select(.metadata.name == \"sbx-alpha-none-pod\") | [.spec.validations[].message | split(\":\")[0]] | . == (\"${CODES}\" | split(\" \"))] | all"
     t "the size rule of a pool with another size equals the expected text" expression_is_exactly sbx-alpha-full BR_SANDBOX_RESOURCES
     t "the image rule of the allow namespace equals the expected text" expression_is_exactly sbx-alpha-allow BR_SANDBOX_IMAGE
     t "a pod with a role other than sandbox is refused: the role rule is the one case" expression_is_exactly sbx-alpha-none BR_SANDBOX_ROLE
     t "the user-namespace rule has no alternative before the guard and the clause" expression_is_exactly sbx-alpha-none BR_SANDBOX_USERNS_REQUIRED
     t "no expression holds a literal true or false operand of || or &&" jqt ex "[${VAP} | .spec.validations[].expression | select(test(\"(^|[(]|[|][|] |&& )(true|false) ([|][|]|&&)|([|][|]|&&) (true|false)([) ]|$)\"))] | length == 0"
-    t "every isolation rule starts with the guard for role=sandbox pods; any other role is refused by the role rule" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|LABELS)\")) | .expression | startswith(\"variables.role != 'sandbox' || \") and (. | split(\"variables.role != 'sandbox' || \") | length == 2)] | all"
+    t "every isolation rule starts with the guard for role=sandbox pods; any other role is refused by the role rule" jqt ex "[${VAP} | .spec.validations[] | select(.message | test(\"^BR_SANDBOX_(USERNS|HOST|VOLUME|CAPABILITY|PRIVILEGE|RESOURCES|IMAGE|TOKEN|IMMUTABLE|RUN_AS_NON_ROOT|LABELS)\")) | .expression | startswith(\"variables.role != 'sandbox' || \") and (. | split(\"variables.role != 'sandbox' || \") | length == 2)] | all"
 }

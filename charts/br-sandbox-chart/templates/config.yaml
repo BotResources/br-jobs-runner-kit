@@ -10,18 +10,20 @@ metadata:
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
 data:
-  config.yaml: |
-    {{- include "br-sandbox-chart.config.namespace" (dict "root" $ "ns" $ns) | nindent 4 }}
+  config.json: |
+    {{- include "br-sandbox-chart.adapter.document" (dict "root" $ "ns" $ns) | nindent 4 }}
 {{- end }}
+{{- if .Values.keeper.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: br-sandbox-config
+  name: br-sandbox-keeper-config
   namespace: {{ $system }}
   labels:
     {{- include "br-sandbox-chart.labels" . | nindent 4 }}
 data:
-  config.yaml: |
-    {{- include "br-sandbox-chart.config.system" . | nindent 4 }}
+  config.json: |
+    {{- include "br-sandbox-chart.keeper.document" . | nindent 4 }}
+{{- end }}
 {{- include "br-sandbox-chart.slot.keeper.objects" . }}

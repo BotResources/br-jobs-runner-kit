@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: warm-{{ $ns.client }}-{{ $ns.mode }}
+  name: {{ include "br-sandbox-chart.replicaset_name" $ns }}
   namespace: {{ $ns.name }}
   labels:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}

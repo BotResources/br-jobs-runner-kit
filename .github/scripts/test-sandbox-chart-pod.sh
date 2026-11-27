@@ -51,7 +51,7 @@ check_PSS_namespace_labels() {
     section "PSS baseline is enforced, restricted warns and audits"
     t "every managed namespace carries the Pod Security labels and the managed label" jqt ex '[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.labels | select(.["pod-security.kubernetes.io/enforce"] == "baseline" and .["pod-security.kubernetes.io/warn"] == "restricted" and .["pod-security.kubernetes.io/audit"] == "restricted" and (.["br.sandbox/mode"] | IN("none", "allow", "full")) and .["br.sandbox/client"] != null)] | length == 4'
     t "the system namespace is not managed, so no exclusion applies to it" jqt ex '.[] | select(.kind == "Namespace" and .metadata.name == "sbx-system") | .metadata.labels | has("br.sandbox/managed") | not'
-    t "the sandbox service account has no token and no Role" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox" and .automountServiceAccountToken == false)] | length == 4'
+    t "the sandbox service account of each managed namespace has no token" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox" and .automountServiceAccountToken == false)] | length == 4'
 }
 
 check_label_contract() {
@@ -61,21 +61,30 @@ check_label_contract() {
     t "no policy selects a pod by the pool label" jqt ex "[${NP} | .. | objects | select(has(\"matchLabels\")) | .matchLabels | keys[] | select(. == \"br.sandbox/pool\")] | length == 0"
 }
 
-check_slots_render_nothing() {
-    section "slots render nothing now"
+check_slots_hold_the_egress_proxy_and_the_keeper_slot_is_empty() {
+    section "slots: the egress slots are filled, the keeper slot renders nothing"
     local slot
     for slot in egress.env egress.volumes egress.volume_mounts egress.objects keeper.objects; do
         t "the slot ${slot} exists" grep -q "define \"br-sandbox-chart.slot.${slot}\"" "$CHART/templates/_slots.tpl"
     done
     t "the render holds only the kinds of the chart" jqt ex '[.[].kind] | unique - ["Namespace", "ServiceAccount", "ResourceQuota", "LimitRange", "ReplicaSet", "NetworkPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "ConfigMap", "Job", "CronJob", "Deployment"] == []'
-    render egon -f "$EXAMPLE" --set egress.enabled=true
-    t "egress.enabled true renders no proxy object: the slot objects stay empty" jqt egon '([.[] | select(.kind == "Namespace")] | length) > 0 and ([.[] | select(.kind == "Deployment" or .kind == "Service" or .kind == "Secret")] | length) == 0'
+    t "with egress disabled the proxy slots render nothing: no Service, no proxy ConfigMap, no CA ConfigMap, no proxy env or CA mount" jqt ex '([.[] | select(.kind == "Service" or (.kind == "ConfigMap" and (.metadata.name | startswith("br-sandbox-proxy") or . == "br-sandbox-ca")))] | length == 0) and ([.[] | select(.kind == "ReplicaSet") | .spec.template.spec | (.containers[0].env | map(.name)) == ["HOME"] and (.volumes | map(.name) | index("egress-ca") == null)] | all)'
+    render egon -f "$EXAMPLE" -f "$EGRESS_VALUES"
+    t "egress.enabled true renders a Deployment and a Service in each egress namespace" jqt egon '([.[] | select(.kind == "Deployment" and .metadata.name == "br-sandbox-proxy")] | length) == 2 and ([.[] | select(.kind == "Service")] | length) == 2'
+    fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.allow.proxy.cluster_ip}" -f "$(vals slotdomain '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')" --set egress.enabled=true --set egress.proxy.reload.key_secret=proxy-reload
 }
 
 check_egress_values_fail_while_egress_is_disabled() {
     section "a credential set or an allow list fails the render while egress is disabled"
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowdomains '.clients.alpha.modes.allow.allow.domains = ["git.example.test"]')"
     fails_with "BR_SANDBOX_EGRESS_DISABLED{client=alpha,mode=allow,key=allow}" -f "$(vals allowcidrs '.clients.alpha.modes.allow.allow.cidrs = ["192.0.2.0/24"]')"
-    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset '.clients.beta.modes.none.credential_set = {"git": "set-a"}')"
+    fails_with "BR_SANDBOX_EGRESS_DISABLED{client=beta,mode=none,key=credential_set}" -f "$(vals credset ".clients.beta.modes.none.credential_set = ${CREDENTIAL_SET}")"
     t "empty lists and an empty credential set render" helm template t "$CHART" -f "$(vals emptyegress '.clients.alpha.modes.allow.allow = {"domains": [], "cidrs": []} | .clients.beta.modes.none.credential_set = {}')"
+}
+
+check_node_selector_reaches_the_pool() {
+    section "pool.node_selector reaches the pod of the pool"
+    t "without a node selector the pod has none" jqt ex "${SANDBOX_PODS} | all(.spec | has(\"nodeSelector\") | not)"
+    render selector -f "$EXAMPLE" --set pool.node_selector.prepared=userns
+    t "a node selector reaches every pool of the render" jqt selector "${SANDBOX_PODS} | all(.spec.nodeSelector == {\"prepared\": \"userns\"})"
 }
