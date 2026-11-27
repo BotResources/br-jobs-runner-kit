@@ -8,6 +8,7 @@ use serde_json::{Map, Value, json};
 const CONFIG_MAP: &str = "br-sandbox-config";
 const CONFIG_KEY: &str = "config.json";
 const KEY: &str = "exec_timeout_seconds";
+const RENDER_FAULT: &str = "BR_SANDBOX_EXEC_TIMEOUT_INVALID";
 const DEFAULT: u64 = 600;
 const OVERLAY_VALUE: u64 = 1800;
 
@@ -154,7 +155,17 @@ fn the_adapter_refuses_a_document_with_a_zero_bound_and_the_chart_never_renders_
         matches!(refused, Err(ConfigError::NotAboveZero { key }) if key == KEY),
         "{refused:?}"
     );
-    for refused in ["exec_timeout_seconds=0", "exec_timeout_seconds=null"] {
-        assert!(!render(None, &[refused]).status.success(), "{refused}");
+    for refused in ["exec_timeout_seconds=0", "exec_timeout_seconds=-1"] {
+        let failure = failure_text(&[refused]);
+        assert!(failure.contains(KEY), "{refused}: {failure}");
+        assert!(!failure.contains(RENDER_FAULT), "{refused}: {failure}");
     }
+    let failure = failure_text(&["exec_timeout_seconds=null"]);
+    assert!(failure.contains(RENDER_FAULT), "null: {failure}");
+}
+
+fn failure_text(sets: &[&str]) -> String {
+    let output = render(None, sets);
+    assert!(!output.status.success(), "{sets:?} rendered");
+    String::from_utf8_lossy(&output.stderr).into_owned()
 }
