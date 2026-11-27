@@ -45,6 +45,27 @@ pub fn tar_restore(tools: &AbsolutePath) -> Vec<String> {
     extract(tools, "--same-owner", "/")
 }
 
+fn root_entry_pattern(root: &AbsolutePath) -> String {
+    let mut pattern = String::from("^");
+    for character in root.relative().chars() {
+        if matches!(character, '\\' | '*' | '?' | '[' | ']' | '$' | '^') {
+            pattern.push('\\');
+        }
+        pattern.push(character);
+    }
+    pattern.push('$');
+    pattern
+}
+
+pub fn tar_restore_scoped(tools: &AbsolutePath, scope: &[AbsolutePath]) -> Vec<String> {
+    let mut argv = tar_restore(tools);
+    for root in scope {
+        argv.push("--exclude".to_owned());
+        argv.push(root_entry_pattern(root));
+    }
+    argv
+}
+
 pub fn tar_write(tools: &AbsolutePath) -> Vec<String> {
     extract(tools, "--no-same-owner", WORK_DIR)
 }

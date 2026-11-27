@@ -93,7 +93,9 @@ impl Env {
                     found: 0,
                 })?;
         let decoder = PartDecoder::new(manifest.part())?;
-        let request = self.agent_request(pod, argv::tar_restore(self.config.tools_path()), true);
+        let command =
+            argv::tar_restore_scoped(self.config.tools_path(), self.config.save_scope_paths());
+        let request = self.agent_request(pod, command, true);
         let ExecIo {
             stdin,
             stdout,

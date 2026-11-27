@@ -26,7 +26,7 @@ async fn fake_cluster_and_store_a_restore_streams_the_decoded_tar_into_bsdtar_an
     assert_eq!(execs.len(), 1);
     assert_eq!(
         execs[0].request.command,
-        argv::tar_restore(rig.config.tools_path())
+        argv::tar_restore_scoped(rig.config.tools_path(), rig.config.save_scope_paths())
     );
     assert_eq!(execs[0].request.container, "sandbox");
     assert_eq!(execs[0].stdin(), staged.tar);

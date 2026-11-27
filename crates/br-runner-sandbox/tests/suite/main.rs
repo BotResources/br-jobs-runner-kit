@@ -36,6 +36,7 @@ mod part_tar;
 mod port_ops;
 mod release_box;
 mod restore_flow;
+mod restore_mount_root;
 mod restore_recheck;
 mod s3_list;
 mod s3_store;

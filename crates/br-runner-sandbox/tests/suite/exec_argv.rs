@@ -78,6 +78,42 @@ fn the_restore_command_extracts_from_the_root_keeping_owner_and_permissions() {
 }
 
 #[test]
+fn the_scoped_restore_command_is_the_restore_call_that_skips_the_scope_root_entries() {
+    let config = config();
+    let command = argv::tar_restore_scoped(config.tools_path(), config.save_scope_paths());
+    let plain = argv::tar_restore(config.tools_path());
+    assert_eq!(command[..plain.len()], plain[..]);
+    assert_eq!(
+        texts(&command[plain.len()..]),
+        ["--exclude", "^work$", "--exclude", "^home/agent$",]
+    );
+    for flag in ["--same-owner", "--numeric-owner", "--preserve-permissions"] {
+        assert!(command.contains(&flag.to_owned()), "{flag} in {command:?}");
+    }
+    let directory = position(&command, "-C").expect("a directory option");
+    assert_eq!(command[directory + 1], "/");
+}
+
+#[test]
+fn the_scoped_restore_command_over_an_empty_scope_is_the_plain_restore_call() {
+    let config = config();
+    assert_eq!(
+        argv::tar_restore_scoped(config.tools_path(), &[]),
+        argv::tar_restore(config.tools_path())
+    );
+}
+
+#[test]
+fn a_scope_root_with_pattern_characters_is_matched_literally_and_whole() {
+    let config = config();
+    let command = argv::tar_restore_scoped(config.tools_path(), &[absolute("/we[ir]d*$/a?b^c\\d")]);
+    assert_eq!(
+        command.last().map(String::as_str),
+        Some("^we\\[ir\\]d\\*\\$/a\\?b\\^c\\\\d$")
+    );
+}
+
+#[test]
 fn the_write_command_extracts_into_the_work_folder_without_taking_the_owner() {
     let config = config();
     let command = argv::tar_write(config.tools_path());
@@ -105,6 +141,7 @@ fn every_tar_call_carries_the_three_metadata_refusals() {
     let calls = [
         argv::tar_create(config.tools_path(), config.save_scope_paths()),
         argv::tar_restore(config.tools_path()),
+        argv::tar_restore_scoped(config.tools_path(), config.save_scope_paths()),
         argv::tar_write(config.tools_path()),
         argv::tar_seed(config.seed_tools_path(), config.seed_root()),
     ];
@@ -122,6 +159,7 @@ fn the_header_charset_option_is_on_create_only() {
     assert!(create.contains(&"hdrcharset=BINARY".to_owned()));
     let extracts = [
         argv::tar_restore(config.tools_path()),
+        argv::tar_restore_scoped(config.tools_path(), config.save_scope_paths()),
         argv::tar_write(config.tools_path()),
         argv::tar_seed(config.seed_tools_path(), config.seed_root()),
     ];
