@@ -15,8 +15,11 @@ check_runner_role_and_binding() {
     t "the runner holds pods, pods/exec, replicasets read and its config only" test "$(role_rules br-sandbox-runner ex)" = "configmaps:get pods/exec:create pods:create,delete,get,list,patch,watch replicasets:get,list,watch"
     t "the runner Role names the ConfigMap it reads" jqt ex "$(role_filter br-sandbox-runner) | .rules[] | select(.resources == [\"configmaps\"]) | .resourceNames == [\"br-sandbox-config\"]"
     t "the runner binding names the service account of the values" jqt ex '.[] | select(.kind == "RoleBinding" and .metadata.name == "br-sandbox-runner" and .metadata.namespace == "sbx-beta-none") | .subjects == [{"kind": "ServiceAccount", "name": "runner", "namespace": "runners"}]'
-    t "no Role of the render grants secrets" jqt keeper '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
-    t "no Role of the render grants a wildcard verb" jqt keeper '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].verbs[] | select(. == "*")] | length == 0'
+    local render
+    for render in keeper cred keeperegress; do
+        t "in the ${render} render no Role grants secrets" jqt "$render" '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].resources[] | select(. == "secrets" or . == "*")] | length == 0'
+        t "in the ${render} render no Role grants a wildcard verb" jqt "$render" '[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[].verbs[] | select(. == "*")] | length == 0'
+    done
 }
 
 check_keeper_rights() {
