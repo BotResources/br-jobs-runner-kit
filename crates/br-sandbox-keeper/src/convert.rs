@@ -91,6 +91,13 @@ pub fn pod_facts(pod: &Pod, keys: &PodKeys) -> Option<PodFacts> {
             .flatten()
             .chain(status.container_statuses.iter().flatten())
     });
+    let ready = status
+        .and_then(|status| status.conditions.as_ref())
+        .is_some_and(|conditions| {
+            conditions
+                .iter()
+                .any(|condition| condition.type_ == READY && condition.status == TRUE)
+        });
     Some(PodFacts {
         namespace: pod.metadata.namespace.clone().unwrap_or_default(),
         name: pod.metadata.name.clone().unwrap_or_default(),
@@ -106,13 +113,8 @@ pub fn pod_facts(pod: &Pod, keys: &PodKeys) -> Option<PodFacts> {
             .creation_timestamp
             .as_ref()
             .map_or_else(|| Timestamp::from_system_time(UNIX_EPOCH), timestamp_of),
-        ready: status
-            .and_then(|status| status.conditions.as_ref())
-            .is_some_and(|conditions| {
-                conditions
-                    .iter()
-                    .any(|condition| condition.type_ == READY && condition.status == TRUE)
-            }),
+        ready,
+        been_ready: false,
         owned: pod
             .metadata
             .owner_references

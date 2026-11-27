@@ -146,6 +146,36 @@ async fn the_leader_serves_the_health_endpoints_expires_pods_and_saves_and_stops
 }
 
 #[tokio::test(start_paused = true)]
+async fn every_managed_namespace_is_served_also_one_with_no_configured_pool() {
+    let rig = rig();
+    rig.kube.set_namespaces(&["sbx", "other"]);
+    rig.kube.put_pod(crate::facts::PodFacts {
+        namespace: "other".to_owned(),
+        pool_id: Some("ghost".to_owned()),
+        ..fixtures::warm("g0", START - 5000)
+    });
+    rig.kube.put_pod(crate::facts::PodFacts {
+        namespace: "other".to_owned(),
+        pool_id: Some("ghost".to_owned()),
+        ..fixtures::warm("g1", START - 10)
+    });
+    let (listener, address) = listener().await;
+    let shutdown = CancellationToken::new();
+    let handle = tokio::spawn(run_on(
+        listener,
+        testing::config(),
+        parts(&rig, "a"),
+        shutdown.clone(),
+    ));
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(request(address, "GET", "/readyz").await.0, 200);
+    assert!(rig.kube.pod("other", "g0").is_none());
+    assert!(rig.kube.pod("other", "g1").is_some());
+    shutdown.cancel();
+    assert_eq!(handle.await.unwrap(), Ok(()));
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_follower_keeps_its_watches_ready_and_writes_nothing() {
     let rig = rig();
     rig.kube.set_lease(Some(crate::cluster::LeaseFacts {

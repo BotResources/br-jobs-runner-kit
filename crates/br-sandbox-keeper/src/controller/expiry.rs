@@ -1,6 +1,9 @@
 use std::collections::HashSet;
+use std::time::Duration;
 
 use crate::cluster::DeleteOutcome;
+use crate::config::{DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, DEFAULT_IDLE_TTL_SECONDS};
+use crate::facts::PodFacts;
 use crate::rules::{Action, DeleteReason, ExpiryRules, judge_pod};
 
 use super::{Engine, PodId, PoolId};
@@ -8,16 +11,29 @@ use super::{Engine, PodId, PoolId};
 const CONFLICT_ATTEMPTS: usize = 4;
 
 impl Engine {
-    fn expiry_rules(&self, namespace: &str, pool_id: &str) -> Option<ExpiryRules> {
-        let pool = self.config.pool(namespace, pool_id)?;
-        Some(ExpiryRules {
+    fn expiry_rules(&self, facts: &PodFacts) -> ExpiryRules {
+        let pool = self
+            .configured_pool(facts)
+            .and_then(|(namespace, id)| self.config.pool(&namespace, &id));
+        ExpiryRules {
             warm_max_age: self.config.warm_max_age,
             stuck_ttl: self.config.stuck_ttl,
             failed_pod_ttl: self.config.failed_pod_ttl,
             pending_alarm: self.config.pending_alarm,
-            idle_ttl: pool.idle_ttl,
-            idle_keep_min_state_bytes: pool.idle_keep_min_state_bytes,
-        })
+            idle_ttl: pool.map_or(Duration::from_secs(DEFAULT_IDLE_TTL_SECONDS), |pool| {
+                pool.idle_ttl
+            }),
+            idle_keep_min_state_bytes: pool.map_or(DEFAULT_IDLE_KEEP_MIN_STATE_BYTES, |pool| {
+                pool.idle_keep_min_state_bytes
+            }),
+        }
+    }
+
+    pub(crate) fn configured_pool(&self, facts: &PodFacts) -> Option<PoolId> {
+        let id = facts.pool_id.as_ref()?;
+        self.config
+            .pool(&facts.namespace, id)
+            .map(|_| (facts.namespace.clone(), id.clone()))
     }
 
     pub(crate) async fn judge(&mut self, id: &PodId) {
@@ -28,13 +44,7 @@ impl Engine {
             };
             let facts = tracked.facts.clone();
             let failed_since = tracked.failed_since;
-            let Some(rules) = facts
-                .pool_id
-                .as_deref()
-                .and_then(|pool| self.expiry_rules(&facts.namespace, pool))
-            else {
-                return;
-            };
+            let rules = self.expiry_rules(&facts);
             let now = self.clock.now();
             let judgment = judge_pod(&facts, &rules, failed_since, now);
             if let Some(tracked) = self.pods.get_mut(id) {
@@ -43,10 +53,9 @@ impl Engine {
             match judgment.action {
                 Action::Keep => {
                     self.unreadable.remove(&facts.uid);
-                    if let Some(due) = facts
-                        .pool_id
-                        .clone()
-                        .and_then(|pool| self.pending_due.get_mut(&(facts.namespace.clone(), pool)))
+                    if let Some(due) = self
+                        .configured_pool(&facts)
+                        .and_then(|pool| self.pending_due.get_mut(&pool))
                     {
                         due.remove(&facts.uid);
                     }
@@ -63,9 +72,9 @@ impl Engine {
                 }
                 Action::PendingAlarm => {
                     self.unreadable.remove(&facts.uid);
-                    if let Some(pool) = facts.pool_id.clone() {
+                    if let Some(pool) = self.configured_pool(&facts) {
                         self.pending_due
-                            .entry((facts.namespace.clone(), pool))
+                            .entry(pool)
                             .or_default()
                             .insert(facts.uid.clone(), facts.name.clone());
                     }

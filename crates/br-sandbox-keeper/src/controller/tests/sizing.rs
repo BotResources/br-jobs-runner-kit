@@ -61,6 +61,7 @@ async fn the_rate_is_the_peak_of_a_bucket_and_not_the_mean_of_the_window() {
 #[tokio::test(start_paused = true)]
 async fn a_cold_pod_created_claimed_counts_once_and_a_pod_seen_in_a_snapshot_does_not() {
     let mut bed = bed(true);
+    bed.sync().await;
     let cold = PodFacts {
         created_at: at(START),
         ..fixtures::claimed("cold", true, START)
@@ -83,6 +84,7 @@ async fn a_cold_pod_created_claimed_counts_once_and_a_pod_seen_in_a_snapshot_doe
 #[tokio::test(start_paused = true)]
 async fn an_owned_claimed_pod_or_an_old_unseen_one_is_not_a_cold_claim() {
     let mut bed = bed(true);
+    bed.sync().await;
     let owned = PodFacts {
         owned: true,
         created_at: at(START),

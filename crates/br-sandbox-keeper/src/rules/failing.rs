@@ -52,7 +52,7 @@ fn container_failure(container: &ContainerFacts) -> Option<PodFailure> {
 }
 
 pub fn pod_failure(pod: &PodFacts) -> Option<PodFailure> {
-    if pod.ready || pod.deleting {
+    if pod.ready || pod.been_ready || pod.deleting {
         return None;
     }
     let failures: Vec<PodFailure> = pod

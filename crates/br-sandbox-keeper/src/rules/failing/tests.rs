@@ -218,3 +218,14 @@ fn a_condition_that_is_already_as_judged_is_not_written() {
     let none = [existing("False", "NoWarmPodFailing", "", 100)];
     assert_eq!(condition_write(&none, &judged(false), at(500)), None);
 }
+
+#[test]
+fn a_pod_that_has_been_ready_is_not_failing_when_a_container_crashes_later() {
+    let restarted = PodFacts {
+        been_ready: true,
+        ..pending("a", vec![waiting("CrashLoopBackOff")])
+    };
+    assert_eq!(pod_failure(&restarted), None);
+    let never_ready = pending("a", vec![waiting("CrashLoopBackOff")]);
+    assert!(pod_failure(&never_ready).is_some());
+}

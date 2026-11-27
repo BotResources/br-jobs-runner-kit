@@ -45,7 +45,10 @@ pub struct Engine {
     pub(crate) pending_due: HashMap<PoolId, HashMap<String, String>>,
     pub(crate) pending_notified: HashSet<String>,
     pub(crate) unreadable: HashSet<String>,
+    pub(crate) watched: HashSet<String>,
+    pub(crate) synced: HashSet<String>,
     pub(crate) next_tick: Timestamp,
+    pub(crate) next_discovery: Timestamp,
 }
 
 pub fn pool_id(pool: &PoolConfig) -> PoolId {
@@ -62,6 +65,7 @@ impl Engine {
         config: Arc<KeeperConfig>,
     ) -> Self {
         let next_tick = clock.now();
+        let next_discovery = next_tick.plus(config.sweep_interval);
         Self {
             api,
             clock,
@@ -77,17 +81,52 @@ impl Engine {
             pending_due: HashMap::new(),
             pending_notified: HashSet::new(),
             unreadable: HashSet::new(),
+            watched: HashSet::new(),
+            synced: HashSet::new(),
             next_tick,
+            next_discovery,
         }
     }
 
+    fn watch(api: &dyn KubeApi, namespace: &str) -> BoxStream<'static, (String, PodEvent)> {
+        let owned = namespace.to_owned();
+        api.watch_pods(namespace)
+            .map(move |event| (owned.clone(), event))
+            .boxed()
+    }
+
     pub fn watches(api: &dyn KubeApi, namespaces: &[String]) -> NamespacedEvents {
-        futures::stream::select_all(namespaces.iter().map(|namespace| {
-            let owned = namespace.clone();
-            api.watch_pods(namespace)
-                .map(move |event| (owned.clone(), event))
-                .boxed()
-        }))
+        futures::stream::select_all(
+            namespaces
+                .iter()
+                .map(|namespace| Self::watch(api, namespace)),
+        )
+    }
+
+    async fn rediscover(&mut self, events: &mut NamespacedEvents) {
+        let now = self.clock.now();
+        if !self.next_discovery.has_passed(now) {
+            return;
+        }
+        self.next_discovery = now.plus(self.config.sweep_interval);
+        let found = self
+            .api
+            .managed_namespaces(&self.config.managed_namespace_selector)
+            .await;
+        match found {
+            Ok(namespaces) => {
+                for namespace in namespaces {
+                    if self.watched.insert(namespace.clone()) {
+                        events.push(Self::watch(self.api.as_ref(), &namespace));
+                    }
+                }
+            }
+            Err(error) => self.action_failed(
+                "the managed namespaces could not be listed",
+                &self.config.managed_namespace_selector,
+                &error,
+            ),
+        }
     }
 
     pub(crate) fn retry_period(&self) -> Duration {
@@ -103,7 +142,7 @@ impl Engine {
         let pods = self.pods.values().filter_map(|tracked| tracked.recheck_at);
         let pools = self.pool_wake.values().copied();
         pods.chain(pools)
-            .chain(std::iter::once(self.next_tick))
+            .chain([self.next_tick, self.next_discovery])
             .fold(None, |best, candidate| earliest(best, Some(candidate)))
             .unwrap_or(self.next_tick)
     }
@@ -144,7 +183,9 @@ impl Engine {
         self.evaluate_all().await;
     }
 
-    pub async fn run(mut self, mut events: NamespacedEvents, shutdown: CancellationToken) {
+    pub async fn run(mut self, namespaces: &[String], shutdown: CancellationToken) {
+        let mut events = Self::watches(self.api.as_ref(), namespaces);
+        self.watched.extend(namespaces.iter().cloned());
         loop {
             let pause = until(self.clock.now(), self.next_wake());
             tokio::select! {
@@ -154,7 +195,10 @@ impl Engine {
                     None => return,
                 },
                 () = self.leadership.gained() => self.gained_leadership().await,
-                () = tokio::time::sleep(pause) => self.wake().await,
+                () = tokio::time::sleep(pause) => {
+                    self.wake().await;
+                    self.rediscover(&mut events).await;
+                }
             }
         }
     }

@@ -147,6 +147,7 @@ async fn a_follower_deletes_nothing() {
 #[tokio::test(start_paused = true)]
 async fn the_event_warm_pods_pending_is_raised_once_for_each_pod_and_never_for_a_failing_pod() {
     let mut bed = bed(true);
+    bed.sync().await;
     let pending = bed.kube.put_pod(PodFacts {
         phase: Phase::Pending,
         ready: false,
@@ -181,6 +182,7 @@ async fn the_event_warm_pods_pending_is_raised_once_for_each_pod_and_never_for_a
 #[tokio::test(start_paused = true)]
 async fn a_deleted_pod_event_forgets_the_pod() {
     let mut bed = bed(true);
+    bed.sync().await;
     let pod = bed.kube.put_pod(old_warm("w0", 10));
     bed.applied(pod).await;
     assert!(bed.has_metric("br_sandbox_keeper_pool_warm_ready{pool=\"p\"} 1"));

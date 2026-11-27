@@ -22,6 +22,7 @@ impl Engine {
                 for id in ids {
                     self.judge(&id).await;
                 }
+                self.synced.insert(namespace.to_owned());
                 self.readiness.namespace_synced(namespace);
             }
             PodEvent::Applied(pod) => {
@@ -69,15 +70,16 @@ impl Engine {
 
     pub(crate) fn apply(
         &mut self,
-        pod: PodFacts,
+        mut pod: PodFacts,
         count_unseen: bool,
         touched: &mut HashSet<PoolId>,
     ) -> Option<PodId> {
-        let pool = pool_of(&pod)?;
-        self.config.pool(&pool.0, &pool.1)?;
         let now = self.clock.now();
         let id: PodId = (pod.namespace.clone(), pod.name.clone());
         let previous = self.pods.get(&id);
+        pod.been_ready =
+            pod.been_ready || pod.ready || previous.is_some_and(|tracked| tracked.facts.been_ready);
+        let configured = self.configured_pool(&pod);
         let was_warm = previous.is_some_and(|tracked| tracked.facts.pool_state == PoolState::Warm);
         let unseen = previous.is_none();
         let changed_failure = previous.is_none_or(|tracked| {
@@ -91,16 +93,18 @@ impl Engine {
             && !pod.owned
             && elapsed(now, pod.created_at) <= self.config.rate_window;
         let warm_to_claimed = was_warm && pod.pool_state == PoolState::Claimed;
-        if warm_to_claimed || cold_claim {
-            let (window, bucket) = (self.config.rate_window, self.config.rate_bucket);
-            self.claims
-                .entry(pool.clone())
-                .or_insert_with(|| ClaimWindow::new(window, bucket))
-                .record(now);
-            touched.insert(pool.clone());
-        }
-        if changed_failure {
-            touched.insert(pool);
+        if let Some(pool) = configured {
+            if warm_to_claimed || cold_claim {
+                let (window, bucket) = (self.config.rate_window, self.config.rate_bucket);
+                self.claims
+                    .entry(pool.clone())
+                    .or_insert_with(|| ClaimWindow::new(window, bucket))
+                    .record(now);
+                touched.insert(pool.clone());
+            }
+            if changed_failure {
+                touched.insert(pool);
+            }
         }
         let failed_since = if pod.phase == Phase::Failed {
             Some(

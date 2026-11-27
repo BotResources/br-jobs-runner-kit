@@ -5,6 +5,8 @@ use super::input::{FloorInput, PoolInput};
 use super::numbers::{Zero, count, required, seconds, small, text};
 
 const DAY_SECONDS: u32 = 86_400;
+pub(crate) const DEFAULT_IDLE_TTL_SECONDS: u64 = 120;
+pub(crate) const DEFAULT_IDLE_KEEP_MIN_STATE_BYTES: u64 = 10_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -114,13 +116,13 @@ impl PoolConfig {
             idle_ttl: seconds(
                 &key("idle_ttl_seconds"),
                 input.idle_ttl_seconds,
-                Some(120),
+                Some(DEFAULT_IDLE_TTL_SECONDS),
                 Zero::Allowed,
             )?,
             idle_keep_min_state_bytes: count(
                 &key("idle_keep_min_state_bytes"),
                 input.idle_keep_min_state_bytes,
-                Some(10_000_000),
+                Some(DEFAULT_IDLE_KEEP_MIN_STATE_BYTES),
                 Zero::Allowed,
             )?,
             id,

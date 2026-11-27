@@ -53,6 +53,9 @@ impl Engine {
     }
 
     async fn evaluate_pool(&mut self, pool: &PoolConfig) {
+        if !self.synced.contains(&pool.namespace) {
+            return;
+        }
         self.refresh_pool_metrics(pool);
         if !self.leadership.is_leader() {
             return;

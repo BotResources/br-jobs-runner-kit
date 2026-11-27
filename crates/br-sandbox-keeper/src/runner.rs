@@ -113,11 +113,7 @@ async fn start(shared: &Shared, parts: &Parts) -> Result<Vec<String>, KeeperErro
         }
         Err(error) => return Err(KeeperError::StoreUnreachable(error.to_string())),
     }
-    let mut watched: Vec<String> = config
-        .pools
-        .iter()
-        .map(|pool| pool.namespace.clone())
-        .collect();
+    let mut watched = managed;
     watched.sort();
     watched.dedup();
     shared.readiness.expect(watched.clone());
@@ -127,7 +123,6 @@ async fn start(shared: &Shared, parts: &Parts) -> Result<Vec<String>, KeeperErro
 
 fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: &[String]) {
     let config = &shared.config;
-    let events = Engine::watches(parts.api.as_ref(), watched);
     let engine = Engine::new(
         parts.api.clone(),
         parts.clock.clone(),
@@ -137,8 +132,9 @@ fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: 
         config.clone(),
     );
     let stop = shared.shutdown.clone();
+    let watched = watched.to_vec();
     tasks.spawn(async move {
-        engine.run(events, stop).await;
+        engine.run(&watched, stop).await;
         "controller"
     });
     let elector = Elector {
