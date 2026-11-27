@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- `resource`: the type of the custom resource `SandboxPool` (`sandbox.botresources.ai/v1alpha1`, namespaced, status subresource): `SandboxPool` (implements `kube::Resource`; the `spec` stays a raw value so a bad spec fails one resource and not a list), `SandboxPoolSpec`, `PoolSize`, `SizeBounds`, `FloorSpec`, `SandboxPoolStatus`, `SpecError`, `DefinitionError`, the constants `GROUP`, `VERSION`, `KIND`, `LIST_KIND`, `PLURAL`, `SINGULAR`, `MAX_FLOORS`, `MAX_TIME_LENGTH`, `DEFAULT_REFILL_SECONDS`, `DEFAULT_MARGIN`. `SandboxPool::read_spec` reads the spec strictly (`deny_unknown_fields` at the spec, in `size`, in `cpu`, `memory` and `disk`, and in each item of `floors`).
+- `resource::definition` and `resource::definition_yaml`: the `CustomResourceDefinition` that the type gives, with `x-kubernetes-preserve-unknown-fields` on each object level of the spec and on the status, `maxItems: 16` on `floors`, `maxLength: 64` on `from` and `to`, the printer columns `Desired`, `Ready`, `Accepted` and `Age`, and the four CEL rules that a real API server of v1.33.6 ran (no rule on a request against its limit). The file `crates/br-sandbox-keeper/definition/sandboxpools.yaml` is its YAML text.
+- `rights`: `RIGHTS` (the rights table of the intent as data, with `Right` and `RightScope`), `POD_TEMPLATE_CONFIGMAP`, and the closed list of network policy names (`NETWORK_POLICY_NAMES`, `NETWORK_POLICY_DEFAULT_DENY`, `NETWORK_POLICY_EGRESS_ALLOW`, `NETWORK_POLICY_EGRESS_FULL`).
+- `serde-saphyr` is now a dependency (it was a dev-dependency, and is already in the lock through `kube`).
+
+### Tests
+
+- The checked-in definition file equals the generated definition; each level of the type has the keys of its schema; the preserve mark, the bounds and the four rules are held; no other rule is present.
+- The spec is read strictly at each level, with the defaults of the table, and a bad spec does not fail the object that holds it.
+- The rights table equals the table of the intent row by row, and has no wildcard, no `escalate`, `bind` or `impersonate`, and no write on the objects that the keeper only reads. The rights test of the client now takes the granted set from `RIGHTS`.
+
+### Documentation
+
+- README: "The resource `SandboxPool`" and "Rights table", and the two new rows of the public surface. This version does not yet validate every rule of the resource, does not read a resource or a network policy, and does not call the new rights.
+
 ## 0.1.1
 
 ### Fixed

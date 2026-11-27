@@ -16,6 +16,8 @@ mod http;
 mod leader;
 mod metrics;
 mod readiness;
+pub mod resource;
+pub mod rights;
 pub mod rules;
 mod runner;
 mod sealed;

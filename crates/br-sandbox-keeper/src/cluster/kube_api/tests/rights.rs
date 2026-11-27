@@ -8,26 +8,8 @@ use super::stub::{Seen, Wire};
 use super::*;
 use crate::cluster::{EventTarget, KubeApi, PoolEvent};
 use crate::facts::PodVersion;
+use crate::rights::RIGHTS;
 use crate::rules::ConditionWrite;
-
-const GRANTED: [(&str, &str); 16] = [
-    ("get", "pods"),
-    ("list", "pods"),
-    ("watch", "pods"),
-    ("delete", "pods"),
-    ("get", "replicasets"),
-    ("list", "replicasets"),
-    ("watch", "replicasets"),
-    ("patch", "replicasets"),
-    ("patch", "replicasets/status"),
-    ("create", "events"),
-    ("get", "leases"),
-    ("create", "leases"),
-    ("update", "leases"),
-    ("get", "namespaces"),
-    ("list", "namespaces"),
-    ("watch", "namespaces"),
-];
 
 const USED: [(&str, &str); 12] = [
     ("get", "pods"),
@@ -144,9 +126,14 @@ async fn every_call_of_the_client_is_a_right_that_the_keeper_is_granted_and_noth
     let wire = Wire::routed(reply);
     drive_every_method(&wire).await;
     let used: BTreeSet<(String, String)> = wire.all().iter().map(right_of).collect();
-    let granted: BTreeSet<(String, String)> = GRANTED
+    let granted: BTreeSet<(String, String)> = RIGHTS
         .iter()
-        .map(|(verb, resource)| ((*verb).to_owned(), (*resource).to_owned()))
+        .flat_map(|right| {
+            right
+                .verbs
+                .iter()
+                .map(|verb| ((*verb).to_owned(), right.resource.to_owned()))
+        })
         .collect();
     assert!(used.is_subset(&granted), "{used:?}");
     let expected: BTreeSet<(String, String)> = USED
