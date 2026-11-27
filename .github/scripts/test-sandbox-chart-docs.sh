@@ -54,13 +54,14 @@ check_file_hygiene() {
 }
 
 check_lint_strict_on_every_fixture() {
-    section "helm lint --strict on the five fixtures"
+    section "helm lint --strict on the six fixtures"
     t "example" helm lint --strict "$CHART" -f "$EXAMPLE"
     t "example and mirror" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$MIRROR_VALUES"
     t "example and keeper" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$KEEPER_VALUES"
     t "example and keeper with non-default values" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$NONDEFAULT_VALUES"
     t "example and egress" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$EGRESS_VALUES"
-    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper keeper-nondefault egress; do' "$ROOT/.github/workflows/ci.yml"
+    t "example and exec timeout" helm lint --strict "$CHART" -f "$EXAMPLE" -f "$CHART/ci/exec-timeout-values.yaml"
+    t "the CI lint loop names every overlay of the chart" grep -qE 'for overlay in mirror keeper keeper-nondefault egress exec-timeout; do' "$ROOT/.github/workflows/ci.yml"
     t "the chart does not render without values" bash -c '! helm template t "$1" >/dev/null 2>&1' _ "$CHART"
 }
 

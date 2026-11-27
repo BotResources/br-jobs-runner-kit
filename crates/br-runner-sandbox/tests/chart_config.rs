@@ -144,6 +144,7 @@ fn read_back(config: &SandboxConfig) -> Map<String, Value> {
         "save_ttl_seconds": config.save_ttl().as_secs(),
         "save_scope_paths": config.save_scope_paths().iter().map(|path| path.as_str()).collect::<Vec<_>>(),
         "restore_timeout_seconds": config.restore_timeout().as_secs(),
+        "exec_timeout_seconds": config.exec_timeout().map(|limit| limit.as_secs()),
         "idle_ttl_seconds": config.idle_ttl().as_secs(),
         "idle_keep_min_state_bytes": config.idle_keep_min_state_bytes(),
         "agent_container": config.agent_container(),

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+Added: the chart value `exec_timeout_seconds`, default `600`, an integer above zero. The adapter document (the ConfigMap `br-sandbox-config` of each sandbox namespace, key `config.json`) gains one key, `exec_timeout_seconds`, and every document holds it.
+
+- The key `exec_timeout_seconds` is the bound, in seconds, of one `run` in the foreground; the same key bounds the seed copy at an open. A command that needs longer uses the background form of `run`. This is read from the code of the adapter and is not tested here or on a cluster. The default `600` (ten minutes) is the choice of the chart.
+- Before 0.3.0 the document had no such key, and the adapter, read from its code, then applied no bound to these two operations. With 0.3.0 each document holds the value: a values file that sets nothing renders `600`.
+- A value that is not an integer above zero is refused: `0`, a negative number, a string and a float by the schema, `null` (which removes the key) by the new render fault `BR_SANDBOX_EXEC_TIMEOUT_INVALID{key=exec_timeout_seconds}`.
+- The README no longer lists `exec_timeout_seconds` among the keys that the chart has no value for.
+- Tests: the offline suite checks the key, the refusals and the sentences of the README and of this entry (`test-sandbox-chart-exec-timeout.sh`, `test-sandbox-chart-exec-timeout-docs.sh`); the lint loop of the CI covers the new overlay `ci/exec-timeout-values.yaml`; the test `crates/br-runner-sandbox/tests/chart_exec_timeout.rs` renders the chart on each fixture, loads each document through `SandboxConfigInput` and `SandboxConfig::try_from`, and checks that the adapter holds the rendered value (`600` by default, `1800` with the new overlay).
+
 ## 0.2.4
 
 The runner can read its document: the chart now renders the ConfigMap `br-sandbox-config` of each sandbox namespace in the flat keys and the format that `SandboxConfigInput` of `br-runner-sandbox` reads. Before, the chart wrote nested YAML (`pool`, `tools`, `save`, `store`, `idle_ttl`, `client`, `mode`) under the key `config.yaml`; the adapter reads JSON, and it silently ignores a key that it does not know, so the nested keys were never read and the required keys were missing.

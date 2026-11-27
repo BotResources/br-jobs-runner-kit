@@ -33,6 +33,7 @@ runtimeClassName: ""
 runAsUser: 10001
 runAsGroup: 10001
 restore_timeout_seconds: 30
+exec_timeout_seconds: 600
 idle_ttl: 120
 idle_keep_min_state_bytes: 10000000
 warm_max_age_seconds: 1800
