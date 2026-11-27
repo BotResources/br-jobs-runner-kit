@@ -50,7 +50,7 @@ check_a_credential_set_in_mode_allow() {
     t "the README says the set is rendered in mode allow after the allowlist and in mode full" grep -qF 'The set is rendered in mode `allow` (the `secrets` transform comes after the allowlist, so the host must be on the allow list too) and in mode `full` (every public name).' "$README"
     t "the README says the swap was measured in mode full with a credential set only, in a Bearer header" grep -qF 'The swap of a placeholder was measured on the pinned proxy image (0.61.0) in mode `full` with a credential set only, in a Bearer `Authorization` header;' "$README"
     t "the README says the swap in mode allow is documented behaviour of the proxy product, not measured here" grep -qF 'the swap in mode `allow` is the documented behaviour of the proxy product, not measured here, and is listed under Not proved offline.' "$README"
-    t "the README does not limit the credential set to mode full" test -z "$(grep -F 'One set per namespace, mode `full`' "$README" || true)"
+    t "the README does not limit the credential set to mode full" test -z "$(grep -F 'One set per namespace, mode `full`' "$DOCS" || true)"
 }
 
 check_the_reload_listener_is_a_loopback_constant() {
@@ -113,7 +113,7 @@ check_the_upstream_trust_of_the_proxy_is_optional() {
     t "the README says the roots of the file are added to the roots of the image directory and do not replace them" grep -qF 'the roots of the file are added to the roots of the certificate directory of the image (`/etc/ssl/certs`); they do not replace them' "$README"
     t "the README says the file alone is enough for a private authority and the public roots stay trusted" grep -qF 'the file alone is enough to trust a private authority, and the public roots of the image directory stay trusted' "$README"
     t "the README says nothing was measured about the default bundle file" grep -qF 'Nothing was measured about the default bundle file of the image when `SSL_CERT_FILE` is set.' "$README"
-    t "the README no longer says the file replaces the default bundle files or must hold every root" test -z "$(grep -E 'instead of the default bundle files|must hold every root' "$README" || true)"
+    t "the README no longer says the file replaces the default bundle files or must hold every root" test -z "$(grep -E 'instead of the default bundle files|must hold every root' "$DOCS" || true)"
     t "the schema description of the key says the roots are added and nothing was measured about the default bundle file" test "$(yq -r '.properties.egress.properties.proxy.properties.upstream_ca.description' "$CHART/values.schema.json" | grep -c 'added to the roots of the certificate directory of the image.*nothing was measured about the default bundle file')" -eq 1
     t "the schema description of the key names the version, the image architecture and the set-up of the measurement" test "$(yq -r '.properties.egress.properties.proxy.properties.upstream_ca.description' "$CHART/values.schema.json" | grep -cF 'measured on the pinned proxy image (0.61.0, arm64 only, in a container on a network with no route out)')" -eq 1
     t "the CHANGELOG says the roots are added and nothing was measured about the default bundle file" grep -qF 'the roots of the file are added to the roots of the certificate directory of the image; they do not replace them' "$CHART/CHANGELOG.md"

@@ -183,5 +183,5 @@ check_the_cluster_default_policy_exclusion_is_stated_for_both_namespace_kinds() 
     section "README: the cluster default network policy exclusion covers managed and egress namespaces"
     t "the README says the cluster default network policy also acts in the egress namespace" grep -qF 'The cluster default network policy (the generated policy per namespace with allow rules for DNS, intra-namespace traffic and ingress controllers) also acts in the egress namespace' "$README"
     t "Needs of the cluster names the exclusion for br.sandbox/egress=true namespaces" grep -qF 'and for namespaces with `br.sandbox/egress=true`' "$README"
-    t "the README no longer makes the egress exclusion conditional" test -z "$(grep -F 'If the cluster policy of the project needs an exclusion there' "$README" || true)"
+    t "the README no longer makes the egress exclusion conditional" test -z "$(grep -F 'If the cluster policy of the project needs an exclusion there' "$DOCS" || true)"
 }

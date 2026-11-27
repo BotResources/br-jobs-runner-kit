@@ -38,10 +38,6 @@ check_the_changelog_040_states_the_breaking_changes() {
     t "the CHANGELOG 0.3.0 and the earlier texts keep their heading" test "$(grep -c '^## 0\.[0-3]\.' "$CHART/CHANGELOG.md")" -ge 8
 }
 
-readme_and_siblings() {
-    cat "$CHART/README.md" "$CHART/POLICIES.md" "$CHART/STAMPER.md" "$CHART/INSTALL.md" "$CHART/LIMITS.md"
-}
-
 install_block() {
     awk -v want="$1" '/^```/ { if (fenced) { fenced = 0; in_block = 0 } else { fenced = 1; n++; in_block = (n == want) } next } in_block' "$CHART/INSTALL.md"
 }
