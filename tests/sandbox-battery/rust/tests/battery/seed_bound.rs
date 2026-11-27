@@ -13,7 +13,7 @@ use battery::ids::Lane;
 use battery::{pool, seeds};
 
 const GONE_SECONDS: u64 = 90;
-const VERSIONS: &str = "adapter 0.1.2, chart 0.2.4, keeper 0.1.1";
+const VERSIONS: &str = "adapter 0.1.3, chart 0.2.4, keeper 0.1.1";
 
 struct Try {
     seconds: f64,

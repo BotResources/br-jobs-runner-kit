@@ -4,6 +4,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin m-coldstart
 
 reps=${COLD_REPS:-10}
+case $reps in
+  '' | *[!0-9]* | 0 | 0[0-9]*) check m-coldstart-reps-valid fail "COLD_REPS must be a whole number of 1 or more, got: $reps"; scenario_end ;;
+esac
 ns=$(ns_of "$CLIENT_A" "$NET_NONE")
 wait_warm "$ns" 1 120 || { check m-coldstart-warm fail "no warm pod in $ns to copy the template from"; scenario_end; }
 warm_name=$(warm_list "$ns" | head -1 | cut -d' ' -f1)
@@ -96,6 +99,7 @@ for variant in $variants; do
   record "m-coldstart-$variant-ready-max" "$(awk -v v="$variant" '$1 == v {print $2}' "$results" | max_of)" ms
   record "m-coldstart-$variant-first-exec-median" "$(awk -v v="$variant" '$1 == v {print $3}' "$results" | median_of)" ms
 done
+verdict m-coldstart-sample-count "$(count_lines < "$results") result lines for $((reps * 4)) planned" test "$(count_lines < "$results")" = "$((reps * 4))"
 verdict m-coldstart-ran "$((reps * 4 - failed)) of $((reps * 4)) cold starts measured, results $results" test "$failed" = 0
 
 scenario_end

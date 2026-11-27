@@ -133,6 +133,8 @@ Given: the harness repo `br-llm-graph-rs` at the release that uses contract 0.2.
 When: run the test suite of the harness with the adapter in place of `MemorySandbox` (a test crate in `br-jobs-runner-kit` that builds the harness cases against the adapter through the port; the suite is not edited).
 Then: all cases pass unchanged. A case that cannot run against a real sandbox (it needs the double only) is listed by name with the reason. Any port change that the suite needs is recorded as a cost line (change, contract minor, harness minor, consumers to repin) and is not made silently. Pass: no case fails; the list of excluded cases is empty or accepted in review.
 
+Status: the upstream cases are not run through the adapter. The test crate `sandbox-battery` does not include an upstream test. The check is proved only by the replacement behaviours listed in its README, and the upstream tests that use a sandbox but are not listed as excluded stay unrun against the adapter.
+
 ## Full flow through the adapter (second pass)
 
 Not done. The script `s12-closed-cluster.sh` runs a hand-made flow on the closed cluster with `kubectl` and `bsdtar`; no Rust test runs the adapter on `sbx-build-closed`. The flow to run once through the adapter on `sbx-build-closed` is: `open`, `run`, `save`, `release`, `open` with the parent (restore), a call in mode `allow` through the proxy (the proxy objects come with a later change of the chart; until then this step cannot run), a scale of the pool. Pass: every step passes with no route to the internet; the proxy logs hold no vendor host.

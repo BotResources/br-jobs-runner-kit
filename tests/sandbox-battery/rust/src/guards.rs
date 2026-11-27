@@ -1,50 +1,67 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use serde_json::Value;
 
 use crate::env::Env;
 use crate::error::Res;
-use crate::evidence::{append, now_utc};
+use crate::evidence::{now_utc, try_append};
 use crate::proc::{Helm, Kube, value_at};
 
-fn restore_failed(evidence: &Path, what: &str, detail: &str) {
+fn report_failure(evidence: &Path, what: &str, detail: &str) {
     let line = format!(
         "{}\tfail\t{}\t{}\n",
         what,
         detail.replace(['\t', '\n', '\r'], " "),
         now_utc()
     );
-    append(evidence, "checks.tsv", &line);
+    if let Err(error) = try_append(evidence, "checks.tsv", &line) {
+        eprintln!("restore {what}: the evidence file cannot be written: {error}");
+    }
     eprintln!("restore {what}: fail {detail}");
-    if !std::thread::panicking() {
-        panic!("the restore {what} failed: {detail}");
+}
+
+fn settle(evidence: &Path, what: &str, failures: &[String]) {
+    for detail in failures {
+        report_failure(evidence, what, detail);
+    }
+    if !failures.is_empty() && !std::thread::panicking() {
+        panic!(
+            "the restore {what} failed {} time(s): {}",
+            failures.len(),
+            failures.join("; ")
+        );
     }
 }
 
-fn run_restore(evidence: &Path, what: &str, command: &mut Command) {
+fn exit_detail(output: &Output) -> String {
+    format!(
+        "exit {:?}: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+            .chars()
+            .take(300)
+            .collect::<String>()
+    )
+}
+
+fn attempt_restore(command: &mut Command) -> Option<String> {
     match command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .output()
     {
-        Ok(output) if output.status.success() => {}
-        Ok(output) => restore_failed(
-            evidence,
-            what,
-            &format!(
-                "exit {:?}: {}",
-                output.status.code(),
-                String::from_utf8_lossy(&output.stderr)
-                    .chars()
-                    .take(300)
-                    .collect::<String>()
-            ),
-        ),
-        Err(error) => restore_failed(evidence, what, &error.to_string()),
+        Ok(output) if output.status.success() => None,
+        Ok(output) => Some(exit_detail(&output)),
+        Err(error) => Some(error.to_string()),
     }
+}
+
+fn run_restore(evidence: &Path, what: &str, command: &mut Command) {
+    let failures: Vec<String> = attempt_restore(command).into_iter().collect();
+    settle(evidence, what, &failures);
 }
 
 pub struct ValueGuard {
@@ -81,42 +98,29 @@ impl Drop for ValueGuard {
             return;
         };
         let args = self.helm.reset_args();
-        let mut child = match Command::new("helm")
+        let mut failures = Vec::new();
+        match Command::new("helm")
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
         {
-            Ok(child) => child,
-            Err(error) => {
-                restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
-                return;
-            }
-        };
-        if let Some(mut stdin) = child.stdin.take()
-            && let Err(error) = stdin.write_all(snapshot.to_string().as_bytes())
-        {
-            restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
-        }
-        match child.wait_with_output() {
-            Ok(output) if output.status.success() => {}
-            Ok(output) => restore_failed(
-                &self.evidence,
-                "helm-values-restore",
-                &format!(
-                    "exit {:?}: {}",
-                    output.status.code(),
-                    String::from_utf8_lossy(&output.stderr)
-                        .chars()
-                        .take(300)
-                        .collect::<String>()
-                ),
-            ),
-            Err(error) => {
-                restore_failed(&self.evidence, "helm-values-restore", &error.to_string());
+            Err(error) => failures.push(error.to_string()),
+            Ok(mut child) => {
+                if let Some(mut stdin) = child.stdin.take()
+                    && let Err(error) = stdin.write_all(snapshot.to_string().as_bytes())
+                {
+                    failures.push(error.to_string());
+                }
+                match child.wait_with_output() {
+                    Ok(output) if output.status.success() => {}
+                    Ok(output) => failures.push(exit_detail(&output)),
+                    Err(error) => failures.push(error.to_string()),
+                }
             }
         }
+        settle(&self.evidence, "helm-values-restore", &failures);
     }
 }
 
@@ -196,11 +200,11 @@ impl PodReaper {
 
 impl Drop for PodReaper {
     fn drop(&mut self) {
-        for pod in &self.pods {
-            run_restore(
-                &self.evidence,
-                "pod-reap",
-                Command::new("kubectl").args([
+        let failures: Vec<String> = self
+            .pods
+            .iter()
+            .filter_map(|pod| {
+                attempt_restore(Command::new("kubectl").args([
                     "--context",
                     &self.context,
                     "-n",
@@ -211,9 +215,11 @@ impl Drop for PodReaper {
                     "--ignore-not-found",
                     "--wait=false",
                     "--grace-period=1",
-                ]),
-            );
-        }
+                ]))
+                .map(|detail| format!("{pod}: {detail}"))
+            })
+            .collect();
+        settle(&self.evidence, "pod-reap", &failures);
     }
 }
 

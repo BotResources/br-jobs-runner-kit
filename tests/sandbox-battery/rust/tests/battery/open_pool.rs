@@ -65,7 +65,8 @@ async fn a_claim_moves_the_pod_out_of_the_replica_set_and_a_new_warm_pod_appears
     let sandbox = adapter::standard(env).await?;
     let mut checks = Checks::new(env);
     pool::wait_warm(env, 1, 120).await?;
-    let before = pool::warm_list(env, true).await?.len();
+    let before_names = pool::warm_list(env, true).await?;
+    let before = before_names.len();
     let (_, turn) = Lane::new()?.first()?;
     let opened = adapter::open(&sandbox, turn, Seed::empty()).await?;
     let pod = pool::pod(env, opened.box_id.as_str())
@@ -86,14 +87,22 @@ async fn a_claim_moves_the_pod_out_of_the_replica_set_and_a_new_warm_pod_appears
         !warm.contains(&opened.box_id.to_string()),
         format!("{warm:?}"),
     );
+    let new_warm = |names: Vec<String>| -> Vec<String> {
+        names
+            .into_iter()
+            .filter(|name| !before_names.contains(name))
+            .collect()
+    };
     wait_until("the replica set to make a new warm pod", 120, || async {
-        Ok(pool::warm_list(env, true).await?.len() >= before)
+        let now = pool::warm_list(env, true).await?;
+        Ok(now.len() >= before && !new_warm(now).is_empty())
     })
     .await?;
+    let made = new_warm(pool::warm_list(env, true).await?);
     checks.expect(
         "claim-replica-set-made-a-new-warm-pod",
-        true,
-        format!("owners left on the claimed pod: {owners}"),
+        !made.is_empty(),
+        format!("new warm pods {made:?}; owners left on the claimed pod: {owners}"),
     );
     adapter::release(&sandbox, &opened.box_id).await?;
     checks.finish()

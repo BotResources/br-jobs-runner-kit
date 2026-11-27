@@ -16,7 +16,7 @@ sx "$ns" "$pod_a" sh -c "echo secret-of-a > /work/x && mkdir -p /home/agent && e
 verdict two-agents-a-sees-own-file "a reads /work/x" test "$(sx "$ns" "$pod_a" cat /work/x)" = secret-of-a
 
 count_marker_files() {
-  sx "$1" "$2" sh -c 'echo "count:$(find / -xdev -name "$0" -print 2> /dev/null | wc -l | tr -d " ")"' "$3"
+  sx "$1" "$2" sh -c 'echo "count:$(find / \( -path /proc -o -path /sys \) -prune -o -name "$0" -print 2> /dev/null | wc -l | tr -d " ")"' "$3"
 }
 
 count_sleep_processes() {

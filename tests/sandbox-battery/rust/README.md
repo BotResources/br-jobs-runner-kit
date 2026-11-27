@@ -1,6 +1,6 @@
 # Sandbox battery: Rust tests
 
-Tests that run the released `br-runner-sandbox` adapter (tag `br-runner-sandbox/v0.1.2`) against the live test cluster, the real object store and the real tools image. This is a separate cargo project (own `[workspace]`), not a member of the kit workspace. It uses the released harness crates at 0.2.0 from `br-llm-graph-rs`.
+Tests that run the released `br-runner-sandbox` adapter (tag `br-runner-sandbox/v0.1.3`) against the live test cluster, the real object store and the real tools image. This is a separate cargo project (own `[workspace]`), not a member of the kit workspace. It uses the released harness crates at 0.2.0 from `br-llm-graph-rs`.
 
 No test is ignored. A test that cannot reach the cluster, the store or a named image fails with a message that names the missing thing.
 
@@ -95,7 +95,7 @@ Variables that only some tests need (the test fails with the variable name when 
 
 The upstream tests of the harness crates drive `MemorySandbox` and read its test hooks (`script`, `fail_save`, `expire_save`, `saved`, `running`, `is_released`, and others) or wrap it in a rig that records the steps. The adapter has none of these hooks, so those tests cannot run unchanged. `harness_excluded.txt` lists each of them by its exact upstream test name, with the hooks that make it need the double (`harness_excluded` checks that every row has four fields and a reason, that no name is listed twice, and that each name is a test function of the named file in the upstream source at the revision pinned in `Cargo.lock`; it reads that source in the cargo git checkouts).
 
-The tests that use the port only are run again against the adapter, and the others are replaced by tests that use a real `Harness` with the adapter behind a recording wrapper (`src/spy.rs`) and observe the cluster and the store.
+The upstream tests that are not listed in `harness_excluded.txt` are not run again against the adapter: nothing in this project includes or calls an upstream test. Those of them that use a sandbox are the unlisted tests of these files: in `br-agentic-harness-contract`, `canary.rs`, `dropped_open.rs`, `lifecycle_open.rs`, `open_faults.rs`, `rules.rs`, `sandbox.rs`, `save_choice.rs`, `save_rules.rs`, `start.rs`; in `br-agentic-harness`, `close.rs`, `credential.rs`, `rules.rs`. The check "the harness test suite passes with the adapter" is proved only by the replacement behaviours of the table below, which use a real `Harness` with the adapter behind a recording wrapper (`src/spy.rs`) and observe the cluster and the store.
 
 | Upstream behaviour | Test with the adapter |
 |---|---|

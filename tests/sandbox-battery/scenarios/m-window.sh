@@ -6,6 +6,9 @@ scenario_begin m-window
 . "$WORK/servers.env"
 
 reps=${REPS:-10}
+case $reps in
+  '' | *[!0-9]* | 0 | 0[0-9]*) check m-window-reps-valid fail "REPS must be a whole number of 1 or more, got: $reps"; scenario_end ;;
+esac
 exec_seconds=${WINDOW_EXEC_SECONDS:-5}
 start_seconds=${WINDOW_START_SECONDS:-15}
 probe_port=${WINDOW_PROBE_PORT:-8080}
@@ -240,6 +243,8 @@ done
 summarize warm
 summarize cold
 verdict m-window-all-samples "every sample completed ($failed incomplete)" test "$failed" = 0
+verdict m-window-sample-count "$(awk 'NR > 1' "$samples" | count_lines) sample lines for $((reps * 2)) planned" \
+  test "$(awk 'NR > 1' "$samples" | count_lines)" = "$((reps * 2))"
 verdict m-window-enforced-at-end "every sample ended with the probe refused or unreachable in both observers" \
   test "$(awk -F'\t' 'NR > 1 && ($12 == "R" || $13 == "R")' "$samples" | count_lines)" = 0
 verdict m-window-no-flip-back "no sample saw the probe reachable again after the first refusal" test "$(awk -F'\t' 'NR > 1 && $11 > 0' "$samples" | count_lines)" = 0

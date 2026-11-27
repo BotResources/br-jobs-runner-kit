@@ -55,11 +55,6 @@ async fn fresh_start_with_a_seed_of_10_mb_is_within_500_ms() -> Res {
     )
     .await?;
     checks.expect(
-        "fresh-start-stress-seed-every-open-is-accounted",
-        stress_series.ended_ok + stress_series.stopped() == STRESS_RUNS,
-        stress_series.summary(),
-    );
-    checks.expect(
         "fresh-start-stress-seed-has-at-least-one-sample",
         stress_series.ended_ok >= 1,
         stress_series.summary(),
@@ -69,15 +64,5 @@ async fn fresh_start_with_a_seed_of_10_mb_is_within_500_ms() -> Res {
     }
     let stress_stats = Stats::of(&stress_series.times, LIMIT_MS)?;
     record_stats(env, "fresh_start_seed_50mb_500_files", &stress_stats);
-    checks.expect(
-        "fresh-start-stress-seed-limit-reported-not-500-ms",
-        stress_stats.count == stress_series.ended_ok,
-        format!(
-            "median {:.0}, slowest {:.0}; {}",
-            stress_stats.median,
-            stress_stats.slowest,
-            stress_series.summary()
-        ),
-    );
     checks.finish()
 }

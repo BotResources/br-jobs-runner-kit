@@ -17,7 +17,7 @@ fn clean(text: &str) -> String {
         .collect()
 }
 
-fn try_append(dir: &Path, file: &str, line: &str) -> std::io::Result<()> {
+pub fn try_append(dir: &Path, file: &str, line: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let mut handle = std::fs::OpenOptions::new()
         .create(true)
