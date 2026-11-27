@@ -161,8 +161,12 @@ check_the_docs_state_who_reads_the_adapter_document_and_what_the_upgrade_does() 
     t "the Keeper document paragraph no longer says that the adapter reads the ConfigMaps" bash -c '! grep -qF "The adapter reads the ConfigMaps" <<<"$1"' _ "$keeper"
     t "the Runner role paragraph says the runner identity can read the adapter document and the adapter crate reads no ConfigMap itself" grep -qF '`configmaps` get on `br-sandbox-config` only (the runner identity can read the adapter document; the adapter crate reads no ConfigMap itself, see Keeper document)' "$README"
     t "the Runner role paragraph no longer says that the adapter reads the config" bash -c '! grep -qF "(the adapter reads the config)" "$1"' _ "$README"
-    t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
     t "the CHANGELOG says that the keeper Deployment rolls once at the upgrade" grep -qF 'the keeper Deployment rolls once at the upgrade, because its pod template changes' "$CHART/CHANGELOG.md"
     t "the CHANGELOG says that the ConfigMap of the system namespace is deleted by the upgrade" grep -qF 'The ConfigMap `br-sandbox-config` of the system namespace is deleted by the upgrade.' "$CHART/CHANGELOG.md"
+}
+
+check_the_docs_state_the_keeper_port_and_the_lint_loop_overlay() {
+    section "the README states that the sandbox pods declare no port and the CHANGELOG states that the lint loop covers the keeper overlay"
+    t "the README says that the sandbox pods have no port and that the keeper declares keeper.port" grep -qF 'no port in a sandbox pod (the keeper declares `keeper.port`)' "$README"
     t "the CHANGELOG says that the lint loop covers the new overlay" grep -qF 'also covers the overlay `ci/keeper-nondefault-values.yaml`' "$CHART/CHANGELOG.md"
 }
