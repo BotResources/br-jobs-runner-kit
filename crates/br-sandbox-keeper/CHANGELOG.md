@@ -6,6 +6,7 @@
 
 - A pod list that fails, a pod watch that cannot be opened or reopened, a watch that breaks and an error event of the watch were retried with no log line and no count. Each now gives one log line at the error level (JSON, with the namespace and the reason) and one count in `br_sandbox_keeper_sweep_errors_total`, and is tried again after one second as before. `/readyz` does not change.
 - A tombstone that cannot be serialized gave an empty list of steps: the expired save stayed whole with no trace. It now gives one step, `StoreStep::TombstoneNotSerialized`, that the sweep logs with the key of the tombstone and counts in `br_sandbox_keeper_sweep_errors_total`; the save is left whole and the next sweep tries again.
+- A Lease read that fails and a Lease create or update that fails were logged and tried again, and were not counted. Each is now also counted in `br_sandbox_keeper_sweep_errors_total`. A conflict on a Lease write is not a failure and is still not counted. The help text of the counter now reads "Actions that failed after the start."
 - The test `sweep::tests::aged::an_unreadable_record_or_tombstone_is_kept_logged_and_counted` failed on some runs: the helper that captures log lines installed a subscriber for one thread, and a log callsite that another thread had reached first could be disabled for it. The helper now installs one global subscriber once and routes each line to the capture of the current thread.
 
 ### Added
@@ -21,6 +22,7 @@
 - The binary, started with a configuration, a kubeconfig and a store that a local test server answers, ends with code 0 after `SIGTERM` (`tests/sigterm.rs`, on Unix).
 - The store client of the sweeper in `run` is the guarded client: a write outside `tombstones/` and any key outside the three prefixes are refused (the wiring is one function, `sweeper_of`).
 - The parts left by a crash between the delete of the manifest and the delete of a part are removed at the next sweep when they are older than `attempt_ttl_seconds`, and stay until then when they are younger.
+- A Lease read that fails, a Lease create that fails and a Lease update that fails are each logged at the warn level and counted once, and the next round is after the retry period; a read and a write that succeed and a conflict count nothing.
 - A configuration test uses a host name under `.test`.
 
 ### Documentation
