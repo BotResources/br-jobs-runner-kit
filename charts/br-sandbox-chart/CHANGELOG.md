@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+Breaking minor. The chart has two parts: an operator part, installed once per cluster, and a fence part, applied to each namespace by its name and mode. A pool is a `SandboxPool` resource that the keeper reads; the chart no longer renders a ReplicaSet. Chart 0.4.x needs keeper 0.2.x, and chart 0.3.x needs keeper 0.1.x: keeper 0.2 refuses a document with `pools` at start.
+
+- No upgrade path from 0.3.x: remove a 0.3.x release before the install. An upgrade in place was not tested.
+- Values: `keeper.*` becomes `operator.*`. A key `keeper` fails the render with `BR_SANDBOX_KEEPER_VALUES_REMOVED{key=keeper}`. `clients` becomes the list `namespaces` (name and mode) and the platform table `scopes`; a key `clients` fails the render with `BR_SANDBOX_CLIENTS_REMOVED{key=clients}`. The `client_id` and the runner identity of a namespace come from the scope that matches its name, never from a label.
+- Removed: the ReplicaSet (the keeper makes `warm-{namespace}` from the `SandboxPool` of the namespace); the root key `image`; the per-mode `pool` and `runner`; `pool.floor`, `pool.max_sandboxes`, `pool.refill_seconds` and `pool.margin`. `network_check.enabled` is `false` by default, and the network check needs `operator.enabled`.
+- Changed: every NetworkPolicy of the chart is named with the prefix `br-sandbox-`. The rights of the controller and of the runner are the ClusterRoles `br-sandbox-controller` and `br-sandbox-runner`, bound in each namespace by a RoleBinding. The image of the agent and its size are bound by the `SandboxPool` of the namespace of the pod and by `limits.size`, and no longer by the chart values.
+- Added: the `SandboxPool` definition (`crds.install`, default `false`); the ConfigMap `br-sandbox-pod-template` (key `pod-template.json`) of each namespace; the pod policy `br-sandbox-pod` with the bindings `br-sandbox-pod` and `br-sandbox-pod-update`; the namespace policy `br-sandbox-namespace`; the fence-object policy `br-sandbox-fence`; the ConfigMap `br-sandbox-grants`; the optional stamper (`stamper.enabled`, default `false`); in the system namespace the policies `br-sandbox-default-deny` and `br-sandbox-egress-keeper`.
+- Admission rules: 15 rules in all. Rule 14 (`BR_SANDBOX_SERVICE_ACCOUNT`) requires the ServiceAccount `sandbox`; rule 15 (`BR_SANDBOX_EPHEMERAL_CONTAINERS`) refuses ephemeral containers, so `kubectl debug` on a sandbox pod is refused.
+- The keeper document and the adapter document name the agent container `agent` (`agent_container`, required by the keeper). The agent container of the pod template has `imagePullPolicy: Always`: the cost is one registry call at each pod start, and the limit is that a start can fail when the registry does not answer (not tested on a cluster).
+- `registry_mirror` does not apply to the image of a pool: the agent of a pod runs exactly the `image` of its `SandboxPool`, as written.
+- Not proved offline, and not tested on a cluster: that the CEL of the three policies compiles, that the API server takes the `SandboxPool` as the parameter of the pod policy, the grants and the fence-object control, the stamper, and the rights on the API server. The rows of the battery hold them.
+- Tests: the offline suite checks each sentence above (`test-sandbox-chart-operator-docs.sh`) and the objects, the rights, the policies and the stamper (`test-sandbox-chart-operator-parts.sh`, `-operator-rights.sh`, `-operator-template.sh`, `-operator-crd.sh`, `-pod-policy.sh`, `-namespace-policy.sh`, `-fence-policy.sh`, `-stamper.sh`, `-scopes.sh`). The lint loop of the CI covers the new fixtures.
+
 ## 0.3.0
 
 Added: the chart value `exec_timeout_seconds`, default `600`, an integer above zero. The adapter document (the ConfigMap `br-sandbox-config` of each sandbox namespace, key `config.json`) gains one key, `exec_timeout_seconds`, and every document holds it.
