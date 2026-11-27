@@ -63,3 +63,4 @@ sxi() { local ns=$1 pod=$2; shift 2; k -n "$ns" exec -i "$pod" -c "$SANDBOX_CONT
 . "$SCEN_DIR/common-run.sh"
 . "$SCEN_DIR/common-probe.sh"
 . "$SCEN_DIR/common-admission.sh"
+. "$SCEN_DIR/common-policy.sh"
