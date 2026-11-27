@@ -50,3 +50,27 @@ check_config_contract() {
     fails_with "BR_SANDBOX_MISSING_VALUE{key=clients.alpha.modes.none.runner.namespace}" -f "$(vals norunner 'del(.clients.alpha.modes.none.runner.namespace)')"
     fails_with "BR_SANDBOX_MISSING_VALUE{key=network_check.image}" -f "$(vals nonetcheck 'del(.network_check.image)')"
 }
+
+BINDING_SUBJECTS_OF_THE_POD_IDENTITY='
+[.[] | select(.kind == "Namespace" and .metadata.labels["br.sandbox/managed"] == "true") | .metadata.name] as $sandbox_namespaces
+| [.[] | select(.kind == "RoleBinding" or .kind == "ClusterRoleBinding") | .subjects[]?
+  | select(.kind == "ServiceAccount" and .name == "sandbox" and (.namespace | IN($sandbox_namespaces[])))]
+'
+
+check_the_pod_identity_has_no_binding() {
+    section "the sandbox service account of a sandbox namespace is the subject of no binding"
+    local render
+    for render in ex keeper mirror; do
+        t "in the ${render} render no RoleBinding and no ClusterRoleBinding names it" jqt "$render" "${BINDING_SUBJECTS_OF_THE_POD_IDENTITY} | length == 0"
+    done
+    t "the render holds bindings, so the check reads something" jqt keeper '[.[] | select(.kind == "RoleBinding" or .kind == "ClusterRoleBinding")] | length > 0'
+    t "the service account sandbox exists in each managed namespace" jqt ex '[.[] | select(.kind == "ServiceAccount" and .metadata.name == "sandbox")] | length == 4'
+}
+
+check_the_runner_identity_is_not_the_pod_identity() {
+    section "the runner service account is never the sandbox service account of a sandbox namespace"
+    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=alpha,mode=none,namespace=sbx-alpha-none}" -f "$(vals runnerownns '.clients.alpha.modes.none.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-none"}')"
+    fails_with "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=beta,mode=none,namespace=sbx-alpha-full}" -f "$(vals runnerothersandbox '.clients.beta.modes.none.runner = {"service_account": "sandbox", "namespace": "sbx-alpha-full"}')"
+    t "a runner service account named sandbox outside a sandbox namespace renders" helm template t "$CHART" -f "$(vals sandboxoutside '.clients.beta.modes.none.runner = {"service_account": "sandbox", "namespace": "runners"}')"
+    t "a runner service account of another name in a sandbox namespace renders" helm template t "$CHART" -f "$(vals runnerinside '.clients.beta.modes.none.runner = {"service_account": "runner", "namespace": "sbx-alpha-none"}')"
+}

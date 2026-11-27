@@ -1,5 +1,8 @@
 {{- define "br-sandbox-chart.pod.security" -}}
 {{- $security := dict "allowPrivilegeEscalation" false "privileged" false "runAsUser" (.uid | int64) "runAsGroup" (.gid | int64) "capabilities" (dict "drop" (list "ALL") "add" (list "CHOWN" "DAC_OVERRIDE" "FOWNER" "FSETID" "SETUID" "SETGID" "KILL")) -}}
+{{- if gt (.uid | int64) 0 -}}
+{{- $_ := set $security "runAsNonRoot" true -}}
+{{- end -}}
 {{- if .read_only_root -}}
 {{- $_ := set $security "readOnlyRootFilesystem" true -}}
 {{- end -}}

@@ -36,6 +36,7 @@
 {{- $seen := dict $system "system" -}}
 {{- $egressNames := dict -}}
 {{- $ips := dict -}}
+{{- $sandboxNames := dict -}}
 {{- $needsResolvers := false -}}
 {{- range $client, $clientValues := .Values.clients -}}
 {{- if not (hasKey $clientValues "modes") -}}
@@ -75,6 +76,7 @@
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=%s,namespace=%s}" (get $seen $name) $client $name) -}}
 {{- end -}}
 {{- $_ := set $seen $name $client -}}
+{{- $_ := set $sandboxNames $name $client -}}
 {{- if gt (len $name) 63 -}}
 {{- fail (printf "BR_SANDBOX_NAME_TOO_LONG{client=%s,mode=%s,namespace=%s}" $client $mode $name) -}}
 {{- end -}}
@@ -102,6 +104,9 @@
 {{- range $mode, $modeValues := $clientValues.modes -}}
 {{- if hasKey $egressNames $modeValues.runner.namespace -}}
 {{- fail (printf "BR_SANDBOX_SHARED_NAMESPACE{client_a=%s,client_b=runner-of-%s,namespace=%s}" (get $egressNames $modeValues.runner.namespace) $client $modeValues.runner.namespace) -}}
+{{- end -}}
+{{- if and (eq $modeValues.runner.service_account "sandbox") (hasKey $sandboxNames $modeValues.runner.namespace) -}}
+{{- fail (printf "BR_SANDBOX_RUNNER_IS_POD_IDENTITY{client=%s,mode=%s,namespace=%s}" $client $mode $modeValues.runner.namespace) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
