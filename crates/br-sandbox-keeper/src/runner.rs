@@ -179,6 +179,7 @@ fn spawn_controllers(tasks: &mut Tasks, shared: &Shared, parts: Parts, watched: 
             .unwrap_or(parts.default_lease_namespace),
         identity: parts.identity,
         lease: config.lease.clone(),
+        metrics: shared.metrics.clone(),
     };
     let stop = shared.shutdown.clone();
     tasks.spawn(async move {

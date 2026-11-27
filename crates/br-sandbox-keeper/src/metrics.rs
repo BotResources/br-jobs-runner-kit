@@ -200,7 +200,7 @@ impl Metrics {
             &mut out,
             "sweep_errors_total",
             "counter",
-            "Sweep steps that failed.",
+            "Actions that failed after the start.",
             state.sweep_errors,
         );
         plain(
