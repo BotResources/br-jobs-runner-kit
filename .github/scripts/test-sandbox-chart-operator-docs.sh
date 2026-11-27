@@ -177,3 +177,37 @@ check_the_warm_age_row_states_the_held_pod() {
     t "the CHANGELOG 0.4.0 holds the held pod line, marked as stated by the keeper 0.2 text and not tested" grep -qF 'is held by keeper 0.2: it has no age deadline and is not deleted at `warm_max_age_seconds` (keeper 0.1.x deleted it). Stated by the keeper 0.2 text; not tested by this chart.' <<<"$(changelog_040)"
     t "the keeper document still carries the key warm_max_age_seconds at its default" test "$(jq -r '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-keeper-config") | .data["config.json"] | fromjson | .warm_max_age_seconds][0]' "$WORK/keeper.json")" = 1800
 }
+
+check_the_installer_of_the_fence_part_is_a_writer() {
+    section "INSTALL.md: the identity that applies the fence part is in grants.writers, and the fixtures list it"
+    local identity grants
+    identity="$(grep -oE 'in the command above, `[^`]+`' "$CHART/INSTALL.md" | sed -E 's/^[^`]*`//; s/`$//')"
+    t "INSTALL.md names one identity for the fence part, and it is a service account" test "$(grep -c . <<<"$identity")" -eq 1 -a "${identity#system:serviceaccount:}" != "$identity"
+    t "INSTALL.md says that this identity must be in grants.writers of the operator part, that the default is [] and that the install is refused with BR_SANDBOX_FENCE" grep -qF 'must be listed in `grants.writers` of the operator part.' "$CHART/INSTALL.md"
+    t "INSTALL.md says that a validating policy is not bypassed by cluster-admin and that the refusal is not tested on a cluster" grep -qF 'a validating policy is not bypassed by cluster-admin. With the default `[]` the install of the fence part is refused, object by object, with `BR_SANDBOX_FENCE`.' "$CHART/INSTALL.md"
+    t "INSTALL.md says that the two releases take the same grants.writers" grep -qF 'The two releases must be given the same platform constants, `grants.writers` included.' "$CHART/INSTALL.md"
+    t "the fence fixture sets grants.writers with the identity of INSTALL.md" test "$(yq -o=json -I=0 '.grants.writers' "$CHART/ci/fence-values.yaml")" = "[\"${identity}\"]"
+    t "the operator fixture sets grants.writers with the same identity" test "$(yq -o=json -I=0 '.grants.writers' "$CHART/ci/platform-values.yaml")" = "[\"${identity}\"]"
+    t "the grants of the operator command list the identity as the only writer" test "$(jq -r '[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-grants") | .data.writers][0]' "$WORK/install_operator.json")" = "$identity"
+    t "the fence command renders no grants, so the writers come from the operator part" jqt install_fence '[.[] | select(.metadata.name == "br-sandbox-grants")] | length == 0'
+    grants="$(grants_of install_operator)"
+    local always='networkpolicies resourcequotas limitranges roles rolebindings'
+    t "the fence render holds objects of the kinds that the fence policy judges" test "$(fence_install_objects | grep -c .)" -ge 20
+    t "the policy model admits every object of the fence render for the identity of INSTALL.md" test "$(fence_install_verdicts install_operator "$identity" "$grants" '' | sort -u)" = admit
+    t "the policy model refuses a project identity on the NetworkPolicy, the quota, the LimitRange, the Role and the RoleBinding of the fence render" test "$(fence_install_verdicts install_operator "$PROJECT_USER" "$grants" "$always" | sort -u)" = BR_SANDBOX_FENCE
+    t "with the default grants, the same identity is refused on every such object: the scenario that INSTALL.md warns of" test "$(fence_install_verdicts ex "$identity" "$(grants_of ex)" "$always" | sort -u)" = BR_SANDBOX_FENCE
+    t "INSTALL.md names grants.writers in the operator part and in the fence part" test "$(grep -c 'writers' "$CHART/INSTALL.md")" -ge 3
+}
+
+fence_install_objects() {
+    jq -r '.[] | select(.metadata.namespace != null and .metadata.namespace != "sbx-system") | [({"NetworkPolicy": "networkpolicies", "ResourceQuota": "resourcequotas", "LimitRange": "limitranges", "Role": "roles", "RoleBinding": "rolebindings", "ServiceAccount": "serviceaccounts", "ConfigMap": "configmaps"}[.kind] // empty), .metadata.name] | @tsv' "$WORK/install_fence.json"
+}
+
+fence_install_verdicts() {
+    local render="$1" user="$2" grants="$3" kinds="$4" res name
+    while IFS=$'\t' read -r res name; do
+        if [[ -z "$kinds" || " $kinds " == *" $res "* ]]; then
+            fence_verdict "$render" CREATE "$res" "$name" "$user" "$grants"
+        fi
+    done < <(fence_install_objects)
+}

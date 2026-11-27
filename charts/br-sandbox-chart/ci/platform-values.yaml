@@ -1,1 +1,4 @@
 namespaces: []
+grants:
+  writers:
+    - system:serviceaccount:gitops:platform
