@@ -43,7 +43,13 @@ source "$HERE/test-sandbox-chart-netcheck-reading.sh"
 source "$HERE/test-sandbox-chart-netcheck-contract.sh"
 source "$HERE/test-sandbox-chart-netcheck-image.sh"
 
-render ex -f "$EXAMPLE"
+section "the example values render with the defaults of the chart"
+if render ex -f "$EXAMPLE"; then
+    pass "the example values render with the defaults of the chart"
+else
+    fail "the example values do not render with the defaults of the chart" "$(cat "$WORK/ex.err")"
+    summary
+fi
 render fence -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml"
 render platform -f "$EXAMPLE" -f "$CHART/ci/platform-values.yaml"
 render mirror -f "$EXAMPLE" -f "$MIRROR_VALUES"

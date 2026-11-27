@@ -12,11 +12,23 @@ export MIRROR_VALUES="$CHART/ci/mirror-values.yaml"
 export OPERATOR_VALUES="$CHART/ci/operator-values.yaml"
 export EGRESS_VALUES="$CHART/ci/egress-values.yaml"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/test-sandbox-chart.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
-
 FAILURES=0
 CASES=0
 CURRENT=""
+LAST_RENDER=""
+SUMMARY_DONE=0
+
+finish() {
+    local code=$?
+    if [[ "$code" -ne 0 && "$SUMMARY_DONE" -eq 0 ]]; then
+        printf 'FAIL  the suite stopped with exit %s before its summary, in the section "%s", after the render "%s"\n' "$code" "$CURRENT" "$LAST_RENDER" >&2
+        if [[ -n "$LAST_RENDER" && -s "$WORK/$LAST_RENDER.err" ]]; then
+            sed 's/^/        | /' "$WORK/$LAST_RENDER.err" | head -12 >&2
+        fi
+    fi
+    rm -rf "$WORK"
+}
+trap finish EXIT
 
 section() {
     CURRENT="$1"
@@ -46,6 +58,7 @@ t() {
 render() {
     local name="$1"
     shift
+    LAST_RENDER="$name"
     helm template t "$CHART" "$@" 2>"$WORK/$name.err" | yq ea -o=json '[select(. != null)]' - >"$WORK/$name.json"
     [[ "${PIPESTATUS[0]}" -eq 0 ]]
 }
@@ -53,6 +66,7 @@ render() {
 render_yaml() {
     local name="$1"
     shift
+    LAST_RENDER="$name"
     helm template t "$CHART" "$@" >"$WORK/$name.yaml" 2>"$WORK/$name.err"
 }
 
@@ -103,6 +117,7 @@ export QTY='def qty: tostring | capture("^(?<n>[0-9.]+)(?<u>m|Ki|Mi|Gi|Ti|K|M|G|
 export SANDBOX_PODS='[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | .data["pod-template.json"] | fromjson]'
 
 summary() {
+    SUMMARY_DONE=1
     echo
     if [[ "$FAILURES" -gt 0 ]]; then
         echo "${FAILURES}/${CASES} case(s) failed" >&2
