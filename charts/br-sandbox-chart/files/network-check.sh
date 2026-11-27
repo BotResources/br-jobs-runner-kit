@@ -17,6 +17,8 @@ check_preconditions() {
       ;;
   esac
   command -v nc >/dev/null 2>&1 || precondition_failed nc present missing
+  command -v sleep >/dev/null 2>&1 || precondition_failed sleep present missing
+  command -v date >/dev/null 2>&1 || precondition_failed date present missing
 }
 
 status_code() {

@@ -35,7 +35,7 @@ if [ "$(($(wc -l <"$STUB_DIR/nc.calls")))" -gt 2000 ]; then
 fi
 refuse() {
     [ -z "${NC_DROP_SECONDS:-}" ] || printf '%s\n' "$(($(cat "$STUB_DIR/clock") + NC_DROP_SECONDS))" >"$STUB_DIR/clock"
-    exit 1
+    exit "${NC_REFUSE_STATUS:-1}"
 }
 if [ -n "${NC_LATE_K:-}" ]; then
     printf x >>"$STUB_DIR/nc.late"

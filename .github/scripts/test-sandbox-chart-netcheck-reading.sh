@@ -14,7 +14,7 @@ check_network_check_elapsed_time_counts_the_wait_of_dropped_probes() {
     t "dropped probes: no wait is spent, each probe is refused at its first try" test "$(sleeps)" -eq 0
     out="$(run_netcheck env NC_MODE=all PROBE_MODE=none 2>&1)" || true
     t "reset probes: every probe of the pod reports 0" test "$(grep -c '"kind":"tcp".*"refused_after_seconds":0,' <<<"$out")" -eq "$(grep -c '"kind":"tcp"' <<<"$out")"
-    t "the README says the start is one value for the pod and that the wait of the dropped probes counts in it" grep -qF 'The start is one value for the whole probe pod, not one for each target, and the limit is counted from it too. The `nc -w 2` wait of every probe that is dropped counts in the elapsed time' "$README"
+    t "the README says the start is one value for the pod and that the wait of the dropped probes counts in it" grep -qF 'The start is one value for the whole probe pod, not one for each target, and the limit is counted from it too: the limit is one budget for the pod, a later target gets what is left of it, and once it is spent each remaining target is tried once. The `nc -w 2` wait of every probe that is dropped counts in the elapsed time' "$README"
     t "the README says what a REJECT policy and a DROP policy report" grep -qF 'under a policy that resets the connection (REJECT) a probe that is refused at once reports about 0; under a policy that drops the packets (DROP) each probe waits for its `nc -w 2` timeout before it reads as refused, so the k-th target of the pod reports about 2 times k seconds' "$README"
 }
 
@@ -23,7 +23,7 @@ precondition_row() {
 }
 
 check_network_check_preconditions_fail_before_any_probe() {
-    section "the network check: a bad limit or a missing nc fails at the start with a distinct row and exit status 2"
+    section "the network check: a bad limit or a missing nc, sleep or date fails at the start with a distinct row and exit status 2"
     stub_tools "$WORK/netcheckbin"
     local value out rc
     for value in 0 -3 abc 1.5 08 1000000000 99999999999999999999; do
@@ -43,18 +43,28 @@ check_network_check_preconditions_fail_before_any_probe() {
     rc=0
     out="$(NETCHECK_ENFORCEMENT_WAIT=abc NETCHECK_TARGETS=10.0.0.1:80 NC_MODE=none PATH="$WORK/netcheckbin:$PATH" STUB_DIR="$WORK/netcheckstub" sh "$CHART/files/network-check.sh" probe 2>&1)" || rc=$?
     t "a probe pod with a bad limit: exit status 2 and the invalid row, no probe" test "$rc" -eq 2 -a "$(grep -c '"observed":"invalid"' <<<"$out")" -eq 1 -a ! -s "$WORK/netcheckstub/nc.calls"
-    mkdir -p "$WORK/netchecknonc"
-    ln -sf "$(command -v sh)" "$WORK/netchecknonc/sh"
-    rc=0
-    out="$(run_netcheck env PATH="$WORK/netchecknonc" NC_MODE=all PROBE_MODE=none 2>&1)" || rc=$?
-    t "no nc: exit status 2" test "$rc" -eq 2
-    t "no nc: the precondition row says nc is missing" precondition_row nc present missing <<<"$out"
-    t "no nc: it is the only row" test "$(grep -c '^{' <<<"$out")" -eq 1
-    sed '/command -v nc/d' "$CHART/files/network-check.sh" >"$WORK/network-check-nocheck.sh"
-    t "mutation: the script without the nc check differs from the chart script" test "$(cmp -s "$WORK/network-check-nocheck.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
-    rc=0
-    out="$(NETCHECK_SCRIPT="$WORK/network-check-nocheck.sh" run_netcheck env PATH="$WORK/netchecknonc" NC_MODE=all PROBE_MODE=none 2>&1)" || rc=$?
-    t "mutation: without the check the missing nc gives no precondition row" test "$(grep -c '"kind":"precondition"' <<<"$out")" -eq 0
+    local tool other
+    for tool in nc sleep date; do
+        mkdir -p "$WORK/netcheckno-$tool"
+        ln -sf "$(command -v sh)" "$WORK/netcheckno-$tool/sh"
+        for other in nc sleep date; do
+            [[ "$other" == "$tool" ]] || ln -sf "$WORK/netcheckbin/$other" "$WORK/netcheckno-$tool/$other"
+        done
+        rc=0
+        out="$(run_netcheck env PATH="$WORK/netcheckno-$tool" NC_MODE=all PROBE_MODE=none 2>&1)" || rc=$?
+        t "no ${tool}: exit status 2" test "$rc" -eq 2
+        t "no ${tool}: the precondition row says ${tool} is missing" precondition_row "$tool" present missing <<<"$out"
+        t "no ${tool}: it is the only row" test "$(grep -c '^{' <<<"$out")" -eq 1
+        t "no ${tool}: no probe and no wait before the row" test ! -s "$WORK/netcheckstub/nc.calls" -a ! -s "$WORK/netcheckstub/wait.args"
+        rc=0
+        out="$(NETCHECK_ENFORCEMENT_WAIT=3 NETCHECK_TARGETS=10.0.0.1:80 NC_MODE=none PATH="$WORK/netcheckno-$tool" STUB_DIR="$WORK/netcheckstub" sh "$CHART/files/network-check.sh" probe 2>&1)" || rc=$?
+        t "no ${tool}: a probe pod gives the same row and exit status 2" test "$rc" -eq 2 -a "$(grep -c '"kind":"precondition"' <<<"$out")" -eq 1 -a "$(grep -c "\"target\":\"${tool}\"" <<<"$out")" -eq 1
+        sed "/command -v ${tool} /d" "$CHART/files/network-check.sh" >"$WORK/network-check-no-${tool}-check.sh"
+        t "mutation: the script without the ${tool} check differs from the chart script" test "$(cmp -s "$WORK/network-check-no-${tool}-check.sh" "$CHART/files/network-check.sh" && echo same || echo differ)" = differ
+        rc=0
+        out="$(NETCHECK_SCRIPT="$WORK/network-check-no-${tool}-check.sh" run_netcheck env PATH="$WORK/netcheckno-$tool" NC_MODE=all PROBE_MODE=none 2>&1)" || rc=$?
+        t "mutation: without the check a missing ${tool} gives no precondition row" test "$(grep -c '"kind":"precondition"' <<<"$out")" -eq 0
+    done
     rc=0
     out="$(run_netcheck env NC_MODE=all PROBE_MODE=none 2>&1)" || rc=$?
     t "with nc present and a valid limit the run has no precondition row" test "$(grep -c '"kind":"precondition"' <<<"$out")" -eq 0
