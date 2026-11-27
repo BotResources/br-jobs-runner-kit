@@ -17,6 +17,8 @@ headings and is released under the tag `{library}/v{version}`.
 
 ### Fixed
 
+- `br-sandbox-keeper` 0.1.1: a failed pod list or pod watch is logged at the error level and counted in `br_sandbox_keeper_sweep_errors_total`; a tombstone that cannot be serialized is a logged and counted step; more tests (no credential in logs and metrics, `SIGTERM` ends the binary with code 0, the guarded store client of the sweeper, the repair of a part after a crash) and a log-capture helper for tests that no longer depends on thread timing (see `crates/br-sandbox-keeper/CHANGELOG.md`). `Cargo.lock` records the new version.
+
 - `.github/scripts/keeper-image-plan.sh` fails (exit 1, a message on stderr, nothing on stdout) when `PUBLISHED` is unset, empty or not exactly `true` or `false`; an unset value used to count as `false`. `test-keeper-image-plan.sh` has 7 more refusal cases (unset, empty, a wrong value, capitals, a trailing space, unset on a pull request and unset on a dispatch with push), 2 cases for the accepted values, and a pin that `keeper-image.yml` passes the output of the published check to the plan. `images/br-sandbox-keeper/README.md` states that the check of the tag and the push are not atomic and what the `concurrency` group of the workflow does about it.
 
 - `images-check-gates.sh` matches the status functions `always`, `cancelled`, `failure` and `success` in any letter case, as GitHub does: `Always()` or `FAILURE()` in the condition of the job `manifest list` is now refused. `test-images-gates.sh` has 16 more tests (`Always`, `FAILURE`, `Cancelled`, `SUCCESS`, each in the plain, quoted, folded and literal forms of the condition).
