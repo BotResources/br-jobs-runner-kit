@@ -42,6 +42,7 @@ pub enum PodEvent {
     Snapshot(Vec<PodFacts>),
     Applied(Box<PodFacts>),
     Deleted { name: String },
+    WatchFailed { reason: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,6 +3,7 @@ use std::time::Duration;
 mod reads;
 mod rights;
 mod stub;
+mod watch_failures;
 mod wire;
 
 use super::lease::{lease_facts, lease_object};
