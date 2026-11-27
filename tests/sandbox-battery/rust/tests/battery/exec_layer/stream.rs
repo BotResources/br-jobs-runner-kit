@@ -33,7 +33,7 @@ async fn a_stream_with_no_status_is_a_fault() -> Res {
             .map_err(BatteryError::from)
     });
     tokio::time::sleep(Duration::from_secs(3)).await;
-    gate.set(GateMode::Refuse);
+    gate.set(GateMode::Refuse).await?;
     let outcome = tokio::time::timeout(Duration::from_secs(60), running)
         .await
         .map_err(|_| BatteryError::Hang {
@@ -52,6 +52,6 @@ async fn a_stream_with_no_status_is_a_fault() -> Res {
         text.contains("NoStatus") || text.to_lowercase().contains("no status"),
         text,
     );
-    gate.set(GateMode::Open);
+    gate.set(GateMode::Open).await?;
     checks.finish()
 }

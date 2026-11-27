@@ -10,11 +10,14 @@ pub mod lock;
 pub mod pool;
 pub mod prng;
 pub mod proc;
+pub mod restore;
 pub mod saves;
 pub mod seeds;
 pub mod spy;
 pub mod tree;
 pub mod tunnel;
+pub mod value_guard;
+pub mod versions;
 pub mod world;
 
 use env::Env;

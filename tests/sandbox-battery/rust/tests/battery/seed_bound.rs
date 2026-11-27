@@ -13,7 +13,6 @@ use battery::ids::Lane;
 use battery::{pool, seeds};
 
 const GONE_SECONDS: u64 = 90;
-const VERSIONS: &str = "adapter 0.1.3, chart 0.2.4, keeper 0.1.1";
 
 struct Try {
     seconds: f64,
@@ -92,7 +91,7 @@ async fn stress_open(env: &Env, sandbox: &br_runner_sandbox::Sandbox, outer: Dur
     })
 }
 
-fn record(env: &Env, label: &str, attempt: usize, done: &Try) {
+fn record(env: &Env, versions: &str, label: &str, attempt: usize, done: &Try) {
     let seed = match done.seed_written {
         Some(true) => "yes",
         Some(false) => "no",
@@ -108,13 +107,14 @@ fn record(env: &Env, label: &str, attempt: usize, done: &Try) {
             if done.gone { "yes" } else { "no" },
             if done.outer_fired { "yes" } else { "no" }
         ),
-        &format!("event; {VERSIONS}"),
+        &format!("event; {versions}"),
     );
 }
 
 async fn series(label: &str, exec_timeout: Option<u64>, tries: usize, outer: u64) -> Res<()> {
     let session = Session::start().await?;
     let env = &session.env;
+    let versions = battery::versions::line(env).await?;
     let mut values = ValueGuard::new(env);
     ensure_floor(env, &mut values, 3).await?;
     let mut checks = Checks::new(env);
@@ -124,7 +124,7 @@ async fn series(label: &str, exec_timeout: Option<u64>, tries: usize, outer: u64
     for attempt in 1..=tries {
         pool::wait_warm(env, 3, 180).await?;
         let done = stress_open(env, &sandbox, Duration::from_secs(outer)).await?;
-        record(env, label, attempt, &done);
+        record(env, &versions, label, attempt, &done);
         if exec_timeout.is_some() {
             let ended = !done.outer_fired && (done.port_fault || done.seed_written == Some(true));
             checks.expect(

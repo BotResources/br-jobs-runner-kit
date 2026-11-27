@@ -28,8 +28,7 @@ async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
     pool::wait_warm(env, 1, 120).await?;
     let prime = adapter::open(&sandbox, Lane::new()?.first()?.1, Seed::empty()).await?;
     adapter::release(&sandbox, &prime.box_id).await?;
-    gate.set(GateMode::Refuse);
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    gate.set(GateMode::Refuse).await?;
     let runner = sandbox.clone();
     let during = request(Lane::new()?.first()?.1, Seed::empty(), None)?;
     let started = Instant::now();
@@ -49,7 +48,7 @@ async fn the_warm_pod_watch_survives_a_break_of_the_api_connection() -> Res {
         cut_result.is_err() && !matches!(&cut_result, Err(Error::Image(_))),
         format!("{cut_result:?}"),
     );
-    gate.set(GateMode::Open);
+    gate.set(GateMode::Open).await?;
     pool::wait_warm(env, 1, 120).await?;
     tokio::time::sleep(Duration::from_secs(10)).await;
     let after = adapter::open(&sandbox, Lane::new()?.first()?.1, Seed::empty()).await;
@@ -88,7 +87,7 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
         reaper.track(prime.box_id.to_string());
         adapter::release(&sandbox, &prime.box_id).await?;
         let claimed_before = pool::claimed_list(env).await?;
-        gate.set(mode);
+        gate.set(mode).await?;
         let req = request(Lane::new()?.first()?.1, Seed::empty(), None)?;
         let limit = Duration::from_secs(10 + 60);
         let started = Instant::now();
@@ -114,7 +113,7 @@ async fn a_slow_or_lost_kube_api_gives_a_fault_not_a_stuck_call() -> Res {
                 format!("hang after {} s", limit.as_secs()),
             ),
         }
-        gate.set(GateMode::Open);
+        gate.set(GateMode::Open).await?;
         for pod in pool::claimed_list(env).await? {
             if !claimed_before.contains(&pod) {
                 reaper.track(pod);
@@ -151,7 +150,7 @@ async fn a_live_pod_is_reused_with_its_files_and_kept_only_for_the_idle_time() -
     tree::state(&sandbox, &opened.box_id, 5, keep_min).await?;
     adapter::save(&sandbox, &opened.box_id).await?;
     adapter::release(&sandbox, &opened.box_id).await?;
-    gate.set(GateMode::Refuse);
+    gate.set(GateMode::Refuse).await?;
     let (_, next) = lane.child(first)?;
     let again = adapter::open(&sandbox, next, Seed::empty()).await?;
     let content = sh_ok(&sandbox, &again.box_id, "cat /work/live").await?;
@@ -166,7 +165,7 @@ async fn a_live_pod_is_reused_with_its_files_and_kept_only_for_the_idle_time() -
         format!("{:?}", again.start),
     );
     checks.expect("live-reuse-files-are-there", content == "kept", content);
-    gate.set(GateMode::Open);
+    gate.set(GateMode::Open).await?;
     adapter::save(&sandbox, &again.box_id).await?;
     adapter::release(&sandbox, &again.box_id).await?;
     let released = Instant::now();
