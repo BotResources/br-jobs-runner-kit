@@ -61,7 +61,7 @@ The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>
 | `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`, `images` (3 tests) | skip row `skip`: "not for chart 0.4.0: the image is set in the SandboxPool spec; see the README map" | run; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
 | `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` and every other test | run (no pool change) | run |
 
-On 0.4.0 and later `quota.extra_pods` is not changed by these tests: the quota of the namespace holds `limits.pods` plus `quota.extra_pods`, which is not tied to the floor any more. The four skipped tests have no replacement for 0.4.0 in this project: the change of the image of a `SandboxPool` is not covered here.
+On 0.4.0 and later `quota.extra_pods` is not changed by these tests: the quota of the namespace holds `limits.pods` plus `quota.extra_pods`, which is not tied to the floor any more. The four skipped tests have no Rust replacement for 0.4.0. Two of their sentences are covered by shell scenarios of `../scenarios` on a scratch `SandboxPool`: a new push under the same tag (`s22-same-tag-push.sh`) and an image that cannot be pulled (`s23-image-fails-at-once.sh`, which reads the pool condition and the pod state; it opens no thread, so the adapter error of that case is covered by `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` before 0.4.0 only). A second image by a change of the image of a pool, and an image that starts and crashes, are not covered on 0.4.0.
 
 Variables that only some tests need (the test fails with the variable name when it is not set):
 
