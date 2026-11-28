@@ -2,6 +2,7 @@ use k8s_openapi::api::apps::v1::ReplicaSet;
 
 use crate::cluster::{
     APPLY_TEMPLATE, CREATE_REPLICA_SET, DELETE_REPLICA_SET, DeleteOutcome, ReplicaSetRead,
+    template_in_place,
 };
 use crate::pool::{
     Acceptance, FenceVerdict, Owner, PoolSettings, PoolTemplate, RenderedTemplate, TemplateFault,
@@ -193,7 +194,8 @@ impl Engine {
         replica_set: &ReplicaSet,
         rendered: &RenderedTemplate,
     ) -> bool {
-        if self.held_hash(replica_set).as_deref() == Some(rendered.hash.as_str()) {
+        let key = template_hash_key(self.config.pod_keys().prefix());
+        if template_in_place(replica_set, &key, &rendered.hash) {
             self.refusals.clear(namespace, APPLY_TEMPLATE, "");
             return true;
         }

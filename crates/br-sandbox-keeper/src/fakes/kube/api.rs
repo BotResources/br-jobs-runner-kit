@@ -1,10 +1,11 @@
 use futures::StreamExt;
 use futures::stream::{self, BoxStream};
+use serde_json::json;
 use tokio::sync::mpsc;
 
 use crate::cluster::{
-    ApiError, ApiFuture, DeleteOutcome, EventTarget, KubeApi, LeaseFacts, LeaseWrite, PodEvent,
-    PoolEvent,
+    ApiError, ApiFuture, DeleteOutcome, EventTarget, FIELD_MANAGER, KubeApi, LeaseFacts,
+    LeaseWrite, PodEvent, PoolEvent,
 };
 use crate::facts::{ConditionFacts, PodFacts, PodVersion};
 use crate::pool::Selector;
@@ -12,7 +13,7 @@ use crate::rules::ConditionWrite;
 
 use super::pool::CLUSTER;
 use super::state::condition_of;
-use super::{Call, FakeKube};
+use super::{Call, FakeKube, ownership};
 
 impl crate::sealed::Sealed for FakeKube {}
 
@@ -115,13 +116,15 @@ impl KubeApi for FakeKube {
             if let Some(error) = state.refusal("apply_replicas") {
                 return Err(error);
             }
-            if let Some(set) = state
+            match state
                 .replica_sets
                 .get_mut(&(namespace.to_owned(), name.to_owned()))
             {
-                set.spec.get_or_insert_with(Default::default).replicas = Some(replicas);
+                Some(set) => {
+                    ownership::apply(set, FIELD_MANAGER, &json!({"spec": {"replicas": replicas}}))
+                }
+                None => Ok(()),
             }
-            Ok(())
         })
     }
 

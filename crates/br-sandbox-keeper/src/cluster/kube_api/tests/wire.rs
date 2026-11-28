@@ -1,6 +1,7 @@
 use http::StatusCode;
 use serde_json::{Value, json};
 
+use super::pool_wire::query_of;
 use super::stub::Wire;
 use super::*;
 use crate::cluster::{DeleteOutcome, EventTarget, KubeApi, PoolEvent};
@@ -67,8 +68,11 @@ async fn the_replicas_are_written_by_a_server_side_apply_of_the_one_field_under_
     let seen = wire.only();
     assert_eq!(seen.method, "PATCH");
     assert_eq!(seen.path, "/apis/apps/v1/namespaces/sbx/replicasets/warm-p");
-    assert!(seen.query.contains("fieldManager=br-sandbox-keeper"));
-    assert!(seen.query.contains("force=true"));
+    assert!(
+        query_of(&seen.query)
+            .contains(&("fieldManager".to_owned(), "br-sandbox-keeper".to_owned()))
+    );
+    assert!(query_of(&seen.query).contains(&("force".to_owned(), "true".to_owned())));
     assert_eq!(
         seen.content_type.as_deref(),
         Some("application/apply-patch+yaml")
@@ -99,7 +103,10 @@ async fn the_condition_is_written_on_the_status_and_nothing_else_of_the_status()
         seen.path,
         "/apis/apps/v1/namespaces/sbx/replicasets/warm-p/status"
     );
-    assert!(seen.query.contains("fieldManager=br-sandbox-keeper"));
+    assert!(
+        query_of(&seen.query)
+            .contains(&("fieldManager".to_owned(), "br-sandbox-keeper".to_owned()))
+    );
     assert_eq!(
         seen.body["status"]
             .as_object()
