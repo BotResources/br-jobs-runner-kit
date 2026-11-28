@@ -1,6 +1,6 @@
 operator:
   enabled: true
-  image: ghcr.io/botresources/br-sandbox-keeper@sha256:ce338934062a0ebf8d27ddf56b9361ec509036c80679d202623a301f23a0c244
+  image: ghcr.io/botresources/br-sandbox-keeper@sha256:2cf56ab2e5daa673e86aa325b880578be2630e803b81b0924a9f52a580a0705b
   replicas: 2
   port: 9191
   lease:
