@@ -10,9 +10,9 @@ adapter_paragraph() {
 
 check_the_docs_state_the_exec_timeout() {
     section "the README and the CHANGELOG state what exec_timeout_seconds is, its default and what it refuses"
-    t "the chart is at version 0.3.0" grep -qx 'version: 0.3.0' "$CHART/Chart.yaml"
+    t "the chart is at version 0.4.0" grep -qx 'version: 0.4.0' "$CHART/Chart.yaml"
     t "the CHANGELOG has the heading 0.3.0 once" test "$(grep -cx '## 0.3.0' "$CHART/CHANGELOG.md")" -eq 1
-    t "the app version is 0.3.0 too" grep -qx 'appVersion: "0.3.0"' "$CHART/Chart.yaml"
+    t "the app version is 0.4.0 too" grep -qx 'appVersion: "0.4.0"' "$CHART/Chart.yaml"
     t "the 0.2.4 heading is still in the CHANGELOG" test "$(grep -cx '## 0.2.4' "$CHART/CHANGELOG.md")" -eq 1
     t "the README values table has the row with the default 600 and the bound of one run in the foreground, marked as read from the code and not tested" grep -qF '| `exec_timeout_seconds` | `600` | An integer above zero. The key `exec_timeout_seconds` of the adapter document: the bound, in seconds, of one `run` in the foreground; the same key bounds the seed copy at an open. A command that needs longer uses the background form of `run`, which returns the id of the process and not its output. What the key bounds, and what the background form returns, are read from the code of the adapter and are not tested here or on a cluster.' "$CHART/README.md"
     t "the README row says that 600 is the choice of the chart, ten minutes" grep -qF 'The default `600` (ten minutes) is the choice of the chart.' "$CHART/README.md"

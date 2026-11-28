@@ -1,0 +1,47 @@
+{{- if .Values.operator.enabled }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: br-sandbox-fence
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      {{- include "br-sandbox-chart.fence.rules" . | nindent 6 }}
+  variables:
+    - name: name
+      expression: {{ "(request.operation == 'DELETE' ? oldObject : object).metadata.name" | include "br-sandbox-chart.json_string" }}
+    - name: fenced
+      expression: {{ "request.resource.resource == 'serviceaccounts' ? variables.name == 'sandbox' : (request.resource.resource == 'configmaps' ? variables.name.startsWith('br-sandbox-') : true)" | include "br-sandbox-chart.json_string" }}
+    - name: writer
+      expression: {{ "has(params.data) && 'writers' in params.data && request.userInfo.username in params.data['writers'].split(',')" | include "br-sandbox-chart.json_string" }}
+  validations:
+    - expression: {{ "!variables.fenced || variables.writer || (has(namespaceObject.status) && namespaceObject.status.phase == 'Terminating')" | include "br-sandbox-chart.json_string" }}
+      message: "BR_SANDBOX_FENCE: a fence object of a managed namespace is written by a writer of the platform only"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: br-sandbox-fence
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  policyName: br-sandbox-fence
+  validationActions: ["Deny"]
+  paramRef:
+    name: br-sandbox-grants
+    namespace: {{ include "br-sandbox-chart.system_namespace" . }}
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        br.sandbox/managed: "true"
+    resourceRules:
+      {{- include "br-sandbox-chart.fence.rules" . | nindent 6 }}
+{{- end }}

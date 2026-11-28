@@ -1,0 +1,6 @@
+namespaces:
+  - name: sbx-alpha-netcheck
+    mode: none
+render_namespace: true
+network_check:
+  enabled: false

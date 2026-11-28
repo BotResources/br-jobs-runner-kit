@@ -1,0 +1,7 @@
+{{- if .Values.crds.install }}
+{{- $definition := .Files.Get "files/sandboxpool-crd.yaml" | fromYaml }}
+{{- $_ := set $definition.metadata "annotations" (dict "helm.sh/resource-policy" "keep") }}
+{{- $_ := set $definition.metadata "labels" (include "br-sandbox-chart.labels" . | fromYaml) }}
+---
+{{ toYaml $definition }}
+{{- end }}

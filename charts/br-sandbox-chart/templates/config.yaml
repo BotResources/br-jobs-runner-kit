@@ -2,18 +2,9 @@
 {{- $namespaces := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
 {{- range $ns := $namespaces }}
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: br-sandbox-config
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-data:
-  config.json: |
-    {{- include "br-sandbox-chart.adapter.document" (dict "root" $ "ns" $ns) | nindent 4 }}
+{{ include "br-sandbox-chart.fence.config" (dict "root" $ "ns" $ns) }}
 {{- end }}
-{{- if .Values.keeper.enabled }}
+{{- if .Values.operator.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap

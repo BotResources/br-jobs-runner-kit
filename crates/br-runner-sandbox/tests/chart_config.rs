@@ -65,8 +65,32 @@ fn template(overlay: Option<&Path>, sets: &[&str]) -> Vec<(String, String)> {
         })
         .collect();
     found.sort();
-    assert!(found.len() >= 4, "fewer than four sandbox namespaces");
+    assert_eq!(
+        found.len(),
+        namespace_count(overlay),
+        "one document for each namespace of the merged values"
+    );
     found
+}
+
+fn listed_namespaces(path: &Path) -> Option<usize> {
+    let text = std::fs::read_to_string(path).expect("a readable values file");
+    let values: Value = serde_saphyr::from_str(&text).expect("a YAML values file");
+    values
+        .get("namespaces")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+}
+
+fn renders_no_namespace(path: &Path) -> bool {
+    listed_namespaces(path) == Some(0)
+}
+
+fn namespace_count(overlay: Option<&Path>) -> usize {
+    overlay
+        .and_then(listed_namespaces)
+        .or_else(|| listed_namespaces(&chart().join("ci/example-values.yaml")))
+        .expect("a list of namespaces in the values")
 }
 
 fn overlays() -> Vec<Option<PathBuf>> {
@@ -76,6 +100,7 @@ fn overlays() -> Vec<Option<PathBuf>> {
         .filter(|path| {
             let name = path.file_name().and_then(|name| name.to_str());
             name.is_some_and(|name| name.ends_with("-values.yaml") && name != "example-values.yaml")
+                && !renders_no_namespace(path)
         })
         .collect();
     found.sort();
@@ -292,7 +317,7 @@ fn a_mode_allow_with_no_list_fails_the_render_when_egress_is_enabled() {
     assert!(!output.status.success(), "the render passed");
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(
-        error.contains("BR_SANDBOX_ALLOW_EMPTY{client=alpha,mode=allow}"),
+        error.contains("BR_SANDBOX_ALLOW_EMPTY{namespace=sbx-alpha-allow,mode=allow}"),
         "{error}"
     );
 }

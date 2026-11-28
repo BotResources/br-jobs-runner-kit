@@ -1,0 +1,140 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sandboxpools.sandbox.botresources.ai
+spec:
+  group: sandbox.botresources.ai
+  names:
+    kind: SandboxPool
+    listKind: SandboxPoolList
+    plural: sandboxpools
+    singular: sandboxpool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.desiredReplicas
+      name: Desired
+      type: integer
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: integer
+    - jsonPath: .status.conditions[?(@.type=="Accepted")].status
+      name: Accepted
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              floors:
+                items:
+                  properties:
+                    floor:
+                      type: integer
+                    from:
+                      maxLength: 64
+                      type: string
+                    to:
+                      maxLength: 64
+                      type: string
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                maxItems: 16
+                type: array
+              image:
+                type: string
+              margin:
+                type: integer
+              maxReplicas:
+                minimum: 0.0
+                type: integer
+              minReplicas:
+                minimum: 0.0
+                type: integer
+              refillSeconds:
+                type: integer
+              size:
+                properties:
+                  cpu:
+                    properties:
+                      limit:
+                        type: string
+                      request:
+                        type: string
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  disk:
+                    properties:
+                      limit:
+                        type: string
+                      request:
+                        type: string
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  memory:
+                    properties:
+                      limit:
+                        type: string
+                      request:
+                        type: string
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+            required:
+            - image
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+            x-kubernetes-validations:
+            - message: minReplicas is above maxReplicas
+              rule: "!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas"
+            - message: image is empty or white space only
+              rule: has(self.image) && self.image.matches('\\S')
+            - message: image cannot change to empty or white space only
+              rule: "!has(oldSelf.image) || self.image == oldSelf.image || self.image.matches('\\\\S')"
+            - message: a floor has from equal to to
+              rule: "!has(self.floors) || self.floors.all(f, !has(f.from) || !has(f.to) || f.from != f.to)"
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    observedGeneration:
+                      type: integer
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              desiredReplicas:
+                type: integer
+              observedAt:
+                format: date-time
+                type: string
+              observedGeneration:
+                type: integer
+              readyReplicas:
+                type: integer
+              replicas:
+                type: integer
+              updatedReplicas:
+                type: integer
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

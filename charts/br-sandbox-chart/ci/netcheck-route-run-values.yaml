@@ -1,0 +1,5 @@
+network_check:
+  enabled: true
+  run_id: route-1
+  targets:
+    - 192.0.2.10:5432

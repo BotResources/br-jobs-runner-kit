@@ -9,14 +9,26 @@ ROOT="$(cd "$SCRIPTS/../.." && pwd)"
 export CHART="$ROOT/charts/br-sandbox-chart"
 export EXAMPLE="$CHART/ci/example-values.yaml"
 export MIRROR_VALUES="$CHART/ci/mirror-values.yaml"
-export KEEPER_VALUES="$CHART/ci/keeper-values.yaml"
+export OPERATOR_VALUES="$CHART/ci/operator-values.yaml"
 export EGRESS_VALUES="$CHART/ci/egress-values.yaml"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/test-sandbox-chart.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
-
 FAILURES=0
 CASES=0
 CURRENT=""
+LAST_RENDER=""
+SUMMARY_DONE=0
+
+finish() {
+    local code=$?
+    if [[ "$code" -ne 0 && "$SUMMARY_DONE" -eq 0 ]]; then
+        printf 'FAIL  the suite stopped with exit %s before its summary, in the section "%s", after the render "%s"\n' "$code" "$CURRENT" "$LAST_RENDER" >&2
+        if [[ -n "$LAST_RENDER" && -s "$WORK/$LAST_RENDER.err" ]]; then
+            sed 's/^/        | /' "$WORK/$LAST_RENDER.err" | head -12 >&2
+        fi
+    fi
+    rm -rf "$WORK"
+}
+trap finish EXIT
 
 section() {
     CURRENT="$1"
@@ -46,6 +58,7 @@ t() {
 render() {
     local name="$1"
     shift
+    LAST_RENDER="$name"
     helm template t "$CHART" "$@" 2>"$WORK/$name.err" | yq ea -o=json '[select(. != null)]' - >"$WORK/$name.json"
     [[ "${PIPESTATUS[0]}" -eq 0 ]]
 }
@@ -53,6 +66,7 @@ render() {
 render_yaml() {
     local name="$1"
     shift
+    LAST_RENDER="$name"
     helm template t "$CHART" "$@" >"$WORK/$name.yaml" 2>"$WORK/$name.err"
 }
 
@@ -78,7 +92,7 @@ export CREDENTIAL_SET='{"secret_ref": "set-a-credentials", "secrets": [{"placeho
 
 valsx() {
     local name="$1" expr="$2"
-    yq ea 'select(fileIndex == 0) * select(fileIndex == 1)' "$EXAMPLE" "$EGRESS_VALUES" | yq "$expr" - >"$WORK/$name.yaml"
+    yq ea 'select(fileIndex == 0) * select(fileIndex == 1) * select(fileIndex == 2)' "$EXAMPLE" "$EGRESS_VALUES" "$CHART/ci/fence-values.yaml" | yq "$expr" - >"$WORK/$name.yaml"
     printf '%s' "$WORK/$name.yaml"
 }
 
@@ -100,9 +114,10 @@ hosts_of() {
 }
 
 export QTY='def qty: tostring | capture("^(?<n>[0-9.]+)(?<u>m|Ki|Mi|Gi|Ti|K|M|G|T)?$") | (.n | tonumber) * ({"":1,"m":0.001,"Ki":1024,"Mi":1048576,"Gi":1073741824,"Ti":1099511627776,"K":1000,"M":1000000,"G":1000000000,"T":1000000000000}[.u // ""]);'
-export SANDBOX_PODS='[.[] | select(.kind == "ReplicaSet") | .spec.template]'
+export SANDBOX_PODS='[.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") | .data["pod-template.json"] | fromjson]'
 
 summary() {
+    SUMMARY_DONE=1
     echo
     if [[ "$FAILURES" -gt 0 ]]; then
         echo "${FAILURES}/${CASES} case(s) failed" >&2

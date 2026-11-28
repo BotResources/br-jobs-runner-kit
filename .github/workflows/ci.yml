@@ -285,7 +285,7 @@ jobs:
           set -euo pipefail
           chart=charts/br-sandbox-chart
           helm lint --strict "$chart" -f "$chart/ci/example-values.yaml"
-          for overlay in mirror keeper keeper-nondefault egress exec-timeout; do
+          for overlay in mirror operator operator-nondefault egress exec-timeout fence platform crds stamper netcheck-route netcheck-route-run; do
             helm lint --strict "$chart" -f "$chart/ci/example-values.yaml" -f "$chart/ci/${overlay}-values.yaml"
           done
       - name: the sandbox chart offline tests

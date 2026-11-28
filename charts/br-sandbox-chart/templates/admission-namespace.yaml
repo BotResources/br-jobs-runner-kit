@@ -1,0 +1,63 @@
+{{- if .Values.operator.enabled }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: br-sandbox-namespace
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  variables:
+    - name: managed
+      expression: {{ "(has(object.metadata.labels) && 'br.sandbox/managed' in object.metadata.labels) ? object.metadata.labels['br.sandbox/managed'] : ''" | include "br-sandbox-chart.json_string" }}
+    - name: oldManaged
+      expression: {{ "request.operation == 'CREATE' ? '' : ((has(oldObject.metadata.labels) && 'br.sandbox/managed' in oldObject.metadata.labels) ? oldObject.metadata.labels['br.sandbox/managed'] : '')" | include "br-sandbox-chart.json_string" }}
+    - name: mode
+      expression: {{ "(has(object.metadata.labels) && 'br.sandbox/mode' in object.metadata.labels) ? object.metadata.labels['br.sandbox/mode'] : ''" | include "br-sandbox-chart.json_string" }}
+    - name: oldMode
+      expression: {{ "request.operation == 'CREATE' ? '' : ((has(oldObject.metadata.labels) && 'br.sandbox/mode' in oldObject.metadata.labels) ? oldObject.metadata.labels['br.sandbox/mode'] : '')" | include "br-sandbox-chart.json_string" }}
+    - name: writer
+      expression: {{ "has(params.data) && 'writers' in params.data && request.userInfo.username in params.data['writers'].split(',')" | include "br-sandbox-chart.json_string" }}
+    - name: scopes
+      expression: {{ "(has(params.data) && 'scopes' in params.data) ? params.data['scopes'].split(',') : []" | include "br-sandbox-chart.json_string" }}
+    - name: granted
+      expression: {{ "(has(params.data) && ('mode.' + object.metadata.name) in params.data) ? params.data['mode.' + object.metadata.name].split(',') : []" | include "br-sandbox-chart.json_string" }}
+  validations:
+    {{- range $rule := include "br-sandbox-chart.vap.namespace_rules" . | fromJsonArray }}
+    - expression: {{ $rule.expression | include "br-sandbox-chart.json_string" }}
+      message: {{ printf "%s: %s" $rule.code $rule.message | include "br-sandbox-chart.json_string" }}
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: br-sandbox-namespace
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+spec:
+  policyName: br-sandbox-namespace
+  validationActions: ["Deny"]
+  paramRef:
+    name: br-sandbox-grants
+    namespace: {{ include "br-sandbox-chart.system_namespace" . }}
+    parameterNotFoundAction: Deny
+  matchResources:
+    objectSelector:
+      matchLabels:
+        br.sandbox/managed: "true"
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+{{- end }}

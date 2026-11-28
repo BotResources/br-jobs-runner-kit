@@ -20,7 +20,7 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $ns := .ns -}}
 {{- $values := $root.Values -}}
 {{- $probe := .probe | default false -}}
-{{- $resources := include "br-sandbox-chart.resources" $ns.pool.size | fromJson -}}
+{{- $resources := include "br-sandbox-chart.resources" $values.limits.size | fromJson -}}
 {{- $uid := $values.runAsUser -}}
 {{- $gid := $values.runAsGroup -}}
 {{- $mount := $values.tools.mount_path -}}
@@ -30,12 +30,12 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- if and (eq $ns.mode "full") (not $ns.egress) -}}
 {{- $nameservers = $values.network.public_resolvers -}}
 {{- end -}}
-{{- $spec := dict "hostUsers" false "automountServiceAccountToken" false "enableServiceLinks" false "serviceAccountName" "sandbox" "terminationGracePeriodSeconds" ($ns.pool.terminationGracePeriodSeconds | int64) "dnsPolicy" "None" "dnsConfig" (dict "nameservers" $nameservers) "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) -}}
+{{- $spec := dict "hostUsers" false "automountServiceAccountToken" false "enableServiceLinks" false "serviceAccountName" "sandbox" "terminationGracePeriodSeconds" ($values.pool.terminationGracePeriodSeconds | int64) "dnsPolicy" "None" "dnsConfig" (dict "nameservers" $nameservers) "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) -}}
 {{- if $values.runtimeClassName -}}
 {{- $_ := set $spec "runtimeClassName" $values.runtimeClassName -}}
 {{- end -}}
-{{- if $ns.pool.node_selector -}}
-{{- $_ := set $spec "nodeSelector" $ns.pool.node_selector -}}
+{{- if $values.pool.node_selector -}}
+{{- $_ := set $spec "nodeSelector" $values.pool.node_selector -}}
 {{- end -}}
 {{- $pullSecrets := include "br-sandbox-chart.pull_secrets" $root | fromJsonArray -}}
 {{- if $pullSecrets -}}
@@ -53,7 +53,7 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $mounts := list (dict "name" "tools" "mountPath" $mount "readOnly" true) (dict "name" "work" "mountPath" "/work") (dict "name" "home" "mountPath" "/home/agent") (dict "name" "skills" "mountPath" $seedRoot "readOnly" $seed) -}}
 {{- $mounts = concat $mounts (include "br-sandbox-chart.slot.egress.volume_mounts" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
 {{- $env := concat (list (dict "name" "HOME" "value" "/home/agent")) (include "br-sandbox-chart.slot.egress.env" (dict "root" $root "ns" $ns) | fromYamlArray) -}}
-{{- $agent := dict "name" (include "br-sandbox-chart.agent_container" $root) "image" (include "br-sandbox-chart.image.project" $root) "imagePullPolicy" (include "br-sandbox-chart.image.policy" (dict "root" $root "ref" $values.image)) "command" (list (printf "%s/bin/pause" $mount)) "env" $env "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $resources "volumeMounts" $mounts -}}
+{{- $agent := dict "name" (include "br-sandbox-chart.agent_container" $root) "image" $toolsImage "imagePullPolicy" (include "br-sandbox-chart.image.agent_policy" $root) "command" (list (printf "%s/bin/pause" $mount)) "env" $env "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" $uid "gid" $gid) | fromJson) "resources" $resources "volumeMounts" $mounts -}}
 {{- $containers := list $agent -}}
 {{- if $seed -}}
 {{- $containers = append $containers (dict "name" $values.tools.seed_container.name "image" $toolsImage "imagePullPolicy" $toolsPolicy "command" (list "/sbx/bin/pause") "securityContext" (include "br-sandbox-chart.pod.security" (dict "uid" 0 "gid" 0 "read_only_root" true) | fromJson) "resources" $values.tools.seed_container.resources "volumeMounts" (list (dict "name" "skills" "mountPath" $seedRoot))) -}}
@@ -66,4 +66,10 @@ br.sandbox/pool-id: {{ .ns.poolId | quote }}
 {{- $_ := set $spec "volumes" $volumes -}}
 {{- end -}}
 {{- toYaml $spec -}}
+{{- end -}}
+
+{{- define "br-sandbox-chart.pod.template" -}}
+{{- $labels := include "br-sandbox-chart.pod.labels" (dict "ns" .ns "pool" "warm") | fromYaml -}}
+{{- $spec := include "br-sandbox-chart.pod.spec" . | fromYaml -}}
+{{- include "br-sandbox-chart.json_string" (dict "metadata" (dict "labels" $labels) "spec" $spec) -}}
 {{- end -}}

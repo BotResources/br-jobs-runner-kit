@@ -8,6 +8,8 @@ def reaches:
 [.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[]? | select(reaches)] | length
 '
 
+RULES_REACHING_RESIZE="${RULES_REACHING_EPHEMERAL_CONTAINERS//ephemeralcontainers/resize}"
+
 ROLES_AND_RULES_OF_THE_RENDER='[.[] | select(.kind == "Role" or .kind == "ClusterRole") | .rules[]?] | length > 0'
 
 check_the_ephemeral_containers_detector_flags_every_reaching_rule() {
@@ -36,12 +38,26 @@ check_the_ephemeral_containers_detector_flags_every_reaching_rule() {
 check_no_role_of_the_chart_reaches_pods_ephemeralcontainers() {
     section "no Role and no ClusterRole of any render holds a verb on pods/ephemeralcontainers"
     render ephemeral_nocheck -f "$EXAMPLE" --set network_check.enabled=false
-    render ephemeral_keeper_nocheck -f "$EXAMPLE" -f "$KEEPER_VALUES" --set network_check.enabled=false
+    render ephemeral_keeper_nocheck -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.enabled=false
     local name
     for name in ex mirror keeper cred two egressdual tunnel ephemeral_nocheck ephemeral_keeper_nocheck; do
-        t "render ${name}: the render holds Roles with rules" jqt "$name" "$ROLES_AND_RULES_OF_THE_RENDER"
+        [[ " ex mirror keeper ephemeral_keeper_nocheck " != *" $name "* ]] || t "render ${name}: the render holds Roles with rules" jqt "$name" "$ROLES_AND_RULES_OF_THE_RENDER"
         t "render ${name}: no rule reaches pods/ephemeralcontainers" test "$(jqv "$name" "$RULES_REACHING_EPHEMERAL_CONTAINERS")" = 0
     done
     t "the render with the network check holds its namespaced Roles" jqt ex '[.[] | select(.kind == "Role" and .metadata.name == "br-sandbox-netcheck")] | length == 4'
     t "the render without the network check holds none" jqt ephemeral_nocheck '[.[] | select(.metadata.name // "" | test("netcheck"))] | length == 0'
+}
+
+check_no_role_of_the_chart_reaches_pods_resize() {
+    section "no Role and no ClusterRole of any render holds a verb on pods/resize"
+    local name probe="$WORK/resize-probe.json" resource
+    for resource in pods/resize '*' 'pods/*' '*/resize'; do
+        jq -nc --arg r "$resource" '[{kind: "Role", rules: [{apiGroups: [""], resources: [$r], verbs: ["patch"]}]}]' >"$probe"
+        t "a Role with the resource ${resource} is flagged by the resize detector" test "$(jq "$RULES_REACHING_RESIZE" "$probe")" = 1
+    done
+    jq -nc '[{kind: "Role", rules: [{apiGroups: [""], resources: ["pods", "pods/ephemeralcontainers"], verbs: ["patch"]}]}]' >"$probe"
+    t "a Role with pods and pods/ephemeralcontainers is not flagged by the resize detector" test "$(jq "$RULES_REACHING_RESIZE" "$probe")" = 0
+    for name in ex mirror keeper cred two egressdual tunnel ephemeral_nocheck ephemeral_keeper_nocheck; do
+        t "render ${name}: no rule reaches pods/resize" test "$(jqv "$name" "$RULES_REACHING_RESIZE")" = 0
+    done
 }

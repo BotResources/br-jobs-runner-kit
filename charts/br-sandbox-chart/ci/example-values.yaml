@@ -1,6 +1,5 @@
 installation:
   namespace_prefix: sbx
-image: registry.example.test/agents/base:1.0
 tools:
   image:
     repository: registry.example.test/tools/br-sandbox-tools
@@ -32,40 +31,32 @@ network:
   store_cidrs:
     - 10.0.1.0/24
 network_check:
+  enabled: true
   image: registry.example.test/tools/probe:1.0
   targets:
     - bus.example.test:4222
     - db.example.test:5432
-clients:
-  alpha:
-    modes:
-      none:
-        runner:
-          service_account: runner
-          namespace: runners
-      allow:
-        runner:
-          service_account: runner
-          namespace: runners
-      full:
-        runner:
-          service_account: runner
-          namespace: runners
-        pool:
-          size:
-            cpu:
-              request: "1"
-              limit: "4"
-            memory:
-              request: 2Gi
-              limit: 4Gi
-            disk:
-              request: 4Gi
-              limit: 10Gi
-          max_sandboxes: 10
-  beta:
-    modes:
-      none:
-        runner:
-          service_account: runner
-          namespace: runners
+operator:
+  enabled: true
+  image: ghcr.io/botresources/br-sandbox-keeper@sha256:2cf56ab2e5daa673e86aa325b880578be2630e803b81b0924a9f52a580a0705b
+render_namespace: true
+scopes:
+  sbx-alpha:
+    client_id: alpha
+    runner:
+      service_account: runner
+      namespace: runners
+  sbx-beta:
+    client_id: beta
+    runner:
+      service_account: runner
+      namespace: runners
+namespaces:
+  - name: sbx-alpha-none
+    mode: none
+  - name: sbx-alpha-allow
+    mode: allow
+  - name: sbx-alpha-full
+    mode: full
+  - name: sbx-beta-none
+    mode: none
