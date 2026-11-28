@@ -12,7 +12,7 @@ check_the_docs_state_the_runner_role() {
     section "the README and the CHANGELOG state the rights of the runner Role on pods/exec"
     t "the README Role description lists pods/exec with get and create" grep -qF '`pods/exec` get and create; `replicasets` get, list, watch' <<<"$(runner_role_paragraph)"
     t "the README Role description no longer lists pods/exec with create alone" test "$(runner_role_paragraph | grep -cF '`pods/exec` create;')" -eq 0
-    t "the README says that the Role holds get and create on pods/exec in each sandbox namespace" grep -qF 'The runner Role holds `get` and `create` on `pods/exec` in each sandbox namespace.' <<<"$(runner_role_paragraph)"
+    t "the README says that the ClusterRole holds get and create on pods/exec, bound in each sandbox namespace" grep -qF 'The runner ClusterRole holds `get` and `create` on `pods/exec`, bound in each sandbox namespace.' <<<"$(runner_role_paragraph)"
     t "the README marks every Kubernetes sentence of the paragraph as read from public pages and not tested on a cluster" grep -qF 'Every sentence of this paragraph about the behaviour of Kubernetes is read from public pages and is not tested on a cluster.' <<<"$(runner_role_paragraph)"
     t "the README names the feature gates reference with its address and the gate" grep -qF 'the Kubernetes feature gates reference (https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/, the gate `AuthorizePodWebsocketUpgradeCreatePermission`)' <<<"$(runner_role_paragraph)"
     t "the README names KEP 4006 with its address" grep -qF 'KEP 4006 of kubernetes/enhancements (https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/4006-transition-spdy-to-websockets)' <<<"$(runner_role_paragraph)"

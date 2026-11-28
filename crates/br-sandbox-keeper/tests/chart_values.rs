@@ -1,21 +1,20 @@
-use br_sandbox_keeper::KeeperConfig;
-use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use br_sandbox_keeper::KeeperConfig;
+use serde_json::Value;
+
 mod common;
+mod keeper_config_map;
 
-use common::{chart, keeper_document, rendered};
+use common::{chart, rendered};
+use keeper_config_map::keeper_document;
 
-const SANDBOX_NAMESPACES: [(&str, &str, &str); 4] = [
-    ("sbx-alpha-allow", "alpha-allow", "pool"),
-    (
-        "sbx-alpha-full",
-        "alpha-full",
-        "clients.alpha.modes.full.pool",
-    ),
-    ("sbx-alpha-none", "alpha-none", "pool"),
-    ("sbx-beta-none", "beta-none", "pool"),
+const SANDBOX_NAMESPACES: [&str; 4] = [
+    "sbx-alpha-allow",
+    "sbx-alpha-full",
+    "sbx-alpha-none",
+    "sbx-beta-none",
 ];
 
 fn parsed(path: PathBuf) -> Value {
@@ -24,7 +23,7 @@ fn parsed(path: PathBuf) -> Value {
 }
 
 fn overlay() -> Value {
-    parsed(chart().join("ci/keeper-nondefault-values.yaml"))
+    parsed(chart().join("ci/operator-nondefault-values.yaml"))
 }
 
 fn lookup<'a>(values: &'a Value, path: &str) -> &'a Value {
@@ -41,6 +40,10 @@ fn text<'a>(values: &'a Value, path: &str) -> &'a str {
     lookup(values, path)
         .as_str()
         .unwrap_or_else(|| panic!("{path} is a string"))
+}
+
+fn seconds(values: &Value, path: &str) -> Duration {
+    Duration::from_secs(number(values, path))
 }
 
 fn differs_from_the_defaults(overlay: &Value, path: &str) {
@@ -88,40 +91,20 @@ fn the_values_of_the_overlay_are_not_the_defaults() {
         "store.bucket",
         "store.region",
         "store.path_style",
-        "pool.floor",
-        "pool.max_sandboxes",
-        "pool.refill_seconds",
-        "pool.margin",
-        "keeper.port",
-        "keeper.lease.duration_seconds",
-        "keeper.lease.renew_deadline_seconds",
-        "keeper.lease.retry_period_seconds",
+        "operator.port",
+        "operator.lease.duration_seconds",
+        "operator.lease.renew_deadline_seconds",
+        "operator.lease.retry_period_seconds",
     ] {
         differs_from_the_defaults(&overlay, path);
     }
 }
 
-fn keeper_values() -> Value {
-    let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
-    serde_json::from_str(&keeper_document(&objects)).expect("the keeper document is JSON")
-}
-
-fn seconds(values: &Value, path: &str) -> Duration {
-    Duration::from_secs(number(values, path))
-}
-
-fn keeper_wide_document() -> String {
-    let mut document = keeper_values();
-    let keys = document.as_object_mut().expect("the document is an object");
-    keys.remove("pools");
-    keys.insert("agent_container".to_owned(), "agent".into());
-    document.to_string()
-}
-
 #[test]
-fn the_typed_config_carries_the_keeper_wide_values_of_the_overlay() {
+fn the_typed_config_carries_the_values_of_the_overlay() {
     let overlay = overlay();
-    let config = KeeperConfig::from_json(&keeper_wide_document()).expect("a valid document");
+    let objects = rendered(&chart().join("ci/operator-nondefault-values.yaml"), &[]);
+    let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
 
     assert_eq!(config.store.bucket, text(&overlay, "store.bucket"));
     assert_eq!(config.store.region, text(&overlay, "store.region"));
@@ -146,141 +129,77 @@ fn the_typed_config_carries_the_keeper_wide_values_of_the_overlay() {
     );
     assert_eq!(
         config.lease.duration,
-        seconds(&overlay, "keeper.lease.duration_seconds")
+        seconds(&overlay, "operator.lease.duration_seconds")
     );
     assert_eq!(
         config.lease.renew_deadline,
-        seconds(&overlay, "keeper.lease.renew_deadline_seconds")
+        seconds(&overlay, "operator.lease.renew_deadline_seconds")
     );
     assert_eq!(
         config.lease.retry_period,
-        seconds(&overlay, "keeper.lease.retry_period_seconds")
+        seconds(&overlay, "operator.lease.retry_period_seconds")
     );
     assert_eq!(
         config.listen_address.to_string(),
-        format!("0.0.0.0:{}", number(&overlay, "keeper.port"))
-    );
-}
-
-#[test]
-fn the_keeper_document_carries_the_values_of_the_overlay() {
-    let overlay = overlay();
-    let document = keeper_values();
-
-    assert_eq!(
-        text(&document, "store_bucket"),
-        text(&overlay, "store.bucket")
-    );
-    assert_eq!(
-        text(&document, "store_region"),
-        text(&overlay, "store.region")
-    );
-    assert_eq!(
-        text(&document, "store_endpoint"),
-        text(&overlay, "store.endpoint")
-    );
-    assert_eq!(
-        lookup(&document, "store_path_style").as_bool(),
-        lookup(&overlay, "store.path_style").as_bool()
-    );
-    assert_eq!(
-        number(&document, "save_ttl_seconds"),
-        number(&overlay, "save.ttl_seconds")
-    );
-    assert_eq!(
-        number(&document, "tombstone_ttl_seconds"),
-        number(&overlay, "save.tombstone_ttl_days") * 86_400
-    );
-    assert_eq!(
-        number(&document, "warm_max_age_seconds"),
-        number(&overlay, "warm_max_age_seconds")
-    );
-    for (key, path) in [
-        ("lease_duration_seconds", "keeper.lease.duration_seconds"),
-        (
-            "renew_deadline_seconds",
-            "keeper.lease.renew_deadline_seconds",
-        ),
-        ("retry_period_seconds", "keeper.lease.retry_period_seconds"),
-    ] {
-        assert_eq!(number(&document, key), number(&overlay, path), "{key}");
-    }
-    assert_eq!(
-        text(&document, "listen_address"),
-        format!("0.0.0.0:{}", number(&overlay, "keeper.port"))
+        format!("0.0.0.0:{}", number(&overlay, "operator.port"))
     );
 
-    let pools = document["pools"]
-        .as_array()
-        .expect("the pools of the chart");
-    assert_eq!(pools.len(), SANDBOX_NAMESPACES.len());
-    for (namespace, id, source) in SANDBOX_NAMESPACES {
-        let pool = pools
-            .iter()
-            .find(|pool| pool["id"] == id && pool["namespace"] == namespace)
-            .unwrap_or_else(|| panic!("the pool {id}"));
-        for (key, field) in [
-            ("min_replicas", "floor"),
-            ("max_replicas", "max_sandboxes"),
-            ("refill_seconds", "refill_seconds"),
-            ("margin", "margin"),
-        ] {
-            assert_eq!(
-                number(pool, key),
-                number(&overlay, &format!("{source}.{field}")),
-                "{id} {key}"
-            );
-        }
-        assert_eq!(
-            number(pool, "idle_ttl_seconds"),
-            number(&overlay, "idle_ttl"),
-            "{id}"
-        );
-        assert_eq!(
-            number(pool, "idle_keep_min_state_bytes"),
-            number(&overlay, "idle_keep_min_state_bytes"),
-            "{id}"
-        );
-    }
+    assert_eq!(config.idle_ttl, seconds(&overlay, "idle_ttl"));
+    assert_eq!(
+        config.idle_keep_min_state_bytes,
+        number(&overlay, "idle_keep_min_state_bytes")
+    );
 }
 
 #[test]
 fn the_adapter_document_carries_the_same_values_as_the_keeper_document() {
-    let objects = rendered(&chart().join("ci/keeper-nondefault-values.yaml"), &[]);
-    let keeper = keeper_values();
+    let objects = rendered(&chart().join("ci/operator-nondefault-values.yaml"), &[]);
+    let config = KeeperConfig::from_json(&keeper_document(&objects)).expect("a valid document");
     let adapters = adapter_documents(&objects);
     assert_eq!(adapters.len(), SANDBOX_NAMESPACES.len());
 
     for (namespace, document) in &adapters {
-        let (_, id, _) = SANDBOX_NAMESPACES
-            .iter()
-            .find(|(name, _, _)| name == namespace)
-            .unwrap_or_else(|| panic!("the namespace {namespace}"));
-        let pool = keeper["pools"]
-            .as_array()
-            .and_then(|pools| pools.iter().find(|pool| pool["namespace"] == *namespace))
-            .expect("the pool of the namespace");
+        assert!(
+            SANDBOX_NAMESPACES.contains(&namespace.as_str()),
+            "the namespace {namespace}"
+        );
         assert_eq!(text(document, "namespace"), namespace);
-        assert_eq!(text(document, "pool_id"), *id);
+        assert_eq!(text(document, "pool_id"), namespace);
         assert_eq!(
-            number(document, "idle_ttl_seconds"),
-            number(pool, "idle_ttl_seconds"),
+            seconds(document, "idle_ttl_seconds"),
+            config.idle_ttl,
             "{namespace}"
         );
         assert_eq!(
             number(document, "idle_keep_min_state_bytes"),
-            number(pool, "idle_keep_min_state_bytes"),
+            config.idle_keep_min_state_bytes,
             "{namespace}"
         );
-        for key in [
-            "save_ttl_seconds",
-            "store_bucket",
-            "store_region",
-            "store_endpoint",
-            "store_path_style",
-        ] {
-            assert_eq!(document[key], keeper[key], "{namespace} {key}");
-        }
+        assert_eq!(
+            seconds(document, "save_ttl_seconds"),
+            config.save_ttl,
+            "{namespace}"
+        );
+        assert_eq!(
+            text(document, "store_bucket"),
+            config.store.bucket,
+            "{namespace}"
+        );
+        assert_eq!(
+            text(document, "store_region"),
+            config.store.region,
+            "{namespace}"
+        );
+        assert_eq!(
+            text(document, "store_endpoint"),
+            config.store.endpoint.as_str().trim_end_matches('/'),
+            "{namespace}"
+        );
+        assert_eq!(
+            lookup(document, "store_path_style").as_bool(),
+            Some(config.store.path_style),
+            "{namespace}"
+        );
         for absent in [
             "floor",
             "max_sandboxes",

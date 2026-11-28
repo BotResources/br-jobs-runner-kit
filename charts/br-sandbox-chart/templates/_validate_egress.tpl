@@ -1,5 +1,5 @@
 {{- define "br-sandbox-chart.validate.credentials" -}}
-{{- $where := printf "client=%s,mode=%s" .client .mode -}}
+{{- $where := printf "namespace=%s,mode=%s" .namespace .mode -}}
 {{- $set := get .values "credential_set" | default dict -}}
 {{- $placeholders := dict -}}
 {{- $envs := dict -}}
@@ -44,15 +44,16 @@
 
 {{- define "br-sandbox-chart.validate.proxy" -}}
 {{- $root := .root -}}
-{{- $base := printf "clients.%s.modes.%s.proxy" .client .mode -}}
+{{- $base := printf "namespaces.%s.proxy" .namespace -}}
+{{- $values := .values -}}
 {{- range $path := list "cluster_ip" "ca.certificate" "ca.key_secret" -}}
-{{- include "br-sandbox-chart.require" (dict "root" $root "path" (printf "%s.%s" $base $path)) -}}
+{{- include "br-sandbox-chart.require.in" (dict "node" $values "path" (printf "proxy.%s" $path) "label" (printf "%s.%s" $base $path)) -}}
 {{- end -}}
 {{- $address := .values.proxy.cluster_ip -}}
 {{- if hasKey .ips $address -}}
-{{- fail (printf "BR_SANDBOX_PROXY_ADDRESS_DUPLICATE{client_a=%s,client_b=%s,cluster_ip=%s}" (get .ips $address) .client $address) -}}
+{{- fail (printf "BR_SANDBOX_PROXY_ADDRESS_DUPLICATE{first=%s,second=%s,cluster_ip=%s}" (get .ips $address) .namespace $address) -}}
 {{- end -}}
-{{- $_ := set .ips $address .client -}}
+{{- $_ := set .ips $address .namespace -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.validate.proxy_global" -}}

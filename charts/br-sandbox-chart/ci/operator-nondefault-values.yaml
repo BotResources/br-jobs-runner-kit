@@ -1,6 +1,6 @@
-keeper:
+operator:
   enabled: true
-  image: registry.example.test/keeper/br-sandbox-keeper@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  image: ghcr.io/botresources/br-sandbox-keeper@sha256:2cf56ab2e5daa673e86aa325b880578be2630e803b81b0924a9f52a580a0705b
   replicas: 2
   port: 9191
   lease:
@@ -18,17 +18,19 @@ store:
   bucket: other-saves
   region: other-region-9
   path_style: false
+limits:
+  pods: 31
+  size:
+    cpu:
+      request: 600m
+      limit: "3"
+    memory:
+      request: 2Gi
+      limit: 4Gi
+    disk:
+      request: 3Gi
+      limit: 6Gi
 pool:
-  floor: 3
-  max_sandboxes: 31
-  refill_seconds: 7
-  margin: 5
-clients:
-  alpha:
-    modes:
-      full:
-        pool:
-          floor: 4
-          max_sandboxes: 12
-          refill_seconds: 9
-          margin: 6
+  terminationGracePeriodSeconds: 5
+  node_selector:
+    pool: sandbox

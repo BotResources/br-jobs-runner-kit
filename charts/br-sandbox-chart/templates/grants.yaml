@@ -1,0 +1,16 @@
+{{- if .Values.operator.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: br-sandbox-grants
+  namespace: {{ include "br-sandbox-chart.system_namespace" . }}
+  labels:
+    {{- include "br-sandbox-chart.labels" . | nindent 4 }}
+data:
+  writers: {{ join "," .Values.grants.writers | quote }}
+  scopes: {{ keys .Values.scopes | sortAlpha | join "," | quote }}
+  {{- range $name, $modes := .Values.grants.modes }}
+  {{ printf "mode.%s" $name | quote }}: {{ $modes | sortAlpha | join "," | quote }}
+  {{- end }}
+{{- end }}

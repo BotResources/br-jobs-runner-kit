@@ -1,4 +1,5 @@
 {{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+{{- if $.Values.render_namespace }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -8,20 +9,14 @@ metadata:
     {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
     br.sandbox/managed: "true"
     br.sandbox/mode: {{ $ns.mode | quote }}
-    br.sandbox/client: {{ $ns.client | quote }}
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: sandbox
-  namespace: {{ $ns.name }}
-  labels:
-    {{- include "br-sandbox-chart.labels" $ | nindent 4 }}
-automountServiceAccountToken: false
 {{- end }}
+---
+{{ include "br-sandbox-chart.fence.service_account" (dict "root" $ "ns" $ns) }}
+{{- end }}
+{{- if .Values.operator.enabled }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -33,3 +28,4 @@ metadata:
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted
+{{- end }}

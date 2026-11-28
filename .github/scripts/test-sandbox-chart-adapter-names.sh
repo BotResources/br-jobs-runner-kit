@@ -5,7 +5,7 @@ adapter_namespaces() {
 }
 
 pod_containers() {
-    jq -r --arg ns "$2" '.[] | select(.kind == "ReplicaSet" and .metadata.namespace == $ns) | .spec.template.spec.containers | map(.name) | join(" ")' "$WORK/$1.json"
+    jq -r --arg ns "$2" '.[] | select(.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template" and .metadata.namespace == $ns) | (.data["pod-template.json"] | fromjson).spec.containers | map(.name) | join(" ")' "$WORK/$1.json"
 }
 
 container_names_agree() {
@@ -67,7 +67,7 @@ check_the_container_names_of_the_document_are_the_names_of_the_containers_of_the
     t "the README says what the document holds with no seed container, and what the adapter does" grep -qF 'With `tools.seed_container.enabled` false the pod has no seed container, so the document holds neither `seed_container` nor `seed_tools_path`, and the adapter then uses its defaults `seed` and `/sbx/bin/bsdtar`; the failure of an open with a non-empty seed follows from the adapter code and is not tested here or on a cluster (the exec would name a container that the pod does not have), and the same holds for the statement that an open with an empty seed is not affected.' "$README"
     t "the CHANGELOG 0.2.4 says the same about the seed container" test "$(changelog_entry | grep -cF 'With `tools.seed_container.enabled` false the pod has no seed container, and the document holds neither `seed_container` nor `seed_tools_path`')" -eq 1
     t "the README marks the failure of an open with a non-empty seed as read from the adapter code and not tested" grep -qF 'the failure of an open with a non-empty seed follows from the adapter code and is not tested here or on a cluster' "$README"
-    t "the README no longer states that failure as a fact of the chart" test "$(grep -c 'an open with a non-empty seed then fails' "$README")" -eq 0
+    t "the README no longer states that failure as a fact of the chart" test "$(grep -c 'an open with a non-empty seed then fails' "$DOCS")" -eq 0
     t "the CHANGELOG 0.2.4 marks the failure of an open with a non-empty seed as read from the adapter code and not tested" test "$(changelog_entry | grep -cF 'the adapter then uses its defaults `seed` and `/sbx/bin/bsdtar`; the failure of an open with a non-empty seed follows from the adapter code and is not tested here or on a cluster')" -eq 1
     t "the CHANGELOG no longer states that failure as a fact of the chart" test "$(grep -c 'an open with a non-empty seed fails' "$CHART/CHANGELOG.md")" -eq 0
 }
@@ -76,14 +76,14 @@ check_the_documents_say_what_the_chart_holds_for_the_constant_and_the_save_paths
     section "the README and the CHANGELOG: label_prefix is a constant, and the adapter checks save.paths"
     t "the README says label_prefix is a constant of both documents and not a chart value" grep -qF 'holds the same constant `label_prefix` (`br.sandbox`, which is not a chart value) and the same chart value for `idle_ttl`' "$README"
     t "the README says the overlay sets the chart values and not the constant" grep -qF 'which sets each of these chart values away from its default (`label_prefix` is a constant, so it is not set)' "$README"
-    t "the README no longer calls label_prefix a chart value of both documents" test "$(grep -c 'holds the same chart value for `label_prefix`' "$README")" -eq 0
+    t "the README no longer calls label_prefix a chart value of both documents" test "$(grep -c 'holds the same chart value for `label_prefix`' "$DOCS")" -eq 0
     t "the CHANGELOG 0.2.4 says label_prefix is a constant, the same in both documents" test "$(changelog_entry | grep -cF '`label_prefix` is a constant (`br.sandbox`), the same in both documents; the store keys')" -eq 1
     t "the CHANGELOG no longer says that label_prefix is one chart value" test "$(grep -c '`label_prefix`, the store keys, the save age, the idle time and the idle threshold are one chart value' "$CHART/CHANGELOG.md")" -eq 0
     t "label_prefix is no key of the values and of the schema" test "$(grep -c 'label_prefix' "$CHART/values.yaml" "$CHART/values.schema.json" | grep -vc ':0$')" -eq 0
     t "the Why row on one value, one source says label_prefix is a constant and not a chart value" grep -qF '| `label_prefix` is a constant (`br.sandbox`), the same in both documents and not a chart value; the store keys, the save age, the idle time and the idle threshold are rendered into both documents from the same chart value, and a test with values that differ from their defaults checks both documents;' "$README"
-    t "the Why row no longer groups label_prefix with the values that a test sets away from the default" test "$(grep -c '`label_prefix`, the store keys, the save age, the idle time and the idle threshold are rendered' "$README")" -eq 0
+    t "the Why row no longer groups label_prefix with the values that a test sets away from the default" test "$(grep -c '`label_prefix`, the store keys, the save age, the idle time and the idle threshold are rendered' "$DOCS")" -eq 0
     t "the README says that store.path_style is required with no default in the chart, that true is to be used, that the virtual-host style has a known defect read from the code, and that the chart does not test it" grep -qF '`store.path_style` is required and the chart sets no default; use `true`. The virtual-host style (`false`) has a known defect in the adapter and the keeper 0.1.x, read from their code and not run on a live store, and the chart does not test it: both build the key with an empty path segment, and a fix to one library alone would make them address different keys.' "$README"
-    t "the README no longer says that the two libraries address different objects, that saves may not expire, or that path_style must be true" test "$(grep -cE 'address different objects|may then not expire|must be `true`' "$README")" -eq 0
+    t "the README no longer says that the two libraries address different objects, that saves may not expire, or that path_style must be true" test "$(grep -cE 'address different objects|may then not expire|must be `true`' "$DOCS")" -eq 0
     t "the CHANGELOG no longer says that the two libraries address different objects, that saves may not expire, or that path_style must be true" test "$(grep -cE 'address different objects|may then not expire|must be `true`' "$CHART/CHANGELOG.md")" -eq 0
     t "the README says that the adapter, not the chart, refuses a save.paths list without /work, with a nested path, with the seed root, or with a .. part" grep -qF 'The chart does not check `save.paths` against the rules of the adapter: the adapter refuses, when it starts, a list that does not hold `/work` (`ScopeWithoutWork`), a list in which one path holds or equals another (`ScopeNested`), a list in which a path holds or is held by `/skills`, the seed root (`SeedRootInScope`), and a path with a `..` part (`PathEscapes`), and the chart renders such a list as it is given.' "$README"
     t "the CHANGELOG 0.2.4 says the chart renders save.paths as given" test "$(changelog_entry | grep -cF '`save.paths` is rendered as given.')" -eq 1
@@ -95,7 +95,7 @@ check_the_documents_say_what_the_chart_holds_for_the_constant_and_the_save_paths
     t "a list that holds the seed root is rendered as given" test "$(adapter_doc paths_seed_root sbx-alpha-none '.save_scope_paths | join(",")')" = /skills,/work
 }
 
-pod_specs='.[] | (if .kind == "Pod" then .spec elif .kind == "CronJob" then .spec.jobTemplate.spec.template.spec elif (.kind | IN("ReplicaSet", "Deployment", "StatefulSet", "DaemonSet", "Job")) then .spec.template.spec else empty end)'
+pod_specs='.[] | (if .kind == "Pod" then .spec elif .kind == "CronJob" then .spec.jobTemplate.spec.template.spec elif (.kind | IN("Deployment", "StatefulSet", "DaemonSet", "Job")) then .spec.template.spec elif (.kind == "ConfigMap" and .metadata.name == "br-sandbox-pod-template") then (.data["pod-template.json"] | fromjson | .spec) else empty end)'
 
 config_maps_of_pods() {
     jq -r "[${pod_specs} | .. | objects | (.configMap, .configMapRef, .configMapKeyRef) | objects | .name] | unique | join(\" \")" "$WORK/$1.json"
@@ -109,8 +109,8 @@ no_pod_refers_to_the_adapter_config() {
 }
 
 check_no_pod_refers_to_the_adapter_config_map() {
-    section "no Pod, ReplicaSet, Job or CronJob of the render mounts or reads the ConfigMap br-sandbox-config"
-    render refs_keeper -f "$EXAMPLE" -f "$KEEPER_VALUES" --set network_check.cron='0 * * * *'
+    section "no Pod, pod template, Job or CronJob of the render mounts or reads the ConfigMap br-sandbox-config"
+    render refs_keeper -f "$EXAMPLE" -f "$OPERATOR_VALUES" --set network_check.cron='0 * * * *'
     t "the query finds the ConfigMaps that the pods of the render use, so the check is not empty" test " $(config_maps_of_pods refs_keeper) " = " br-sandbox-keeper-config br-sandbox-netcheck "
     t "the document ConfigMap exists in the render, so a pod could have named it" test "$(adapter_namespaces refs_keeper | grep -c .)" -ge 3
     t "no workload of the renders of the example, the keeper, the egress and the mirror refers to br-sandbox-config" no_pod_refers_to_the_adapter_config refs_keeper cred ex mirror egress_keeper keeper nondefault

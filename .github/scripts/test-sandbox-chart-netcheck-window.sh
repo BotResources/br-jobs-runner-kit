@@ -85,7 +85,7 @@ check_network_check_retries_a_probe_until_it_is_refused() {
     t "a positive control is not tried again: one call for the control and one for each probe pod" test "$(grep -cxF "$first" "$WORK/netcheckstub/nc.calls")" -eq $((count + 1))
     t "the connect probes are tried once: no wait in mode allow with a proxy" test "$(NETCHECK_SOURCE=egress_yaml run_netcheck env NC_MODE=all PROBE_MODE=none CONNECT_MODE=403 >/dev/null 2>&1; sleeps)" -eq 0
     t "the README says the controls and the CONNECT probes are tried once" grep -qF 'The positive controls (from the Job pod) are tried once and never again, and the `CONNECT` probes in mode `allow` are tried once.' "$README"
-    t "the README names the products of the measurement and the numbers" grep -qF 'flannel and the kube-router network policy controller: the policy started some seconds after the pod; a probe sent at once reached 2 of 2 targets, the same probe sent 30 seconds later reached 0' "$README"
+    t "the README names the products of the measurement and the numbers" grep -qF 'flannel and the kube-router network policy controller (reported by the operator of a test cluster; no record in this repository): the policy started some seconds after the pod; a probe sent at once reached 2 of 2 targets, the same probe sent 30 seconds later reached 0' "$README"
     t "the README says the window exists and the chart does not close it" grep -qF 'A window exists in which a fresh sandbox pod can reach internal targets, and the chart does not close it' "$README"
     t "the README says what the Job proves" grep -qF 'What the Job proves is the state after enforcement.' "$README"
 }

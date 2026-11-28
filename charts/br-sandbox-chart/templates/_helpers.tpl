@@ -24,25 +24,37 @@ agent
 /sbx/bin/bsdtar
 {{- end -}}
 
-{{- define "br-sandbox-chart.replicaset_name" -}}
-{{- printf "warm-%s-%s" .client .mode -}}
+{{- define "br-sandbox-chart.scope.of" -}}
+{{- $name := .name -}}
+{{- $found := list -}}
+{{- range $scope, $table := .root.Values.scopes -}}
+{{- if or (eq $name $scope) (hasPrefix (printf "%s-" $scope) $name) -}}
+{{- $found = append $found (dict "name" $scope "client_id" ($table.client_id | default $scope) "runner" (dict "service_account" (dig "runner" "service_account" "" $table) "namespace" (dig "runner" "namespace" "" $table))) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq (len $found) 0 -}}
+{{- fail (printf "BR_SANDBOX_NO_SCOPE{namespace=%s}" $name) -}}
+{{- end -}}
+{{- toJson (first $found) -}}
 {{- end -}}
 
 {{- define "br-sandbox-chart.namespaces" -}}
 {{- include "br-sandbox-chart.validate" . -}}
 {{- $root := . -}}
 {{- $out := list -}}
-{{- range $client, $clientValues := .Values.clients -}}
-{{- range $mode, $modeValues := $clientValues.modes -}}
-{{- $pool := mergeOverwrite (deepCopy $root.Values.pool) (deepCopy ($modeValues.pool | default dict)) -}}
-{{- $name := printf "%s-%s-%s" $root.Values.installation.namespace_prefix $client $mode -}}
+{{- $byName := dict -}}
+{{- range $entry := .Values.namespaces -}}
+{{- $_ := set $byName $entry.name $entry -}}
+{{- end -}}
+{{- range $name := keys $byName | sortAlpha -}}
+{{- $entry := get $byName $name -}}
+{{- $scope := include "br-sandbox-chart.scope.of" (dict "root" $root "name" $entry.name) | fromJson -}}
 {{- $egress := "" -}}
-{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $mode "values" $modeValues) -}}
-{{- $egress = include "br-sandbox-chart.egress.namespace" $name -}}
+{{- if include "br-sandbox-chart.egress.proxied" (dict "mode" $entry.mode "values" $entry) -}}
+{{- $egress = include "br-sandbox-chart.egress.namespace" $entry.name -}}
 {{- end -}}
-{{- $item := dict "client" $client "mode" $mode "name" $name "egress" $egress "poolId" (printf "%s-%s" $client $mode) "pool" $pool "runner" $modeValues.runner "allow" ($modeValues.allow | default dict) "credential_set" ($modeValues.credential_set | default dict) "proxy" ($modeValues.proxy | default dict) -}}
+{{- $item := dict "name" $entry.name "mode" $entry.mode "client" $scope.client_id "scope" $scope.name "egress" $egress "poolId" $entry.name "runner" $scope.runner "allow" ($entry.allow | default dict) "credential_set" ($entry.credential_set | default dict) "proxy" ($entry.proxy | default dict) -}}
 {{- $out = append $out $item -}}
-{{- end -}}
 {{- end -}}
 {{- toJson $out -}}
 {{- end -}}
@@ -78,10 +90,6 @@ true
 {{- end -}}
 {{- end -}}
 
-{{- define "br-sandbox-chart.image.project" -}}
-{{- include "br-sandbox-chart.image.mirrored" (dict "root" . "ref" .Values.image) -}}
-{{- end -}}
-
 {{- define "br-sandbox-chart.image.tools" -}}
 {{- include "br-sandbox-chart.image.mirrored" (dict "root" . "ref" (printf "%s@%s" .Values.tools.image.repository .Values.tools.image.digest)) -}}
 {{- end -}}
@@ -96,8 +104,12 @@ Always
 {{- end -}}
 {{- end -}}
 
+{{- define "br-sandbox-chart.image.agent_policy" -}}
+{{- default "Always" .Values.image_pull_policy -}}
+{{- end -}}
+
 {{- define "br-sandbox-chart.image.allowed_repositories" -}}
-{{- $repositories := list (include "br-sandbox-chart.image.repository" .Values.image) .Values.tools.image.repository -}}
+{{- $repositories := list .Values.tools.image.repository -}}
 {{- if .Values.network_check.enabled -}}
 {{- $repositories = append $repositories (include "br-sandbox-chart.image.repository" .Values.network_check.image) -}}
 {{- end -}}

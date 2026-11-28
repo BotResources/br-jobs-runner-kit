@@ -1,0 +1,4 @@
+{{- range $ns := include "br-sandbox-chart.namespaces" . | fromJsonArray }}
+---
+{{ include "br-sandbox-chart.fence.pod_template" (dict "root" $ "ns" $ns) }}
+{{- end }}

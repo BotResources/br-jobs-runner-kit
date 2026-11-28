@@ -1,0 +1,7 @@
+operator:
+  enabled: false
+network_check:
+  enabled: false
+grants:
+  writers:
+    - system:serviceaccount:gitops:platform

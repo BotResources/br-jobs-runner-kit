@@ -3,48 +3,52 @@ egress:
   proxy:
     reload:
       key_secret: proxy-reload
-clients:
-  alpha:
-    modes:
-      allow:
-        allow:
-          domains:
+namespaces:
+  - name: sbx-alpha-none
+    mode: none
+  - name: sbx-alpha-allow
+    mode: allow
+    allow:
+      domains:
+        - git.example.test
+        - "*.packages.example.test"
+      cidrs:
+        - 192.0.2.0/24
+    proxy:
+      cluster_ip: 10.43.0.50
+      ca:
+        certificate: |
+          -----BEGIN CERTIFICATE-----
+          ZmFrZS1jYS1hbGxvdw==
+          -----END CERTIFICATE-----
+        key_secret: sbx-alpha-allow-ca-key
+  - name: sbx-alpha-full
+    mode: full
+    credential_set:
+      secret_ref: sbx-alpha-full-credentials
+      secrets:
+        - placeholder: placeholder-git-a
+          env_name: GIT_ACCESS
+          key: git
+          hosts:
             - git.example.test
+        - placeholder: placeholder-registry-a
+          env_name: REGISTRY_ACCESS
+          key: registry
+          hosts:
             - "*.packages.example.test"
-          cidrs:
-            - 192.0.2.0/24
-        proxy:
-          cluster_ip: 10.43.0.50
-          ca:
-            certificate: |
-              -----BEGIN CERTIFICATE-----
-              ZmFrZS1jYS1hbGxvdw==
-              -----END CERTIFICATE-----
-            key_secret: sbx-alpha-allow-ca-key
-      full:
-        credential_set:
-          secret_ref: sbx-alpha-full-credentials
-          secrets:
-            - placeholder: placeholder-git-a
-              env_name: GIT_ACCESS
-              key: git
-              hosts:
-                - git.example.test
-            - placeholder: placeholder-registry-a
-              env_name: REGISTRY_ACCESS
-              key: registry
-              hosts:
-                - "*.packages.example.test"
-              match_headers:
-                - X-Registry-Auth
-              match_query: true
-              require_tls: false
-              require: true
-        proxy:
-          cluster_ip: 10.43.0.51
-          ca:
-            certificate: |
-              -----BEGIN CERTIFICATE-----
-              ZmFrZS1jYS1mdWxs
-              -----END CERTIFICATE-----
-            key_secret: sbx-alpha-full-ca-key
+          match_headers:
+            - X-Registry-Auth
+          match_query: true
+          require_tls: false
+          require: true
+    proxy:
+      cluster_ip: 10.43.0.51
+      ca:
+        certificate: |
+          -----BEGIN CERTIFICATE-----
+          ZmFrZS1jYS1mdWxs
+          -----END CERTIFICATE-----
+        key_secret: sbx-alpha-full-ca-key
+  - name: sbx-beta-none
+    mode: none

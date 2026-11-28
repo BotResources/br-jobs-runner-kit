@@ -46,7 +46,7 @@ work:
   size_limit: 3Gi
 home:
   size_limit: 512Mi
-pool:
+limits:
   size:
     cpu:
       request: 500m
@@ -57,10 +57,8 @@ pool:
     disk:
       request: 2Gi
       limit: 5Gi
-  floor: 1
-  max_sandboxes: 20
-  refill_seconds: 3
-  margin: 2
+  pods: 20
+pool:
   terminationGracePeriodSeconds: 1
   node_selector: {}
 quota:
@@ -74,7 +72,12 @@ network:
     - 169.254.0.0/16
     - 127.0.0.0/8
   ipv6: single_stack
-clients: {}
+namespaces: []
+scopes: {}
+grants:
+  writers: []
+  modes: {}
+render_namespace: false
 egress:
   enabled: false
   proxy:
@@ -101,7 +104,12 @@ egress:
       - CURL_CA_BUNDLE
   quota:
     pods: 4
-keeper:
+crds:
+  install: false
+stamper:
+  enabled: false
+  identity: system:serviceaccount:kyverno:kyverno-background-controller
+operator:
   enabled: false
   replicas: 2
   port: 8080
@@ -118,7 +126,7 @@ keeper:
     renew_deadline_seconds: 10
     retry_period_seconds: 2
 network_check:
-  enabled: true
+  enabled: false
   image: ghcr.io/botresources/br-sandbox-check@sha256:51bd276e6c14b568a55633419d31a824338d423360c08d6584ecf28a7bcf556d
   targets: []
   offlist_host: offlist.invalid
