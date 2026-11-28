@@ -1,3 +1,28 @@
+{{- define "br-sandbox-chart.validate.link_local" -}}
+{{- $target := 2851995648 -}}
+{{- $covered := false -}}
+{{- range $entry := .Values.network.internal_cidrs -}}
+{{- $parts := splitList "/" (include "br-sandbox-chart.cidr.normalize" $entry) -}}
+{{- $octets := splitList "." (index $parts 0) -}}
+{{- if and (eq (len $octets) 4) (not (contains ":" (index $parts 0))) -}}
+{{- $prefix := atoi (index $parts 1) -}}
+{{- if le $prefix 16 -}}
+{{- $block := 1 -}}
+{{- range until (int (sub 32 $prefix)) -}}
+{{- $block = mul $block 2 -}}
+{{- end -}}
+{{- $ip := add (add (mul (atoi (index $octets 0)) 16777216) (mul (atoi (index $octets 1)) 65536)) (add (mul (atoi (index $octets 2)) 256) (atoi (index $octets 3))) -}}
+{{- if eq (div $ip $block) (div $target $block) -}}
+{{- $covered = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if not $covered -}}
+{{- fail "BR_SANDBOX_LINK_LOCAL_MISSING{key=network.internal_cidrs,range=169.254.0.0/16}" -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "br-sandbox-chart.require" -}}
 {{- include "br-sandbox-chart.require.in" (dict "node" .root.Values "path" .path "label" .path) -}}
 {{- end -}}
@@ -55,6 +80,7 @@
 {{- range $path := list "installation.namespace_prefix" "tools.image.repository" "tools.image.digest" "save.ttl_seconds" "store.endpoint" "store.bucket" "store.region" "store.path_style" "store.credentials_secret" "network.pod_cidr" "network.service_cidr" "network.node_addresses" "network.node_public_addresses" "network.load_balancer_addresses" -}}
 {{- include "br-sandbox-chart.require" (dict "root" $root "path" $path) -}}
 {{- end -}}
+{{- include "br-sandbox-chart.validate.link_local" . -}}
 {{- if le (.Values.save.ttl_seconds | int64) 0 -}}
 {{- fail "BR_SANDBOX_SAVE_AGE_INVALID{key=save.ttl_seconds}" -}}
 {{- end -}}
