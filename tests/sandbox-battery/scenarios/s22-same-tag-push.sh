@@ -90,19 +90,22 @@ build_and_push 2 || scenario_end
 pushed=$(date +%s)
 bound=$((age + MOVING_MARGIN_SECONDS))
 found=
-while [ $(($(date +%s) - pushed)) -le "$bound" ]; do
+delay=0
+while [ "$delay" -le "$bound" ]; do
   found=$(first_new_pod "$old_id")
+  delay=$(($(date +%s) - pushed))
   if [ -n "$found" ]; then break; fi
   sleep 5
 done
-delay=$(($(date +%s) - pushed))
 record same_tag_push_margin_seconds "$MOVING_MARGIN_SECONDS" s
+values="warm_max_age_seconds of the keeper document is $age s, the margin for the start of the pod is $MOVING_MARGIN_SECONDS s, the limit is $bound s"
 if [ -z "$found" ]; then
   record same_tag_push_delay_to_new_warm_pod never s
-  check same-tag-push-new-warm-pod-within-bound fail "no warm pod with another image id than $old_id in $bound s ($age s warm_max_age_seconds and $MOVING_MARGIN_SECONDS s margin) after the push of the content 2 under the same tag"
+  check same-tag-push-new-warm-pod-within-age-plus-margin fail "no Ready warm pod with another image id than $old_id $delay s after the push of the content 2 under the same tag; $values"
 else
   record same_tag_push_delay_to_new_warm_pod "$delay" s
-  check same-tag-push-new-warm-pod-within-bound pass "the warm pod ${found%% *} has the image id ${found#* } (not $old_id) $delay s after the push, within $bound s"
+  verdict same-tag-push-new-warm-pod-within-age-plus-margin "the warm pod ${found%% *} has the image id ${found#* } (not $old_id) $delay s after the push; $values" \
+    test "$delay" -le "$bound"
   verdict same-tag-push-new-pod-holds-new-content "the new warm pod ${found%% *} holds the content 2" \
     test "$(pod_content "${found%% *}")" = 2
 fi

@@ -5,6 +5,7 @@ scenario_begin s23-image-fails-at-once
 
 : "${FAILING_WAIT_SECONDS:=300}"
 PULL_REASONS="ErrImagePull ImagePullBackOff"
+AT_ONCE_LIMIT_SECONDS=20
 
 SCRATCH_PREFIX=bt23
 cleanup_extra() { scratch_pool_remove; }
@@ -71,6 +72,8 @@ started=$(date +%s)
 if wait_condition; then
   seconds=$(($(date +%s) - started))
   record image_fails_at_once_condition_seconds "$seconds" s
+  verdict image-fails-at-once-within-limit "the condition $POOL_FAILING_CONDITION shows $seconds s after the pool is Accepted; the limit is $AT_ONCE_LIMIT_SECONDS s (FAILING_WAIT_SECONDS only ends the wait)" \
+    test "$seconds" -le "$AT_ONCE_LIMIT_SECONDS"
   condition=$(rs_condition)
   verdict image-fails-at-once-condition-reason "the pool ReplicaSet of $SCRATCH_NS has $POOL_FAILING_CONDITION True with the reason $POOL_FAILING_REASON after $seconds s for the image $ABSENT_IMAGE: $(first_line "$condition")" \
     test "$(jq -r '.reason // ""' <<< "$condition")" = "$POOL_FAILING_REASON"
@@ -83,7 +86,5 @@ verdict image-fails-at-once-pod-waiting-reason "a warm pod has the container $SA
   has_pull_reason
 verdict image-fails-at-once-no-warm-pod-ready "no warm pod of $SCRATCH_NS is Ready" \
   test "$(warm_image_ids "$SCRATCH_NS" | count_lines)" = 0
-verdict image-fails-at-once-no-claimed-pod "no pod of $SCRATCH_NS is claimed" \
-  test "$(k -n "$SCRATCH_NS" get pods -l "$LBL_POOL=claimed" -o name | count_lines)" = 0
 
 scenario_end

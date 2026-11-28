@@ -1,4 +1,5 @@
 SCRATCH_NS=
+SCRATCH_MADE=
 SCRATCH_REF_NS=
 SCRATCH_PREFIX=
 
@@ -59,6 +60,7 @@ scratch_pool_make() {
     check "$SCRATCH_PREFIX-namespace" fail "namespace $SCRATCH_NS was not made as $FENCE_WRITER: $(first_line "$out")"
     return 1
   fi
+  SCRATCH_MADE=$SCRATCH_NS
   log "set-up: namespace $SCRATCH_NS made; the fence objects of $SCRATCH_REF_NS are copied unless the stamper made them first"
   scratch_wait_stamped || true
   for ref in $FENCE_COPIES; do
@@ -83,21 +85,45 @@ scratch_pool_accepted() {
   return 1
 }
 
+scratch_namespace_state() {
+  local out
+  if out=$(k get namespace "$1" -o name 2>&1); then
+    echo present
+  elif [[ "$out" == *"(NotFound)"* ]]; then
+    echo gone
+  else
+    echo "error: $(first_line "$out")"
+  fi
+}
+
 scratch_pool_remove() {
-  local name=$SCRATCH_NS end
+  local name=$SCRATCH_MADE end out state
   if [ -z "$name" ]; then return 0; fi
-  k -n "$name" delete "$SANDBOX_POOL_KIND" "$SANDBOX_POOL_NAME" --ignore-not-found --wait=false > /dev/null 2>&1
-  k delete namespace "$name" --ignore-not-found --wait=false > /dev/null 2>&1
+  if ! out=$(k -n "$name" delete "$SANDBOX_POOL_KIND" "$SANDBOX_POOL_NAME" --ignore-not-found --wait=false 2>&1); then
+    check "$SCRATCH_PREFIX-scratch-pool-delete" fail "the $SANDBOX_POOL_KIND $SANDBOX_POOL_NAME of namespace $name was not deleted: $(first_line "$out")"
+  fi
+  if ! out=$(k delete namespace "$name" --ignore-not-found --wait=false 2>&1); then
+    check "$SCRATCH_PREFIX-scratch-removed" fail "namespace $name was not deleted; remove it by this exact name: $(first_line "$out")"
+    return 0
+  fi
   end=$(($(date +%s) + 180))
-  while k get namespace "$name" > /dev/null 2>&1; do
+  while true; do
+    state=$(scratch_namespace_state "$name")
+    if [ "$state" = gone ]; then
+      check "$SCRATCH_PREFIX-scratch-removed" pass "namespace $name (with its pool and pods) is gone: kubectl answers NotFound"
+      SCRATCH_MADE=
+      return 0
+    fi
+    if [ "$state" != present ]; then
+      check "$SCRATCH_PREFIX-scratch-removed" fail "the state of namespace $name cannot be read ($state); remove it by this exact name if it exists"
+      return 0
+    fi
     if [ "$(date +%s)" -ge "$end" ]; then
       check "$SCRATCH_PREFIX-scratch-removed" fail "namespace $name still exists 180 s after its delete; remove it by this exact name"
       return 0
     fi
     sleep 2
   done
-  check "$SCRATCH_PREFIX-scratch-removed" pass "namespace $name (with its pool and pods) is gone"
-  SCRATCH_NS=
 }
 
 warm_pods_json() { k -n "$1" get pods -l "$LBL_POOL=warm,$LBL_POOL_ID=$(pool_of "$1")" -o json; }
