@@ -4,7 +4,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin s22-same-tag-push
 
 : "${MOVING_MARGIN_SECONDS:=120}"
-: "${MOVING_SKEW_LIMIT_SECONDS:=5}"
 : "${MOVING_AGE_LIMIT_SECONDS:=300}"
 VERSION_FILE=/etc/image-version
 
@@ -60,13 +59,24 @@ pod_created() {
   k -n "$SCRATCH_NS" get pod "$1" -o json | jq -r '.metadata.creationTimestamp | fromdateiso8601' 2> /dev/null
 }
 
-cluster_clock_skew() {
-  local before cluster after
-  before=$(date +%s)
-  cluster=$(sx "$SCRATCH_NS" "$1" date +%s 2> /dev/null | tr -d '\r\n')
-  after=$(date +%s)
-  [[ "$cluster" =~ ^[0-9]+$ ]] || return 1
-  echo $((cluster - (before + after) / 2))
+PUSH_MARKER_NAME=
+PUSH_MARKER_TIME=
+PUSH_MARKER_ERROR=
+
+make_push_marker() {
+  local out
+  PUSH_MARKER_NAME=push-marker-${SCRATCH_NS##*-}
+  PUSH_MARKER_TIME=
+  if ! out=$(k -n "$SCRATCH_NS" create configmap "$PUSH_MARKER_NAME" -o json 2>&1); then
+    PUSH_MARKER_ERROR="the marker object $PUSH_MARKER_NAME was not created in $SCRATCH_NS: $(first_line "$out")"
+    return 1
+  fi
+  PUSH_MARKER_TIME=$(jq -r '.metadata.creationTimestamp | fromdateiso8601' <<< "$out" 2> /dev/null)
+  if ! [[ "$PUSH_MARKER_TIME" =~ ^[0-9]+$ ]]; then
+    PUSH_MARKER_TIME=
+    PUSH_MARKER_ERROR="the creation time of the marker object $PUSH_MARKER_NAME was not read from the answer of the API server"
+    return 1
+  fi
 }
 
 pushed_digest() {
@@ -107,13 +117,9 @@ verdict same-tag-push-agent-pull-policy-always "container $SANDBOX_CONTAINER of 
 verdict same-tag-push-first-content "the warm pod $old_pod (image id $old_id) holds the content 1" \
   test "$(pod_content "$old_pod")" = 1
 
-old_created=$(pod_created "$old_pod")
-skew=$(cluster_clock_skew "$old_pod") || skew=
-if [ -n "$skew" ] && [ "${skew#-}" -le "$MOVING_SKEW_LIMIT_SECONDS" ]; then basis=push; else basis=pods; fi
-record same_tag_push_clock_skew_seconds "${skew:-unread}" s
-
 build_and_push 2 || scenario_end
 pushed=$(date +%s)
+make_push_marker || true
 digest2=$(pushed_digest)
 bound=$((age + MOVING_MARGIN_SECONDS))
 found=
@@ -134,19 +140,14 @@ else
   new_id=${found#* }
   created=$(pod_created "$new_pod")
   record same_tag_push_delay_to_new_warm_pod "$delay" s
-  if ! [[ "$created" =~ ^[0-9]+$ ]]; then
+  if [ -z "$PUSH_MARKER_TIME" ]; then
+    check same-tag-push-new-warm-pod-created-within-age fail "$PUSH_MARKER_ERROR, so the push time is not known and no creation time is compared"
+  elif ! [[ "$created" =~ ^[0-9]+$ ]]; then
     check same-tag-push-new-warm-pod-created-within-age fail "the creation time of the warm pod $new_pod was not read from the pod"
-  elif [ "$basis" = pods ] && ! [[ "$old_created" =~ ^[0-9]+$ ]]; then
-    check same-tag-push-new-warm-pod-created-within-age fail "the clock of the cluster and of this host are not comparable and the creation time of the old warm pod $old_pod was not read from the pod"
-  elif [ "$basis" = push ]; then
-    since=$((created - pushed))
-    record same_tag_push_creation_after_push_seconds "$since" s
-    verdict same-tag-push-new-warm-pod-created-within-age "push of the content 2 at $pushed (epoch seconds, clock of this host), warm pod $new_pod created at $created (creation time of the pod), $since s between, warm_max_age_seconds is $age s; compared: creation of the new pod against the push, no margin; clock difference between the cluster and this host $skew s" \
-      test "$since" -le "$age"
   else
-    since=$((created - old_created))
-    record same_tag_push_creation_after_old_creation_seconds "$since" s
-    verdict same-tag-push-new-warm-pod-created-within-age "the clock of the cluster and of this host differ by more than $MOVING_SKEW_LIMIT_SECONDS s or the clock was not read, so the push time is not used; warm pod $new_pod created at $created, old warm pod $old_pod created at $old_created, $since s between, warm_max_age_seconds is $age s; compared: creation of the new pod against creation of the old pod, no margin" \
+    since=$((created - PUSH_MARKER_TIME))
+    record same_tag_push_creation_after_marker_seconds "$since" s
+    verdict same-tag-push-new-warm-pod-created-within-age "marker object $PUSH_MARKER_NAME made right after the push of the content 2, created at $PUSH_MARKER_TIME (epoch seconds, creation time stamped by the API server); warm pod $new_pod created at $created (creation time of the pod, same clock); $since s between; warm_max_age_seconds is $age s; compared: creation of the new pod against the marker, no margin" \
       test "$since" -le "$age"
   fi
   verdict same-tag-push-new-warm-pod-image-id-is-content-2 "the warm pod $new_pod has the image id $new_id, the pushed content 2 has the digest ${digest2:-unread}, Ready $delay s after the push; the wait limit is $bound s ($age s of age plus $MOVING_MARGIN_SECONDS s for the pull and the start of one pod), a limit of the wait and not a bound of the sentence" \
