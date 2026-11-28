@@ -2,7 +2,8 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 
-UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s08-internal-targets s10-proxy-canary s11-platform s12-closed-cluster s13-pivot-barriers s14-fresh-pod-race s15-keeper-ready s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods"
+UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s08-internal-targets s10-proxy-canary s11-platform s12-closed-cluster s13-pivot-barriers s14-fresh-pod-race s15-keeper-ready s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules"
+CHART_040_ONLY="s05-admission s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules"
 TIMED="m-restore-stalls m-netpol-delay m-window m-coldstart m-scale-down m-burst"
 
 mkdir -p "$BATTERY_OUT"
@@ -42,7 +43,16 @@ for name in $selected; do
   if [[ " $UNTIMED $TIMED " != *" $name "* ]]; then check "$name-unknown-script" fail "no script of this name in the lists of run-all.sh"; fi
 done
 for name in $UNTIMED; do
-  if [ -z "$selected" ] || [[ " $selected " == *" $name "* ]]; then run_one "$name"; fi
+  if [ -n "$selected" ] && [[ " $selected " != *" $name "* ]]; then continue; fi
+  if [[ " $CHART_040_ONLY " == *" $name "* ]] && ! chart_at_least 0.4.0; then
+    if [ -n "$selected" ]; then
+      check "$name-chart-version" fail "this script needs chart 0.4.0 or later and CHART_VERSION is $CHART_VERSION"
+    else
+      echo "== $name skipped: it needs chart 0.4.0 or later and CHART_VERSION is $CHART_VERSION"
+    fi
+    continue
+  fi
+  run_one "$name"
 done
 for name in $TIMED; do
   if [ -z "$selected" ] || [[ " $selected " == *" $name "* ]]; then run_timed "$name"; fi

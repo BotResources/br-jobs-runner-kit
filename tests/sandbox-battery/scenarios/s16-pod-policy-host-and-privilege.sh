@@ -52,6 +52,10 @@ probe_without_host() { printf '%s' "{$1: {httpGet: {port: 8080, path: \"/\"}}}";
 tcp_with_host() { printf '%s' "{$1: {tcpSocket: {host: \"$PROBE_TARGET_HOST\", port: 8080}}}"; }
 tcp_without_host() { printf '%s' "{$1: {tcpSocket: {port: 8080}}}"; }
 
+empty_host_probes() {
+  printf '%s' '{livenessProbe: {httpGet: {host: "", port: 8080, path: "/"}}, readinessProbe: {tcpSocket: {host: "", port: 8080}}, startupProbe: {httpGet: {host: "", port: 8080, path: "/"}}, lifecycle: {postStart: {httpGet: {host: "", port: 8080, path: "/"}}, preStop: {tcpSocket: {host: "", port: 8080}}}}'
+}
+
 post_start_bad=".lifecycle.postStart = {httpGet: {host: \"$PROBE_TARGET_HOST\", port: 8080, path: \"/\"}}"
 post_start_ok='.lifecycle.postStart = {httpGet: {port: 8080, path: "/"}}'
 pre_stop_bad=".lifecycle.preStop = {tcpSocket: {host: \"$PROBE_TARGET_HOST\", port: 8080}}"
@@ -69,6 +73,8 @@ for where in main init; do
     "$($put "$post_start_bad")" "$($put "$post_start_ok")"
   policy_case "policy-refuses-pre-stop-hook-host-$where" "$where container with a preStop hook tcpSocket.host" "$CODES_HOOK_HOST" \
     "$($put "$pre_stop_bad")" "$($put "$pre_stop_ok")"
+  policy_accepts "policy-accepts-empty-host-probes-and-hooks-$where" "$where container with a liveness, readiness and startup probe and a postStart and a preStop hook whose host field is empty (the rule refuses a host that is set and not empty)" \
+    "$($put ". += $(empty_host_probes)")"
 done
 
 scenario_end
