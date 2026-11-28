@@ -4,11 +4,10 @@ use std::time::{Duration, Instant};
 
 use battery::Session;
 use battery::adapter::{self, Tunables};
-use battery::common::ensure_floor;
 use battery::env::Env;
 use battery::error::Res;
 use battery::evidence::Checks;
-use battery::guards::ValueGuard;
+use battery::floor::ensure_floor;
 use battery::ids::Lane;
 use battery::{pool, seeds};
 
@@ -115,8 +114,7 @@ async fn series(label: &str, exec_timeout: Option<u64>, tries: usize, outer: u64
     let session = Session::start().await?;
     let env = &session.env;
     let versions = battery::versions::line(env).await?;
-    let mut values = ValueGuard::new(env);
-    ensure_floor(env, &mut values, 3).await?;
+    let _floor = ensure_floor(env, 3).await?;
     let mut checks = Checks::new(env);
     let mut tunables = Tunables::standard(env);
     tunables.exec_timeout = exec_timeout;

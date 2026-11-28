@@ -1,9 +1,9 @@
 use battery::Session;
 use battery::adapter;
-use battery::common::{ensure_floor, record_stats};
+use battery::common::record_stats;
 use battery::error::Res;
 use battery::evidence::{Checks, load_now};
-use battery::guards::ValueGuard;
+use battery::floor::ensure_floor;
 use battery::ids::Lane;
 use battery::prng::Stats;
 use battery::seeds;
@@ -17,8 +17,7 @@ const STRESS_RUNS: usize = 20;
 async fn fresh_start_with_a_seed_of_10_mb_is_within_500_ms() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
-    let mut values = ValueGuard::new(env);
-    ensure_floor(env, &mut values, 3).await?;
+    let _floor = ensure_floor(env, 3).await?;
     let mut checks = Checks::new(env);
     let set = seeds::standard()?;
     let sandbox = adapter::standard(env).await?;

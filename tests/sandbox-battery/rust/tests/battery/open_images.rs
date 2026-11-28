@@ -3,17 +3,22 @@ use std::time::{Duration, Instant};
 use battery::Session;
 use battery::adapter::{self, Tunables, request};
 use battery::common::wait_until;
+use battery::env::Env;
 use battery::error::Res;
 use battery::evidence::Checks;
 use battery::guards::{CordonGuard, ValueGuard};
 use battery::ids::Lane;
 use battery::pool;
+use battery::skip::skip_image_test;
 use br_agentic_harness_contract::{OpenFault, SandboxPort, Seed};
 use br_runner_sandbox::{Error, ImageError, LABEL_POOL, POOL_CLAIMED};
 use serde_json::json;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_pool_whose_image_fails_gives_image_failing_at_once() -> Res {
+    if skip_image_test(&Env::load()?, "skip-pool-image-fails-gives-image-failing")? {
+        return Ok(());
+    }
     let session = Session::start().await?;
     let env = &session.env;
     let mut values = ValueGuard::new(env);

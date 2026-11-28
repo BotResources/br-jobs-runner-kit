@@ -1,17 +1,5 @@
+use crate::chart_line::ChartLine;
 use crate::error::{BatteryError, Res};
-
-const FIRST_NAMESPACE_POOL_ID: (u64, u64, u64) = (0, 4, 0);
-
-fn numbers(version: &str) -> Option<(u64, u64, u64)> {
-    let core = version.split(['-', '+']).next()?;
-    let mut parts = core.split('.');
-    let triple = (
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-    );
-    parts.next().is_none().then_some(triple)
-}
 
 fn bad(name: &'static str, value: &str, expected: &'static str) -> BatteryError {
     BatteryError::BadVariable {
@@ -25,17 +13,9 @@ fn strip_of(chart_version: &str, ns_prefix: &str, replace: Option<&str>) -> Res<
     if let Some(prefix) = replace {
         return Ok(prefix.to_owned());
     }
-    let version = numbers(chart_version).ok_or_else(|| {
-        bad(
-            "CHART_VERSION",
-            chart_version,
-            "a version such as 0.4.0 (three numbers)",
-        )
-    })?;
-    if version >= FIRST_NAMESPACE_POOL_ID {
-        Ok(String::new())
-    } else {
-        Ok(format!("{ns_prefix}-"))
+    match ChartLine::of(chart_version)? {
+        ChartLine::PoolResource => Ok(String::new()),
+        ChartLine::Values => Ok(format!("{ns_prefix}-")),
     }
 }
 

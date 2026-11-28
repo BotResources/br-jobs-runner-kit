@@ -10,6 +10,7 @@ use battery::guards::ValueGuard;
 use battery::ids::Lane;
 use battery::pool;
 use battery::proc::{self, Helm, strings};
+use battery::skip::skip_image_test;
 use br_agentic_harness_contract::{SandboxPort, Seed};
 use br_runner_sandbox::{Error, ImageError, Sandbox};
 use serde_json::{Value, json};
@@ -54,6 +55,9 @@ fn without_image(values: &Value, key: &str) -> Value {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_second_image_comes_by_a_change_of_the_image_value_only() -> Res {
+    if skip_image_test(&Env::load()?, "skip-second-image-by-image-value")? {
+        return Ok(());
+    }
     let session = Session::start().await?;
     let env = &session.env;
     let second = env.named("SECOND_IMAGE")?;
@@ -125,6 +129,9 @@ async fn read_version(sandbox: &Sandbox) -> Res<(String, String)> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age() -> Res {
+    if skip_image_test(&Env::load()?, "skip-new-push-under-the-same-tag")? {
+        return Ok(());
+    }
     let session = Session::start().await?;
     let env = &session.env;
     let image = env.named("MOVING_IMAGE")?;
@@ -234,6 +241,9 @@ async fn a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_image_that_starts_and_crashes_at_once_gives_image_failing() -> Res {
+    if skip_image_test(&Env::load()?, "skip-crashing-image-gives-image-failing")? {
+        return Ok(());
+    }
     let session = Session::start().await?;
     let env = &session.env;
     let crashing = env.named("CRASHING_IMAGE")?;

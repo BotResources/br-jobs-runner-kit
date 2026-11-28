@@ -9,6 +9,7 @@ use crate::evidence::{now_utc, try_append};
 use crate::keeper::{require_pods, wait_pods_gone};
 use crate::proc::Kube;
 
+pub use crate::pool_guard::PoolGuard;
 pub use crate::value_guard::ValueGuard;
 
 const KEEPER_GONE_SECONDS: u64 = 120;

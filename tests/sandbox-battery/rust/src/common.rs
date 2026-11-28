@@ -2,46 +2,17 @@ use std::time::Duration;
 
 use br_agentic_harness_contract::{BoxId, SaveReceipt, StartKind, TurnId};
 use br_runner_sandbox::Sandbox;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::adapter::{self, Tunables};
 use crate::env::Env;
 use crate::error::{Res, data};
-use crate::guards::{ScaleGuard, ValueGuard};
+use crate::guards::ScaleGuard;
 use crate::ids::Lane;
 use crate::pool;
 use crate::proc::{self, Kube, SHORT, strings};
 use crate::seeds;
 use crate::tree;
-
-pub fn floor_key(env: &Env) -> String {
-    format!("clients.{}.modes.{}.pool.floor", env.client, env.mode)
-}
-
-pub async fn ensure_floor(env: &Env, guard: &mut ValueGuard, want: u64) -> Res {
-    let current = guard
-        .current(&floor_key(env))
-        .await?
-        .and_then(|value| value.as_u64())
-        .unwrap_or(0);
-    if current < want {
-        let max_key = floor_key(env).replace(".floor", ".max_sandboxes");
-        let max = guard
-            .current(&max_key)
-            .await?
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0);
-        let mut sets = vec![
-            (floor_key(env), json!(want)),
-            ("quota.extra_pods".to_owned(), json!(want + 4)),
-        ];
-        if max < want {
-            sets.push((max_key, json!(want)));
-        }
-        guard.set(&sets).await?;
-    }
-    pool::wait_warm(env, want as usize, 180).await
-}
 
 pub async fn restore_floor_wait(env: &Env, want: usize) -> Res {
     pool::wait_warm(env, want, 120).await
@@ -201,10 +172,6 @@ pub async fn empty_pool(env: &Env) -> Res<ScaleGuard> {
 pub async fn settle() -> Res {
     let env = Env::load()?;
     pool::wait_gone_all(&env).await?;
-    let floor = ValueGuard::new(&env)
-        .current(&floor_key(&env))
-        .await?
-        .and_then(|value| value.as_u64())
-        .unwrap_or(1) as usize;
+    let floor = crate::floor::current_floor(&env).await?;
     pool::wait_warm(&env, floor, 120).await
 }

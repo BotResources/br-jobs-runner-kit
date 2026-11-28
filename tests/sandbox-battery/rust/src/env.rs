@@ -28,6 +28,7 @@ pub struct Env {
     pub rs_prefix: String,
     pub chart_version: String,
     pub pool: String,
+    pub pool_object: String,
     pub keeper_label: String,
     pub agent_container: String,
     pub seed_container: String,
@@ -101,7 +102,7 @@ impl Env {
         };
         let values_file = match optional("CHART_VALUES_FILE") {
             Some(path) => PathBuf::from(path),
-            None => work.join("values-test.yaml"),
+            None => work.join("values-test.rendered.yaml"),
         };
         let ns_prefix = required("NS_PREFIX", FILE_CHART_NAMES)?;
         let client = required("CLIENT_A", FILE_CHART_NAMES)?;
@@ -122,6 +123,7 @@ impl Env {
             rs_prefix: required("RS_PREFIX", FILE_CHART_NAMES)?,
             chart_version,
             pool,
+            pool_object: optional("SANDBOX_POOL_NAME").unwrap_or_else(|| "pool".to_owned()),
             keeper_label: required("KEEPER_LABEL", FILE_CHART_NAMES)?,
             agent_container: required("SANDBOX_CONTAINER", FILE_CHART_NAMES)?,
             seed_container: required("SEED_CONTAINER", FILE_CHART_NAMES)?,
