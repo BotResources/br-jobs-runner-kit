@@ -48,7 +48,7 @@ ephemeral_case() {
 }
 
 verdict policy-accepts-update-of-pod-for-ephemeral-checks "pod $bare takes a dry-run annotation update, so the ephemeral checks below are not refused for another reason" \
-  accepted k -n "$POLICY_NS" annotate pod "$bare" battery=ephemeral --overwrite --dry-run=server
+  accepted k -n "$POLICY_NS" annotate pod "$bare" br.sandbox/battery=ephemeral --overwrite --dry-run=server
 
 ephemeral_case policy-refuses-ephemeral-privileged "ephemeral container privileged" '{"privileged": true}'
 ephemeral_case policy-refuses-ephemeral-added-capability "ephemeral container with the added capability SYS_ADMIN" '{"capabilities": {"add": ["SYS_ADMIN"]}}'
