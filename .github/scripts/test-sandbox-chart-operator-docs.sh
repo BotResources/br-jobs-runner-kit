@@ -9,7 +9,7 @@ check_the_changelog_040_states_the_breaking_changes() {
     local text
     text="$(changelog_040)"
     t "the CHANGELOG has the heading 0.4.0 once, above 0.3.0" test "$(grep -cx '## 0.4.0' "$CHART/CHANGELOG.md")" -eq 1 -a "$(grep -nx '## 0.4.0' "$CHART/CHANGELOG.md" | cut -d: -f1)" -lt "$(grep -nx '## 0.3.0' "$CHART/CHANGELOG.md" | cut -d: -f1)"
-    t "it says that the minor is breaking and that 0.4.x needs keeper 0.2.x and 0.3.x needs keeper 0.1.x" grep -qF 'Chart 0.4.x needs keeper 0.2.x, and chart 0.3.x needs keeper 0.1.x: keeper 0.2 refuses a document with `pools` at start.' <<<"$text"
+    t "it says that the minor is breaking and that 0.4.x needs keeper 0.2.1 or later 0.2.x and 0.3.x needs keeper 0.1.x" grep -qF 'Chart 0.4.x needs keeper 0.2.1 or later 0.2.x, and chart 0.3.x needs keeper 0.1.x: keeper 0.2 refuses a document with `pools` at start.' <<<"$text"
     t "it says that there is no upgrade path from 0.3.x, that a 0.3.x release is removed first, and that an upgrade in place was not tested" grep -qF 'No upgrade path from 0.3.x: remove a 0.3.x release before the install. An upgrade in place was not tested.' <<<"$text"
     t "it says that keeper.* becomes operator.* and that clients becomes namespaces and scopes" grep -qF '`keeper.*` becomes `operator.*`' <<<"$text"
     t "it names the two faults of the removed roots" test "$(grep -cF 'BR_SANDBOX_KEEPER_VALUES_REMOVED{key=keeper}' <<<"$text")" -eq 1 -a "$(grep -cF 'BR_SANDBOX_CLIENTS_REMOVED{key=clients}' <<<"$text")" -eq 1

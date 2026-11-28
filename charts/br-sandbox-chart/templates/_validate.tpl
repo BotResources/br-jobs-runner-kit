@@ -7,7 +7,7 @@
 {{- $parts := splitList "/" $cidr -}}
 {{- $octets := splitList "." (index $parts 0) -}}
 {{- $prefix := atoi (index $parts 1) -}}
-{{- $wellformed := le $prefix 32 -}}
+{{- $wellformed := true -}}
 {{- range $octet := $octets -}}
 {{- if gt (atoi $octet) 255 -}}
 {{- $wellformed = false -}}
