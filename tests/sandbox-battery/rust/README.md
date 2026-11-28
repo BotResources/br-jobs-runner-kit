@@ -50,7 +50,7 @@ The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>
 
 ## Namespace of the adapter tests
 
-The adapter tests of this repository take the network mode from the suffix of the namespace name. This is a rule of the tests, not of the adapter or of the chart. They need a namespace named `<prefix>-<client>-<mode>` with the mode `none`, `allow` or `full`: `NS_PREFIX`, `CLIENT_A` and `NET_NONE` build the name, and `NET_NONE` is the mode. For example the namespace `sbx-pool-o4w-none` has `CLIENT_A` `pool-o4w` and `NET_NONE` `none`. A namespace whose last part is not a mode (for example `sbx-pool-a`) stops the tests before they measure anything.
+The adapter tests of this repository take the network mode from the suffix of the namespace name. This is a rule of the tests, not of the adapter or of the chart. They need a namespace named `<prefix>-<client>-<mode>` with the mode `none`, `allow` or `full`: `NS_PREFIX`, `CLIENT_A` and `NET_NONE` build the name, and `NET_NONE` is the mode. For example the namespace `sbx-pool-w-none` has `CLIENT_A` `pool-w` and `NET_NONE` `none`. A namespace whose last part is not a mode (for example `sbx-pool-a`) stops the tests before they measure anything.
 
 The pool must be made in that namespace by one operator upgrade of the chart that lists the namespace, since the chart makes the namespace and its fence objects. The warm pods are named with the prefix `RS_PREFIX` (`warm-` in `../scenarios/names-chart.env`). A scratch namespace of the shell scripts is no target for these tests: it has no `br-sandbox-config` and no binding of the runner (see "Scratch pools" in `../scenarios/README.md`).
 
