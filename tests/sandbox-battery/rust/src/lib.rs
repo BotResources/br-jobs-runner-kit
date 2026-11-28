@@ -7,6 +7,7 @@ pub mod expected;
 pub mod floor;
 pub mod guards;
 pub mod ids;
+pub mod image_change;
 pub mod keeper;
 pub mod kubeconfig;
 pub mod lock;

@@ -58,10 +58,21 @@ The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>
 | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split` | runs; `PoolGuard` sets `spec.minReplicas` 4 | runs; `ValueGuard`, floor 4 |
 | `seed_bound` (2 tests) | run; `PoolGuard` sets `spec.minReplicas` 3 | run; `ValueGuard`, floor 3 |
 | `expiry` (3 tests) | run; `ValueGuard` sets `save.ttl_seconds` (a release value) | run; same |
-| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`, `images` (3 tests) | skip row `skip`: "not for chart 0.4.0: the image is set in the SandboxPool spec; see the README map" | run; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
+| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | runs; `PoolGuard` sets `spec.image` and puts the spec back at the end and on SIGTERM or SIGINT. This ported test has not run on a cluster yet | runs; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
+| `images` (3 tests) | skip row `skip`: "not for chart 0.4.0: the image is set in the SandboxPool spec; see the README map" | run; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
 | `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` and every other test | run (no pool change) | run |
 
-On 0.4.0 and later `quota.extra_pods` is not changed by these tests: the quota of the namespace holds `limits.pods` plus `quota.extra_pods`, which is not tied to the floor any more. The four skipped tests have no Rust replacement for 0.4.0. Two of their sentences are covered by shell scenarios of `../scenarios` on a scratch `SandboxPool`: a new push under the same tag (`s22-same-tag-push.sh`) and an image that cannot be pulled (`s23-image-fails-at-once.sh`, which reads the pool condition and the pod state; it opens no thread, so the adapter error of that case is covered by `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` before 0.4.0 only). A second image by a change of the image of a pool, and an image that starts and crashes, are not covered on 0.4.0.
+On 0.4.0 and later `quota.extra_pods` is not changed by these tests: the quota of the namespace holds `limits.pods` plus `quota.extra_pods`, which is not tied to the floor any more. On chart 0.4.0 and later no test of this project changes the image of a pool except `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`; the three tests in `images` skip with a skip row, and a skip is not a proof. The three skipped tests have no Rust replacement for 0.4.0. Two of their sentences are covered by shell scenarios of `../scenarios` on a scratch `SandboxPool`: a new push under the same tag (`s22-same-tag-push.sh`) and an image that cannot be pulled (`s23-image-fails-at-once.sh`, which reads the pool condition and the pod state; it opens no thread, so the adapter error of that case is covered by `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`).
+
+## Not run on chart 0.4.0
+
+The chart refuses the key `image` of the values, so these three tests of `images` write a skip row and nothing else on chart 0.4.0 and later. They prove nothing there:
+
+- `images::a_second_image_comes_by_a_change_of_the_image_value_only`
+- `images::a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age`
+- `images::an_image_that_starts_and_crashes_at_once_gives_image_failing`
+
+The image error `ImageFailing` by a crash at start is not run on chart 0.4.0. The last result of the crash test is from chart 0.2.4 (it passed in 23 s).
 
 Variables that only some tests need (the test fails with the variable name when it is not set):
 
@@ -112,7 +123,7 @@ Variables that only some tests need (the test fails with the variable name when 
 | Fresh start within 500 ms with the seed (and the stress seed: limit reported, at least one sample) | `start_times::fresh::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
 | Save, failed turn, tree equal, go back | `failed_turns`, `tree_equal`, `go_back`, `save_keys`, `missing_save`, `crash_save` |
 | Expiry after 60 s, named start results | `expiry`, `start_results` |
-| Second image by value, same tag reaches a new warm pod within `warm_max_age_seconds` (no box is opened while waiting, so the pool is not renewed by claims), two image errors | `images`, `open_images` |
+| Second image by value, same tag reaches a new warm pod within `warm_max_age_seconds` (no box is opened while waiting, so the pool is not renewed by claims), two image errors (on chart 0.4.0 and later only `open_images`; see "Not run on chart 0.4.0") | `images`, `open_images` |
 | Harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
 | Hard links, executable bit | `properties::hard_links_and_the_executable_bit_survive_save_and_restore` |
 | A file that the agent deleted stays deleted after the next restore, and the file that stayed is still there. The image files in `/work` and `/home/agent` are hidden by the volumes of the chart, so the property is shown with two files that the agent writes itself (one under each path). An image file outside the save scope is not saved and is not restored (not tested here) | `properties::a_file_deleted_by_the_agent_stays_deleted_after_the_next_restore` |
