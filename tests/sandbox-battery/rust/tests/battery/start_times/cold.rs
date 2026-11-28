@@ -57,7 +57,7 @@ async fn cold_start_effect_of_the_init_container_and_the_image_size() -> Res {
         format!("{:.0}", init.median),
         "ms",
     );
-    let sizes = battery::pool::node_exec(env, "k3s crictl images -o json").await?;
+    let sizes = battery::pool::node_exec(env, "crictl images -o json").await?;
     let parsed: serde_json::Value = serde_json::from_slice(&sizes.stdout).unwrap_or_default();
     let bytes = parsed["images"]
         .as_array()

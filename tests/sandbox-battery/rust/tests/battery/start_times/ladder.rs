@@ -2,10 +2,10 @@ use std::time::Instant;
 
 use battery::Session;
 use battery::adapter;
-use battery::common::{ensure_floor, record_stats, restored, timed_open};
+use battery::common::{record_stats, restored, timed_open};
 use battery::error::{Res, data};
 use battery::evidence::Checks;
-use battery::guards::ValueGuard;
+use battery::floor::ensure_floor;
 use battery::ids::Lane;
 use battery::prng::Stats;
 use battery::seeds;
@@ -20,8 +20,7 @@ const SAVES_PER_SIZE: usize = 3;
 async fn restored_start_ladder_10_30_50_100_mb_with_stalls_and_split() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
-    let mut values = ValueGuard::new(env);
-    ensure_floor(env, &mut values, 4).await?;
+    let _floor = ensure_floor(env, 4).await?;
     let mut checks = Checks::new(env);
     let set = seeds::standard()?;
     let sandbox = adapter::standard(env).await?;

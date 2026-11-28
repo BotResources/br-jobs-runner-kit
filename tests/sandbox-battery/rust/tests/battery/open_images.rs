@@ -5,22 +5,21 @@ use battery::adapter::{self, Tunables, request};
 use battery::common::wait_until;
 use battery::error::Res;
 use battery::evidence::Checks;
-use battery::guards::{CordonGuard, ValueGuard};
+use battery::guards::CordonGuard;
 use battery::ids::Lane;
+use battery::image_change::ImageChange;
 use battery::pool;
 use br_agentic_harness_contract::{OpenFault, SandboxPort, Seed};
 use br_runner_sandbox::{Error, ImageError, LABEL_POOL, POOL_CLAIMED};
-use serde_json::json;
+
+const FAILING_IMAGE: &str = "registry.invalid/none:1";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_pool_whose_image_fails_gives_image_failing_at_once() -> Res {
     let session = Session::start().await?;
     let env = &session.env;
-    let mut values = ValueGuard::new(env);
     let mut checks = Checks::new(env);
-    values
-        .set(&[(env.image_key.clone(), json!("registry.invalid/none:1"))])
-        .await?;
+    let change = ImageChange::set(env, FAILING_IMAGE).await?;
     for name in pool::warm_list(env, false).await? {
         pool::delete_now(env, &name).await?;
     }
@@ -88,7 +87,7 @@ async fn a_pool_whose_image_fails_gives_image_failing_at_once() -> Res {
         cold == 0,
         format!("{cold} claimed pods"),
     );
-    drop(values);
+    drop(change);
     for name in pool::warm_list(env, false).await? {
         pool::delete_now(env, &name).await?;
     }

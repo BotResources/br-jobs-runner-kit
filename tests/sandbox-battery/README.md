@@ -26,7 +26,7 @@ The sandbox egress proxy cannot reach the pod network, the service network, the 
 | `./extras.sh up` | Test objects of the battery: our own DNS stub (same `servers/dns.py`, fixed address 172.31.77.250, the five names, the canary name and the target names), the canary container (172.31.77.251, name `canary.test.internal`, certificate of the test CA), the recording pods and Service in `sbx-testsvc`. `down` removes them. |
 | `./teardown.sh --closed` or `--main` | Deletes that cluster, its servers, its store container and its servers network (closed: also its cluster network). Nothing else. |
 
-`lib.sh` gives `preflight` (stops with exit 3 when free disk of `/` is under `MIN_FREE_GIB`, default 8 GiB), `load_now`, `record NAME VALUE UNIT` (`$EVIDENCE/measurements.tsv`) and `check NAME pass|fail DETAIL` (`$EVIDENCE/checks.tsv`). `EVIDENCE` defaults to `$HOME/sbx-battery-work/battery/evidence`. Work files: `~/sbx-battery-work/battery/`.
+`lib.sh` gives `preflight` (stops with exit 3 when free disk of `/` is under `MIN_FREE_GIB`, default 8 GiB), `load_now`, `record NAME VALUE UNIT` (`$EVIDENCE/measurements.tsv`) and `check NAME pass|fail|skip DETAIL` (`$EVIDENCE/checks.tsv`). `EVIDENCE` defaults to `$HOME/sbx-battery-work/battery/evidence`. Work files: `~/sbx-battery-work/battery/`.
 
 ## Networks and containers (main cluster; closed in brackets)
 

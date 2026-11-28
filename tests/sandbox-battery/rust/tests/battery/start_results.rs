@@ -62,9 +62,9 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
     let no_parent = fresh(start);
     let (start, _) = start_of(&sandbox, &lane, Some(ids::turn()?)).await?;
     let unknown_parent = fresh(start);
-    store_gate.set(GateMode::Refuse);
+    store_gate.set(GateMode::Refuse).await?;
     let (start, _) = start_of(&sandbox, &lane, None).await?;
-    store_gate.set(GateMode::Open);
+    store_gate.set(GateMode::Open).await?;
     checks.expect(
         "start-no-save-ever-without-parent-and-with-unknown-parent-and-store-down",
         no_parent == Some(FreshReason::NoSaveEver)
@@ -114,9 +114,9 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
     let (k1, turn) = lane.first()?;
     let opened = adapter::open(&long_sandbox, turn, Seed::empty()).await?;
     sh_ok(&long_sandbox, &opened.box_id, "printf x > /work/x").await?;
-    store_gate.set(GateMode::DenyManifestWrite);
+    store_gate.set(GateMode::DenyManifestWrite).await?;
     let saved = long_sandbox.save_box(&opened.box_id).await;
-    store_gate.set(GateMode::Open);
+    store_gate.set(GateMode::Open).await?;
     adapter::release(&long_sandbox, &opened.box_id).await?;
     battery::common::settle().await?;
     checks.expect(
@@ -200,11 +200,11 @@ async fn each_named_start_result_comes_from_its_scripted_scenario() -> Res {
 
     let lane = Lane::new()?;
     let (k1, _) = state_turn(&long_sandbox, &lane, None, 54, 1000).await?;
-    store_gate.set(GateMode::Refuse);
+    store_gate.set(GateMode::Refuse).await?;
     let outcome = long_sandbox
         .open_box(&request(lane.child(k1)?.1, Seed::empty(), None)?)
         .await;
-    store_gate.set(GateMode::Open);
+    store_gate.set(GateMode::Open).await?;
     let unavailable = outcome.as_ref().ok().and_then(|o| fresh(o.start));
     checks.expect(
         "start-store-unavailable-is-ok-and-fresh-not-an-error",

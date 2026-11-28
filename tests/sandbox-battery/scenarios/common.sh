@@ -51,7 +51,17 @@ use_closed() {
 helm_ctx() { helm --kube-context "$CTX" "$@"; }
 ns_of() { printf '%s-%s-%s\n' "$NS_PREFIX" "$1" "$2"; }
 egress_ns_of() { printf '%s%s\n' "$(ns_of "$1" "$2")" "$EGRESS_SUFFIX"; }
-pool_of() { printf '%s\n' "${1#"$NS_PREFIX"-}"; }
+chart_at_least() { [ "$(printf '%s\n%s\n' "$1" "$CHART_VERSION" | sort -V | head -1)" = "$1" ]; }
+pool_id_strip() {
+  if [ "${POOL_ID_STRIP+set}" = set ]; then
+    printf '%s' "$POOL_ID_STRIP"
+  elif chart_at_least 0.4.0; then
+    printf ''
+  else
+    printf '%s-' "$NS_PREFIX"
+  fi
+}
+pool_of() { printf '%s\n' "${1#"$(pool_id_strip)"}"; }
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time()*1000'; }
 new_id() { openssl rand -hex 4; }
 count_lines() { wc -l | tr -d ' '; }
@@ -63,3 +73,6 @@ sxi() { local ns=$1 pod=$2; shift 2; k -n "$ns" exec -i "$pod" -c "$SANDBOX_CONT
 . "$SCEN_DIR/common-run.sh"
 . "$SCEN_DIR/common-probe.sh"
 . "$SCEN_DIR/common-admission.sh"
+. "$SCEN_DIR/common-policy.sh"
+. "$SCEN_DIR/common-isolated.sh"
+. "$SCEN_DIR/common-scratch.sh"

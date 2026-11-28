@@ -6,6 +6,8 @@ scenario_begin s05-admission
 ns=$(ns_of "$CLIENT_A" "$NET_ALLOW")
 eg=$(egress_ns_of "$CLIENT_A" "$NET_ALLOW")
 NONROOT=RUN_AS_NON_ROOT
+IMAGE_REFUSAL=IMAGE
+EPHEMERAL_REFUSAL="(EPHEMERAL_CONTAINERS|IMMUTABLE)"
 
 as_runner() { as_id "$RUNNER_ID" "$ns" "$@"; }
 as_netcheck() { as_id "$NETCHECK_ID" "$ns" "$@"; }
@@ -25,8 +27,10 @@ template=$(pod_template "$ns")
 
 verdict admission-runner-may-create-pods "runner can create pods in $ns" test "$(as_runner auth can-i create pods)" = yes
 verdict admission-runner-may-not-create-deployments "runner cannot create deployments" test "$(as_runner auth can-i create deployments)" = no
-verdict admission-policy-bound "13 rules: policy and binding $NS_PREFIX-$CLIENT_A-$NET_ALLOW-pod exist" \
-  test "$(k get validatingadmissionpolicybinding "$NS_PREFIX-$CLIENT_A-$NET_ALLOW-pod" -o name 2> /dev/null)" != ""
+verdict admission-policy-bound "policy $POD_POLICY with the bindings $POD_POLICY_CREATE_BINDING and $POD_POLICY_UPDATE_BINDING exist" \
+  test "$(k get validatingadmissionpolicy "$POD_POLICY" -o name 2> /dev/null)" != "" -a "$(k get validatingadmissionpolicybinding "$POD_POLICY_CREATE_BINDING" -o name 2> /dev/null)" != "" -a "$(k get validatingadmissionpolicybinding "$POD_POLICY_UPDATE_BINDING" -o name 2> /dev/null)" != ""
+verdict admission-policy-has-all-rules "policy $POD_POLICY holds $POD_RULE_COUNT rules and their codes are the expected ones, in order" \
+  pod_policy_rules_ok
 
 verdict admission-sandbox-pod-passes "legitimate pod: role=sandbox, agent non-root, seed container with the tools image" \
   accepted submit "$(variant "$template" '.metadata.labels[$role] = "sandbox"')"
@@ -34,8 +38,10 @@ verdict admission-refuses-agent-root "agent container uid 0: refused with $NONRO
   refused_with $NONROOT submit "$(variant "$template" "$root_agent")"
 verdict admission-refuses-agent-no-run-as-non-root "agent container without runAsNonRoot: refused with $NONROOT" \
   refused_with $NONROOT submit "$(variant "$template" '.spec.containers |= map(if .name == $agent then del(.securityContext.runAsNonRoot) else . end)')"
-verdict admission-refuses-seed-name-other-image "container named $SEED_CONTAINER with the agent image: refused with $NONROOT" \
-  refused_with $NONROOT submit "$(variant "$template" '(.spec.containers | map(select(.name == $agent))[0].image) as $image | .spec.containers |= map(if .name == $seed then .image = $image else . end)')"
+verdict admission-refuses-seed-name-other-image "container named $SEED_CONTAINER with the agent image: refused with $IMAGE_REFUSAL (the image rule comes before the non-root rule and the agent image is not in an allowed repository)" \
+  refused_with $IMAGE_REFUSAL submit "$(variant "$template" '(.spec.containers | map(select(.name == $agent))[0].image) as $image | .spec.containers |= map(if .name == $seed then .image = $image else . end)')"
+verdict admission-refuses-seed-name-other-digest "container named $SEED_CONTAINER with another digest of the tools repository: refused with $NONROOT" \
+  refused_with $NONROOT submit "$(variant "$template" '.spec.containers |= map(if .name == $seed then .image = (.image | split("@")[0] + "@sha256:" + ([range(64) | "0"] | join(""))) else . end)')"
 verdict admission-refuses-root-container-other-name "root container with the tools image under another name: refused with $NONROOT" \
   refused_with $NONROOT submit "$(variant "$template" '.spec.containers += [(.spec.containers | map(select(.name == $seed))[0]) | .name = "extra"]')"
 verdict admission-refuses-init-shaped-like-seed "init container named $SEED_CONTAINER with the tools image, uid 0, read-only root, no port: refused with $NONROOT" \
@@ -47,8 +53,8 @@ verdict admission-runner-has-no-ephemeral-right "runner patch of pods/ephemeralc
 bare=$(k -n "$ns" create -o jsonpath='{.metadata.name}' -f - <<< "$(variant "$template" '.metadata.labels["br.sandbox/pool"] = "battery" | .spec.containers |= map(select(.name != $seed))')")
 track_pod "$ns" "$bare"
 k -n "$ns" wait --for=condition=Ready "pod/$bare" --timeout=120s > /dev/null
-verdict admission-refuses-ephemeral-shaped-like-seed "cluster admin adds an ephemeral container shaped like the seed (dry run): refused with $NONROOT" \
-  refused_with $NONROOT k -n "$ns" patch pod "$bare" --subresource=ephemeralcontainers --type=strategic --dry-run=server -p "$(ephemeral_patch)"
+verdict admission-refuses-ephemeral-shaped-like-seed "cluster admin adds an ephemeral container shaped like the seed (dry run): refused with $EPHEMERAL_REFUSAL" \
+  refused_with "$EPHEMERAL_REFUSAL" k -n "$ns" patch pod "$bare" --subresource=ephemeralcontainers --type=strategic --dry-run=server -p "$(ephemeral_patch)"
 verdict admission-check-identity-may-run-root "pod with uid 0 created by $NETCHECK_ID is accepted" \
   accepted submit_netcheck "$(variant "$template" "$root_agent")"
 verdict admission-check-identity-not-shared-pid "pod with uid 0 and shareProcessNamespace by $NETCHECK_ID is refused" \

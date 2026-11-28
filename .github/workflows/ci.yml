@@ -242,6 +242,8 @@ jobs:
         run: bash .github/scripts/test-check-bus-access.sh
       - name: plan of the keeper image
         run: bash .github/scripts/test-keeper-image-plan.sh
+      - name: pod template copy of the sandbox battery scratch namespace
+        run: bash .github/scripts/test-sandbox-battery-scratch-copy.sh
 
   registry-gate:
     name: registry gate

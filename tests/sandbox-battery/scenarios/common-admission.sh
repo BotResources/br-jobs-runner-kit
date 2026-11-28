@@ -39,3 +39,13 @@ root_pod_to() {
   k -n "$ns" wait --for=condition=Ready "pod/$created" --timeout=120s > /dev/null || return 1
   printf -v "$var" '%s' "$created"
 }
+
+pod_policy_codes() {
+  k get validatingadmissionpolicy "$POD_POLICY" -o json | jq -r '.spec.validations[].message | split(":")[0]'
+}
+
+pod_policy_rules_ok() {
+  local codes
+  codes=$(pod_policy_codes | tr '\n' ' ')
+  [ "$(wc -w <<< "$codes" | tr -d ' ')" = "$POD_RULE_COUNT" ] && [ "$codes" = "$POD_RULE_CODES " ]
+}

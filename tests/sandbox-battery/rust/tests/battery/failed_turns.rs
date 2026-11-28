@@ -22,7 +22,7 @@ async fn first_turn(sandbox: &Sandbox, lane: &Lane) -> Res<(TurnId, String)> {
 }
 
 async fn next_is_the_last_good_save(
-    checks: &mut Checks<'_>,
+    checks: &mut Checks,
     name: &str,
     sandbox: &Sandbox,
     lane: &Lane,

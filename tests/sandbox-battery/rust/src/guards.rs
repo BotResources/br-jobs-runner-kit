@@ -1,16 +1,20 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use br_runner_sandbox::LABEL_THREAD;
-use serde_json::Value;
 
 use crate::env::Env;
 use crate::error::Res;
 use crate::evidence::{now_utc, try_append};
-use crate::proc::{Helm, Kube, value_at};
+use crate::keeper::{require_pods, wait_pods_gone};
+use crate::proc::Kube;
 
-fn report_failure(evidence: &Path, what: &str, detail: &str) {
+pub use crate::pool_guard::PoolGuard;
+pub use crate::value_guard::ValueGuard;
+
+const KEEPER_GONE_SECONDS: u64 = 120;
+
+pub(crate) fn report_failure(evidence: &Path, what: &str, detail: &str) {
     let line = format!(
         "{}\tfail\t{}\t{}\n",
         what,
@@ -23,7 +27,7 @@ fn report_failure(evidence: &Path, what: &str, detail: &str) {
     eprintln!("restore {what}: fail {detail}");
 }
 
-fn settle(evidence: &Path, what: &str, failures: &[String]) {
+pub(crate) fn settle(evidence: &Path, what: &str, failures: &[String]) {
     for detail in failures {
         report_failure(evidence, what, detail);
     }
@@ -36,7 +40,7 @@ fn settle(evidence: &Path, what: &str, failures: &[String]) {
     }
 }
 
-fn exit_detail(output: &Output) -> String {
+pub(crate) fn exit_detail(output: &Output) -> String {
     format!(
         "exit {:?}: {}",
         output.status.code(),
@@ -65,66 +69,6 @@ fn run_restore(evidence: &Path, what: &str, command: &mut Command) {
     settle(evidence, what, &failures);
 }
 
-pub struct ValueGuard {
-    helm: Helm,
-    evidence: PathBuf,
-    snapshot: Option<Value>,
-}
-
-impl ValueGuard {
-    pub fn new(env: &Env) -> Self {
-        Self {
-            helm: Helm::of(env),
-            evidence: env.evidence.clone(),
-            snapshot: None,
-        }
-    }
-
-    pub async fn set(&mut self, sets: &[(String, Value)]) -> Res {
-        if self.snapshot.is_none() {
-            self.snapshot = Some(self.helm.supplied_values().await?);
-        }
-        self.helm.upgrade(sets).await
-    }
-
-    pub async fn current(&self, key: &str) -> Res<Option<Value>> {
-        let values = self.helm.values().await?;
-        Ok(value_at(&values, key).cloned())
-    }
-}
-
-impl Drop for ValueGuard {
-    fn drop(&mut self) {
-        let Some(snapshot) = self.snapshot.take() else {
-            return;
-        };
-        let args = self.helm.reset_args();
-        let mut failures = Vec::new();
-        match Command::new("helm")
-            .args(&args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Err(error) => failures.push(error.to_string()),
-            Ok(mut child) => {
-                if let Some(mut stdin) = child.stdin.take()
-                    && let Err(error) = stdin.write_all(snapshot.to_string().as_bytes())
-                {
-                    failures.push(error.to_string());
-                }
-                match child.wait_with_output() {
-                    Ok(output) if output.status.success() => {}
-                    Ok(output) => failures.push(exit_detail(&output)),
-                    Err(error) => failures.push(error.to_string()),
-                }
-            }
-        }
-        settle(&self.evidence, "helm-values-restore", &failures);
-    }
-}
-
 pub struct ScaleGuard {
     context: String,
     namespace: String,
@@ -140,6 +84,9 @@ impl ScaleGuard {
             .json(&["get", "deployment", &env.keeper_deploy])
             .await?;
         let original = current["spec"]["replicas"].as_u64().unwrap_or(1);
+        if replicas == 0 && original > 0 {
+            require_pods(env).await?;
+        }
         let guard = Self {
             context: env.context.clone(),
             namespace: env.system_ns.clone(),
@@ -154,6 +101,9 @@ impl ScaleGuard {
             &format!("--replicas={replicas}"),
         ])
         .await?;
+        if replicas == 0 {
+            wait_pods_gone(env, KEEPER_GONE_SECONDS).await?;
+        }
         Ok(guard)
     }
 }

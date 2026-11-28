@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::error::{BatteryError, Res};
+use crate::pool_id::pool_id;
 
 pub const FILE_NAMES: &str = "tests/sandbox-battery/names.env";
 pub const FILE_CHART_NAMES: &str = "tests/sandbox-battery/scenarios/names-chart.env";
@@ -25,6 +26,10 @@ pub struct Env {
     pub client: String,
     pub mode: String,
     pub rs_prefix: String,
+    pub chart_version: String,
+    pub pool: String,
+    pub pool_object: String,
+    pub keeper_label: String,
     pub agent_container: String,
     pub seed_container: String,
     pub seed_root: String,
@@ -35,6 +40,7 @@ pub struct Env {
     pub helm_namespace: String,
     pub system_ns: String,
     pub keeper_deploy: String,
+    pub keeper_container: String,
     pub runner_ns: String,
     pub runner_sa: String,
     pub image_key: String,
@@ -44,6 +50,7 @@ pub struct Env {
     pub work: PathBuf,
     pub timing_lock: PathBuf,
     pub chart_dir: PathBuf,
+    pub chart_dir_given: bool,
     pub values_file: PathBuf,
 }
 
@@ -87,21 +94,37 @@ impl Env {
             None => work.join("timing.lock.d"),
         };
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let chart_dir = match optional("CHART_DIR") {
+        let given_chart_dir = optional("CHART_DIR");
+        let chart_dir_given = given_chart_dir.is_some();
+        let chart_dir = match given_chart_dir {
             Some(path) => PathBuf::from(path),
             None => manifest.join("../../../charts/br-sandbox-chart"),
         };
         let values_file = match optional("CHART_VALUES_FILE") {
             Some(path) => PathBuf::from(path),
-            None => work.join("values-test.yaml"),
+            None => work.join("values-test.rendered.yaml"),
         };
+        let ns_prefix = required("NS_PREFIX", FILE_CHART_NAMES)?;
+        let client = required("CLIENT_A", FILE_CHART_NAMES)?;
+        let mode = required("NET_NONE", FILE_CHART_NAMES)?;
+        let chart_version = required("CHART_VERSION", FILE_CHART_NAMES)?;
+        let pool = pool_id(
+            &format!("{ns_prefix}-{client}-{mode}"),
+            &ns_prefix,
+            &chart_version,
+            std::env::var("POOL_ID_STRIP").ok().as_deref(),
+        )?;
         Ok(Self {
             context: required("CTX_TEST", FILE_CHART_NAMES)?,
             node: required("NODE_TEST", FILE_CHART_NAMES)?,
-            ns_prefix: required("NS_PREFIX", FILE_CHART_NAMES)?,
-            client: required("CLIENT_A", FILE_CHART_NAMES)?,
-            mode: required("NET_NONE", FILE_CHART_NAMES)?,
+            ns_prefix,
+            client,
+            mode,
             rs_prefix: required("RS_PREFIX", FILE_CHART_NAMES)?,
+            chart_version,
+            pool,
+            pool_object: optional("SANDBOX_POOL_NAME").unwrap_or_else(|| "pool".to_owned()),
+            keeper_label: required("KEEPER_LABEL", FILE_CHART_NAMES)?,
             agent_container: required("SANDBOX_CONTAINER", FILE_CHART_NAMES)?,
             seed_container: required("SEED_CONTAINER", FILE_CHART_NAMES)?,
             seed_root: required("SEED_PATH", FILE_CHART_NAMES)?,
@@ -112,6 +135,7 @@ impl Env {
             helm_namespace: required("HELM_NAMESPACE", FILE_CHART_NAMES)?,
             system_ns: required("SYSTEM_NS", FILE_CHART_NAMES)?,
             keeper_deploy: required("KEEPER_DEPLOY", FILE_CHART_NAMES)?,
+            keeper_container: required("KEEPER_CONTAINER", FILE_CHART_NAMES)?,
             runner_ns: required("RUNNER_NS", FILE_CHART_NAMES)?,
             runner_sa: required("RUNNER_SA", FILE_CHART_NAMES)?,
             image_key: required("VALUES_IMAGE_KEY", FILE_CHART_NAMES)?,
@@ -128,6 +152,7 @@ impl Env {
             work,
             timing_lock,
             chart_dir,
+            chart_dir_given,
             values_file,
         })
     }
@@ -137,7 +162,7 @@ impl Env {
     }
 
     pub fn pool_id(&self) -> String {
-        format!("{}-{}", self.client, self.mode)
+        self.pool.clone()
     }
 
     pub fn replica_set(&self) -> String {

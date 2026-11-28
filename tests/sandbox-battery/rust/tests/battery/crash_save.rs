@@ -119,7 +119,7 @@ async fn a_crash_after_the_parts_and_before_the_manifest_leaves_no_save() -> Res
         true,
     )
     .await?;
-    gate.set(GateMode::HoldManifestWrite);
+    gate.set(GateMode::HoldManifestWrite).await?;
     let (k2, _) = lane.child(k1)?;
     let (mut process, log) = child(
         env,
@@ -146,7 +146,7 @@ async fn a_crash_after_the_parts_and_before_the_manifest_leaves_no_save() -> Res
         .kill()
         .await
         .map_err(|e| data("kill child", e.to_string()))?;
-    gate.set(GateMode::Open);
+    gate.set(GateMode::Open).await?;
     let key = saves.key(lane.thread, lane.agent, k2);
     checks.expect(
         "crash-before-manifest-has-no-manifest",
@@ -211,7 +211,7 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
         true,
     )
     .await?;
-    store_gate.set(GateMode::PauseManifestWrite);
+    store_gate.set(GateMode::PauseManifestWrite).await?;
     let (k2, _) = lane.child(k1)?;
     let (mut process, log) = child(
         env,
@@ -234,8 +234,8 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
         &prefix,
     )
     .await?;
-    gate.set(GateMode::Stall);
-    store_gate.set(GateMode::Open);
+    gate.set(GateMode::Stall).await?;
+    store_gate.set(GateMode::Open).await?;
     wait_until("the manifest of the save", 300, || async {
         Ok(saves.manifest(&key).await?.is_some())
     })
@@ -245,7 +245,7 @@ async fn a_crash_after_the_manifest_and_before_the_pod_annotation_restores_from_
         .kill()
         .await
         .map_err(|e| data("kill child", e.to_string()))?;
-    gate.set(GateMode::Refuse);
+    gate.set(GateMode::Refuse).await?;
     let thread = lane.thread.to_string();
     let pods = pool::pods_of_thread(env, &thread).await?;
     let mut claimed = 0;
