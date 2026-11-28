@@ -147,6 +147,8 @@ jobs:
         run: cargo test -p br-runner-jobs-client --locked -- --ignored --test-threads=1
       - name: run the br-runner-toolkit e2e tests against a real JetStream
         run: cargo test -p br-runner-toolkit --features test-host --locked -- --ignored --test-threads=1
+      - name: run the br-runner-model-calls e2e tests against a real JetStream
+        run: cargo test -p br-runner-model-calls --locked -- --ignored --test-threads=1
 
   changelog:
     name: changelog + readme pins
@@ -205,6 +207,8 @@ jobs:
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-as-node --allow br-llm-clients-core
       - name: br-runner-toolkit reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-runner-toolkit --allow br-llm-clients-core
+      - name: br-runner-model-calls reaches only br-llm-clients-core and br-llm-clients-common-call (with its http and sse layers)
+        run: bash .github/scripts/check-no-llm-clients.sh br-runner-model-calls --allow br-llm-clients-core --allow br-llm-clients-common-call --allow br-llm-clients-common-http --allow br-llm-clients-common-sse
       - name: br-sandbox-keeper reaches only br-llm-clients-core
         run: bash .github/scripts/check-no-llm-clients.sh br-sandbox-keeper --allow br-llm-clients-core
       - name: br-sandbox-keeper names no bus and no subject

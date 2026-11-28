@@ -26,4 +26,3 @@ br-llm-clients-common-http = { git = "https://github.com/BotResources/br-llm-cli
 futures.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
-uuid.workspace = true

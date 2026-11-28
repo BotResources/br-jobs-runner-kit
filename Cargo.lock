@@ -359,7 +359,7 @@ dependencies = [
 [[package]]
 name = "br-llm-clients-common-call"
 version = "0.3.0"
-source = "git+https://github.com/BotResources/br-llm-clients-rs?branch=feat%2Fobserved-calls#9f5986d0d6b1cd2a88483c73d5a738dd3e3f9b83"
+source = "git+https://github.com/BotResources/br-llm-clients-rs?branch=feat%2Fobserved-calls#dcec6463a7ef2268b621fa55087e6719dcb2a90d"
 dependencies = [
  "br-llm-clients-common-http",
  "br-llm-clients-common-sse",
@@ -2546,7 +2546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "969cde0349344dbbf58b5f9badbfb8f806db13969364eb8007c057ef687007d9"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.1",
+ "base64 0.22.1",
  "encoding_rs_io",
  "granit-parser",
  "nohash-hasher",
