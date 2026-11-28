@@ -1,0 +1,29 @@
+[package]
+name = "br-runner-model-calls"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "An envelope around any observed LLM client of a runner: one model call record per call, published on the bus as the command of a consuming service, never blocking and never failing the call"
+
+[dependencies]
+br-llm-clients-common-call = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-common-call", branch = "feat/observed-calls", version = "0.3.0" }
+br-llm-clients-core.workspace = true
+br-llm-messages.workspace = true
+br-util-nats-fabric.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-nats.workspace = true
+br-core-kernel.workspace = true
+br-llm-clients-common-http = { git = "https://github.com/BotResources/br-llm-clients-rs", package = "br-llm-clients-common-http", tag = "br-llm-clients-common-http/v0.2.0", version = "0.2.0" }
+futures.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
+uuid.workspace = true

@@ -357,6 +357,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "br-llm-clients-common-call"
+version = "0.3.0"
+source = "git+https://github.com/BotResources/br-llm-clients-rs?branch=feat%2Fobserved-calls#9f5986d0d6b1cd2a88483c73d5a738dd3e3f9b83"
+dependencies = [
+ "br-llm-clients-common-http",
+ "br-llm-clients-common-sse",
+ "br-llm-clients-core",
+ "br-llm-messages",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "br-llm-clients-common-http"
+version = "0.2.0"
+source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-common-http%2Fv0.2.0#f16adaef1d12be8e0b33117e1deedef0f73bd282"
+dependencies = [
+ "bytes",
+ "h2",
+ "http",
+ "httpdate",
+ "hyper",
+ "hyper-util",
+ "rustls",
+ "rustls-pki-types",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "webpki-roots 1.0.11",
+]
+
+[[package]]
+name = "br-llm-clients-common-sse"
+version = "0.1.0"
+source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-common-sse%2Fv0.1.0#474999b432f09ced4baa49a07b248e935fdfaf72"
+
+[[package]]
 name = "br-llm-clients-core"
 version = "0.5.0"
 source = "git+https://github.com/BotResources/br-llm-clients-rs?tag=br-llm-clients-core%2Fv0.5.0#337094a8cdd1d169b3e8602e2d7a4ca67eaf9f31"
@@ -481,6 +519,28 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "br-runner-model-calls"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "br-core-kernel",
+ "br-llm-clients-common-call",
+ "br-llm-clients-common-http",
+ "br-llm-clients-core",
+ "br-llm-messages",
+ "br-util-nats-fabric",
+ "chrono",
+ "futures",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
