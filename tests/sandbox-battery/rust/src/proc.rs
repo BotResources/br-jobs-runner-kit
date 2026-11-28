@@ -7,6 +7,7 @@ use tokio::process::Command;
 
 use crate::env::Env;
 use crate::error::{BatteryError, Res, data};
+use crate::release_chart::ReleaseChart;
 
 pub const SHORT: Duration = Duration::from_secs(120);
 pub const LONG: Duration = Duration::from_secs(900);
@@ -197,6 +198,7 @@ pub struct Helm {
     pub release: String,
     pub namespace: String,
     pub chart: String,
+    pub release_chart: ReleaseChart,
 }
 
 impl Helm {
@@ -206,6 +208,7 @@ impl Helm {
             release: env.helm_release.clone(),
             namespace: env.helm_namespace.clone(),
             chart: env.chart_dir.display().to_string(),
+            release_chart: ReleaseChart::of(env),
         }
     }
 
@@ -229,6 +232,7 @@ impl Helm {
     }
 
     pub async fn supplied_values(&self) -> Res<Value> {
+        self.release_chart.check()?;
         let args = strings(&[
             "--kube-context",
             &self.context,

@@ -34,12 +34,16 @@ All names are read in `src/env.rs` (one `Env` struct). A missing variable fails 
 
 | Variable | Comes from |
 |---|---|
-| `CTX_TEST`, `NODE_TEST`, `NS_PREFIX`, `CLIENT_A`, `NET_NONE`, `RS_PREFIX` | `scenarios/names-chart.env` |
+| `CTX_TEST`, `NODE_TEST`, `NS_PREFIX`, `CLIENT_A`, `NET_NONE`, `RS_PREFIX`, `CHART_VERSION`, `KEEPER_LABEL` | `scenarios/names-chart.env` |
 | `SANDBOX_CONTAINER`, `SEED_CONTAINER`, `SEED_PATH`, `AGENT_BSDTAR`, `SEED_BSDTAR`, `SANDBOX_PYTHON` | `scenarios/names-chart.env` |
 | `HELM_RELEASE`, `HELM_NAMESPACE`, `SYSTEM_NS`, `KEEPER_DEPLOY`, `RUNNER_NS`, `RUNNER_SA` | `scenarios/names-chart.env` |
 | `VALUES_IMAGE_KEY`, `WARM_MAX_AGE_VALUE_KEY` | `scenarios/names-chart.env` |
 | `S3_ENDPOINT_HOST`, `S3_BUCKET`, `S3_REGION`, `S3_PATH_STYLE`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `creds.env` |
-| `WORK` or `BATTERY_WORK`, `EVIDENCE`, `TIMING_LOCK`, `CHART_DIR`, `CHART_VALUES_FILE` | optional; defaults are the work folder `~/sbx-battery-work/battery`, `$WORK/evidence`, `$WORK/timing.lock.d`, the chart of this repository, `$WORK/values-test.yaml` |
+| `WORK` or `BATTERY_WORK`, `EVIDENCE`, `TIMING_LOCK`, `CHART_VALUES_FILE` | optional; defaults are the work folder `~/sbx-battery-work/battery`, `$WORK/evidence`, `$WORK/timing.lock.d`, `$WORK/values-test.yaml` |
+| `CHART_DIR` | the folder of the chart of the installed release (the one that `CHART_VERSION` names). It is read for the chart version of the measurements and it is the chart that the guard of the chart values (`ValueGuard`) upgrades and restores with, so a test that uses the guard fails before any change when `CHART_DIR` is not set, has no readable `Chart.yaml`, or holds another chart version than `CHART_VERSION`. Default when unset: the chart of this repository, which only the tests that do not change chart values may use |
+| `POOL_ID_STRIP` | optional; replaces the choice below. It is the prefix that is removed from the namespace name to get the pool id (also an empty value); it must be a prefix of the namespace name and leave a name |
+
+The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>`) follows the chart version, as the shell scenarios do: below 0.4.0 it is the namespace name without the prefix `$NS_PREFIX-` (`{client}-{mode}`), from 0.4.0 on it is the namespace name (`{NS_PREFIX}-{client}-{mode}`). `CHART_VERSION` must be three numbers (a suffix such as `-rc1` is ignored). A test that stops the keeper waits until no pod with the label `KEEPER_LABEL` is left in `SYSTEM_NS` (at most 120 s, then the test fails with the label and the namespace) before it changes the pool, and the keeper scale guard puts the keeper back at the end.
 
 Variables that only some tests need (the test fails with the variable name when it is not set):
 

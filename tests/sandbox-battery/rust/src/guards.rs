@@ -6,9 +6,12 @@ use br_runner_sandbox::LABEL_THREAD;
 use crate::env::Env;
 use crate::error::Res;
 use crate::evidence::{now_utc, try_append};
+use crate::keeper::{require_pods, wait_pods_gone};
 use crate::proc::Kube;
 
 pub use crate::value_guard::ValueGuard;
+
+const KEEPER_GONE_SECONDS: u64 = 120;
 
 pub(crate) fn report_failure(evidence: &Path, what: &str, detail: &str) {
     let line = format!(
@@ -80,6 +83,9 @@ impl ScaleGuard {
             .json(&["get", "deployment", &env.keeper_deploy])
             .await?;
         let original = current["spec"]["replicas"].as_u64().unwrap_or(1);
+        if replicas == 0 && original > 0 {
+            require_pods(env).await?;
+        }
         let guard = Self {
             context: env.context.clone(),
             namespace: env.system_ns.clone(),
@@ -94,6 +100,9 @@ impl ScaleGuard {
             &format!("--replicas={replicas}"),
         ])
         .await?;
+        if replicas == 0 {
+            wait_pods_gone(env, KEEPER_GONE_SECONDS).await?;
+        }
         Ok(guard)
     }
 }
