@@ -11,15 +11,7 @@ pub struct ReleaseChart {
     version: String,
 }
 
-fn verdict(given: bool, dir: &Path, chart_yaml: Option<&str>, release: &str) -> Res {
-    if !given {
-        return Err(data(
-            "CHART_DIR",
-            format!(
-                "not set: a test that changes the chart values needs the folder of the chart of the installed release ({release})"
-            ),
-        ));
-    }
+fn same_version(dir: &Path, chart_yaml: Option<&str>, release: &str) -> Res<String> {
     let found = chart_yaml.and_then(chart_version_in).ok_or_else(|| {
         data(
             "CHART_DIR",
@@ -30,15 +22,27 @@ fn verdict(given: bool, dir: &Path, chart_yaml: Option<&str>, release: &str) -> 
         )
     })?;
     if found == release {
-        return Ok(());
+        return Ok(found);
     }
     Err(data(
         "CHART_DIR",
         format!(
-            "{} is chart {found} but the installed release is {release} (CHART_VERSION): a restore would put the wrong chart back",
+            "{} is chart {found} but the installed release is {release} (CHART_VERSION)",
             dir.display()
         ),
     ))
+}
+
+fn verdict(given: bool, dir: &Path, chart_yaml: Option<&str>, release: &str) -> Res {
+    if !given {
+        return Err(data(
+            "CHART_DIR",
+            format!(
+                "not set: a test that changes the chart values needs the folder of the chart of the installed release ({release})"
+            ),
+        ));
+    }
+    same_version(dir, chart_yaml, release).map(|_| ())
 }
 
 impl ReleaseChart {
@@ -50,9 +54,21 @@ impl ReleaseChart {
         }
     }
 
+    fn chart_yaml(&self) -> Option<String> {
+        std::fs::read_to_string(self.dir.join("Chart.yaml")).ok()
+    }
+
     pub fn check(&self) -> Res {
-        let text = std::fs::read_to_string(self.dir.join("Chart.yaml")).ok();
-        verdict(self.given, &self.dir, text.as_deref(), &self.version)
+        verdict(
+            self.given,
+            &self.dir,
+            self.chart_yaml().as_deref(),
+            &self.version,
+        )
+    }
+
+    pub fn measured_version(&self) -> Res<String> {
+        same_version(&self.dir, self.chart_yaml().as_deref(), &self.version)
     }
 }
 
@@ -94,5 +110,47 @@ mod tests {
         let error = run(true, None, "0.4.0").unwrap_err().to_string();
         assert!(error.contains("no readable Chart.yaml"), "{error}");
         assert!(run(true, Some("name: x\n"), "0.4.0").is_err());
+    }
+
+    fn chart_folder(name: &str, yaml: &str, release: &str, given: bool) -> ReleaseChart {
+        let dir = std::env::temp_dir().join(format!(
+            "battery-release-chart-{name}-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Chart.yaml"), yaml).unwrap();
+        ReleaseChart {
+            given,
+            dir,
+            version: release.to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_measured_version_is_the_one_the_chart_folder_holds() {
+        let chart = chart_folder("same", CHART, "0.4.0", false);
+        assert_eq!(chart.measured_version().unwrap(), "0.4.0");
+    }
+
+    #[test]
+    fn a_measured_version_fails_when_the_folder_holds_another_chart_even_if_no_folder_was_given() {
+        let chart = chart_folder("other", "version: 0.3.0\n", "0.4.0", false);
+        let error = chart.measured_version().unwrap_err().to_string();
+        assert!(
+            error.contains("0.3.0") && error.contains("0.4.0") && error.contains("CHART_VERSION"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_measured_version_fails_when_the_folder_has_no_chart() {
+        let chart = ReleaseChart {
+            given: true,
+            dir: std::env::temp_dir()
+                .join(format!("battery-release-chart-none-{}", std::process::id())),
+            version: "0.4.0".to_owned(),
+        };
+        let error = chart.measured_version().unwrap_err().to_string();
+        assert!(error.contains("no readable Chart.yaml"), "{error}");
     }
 }

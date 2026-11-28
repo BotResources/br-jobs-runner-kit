@@ -106,30 +106,30 @@ pub fn sync_quiet(program: &str, args: &[&str]) {
 
 #[derive(Debug, Clone)]
 pub struct Kube {
+    program: String,
     pub context: String,
     pub namespace: Option<String>,
 }
 
 impl Kube {
-    pub fn of(env: &Env) -> Self {
+    pub fn using(program: &str, context: &str, namespace: Option<&str>) -> Self {
         Self {
-            context: env.context.clone(),
-            namespace: Some(env.namespace()),
+            program: program.to_owned(),
+            context: context.to_owned(),
+            namespace: namespace.map(str::to_owned),
         }
+    }
+
+    pub fn of(env: &Env) -> Self {
+        Self::using("kubectl", &env.context, Some(&env.namespace()))
     }
 
     pub fn cluster_wide(env: &Env) -> Self {
-        Self {
-            context: env.context.clone(),
-            namespace: None,
-        }
+        Self::using("kubectl", &env.context, None)
     }
 
     pub fn in_namespace(&self, namespace: &str) -> Self {
-        Self {
-            context: self.context.clone(),
-            namespace: Some(namespace.to_owned()),
-        }
+        Self::using(&self.program, &self.context, Some(namespace))
     }
 
     fn base(&self, args: &[&str]) -> Vec<String> {
@@ -148,13 +148,13 @@ impl Kube {
         stdin: Option<Vec<u8>>,
         limit: Duration,
     ) -> Res<Output> {
-        run("kubectl", &self.base(args), stdin, limit).await
+        run(&self.program, &self.base(args), stdin, limit).await
     }
 
     pub async fn run(&self, args: &[&str]) -> Res<String> {
         let all = self.base(args);
-        let output = run("kubectl", &all, None, SHORT).await?;
-        succeeded("kubectl", &all, output).map(|out| out.text())
+        let output = run(&self.program, &all, None, SHORT).await?;
+        succeeded(&self.program, &all, output).map(|out| out.text())
     }
 
     pub async fn json(&self, args: &[&str]) -> Res<Value> {
@@ -179,12 +179,12 @@ impl Kube {
         args.push("--");
         let mut all = self.base(&args);
         all.extend(argv.iter().cloned());
-        run("kubectl", &all, stdin, limit).await
+        run(&self.program, &all, stdin, limit).await
     }
 
     pub async fn reachable(&self) -> Res {
         let all = self.base(&["--request-timeout=10s", "get", "--raw", "/readyz"]);
-        match run("kubectl", &all, None, Duration::from_secs(20)).await {
+        match run(&self.program, &all, None, Duration::from_secs(20)).await {
             Ok(out) if out.code == 0 => Ok(()),
             Ok(out) => Err(BatteryError::ClusterUnreachable(out.stderr)),
             Err(error) => Err(BatteryError::ClusterUnreachable(error.to_string())),
@@ -212,8 +212,8 @@ impl Helm {
         }
     }
 
-    pub async fn values(&self) -> Res<Value> {
-        let args = strings(&[
+    async fn get_values(&self, with_defaults: bool) -> Res<Value> {
+        let mut args = strings(&[
             "--kube-context",
             &self.context,
             "-n",
@@ -221,33 +221,24 @@ impl Helm {
             "get",
             "values",
             &self.release,
-            "--all",
-            "-o",
-            "json",
         ]);
+        if with_defaults {
+            args.push("--all".to_owned());
+        }
+        args.extend(strings(&["-o", "json"]));
         let output = run("helm", &args, None, SHORT).await?;
         let output = succeeded("helm", &args, output)?;
         serde_json::from_slice(&output.stdout)
             .map_err(|error| data("helm values", error.to_string()))
     }
 
+    pub async fn values(&self) -> Res<Value> {
+        self.get_values(true).await
+    }
+
     pub async fn supplied_values(&self) -> Res<Value> {
         self.release_chart.check()?;
-        let args = strings(&[
-            "--kube-context",
-            &self.context,
-            "-n",
-            &self.namespace,
-            "get",
-            "values",
-            &self.release,
-            "-o",
-            "json",
-        ]);
-        let output = run("helm", &args, None, SHORT).await?;
-        let output = succeeded("helm", &args, output)?;
-        serde_json::from_slice(&output.stdout)
-            .map_err(|error| data("helm values", error.to_string()))
+        self.get_values(false).await
     }
 
     pub fn reset_args(&self) -> Vec<String> {

@@ -41,7 +41,7 @@ record() {
 
 check() {
   local name="$1" verdict="$2" detail="${3:-}"
-  case "$verdict" in pass | fail) ;; *) die "check verdict must be pass or fail" ;; esac
+  case "$verdict" in pass | fail | skip) ;; *) die "check verdict must be pass, fail or skip" ;; esac
   printf '%s\t%s\t%s\t%s\n' "$name" "$verdict" "$detail" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$EVIDENCE/checks.tsv"
   log "check $name: $verdict $detail"
 }

@@ -5,6 +5,7 @@ use serde_json::Value;
 use crate::env::Env;
 use crate::error::{BatteryError, Res};
 use crate::proc::Kube;
+use crate::release_chart::ReleaseChart;
 
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -69,7 +70,7 @@ pub async fn line(env: &Env) -> Res<String> {
     })?;
     Ok(format!(
         "adapter {adapter}, chart {}, keeper {}",
-        chart_version(&env.chart_dir)?,
+        ReleaseChart::of(env).measured_version()?,
         keeper_image(env).await?
     ))
 }

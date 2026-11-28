@@ -30,6 +30,16 @@ validate_timing_lock_wait() {
   esac
 }
 
+validate_chart_version() {
+  if [[ "$CHART_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+].*)?$ ]]; then return 0; fi
+  check chart-version-valid fail "CHART_VERSION must be three numbers such as 0.4.0 (a suffix after - or + is allowed), got: $CHART_VERSION"
+  return 1
+}
+
+skip_script() {
+  check "$1-chart-version" skip "$1 needs chart 0.4.0 or later and CHART_VERSION is $CHART_VERSION"
+}
+
 lock_timed() {
   if [ -n "${TIMING_LOCK_HELD:-}" ]; then return 0; fi
   validate_timing_lock_wait || return 1
@@ -62,6 +72,7 @@ scenario_cleanup() {
 scenario_begin() {
   SCENARIO_NAME=$1
   validate_timing_lock_wait || scenario_end
+  validate_chart_version || scenario_end
   if [ -z "${PREFLIGHT_DONE:-}" ]; then preflight; fi
   mkdir -p "$BATTERY_OUT"
   route_kubectl

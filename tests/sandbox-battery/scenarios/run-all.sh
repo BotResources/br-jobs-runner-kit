@@ -2,8 +2,8 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/common.sh"
 
-UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s08-internal-targets s10-proxy-canary s11-platform s12-closed-cluster s13-pivot-barriers s14-fresh-pod-race s15-keeper-ready s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules"
-CHART_040_ONLY="s05-admission s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules"
+UNTIMED="s01-docker-parity s02-two-agents s03-two-clients s04-network-modes s05-admission s06-seed-read-only s07-egress-namespace s08-internal-targets s10-proxy-canary s11-platform s12-closed-cluster s13-pivot-barriers s14-fresh-pod-race s15-keeper-ready s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules s22-same-tag-push s23-image-fails-at-once"
+CHART_040_ONLY="s05-admission s16-pod-policy-host-and-privilege s17-pod-policy-baseline s18-pod-policy-accepted-pods s19-pod-policy-image s20-pod-policy-ephemeral s21-pod-policy-isolated-rules s22-same-tag-push s23-image-fails-at-once"
 TIMED="m-restore-stalls m-netpol-delay m-window m-coldstart m-scale-down m-burst"
 
 mkdir -p "$BATTERY_OUT"
@@ -12,6 +12,7 @@ export SCENARIO_TALLY
 : > "$SCENARIO_TALLY"
 export PREFLIGHT_DONE=1
 validate_timing_lock_wait || exit 1
+validate_chart_version || exit 1
 
 fails_recorded() { awk -F'\t' '$2 == "fail"' "$SCENARIO_TALLY" | count_lines; }
 
@@ -48,7 +49,7 @@ for name in $UNTIMED; do
     if [ -n "$selected" ]; then
       check "$name-chart-version" fail "this script needs chart 0.4.0 or later and CHART_VERSION is $CHART_VERSION"
     else
-      echo "== $name skipped: it needs chart 0.4.0 or later and CHART_VERSION is $CHART_VERSION"
+      skip_script "$name"
     fi
     continue
   fi
@@ -60,5 +61,6 @@ done
 
 passed=$(awk -F'\t' '$2 == "pass"' "$SCENARIO_TALLY" | count_lines)
 failed=$(awk -F'\t' '$2 == "fail"' "$SCENARIO_TALLY" | count_lines)
-echo "== total: $passed pass, $failed fail (tally $SCENARIO_TALLY)"
+skipped=$(awk -F'\t' '$2 == "skip"' "$SCENARIO_TALLY" | count_lines)
+echo "== total: $passed pass, $failed fail, $skipped skip (tally $SCENARIO_TALLY)"
 [ "$failed" -eq 0 ]
