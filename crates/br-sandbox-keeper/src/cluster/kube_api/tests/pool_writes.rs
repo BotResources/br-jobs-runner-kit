@@ -1,7 +1,7 @@
 use http::StatusCode;
 use serde_json::{Value, json};
 
-use super::pool_wire::status_reply;
+use super::pool_wire::{query_of, status_reply};
 use super::stub::Wire;
 use super::*;
 use crate::cluster::{CreateOutcome, PoolApi};
@@ -19,7 +19,10 @@ async fn the_replica_set_is_created_by_a_post_that_keeps_every_field_of_the_temp
     let seen = wire.only();
     assert_eq!(seen.method, "POST");
     assert_eq!(seen.path, "/apis/apps/v1/namespaces/sbx/replicasets");
-    assert!(seen.query.contains("fieldManager=br-sandbox-keeper"));
+    assert!(
+        query_of(&seen.query)
+            .contains(&("fieldManager".to_owned(), "br-sandbox-keeper".to_owned()))
+    );
     assert_eq!(seen.body, body);
 }
 
@@ -52,7 +55,11 @@ async fn the_template_is_written_by_a_server_side_apply_of_spec_template_alone()
         seen.path,
         "/apis/apps/v1/namespaces/sbx/replicasets/warm-sbx"
     );
-    assert!(seen.query.contains("fieldManager=br-sandbox-keeper"));
+    assert!(query_of(&seen.query).contains(&(
+        "fieldManager".to_owned(),
+        "br-sandbox-keeper-template".to_owned()
+    )));
+    assert!(query_of(&seen.query).contains(&("force".to_owned(), "true".to_owned())));
     assert_eq!(
         seen.content_type.as_deref(),
         Some("application/apply-patch+yaml")

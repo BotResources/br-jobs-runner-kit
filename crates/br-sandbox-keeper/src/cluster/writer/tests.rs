@@ -1,7 +1,9 @@
+use serde_json::Value;
+
 use super::*;
 use crate::cluster::fixtures::{AGENT, owned_replica_set, owner, template_json, template_map};
 use crate::fakes::{Call, FakeKube};
-use crate::pool::PoolTemplate;
+use crate::pool::{PoolSettings, PoolTemplate};
 use crate::testing::settings;
 
 pub(super) struct Rig {
@@ -22,12 +24,16 @@ pub(super) fn rig() -> Rig {
 }
 
 pub(super) fn rendered(image: &str) -> RenderedTemplate {
-    let keys = PodKeys::default();
-    let map = template_map(&template_json("sbx"));
-    let template = PoolTemplate::read(Some(&map), "sbx", &keys, AGENT).unwrap();
     let mut wanted = settings();
     wanted.image = image.to_owned();
-    template.render(&wanted, &keys)
+    rendered_with(&wanted, &template_json("sbx"))
+}
+
+pub(super) fn rendered_with(wanted: &PoolSettings, document: &Value) -> RenderedTemplate {
+    let keys = PodKeys::default();
+    let map = template_map(document);
+    let template = PoolTemplate::read(Some(&map), "sbx", &keys, AGENT).unwrap();
+    template.render(wanted, &keys)
 }
 
 pub(super) fn errors(rig: &Rig) -> bool {
@@ -37,7 +43,10 @@ pub(super) fn errors(rig: &Rig) -> bool {
 }
 
 mod condition;
+mod managers;
 mod more;
+mod repair;
+mod whole;
 
 #[tokio::test]
 async fn the_replica_set_is_created_with_the_controller_reference_and_no_block_owner_deletion() {

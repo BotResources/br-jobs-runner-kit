@@ -4,6 +4,7 @@ mod kube_api;
 mod notice;
 mod observe;
 mod pool_api;
+mod template_owner;
 mod view;
 mod views;
 mod writer;
@@ -29,7 +30,10 @@ pub(crate) use writer::{
 };
 pub use writer::{Change, PoolWriter, WriteError};
 
+pub(crate) use template_owner::template_in_place;
+
 pub const FIELD_MANAGER: &str = "br-sandbox-keeper";
+pub const TEMPLATE_FIELD_MANAGER: &str = "br-sandbox-keeper-template";
 pub const EVENT_POOL_AT_MAX: &str = "PoolAtMax";
 pub const EVENT_WARM_PODS_PENDING: &str = "WarmPodsPending";
 

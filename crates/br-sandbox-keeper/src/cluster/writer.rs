@@ -12,7 +12,7 @@ use crate::pool::{
 use crate::resource::SandboxPoolStatus;
 use crate::rules::ConditionWrite;
 
-use super::{ApiError, CreateOutcome, DeleteOutcome, PoolApi};
+use super::{ApiError, CreateOutcome, DeleteOutcome, PoolApi, template_in_place};
 
 pub(crate) const CREATE_REPLICA_SET: &str = "create_replica_set";
 pub(crate) const APPLY_REPLICAS: &str = "apply_replicas";
@@ -159,14 +159,7 @@ impl PoolWriter {
             .await?
             .ok_or(WriteError::Gone { call })?;
         let key = template_hash_key(self.keys.prefix());
-        let held = current
-            .spec
-            .as_ref()
-            .and_then(|spec| spec.template.as_ref())
-            .and_then(|template| template.metadata.as_ref())
-            .and_then(|meta| meta.annotations.as_ref())
-            .and_then(|annotations| annotations.get(&key));
-        if held == Some(&rendered.hash) {
+        if template_in_place(&current, &key, &rendered.hash) {
             return Ok(Change::Unchanged);
         }
         self.api
