@@ -4,6 +4,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 scenario_begin s22-same-tag-push
 
 : "${MOVING_MARGIN_SECONDS:=120}"
+: "${MOVING_SKEW_LIMIT_SECONDS:=5}"
 : "${MOVING_AGE_LIMIT_SECONDS:=300}"
 VERSION_FILE=/etc/image-version
 
@@ -55,6 +56,26 @@ pod_policy() {
   k -n "$SCRATCH_NS" get pod "$1" -o json | jq -r --arg c "$SANDBOX_CONTAINER" '[.spec.containers[] | select(.name == $c) | .imagePullPolicy] | first // ""'
 }
 
+pod_created() {
+  k -n "$SCRATCH_NS" get pod "$1" -o json | jq -r '.metadata.creationTimestamp | fromdateiso8601' 2> /dev/null
+}
+
+cluster_clock_skew() {
+  local before cluster after
+  before=$(date +%s)
+  cluster=$(sx "$SCRATCH_NS" "$1" date +%s 2> /dev/null | tr -d '\r\n')
+  after=$(date +%s)
+  [[ "$cluster" =~ ^[0-9]+$ ]] || return 1
+  echo $((cluster - (before + after) / 2))
+}
+
+pushed_digest() {
+  docker image inspect "$MOVING_PUSH" --format '{{json .RepoDigests}}' 2> /dev/null |
+    jq -r --arg prefix "${MOVING_PUSH%:*}@" 'map(select(startswith($prefix))) | first // "" | split("@")[1] // ""'
+}
+
+image_is_content_2_in_time() { [ -n "$2" ] && [[ "$1" == *"@$2" ]] && [ "$3" -le "$4" ]; }
+
 first_new_pod() {
   local old=$1
   warm_image_ids "$SCRATCH_NS" | awk -v old="$old" '$2 != "" && $2 != old {print; exit}'
@@ -86,8 +107,14 @@ verdict same-tag-push-agent-pull-policy-always "container $SANDBOX_CONTAINER of 
 verdict same-tag-push-first-content "the warm pod $old_pod (image id $old_id) holds the content 1" \
   test "$(pod_content "$old_pod")" = 1
 
+old_created=$(pod_created "$old_pod")
+skew=$(cluster_clock_skew "$old_pod") || skew=
+if [ -n "$skew" ] && [ "${skew#-}" -le "$MOVING_SKEW_LIMIT_SECONDS" ]; then basis=push; else basis=pods; fi
+record same_tag_push_clock_skew_seconds "${skew:-unread}" s
+
 build_and_push 2 || scenario_end
 pushed=$(date +%s)
+digest2=$(pushed_digest)
 bound=$((age + MOVING_MARGIN_SECONDS))
 found=
 delay=0
@@ -98,16 +125,34 @@ while [ "$delay" -le "$bound" ]; do
   sleep 5
 done
 record same_tag_push_margin_seconds "$MOVING_MARGIN_SECONDS" s
-values="warm_max_age_seconds of the keeper document is $age s, the margin for the start of the pod is $MOVING_MARGIN_SECONDS s, the limit is $bound s"
 if [ -z "$found" ]; then
   record same_tag_push_delay_to_new_warm_pod never s
-  check same-tag-push-new-warm-pod-within-age-plus-margin fail "no Ready warm pod with another image id than $old_id $delay s after the push of the content 2 under the same tag; $values"
+  check same-tag-push-new-warm-pod-created-within-age fail "no Ready warm pod with another image id than $old_id $delay s after the push of the content 2 under the same tag, so no creation time was read; warm_max_age_seconds is $age s"
+  check same-tag-push-new-warm-pod-image-id-is-content-2 fail "no Ready warm pod with another image id than $old_id within the wait limit of $bound s ($age s of age plus $MOVING_MARGIN_SECONDS s of margin) after the push"
 else
+  new_pod=${found%% *}
+  new_id=${found#* }
+  created=$(pod_created "$new_pod")
   record same_tag_push_delay_to_new_warm_pod "$delay" s
-  verdict same-tag-push-new-warm-pod-within-age-plus-margin "the warm pod ${found%% *} has the image id ${found#* } (not $old_id) $delay s after the push; $values" \
-    test "$delay" -le "$bound"
-  verdict same-tag-push-new-pod-holds-new-content "the new warm pod ${found%% *} holds the content 2" \
-    test "$(pod_content "${found%% *}")" = 2
+  if ! [[ "$created" =~ ^[0-9]+$ ]]; then
+    check same-tag-push-new-warm-pod-created-within-age fail "the creation time of the warm pod $new_pod was not read from the pod"
+  elif [ "$basis" = pods ] && ! [[ "$old_created" =~ ^[0-9]+$ ]]; then
+    check same-tag-push-new-warm-pod-created-within-age fail "the clock of the cluster and of this host are not comparable and the creation time of the old warm pod $old_pod was not read from the pod"
+  elif [ "$basis" = push ]; then
+    since=$((created - pushed))
+    record same_tag_push_creation_after_push_seconds "$since" s
+    verdict same-tag-push-new-warm-pod-created-within-age "push of the content 2 at $pushed (epoch seconds, clock of this host), warm pod $new_pod created at $created (creation time of the pod), $since s between, warm_max_age_seconds is $age s; compared: creation of the new pod against the push, no margin; clock difference between the cluster and this host $skew s" \
+      test "$since" -le "$age"
+  else
+    since=$((created - old_created))
+    record same_tag_push_creation_after_old_creation_seconds "$since" s
+    verdict same-tag-push-new-warm-pod-created-within-age "the clock of the cluster and of this host differ by more than $MOVING_SKEW_LIMIT_SECONDS s or the clock was not read, so the push time is not used; warm pod $new_pod created at $created, old warm pod $old_pod created at $old_created, $since s between, warm_max_age_seconds is $age s; compared: creation of the new pod against creation of the old pod, no margin" \
+      test "$since" -le "$age"
+  fi
+  verdict same-tag-push-new-warm-pod-image-id-is-content-2 "the warm pod $new_pod has the image id $new_id, the pushed content 2 has the digest ${digest2:-unread}, Ready $delay s after the push; the wait limit is $bound s ($age s of age plus $MOVING_MARGIN_SECONDS s for the pull and the start of one pod), a limit of the wait and not a bound of the sentence" \
+    image_is_content_2_in_time "$new_id" "$digest2" "$delay" "$bound"
+  verdict same-tag-push-new-pod-holds-new-content "the new warm pod $new_pod holds the content 2" \
+    test "$(pod_content "$new_pod")" = 2
 fi
 verdict same-tag-push-pool-spec-unchanged "the SandboxPool $SANDBOX_POOL_NAME in $SCRATCH_NS has the same spec before the push and after the new pod" \
   test "$(pool_spec)" = "$spec_before"

@@ -58,7 +58,7 @@ The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>
 | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split` | runs; `PoolGuard` sets `spec.minReplicas` 4 | runs; `ValueGuard`, floor 4 |
 | `seed_bound` (2 tests) | run; `PoolGuard` sets `spec.minReplicas` 3 | run; `ValueGuard`, floor 3 |
 | `expiry` (3 tests) | run; `ValueGuard` sets `save.ttl_seconds` (a release value) | run; same |
-| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | runs; `PoolGuard` sets `spec.image` and puts the spec back at the end and on SIGTERM or SIGINT. This ported test has not run on a cluster yet | runs; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
+| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | runs; `PoolGuard` sets `spec.image` and puts the spec back at the end and on SIGTERM or SIGINT. This ported test has not run on a cluster yet. If the pool admission refuses the failing image, the test fails with the refusal text; if only the pod creation is refused, the wait for the failing condition ends in an error after 300 s. In both cases the test fails and never passes | runs; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
 | `images` (3 tests) | skip row `skip`: "not for chart 0.4.0: the image is set in the SandboxPool spec; see the README map" | run; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
 | `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` and every other test | run (no pool change) | run |
 
@@ -123,7 +123,7 @@ Variables that only some tests need (the test fails with the variable name when 
 | Fresh start within 500 ms with the seed (and the stress seed: limit reported, at least one sample) | `start_times::fresh::fresh_start_with_a_seed_of_10_mb_is_within_500_ms` |
 | Save, failed turn, tree equal, go back | `failed_turns`, `tree_equal`, `go_back`, `save_keys`, `missing_save`, `crash_save` |
 | Expiry after 60 s, named start results | `expiry`, `start_results` |
-| Second image by value, same tag reaches a new warm pod within `warm_max_age_seconds` (no box is opened while waiting, so the pool is not renewed by claims), two image errors (on chart 0.4.0 and later only `open_images`; see "Not run on chart 0.4.0") | `images`, `open_images` |
+| Second image by value, a new push under the same tag reaches a new warm pod (no box is opened while waiting, so the pool is not renewed by claims), two image errors. On chart 0.4.0 and later only `open_images` runs here; for the push, `../scenarios/s22-same-tag-push.sh` measures the creation time of the new warm pod against the push time, at most `warm_max_age_seconds` and with no margin, and then checks that the image id of that pod is the pushed content within a wait limit (see "Not run on chart 0.4.0") | `images`, `open_images` |
 | Harness suite with the adapter | `harness_suite`, `harness_open`, `harness_excluded` (see below) |
 | Hard links, executable bit | `properties::hard_links_and_the_executable_bit_survive_save_and_restore` |
 | A file that the agent deleted stays deleted after the next restore, and the file that stayed is still there. The image files in `/work` and `/home/agent` are hidden by the volumes of the chart, so the property is shown with two files that the agent writes itself (one under each path). An image file outside the save scope is not saved and is not restored (not tested here) | `properties::a_file_deleted_by_the_agent_stays_deleted_after_the_next_restore` |
