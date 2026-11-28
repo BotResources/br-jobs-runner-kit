@@ -48,6 +48,26 @@ All names are read in `src/env.rs` (one `Env` struct). A missing variable fails 
 
 The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>`) follows the chart version, as the shell scenarios do: below 0.4.0 it is the namespace name without the prefix `$NS_PREFIX-` (`{client}-{mode}`), from 0.4.0 on it is the namespace name (`{NS_PREFIX}-{client}-{mode}`). `CHART_VERSION` must be three numbers (a suffix such as `-rc1` is ignored). A test that stops the keeper waits until no pod with the label `KEEPER_LABEL` is left in `SYSTEM_NS` (at most 120 s, then the test fails with the label and the namespace) before it changes the pool, and the keeper scale guard puts the keeper back at the end.
 
+## Namespace of the adapter tests
+
+The adapter tests of this repository take the network mode from the suffix of the namespace name. This is a rule of the tests, not of the adapter or of the chart. They need a namespace named `<prefix>-<client>-<mode>` with the mode `none`, `allow` or `full`: `NS_PREFIX`, `CLIENT_A` and `NET_NONE` build the name, and `NET_NONE` is the mode. For example the namespace `sbx-pool-o4w-none` has `CLIENT_A` `pool-o4w` and `NET_NONE` `none`. A namespace whose last part is not a mode (for example `sbx-pool-a`) stops the tests before they measure anything.
+
+The pool must be made in that namespace by one operator upgrade of the chart that lists the namespace, since the chart makes the namespace and its fence objects. The warm pods are named with the prefix `RS_PREFIX` (`warm-` in `../scenarios/names-chart.env`). A scratch namespace of the shell scripts is no target for these tests: it has no `br-sandbox-config` and no binding of the runner (see "Scratch pools" in `../scenarios/README.md`).
+
+## Seen on a cluster
+
+These results are from one cluster, with chart 0.4.0 as released and adapter 0.1.3, in a scratch namespace of mode none made by an operator upgrade. Each row is one run unless it says otherwise; no spread is known.
+
+| Test | What was seen |
+|---|---|
+| `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` | Passed. The open ended with the error `ImageUnavailable` at 10.1 s, for an open timeout of 10 s. |
+| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | Passed. The open ended with the error `ImageFailing` with the reason `ImagePullFailing` in 0.03 s; the reason is equal to the condition of the pool. |
+| `seed_bound::open_with_the_stress_seed_and_no_bound_leaves_no_pod_after_it_ends_or_is_stopped` | Passed: 2 tries ended Ok and no pod was left. |
+| `seed_bound::open_with_the_stress_seed_and_a_set_bound_ends_within_the_outer_bound_and_leaves_no_pod` (bound 120 s) | Two runs: one failed and one passed. In the failed run, tries 1 and 2 took 7.5 s and 7.7 s. In try 3 of 3 the seed exec did not end, and the adapter stopped it at the exec timeout, at 120.2 s, with the error that the seed did not end in the time that the configuration gives. No seed was written, the open failed and no pod was left. The second run passed (tries of 5.8 s, 7.7 s and 8.7 s). The cause of the stall is not known: it is a known open stall of the adapter on the copy-in of the seed. This test is not a plain pass on this cluster. |
+| `expiry::with_the_keeper_stopped_an_old_save_is_expired_on_the_read_side` | Passed. An old save was expired on the read side; the test stops the keeper and puts it back to 2. |
+
+The tests of this project that are not in this table were not run on this cluster with this chart and adapter, and their rows above and below say what the tests do, not what was seen.
+
 ## Which tests are for which chart line
 
 `CHART_VERSION` picks the line (`src/chart_line.rs`): from 0.4.0 on the pool is a `SandboxPool` resource (the image, `minReplicas`, `maxReplicas`, `margin` and the size are in its `spec`; the chart refuses the values `image` and `clients`); before 0.4.0 they are chart values.
@@ -58,9 +78,9 @@ The pool id (pool label, adapter `pool_id`, ReplicaSet name `$RS_PREFIX<pool id>
 | `start_times::ladder::restored_start_ladder_10_30_50_100_mb_with_stalls_and_split` | runs; `PoolGuard` sets `spec.minReplicas` 4 | runs; `ValueGuard`, floor 4 |
 | `seed_bound` (2 tests) | run; `PoolGuard` sets `spec.minReplicas` 3 | run; `ValueGuard`, floor 3 |
 | `expiry` (3 tests) | run; `ValueGuard` sets `save.ttl_seconds` (a release value) | run; same |
-| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | runs; `PoolGuard` sets `spec.image` and puts the spec back at the end and on SIGTERM or SIGINT. This ported test has not run on a cluster yet. If the pool admission refuses the failing image, the test fails with the refusal text; if only the pod creation is refused, the wait for the failing condition ends in an error after 300 s. In both cases the test fails and never passes | runs; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
+| `open_images::a_pool_whose_image_fails_gives_image_failing_at_once` | runs; `PoolGuard` sets `spec.image` and puts the spec back at the end and on SIGTERM or SIGINT. On chart 0.4.0 (adapter 0.1.3) it passed in a scratch namespace of mode none (see "Seen on a cluster"). If the pool admission refuses the failing image, the test fails with the refusal text; if only the pod creation is refused, the wait for the failing condition ends in an error after 300 s. In both cases the test fails and never passes | runs; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
 | `images` (3 tests) | skip row `skip`: "not for chart 0.4.0: the image is set in the SandboxPool spec; see the README map" | run; `ValueGuard` sets the key `VALUES_IMAGE_KEY` |
-| `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` and every other test | run (no pool change) | run |
+| `open_images::a_pod_that_never_gets_ready_gives_image_unavailable_at_the_open_timeout` and every other test | run (no pool change); the result of this one on chart 0.4.0 is in "Seen on a cluster" | run |
 
 On 0.4.0 and later `quota.extra_pods` is not changed by these tests: the quota of the namespace holds `limits.pods` plus `quota.extra_pods`, which is not tied to the floor any more. On chart 0.4.0 and later no test of this project changes the image of a pool except `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`; the three tests in `images` skip with a skip row, and a skip is not a proof. The three skipped tests have no Rust replacement for 0.4.0. Two of their sentences are covered by shell scenarios of `../scenarios` on a scratch `SandboxPool`: a new push under the same tag (`s22-same-tag-push.sh`) and an image that cannot be pulled (`s23-image-fails-at-once.sh`, which reads the pool condition and the pod state; it opens no thread, so the adapter error of that case is covered by `open_images::a_pool_whose_image_fails_gives_image_failing_at_once`).
 
@@ -72,7 +92,7 @@ The chart refuses the key `image` of the values, so these three tests of `images
 - `images::a_new_push_under_the_same_tag_reaches_the_pool_within_the_warm_max_age`
 - `images::an_image_that_starts_and_crashes_at_once_gives_image_failing`
 
-The image error `ImageFailing` by a crash at start is not run on chart 0.4.0. The last result of the crash test is from chart 0.2.4 (it passed in 23 s).
+The image error `ImageFailing` by a crash at start is not run on chart 0.4.0. The last result of the crash test is from chart 0.2.4 (it passed in 23 s). The image error `ImageFailing` by a failing pull is run on chart 0.4.0 by `open_images` (see "Seen on a cluster").
 
 Variables that only some tests need (the test fails with the variable name when it is not set):
 
