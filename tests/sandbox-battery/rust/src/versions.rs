@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde_json::Value;
+
 use crate::env::Env;
 use crate::error::{BatteryError, Res};
 use crate::proc::Kube;
@@ -40,18 +42,24 @@ pub fn chart_version(chart_dir: &Path) -> Res<String> {
     })
 }
 
+pub fn container_image_in(deployment: &Value, container: &str) -> Option<String> {
+    deployment["spec"]["template"]["spec"]["containers"]
+        .as_array()?
+        .iter()
+        .find(|candidate| candidate["name"].as_str() == Some(container))?["image"]
+        .as_str()
+        .map(str::to_owned)
+}
+
 pub async fn keeper_image(env: &Env) -> Res<String> {
     let deployment = Kube::cluster_wide(env)
         .in_namespace(&env.system_ns)
         .json(&["get", "deployment", &env.keeper_deploy])
         .await?;
-    deployment["spec"]["template"]["spec"]["containers"][0]["image"]
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| BatteryError::Data {
-            what: format!("deployment {}", env.keeper_deploy),
-            reason: "no container image".to_owned(),
-        })
+    container_image_in(&deployment, &env.keeper_container).ok_or_else(|| BatteryError::Data {
+        what: format!("deployment {}", env.keeper_deploy),
+        reason: format!("no container named {} with an image", env.keeper_container),
+    })
 }
 
 pub async fn line(env: &Env) -> Res<String> {
@@ -68,6 +76,8 @@ pub async fn line(env: &Env) -> Res<String> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -88,6 +98,20 @@ mod tests {
         );
         assert_eq!(chart_version_in("name: x\n"), None);
         assert_eq!(chart_version_in("version:\n"), None);
+    }
+
+    #[test]
+    fn the_keeper_image_is_read_from_the_container_named_as_the_keeper() {
+        let deployment = json!({"spec": {"template": {"spec": {"containers": [
+            {"name": "sidecar", "image": "example.test/sidecar:1"},
+            {"name": "keeper", "image": "example.test/keeper@sha256:abc"}
+        ]}}}});
+        assert_eq!(
+            container_image_in(&deployment, "keeper").as_deref(),
+            Some("example.test/keeper@sha256:abc")
+        );
+        assert_eq!(container_image_in(&deployment, "other"), None);
+        assert_eq!(container_image_in(&json!({}), "keeper"), None);
     }
 
     #[test]

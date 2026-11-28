@@ -45,6 +45,8 @@ pub enum BatteryError {
     Store(#[from] br_runner_sandbox::StoreError),
     #[error("the port gave: {0}")]
     Port(String),
+    #[error("the run received a stop signal: no new change of the chart values starts")]
+    Stopping,
     #[error("the test ended with no check recorded")]
     NoChecks,
     #[error("{count} check(s) failed: {names}")]
