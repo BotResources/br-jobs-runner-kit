@@ -2,11 +2,18 @@
 {{- $target := 2851995648 -}}
 {{- $covered := false -}}
 {{- range $entry := .Values.network.internal_cidrs -}}
-{{- $parts := splitList "/" (include "br-sandbox-chart.cidr.normalize" $entry) -}}
+{{- $cidr := include "br-sandbox-chart.cidr.normalize" $entry -}}
+{{- if regexMatch `^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,3}$` $cidr -}}
+{{- $parts := splitList "/" $cidr -}}
 {{- $octets := splitList "." (index $parts 0) -}}
-{{- if and (eq (len $octets) 4) (not (contains ":" (index $parts 0))) -}}
 {{- $prefix := atoi (index $parts 1) -}}
-{{- if le $prefix 16 -}}
+{{- $wellformed := le $prefix 32 -}}
+{{- range $octet := $octets -}}
+{{- if gt (atoi $octet) 255 -}}
+{{- $wellformed = false -}}
+{{- end -}}
+{{- end -}}
+{{- if and $wellformed (le $prefix 16) -}}
 {{- $block := 1 -}}
 {{- range until (int (sub 32 $prefix)) -}}
 {{- $block = mul $block 2 -}}

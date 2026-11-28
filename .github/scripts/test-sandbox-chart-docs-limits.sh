@@ -100,12 +100,15 @@ check_the_stamper_example_covers_the_kinds_that_the_stamper_generates() {
     t "the stamper generates six kinds, NetworkPolicy among them" test "$kinds" = '["configmaps","limitranges","networkpolicies","resourcequotas","rolebindings","serviceaccounts"]'
     t "the example rules with the create verb name exactly those six resources" test "$resources" = "$kinds"
     t "the stamper generates the two NetworkPolicies that STAMPER.md names" test "$(jq -r '[.[] | select(.kind == "ClusterPolicy") | .spec.rules[] | .generate | select(.kind == "NetworkPolicy") | .name] | unique | join(",")' "$WORK/stamper.json")" = br-sandbox-default-deny,br-sandbox-egress-full
-    t "STAMPER.md says that the stamper generates NetworkPolicies, that the rule is not part of the reported rights, and what a cluster with and without such a right does" grep -qF 'The stamper also generates NetworkPolicies (`br-sandbox-default-deny`, and `br-sandbox-egress-full` for the mode `full`), so the example ends with a rule on `networkpolicies`, which is not part of what the operator of that test cluster reported. A cluster whose policy engine already generates NetworkPolicies has this right (inferred; not tested on a cluster), and one whose policy engine does not generate them needs the rule:' "$CHART/STAMPER.md"
+    t "STAMPER.md says what was seen for the NetworkPolicy right: the version of the policy engine, the default rights, that the added ClusterRole does not hold that kind, and that the example rule is there for that reason only" grep -qF 'The stamper also generates NetworkPolicies (`br-sandbox-default-deny`, and `br-sandbox-egress-full` for the mode `full`). In the test, the policy engine at version 1.18.0 (chart 3.8.0) stamped the NetworkPolicy with its default rights; the added ClusterRole does not hold that kind. Another version or another install of the policy engine can need it. The example ends with a rule on `networkpolicies` for that reason only: it is not in the ClusterRole of the test, and it was not run on a cluster:' "$CHART/STAMPER.md"
+    t "STAMPER.md does not call the right on NetworkPolicy inferred" test "$(grep -cF 'has this right (inferred' "$CHART/STAMPER.md")" -eq 0
 }
 
 check_the_cluster_reports_are_marked_and_the_changelog_names_the_stamper_conditions() {
     section "README.md and CHANGELOG.md: the older cluster results are marked as reported, and the stamper conditions are in the CHANGELOG"
     t "the flannel measurement is marked as reported, with no record here" grep -qF 'A probe at once therefore failed the Job although the policy worked (reported by the operator of a test cluster; no record in this repository).' "$CHART/README.md"
+    t "the sentence that says the window was measured with flannel and kube-router carries the mark: reported, no record here" grep -qF 'This was measured on a test cluster with flannel and the kube-router network policy controller (reported by the operator of a test cluster; no record in this repository): the policy started' "$CHART/README.md"
+    t "the sentence that says the window was measured with that one network plugin carries the mark: reported, no record here" grep -qF 'The window was measured with that one network plugin (reported by the operator of a test cluster; no record in this repository); the time it takes' "$CHART/README.md"
     t "the measurement of the image rancher/k3s is marked as reported, with no record here" grep -qF 'the image `rancher/k3s` has no `nc` (reported by the operator of a test cluster; no record in this repository).' "$CHART/README.md"
     t "the CHANGELOG 0.4.0 holds one line on the conditions of the stamper: the rights, reported, and one maker" grep -qF -- '- Stamper conditions (`STAMPER.md`): the rights that the policy engine needs to generate the fence objects are not rendered by the chart and are needed (reported by the operator of a test cluster; no record in this repository; not proved here), and one namespace has one maker of its fence: a fence release, or the stamper.' <<<"$(changelog_040)"
     t "the CHANGELOG route line names copies of the two files and the probe namespace as <scope>-netcheck" has_all "$CHART/CHANGELOG.md" 'an upgrade of the operator release with a copy of `ci/netcheck-route-values.yaml` (one probe namespace `<scope>-netcheck` in mode `none`' 'an upgrade with a copy of `ci/netcheck-route-run-values.yaml` added'
@@ -116,12 +119,12 @@ LINK_LOCAL_FAULT='BR_SANDBOX_LINK_LOCAL_MISSING{key=network.internal_cidrs,range
 check_a_replacing_deny_list_must_keep_the_link_local_range() {
     section "network.internal_cidrs replaces the chart default: a list without the link-local range, or a cover of it, fails the render"
     local list proxied=(-f "$EXAMPLE" -f "$EGRESS_VALUES" -f "$CHART/ci/fence-values.yaml")
-    for list in '10.0.0.0/8' '10.0.0.0/8,192.168.0.0/16,100.64.0.0/10,127.0.0.0/8' '10.0.0.0/8,169.254.1.0/24' '169.254.0.0/17' '169.254.169.254' '10.0.0.0/8,fe80::/10' '168.0.0.0/8' '169.255.0.0/16'; do
+    for list in '10.0.0.0/8' '10.0.0.0/8,192.168.0.0/16,100.64.0.0/10,127.0.0.0/8' '10.0.0.0/8,169.254.1.0/24' '169.254.0.0/17' '169.254.169.254' '10.0.0.0/8,fe80::/10' '168.0.0.0/8' '169.255.0.0/16' '10.0.0.0/8,::1.2.3.4/0' '10.0.0.0/8,::ffff:1.2.3.4/0' '10.0.0.0/8,0:0:0:0:0:0:1.2.3.4/0' '10.0.0.0/8,::169.254.0.0/0' '10.0.0.0/8,1.2.3/0' '10.0.0.0/8,1.2.3.4.5/0' '10.0.0.0/8,1.2/8' 'a.b.c.d/0' 'fe.fe.fe.fe/0' '168.510.0.0/16' '256.0.0.0/0' '0.0.0.0/33'; do
         fails_with "$LINK_LOCAL_FAULT" -f "$EXAMPLE" --set "network.internal_cidrs={${list}}"
     done
     fails_with "$LINK_LOCAL_FAULT" "${proxied[@]}" --set 'network.internal_cidrs={10.0.0.0/8}'
     fails_with "$LINK_LOCAL_FAULT" -f "$EXAMPLE" -f "$CHART/ci/fence-values.yaml" --set 'network.internal_cidrs={10.0.0.0/8}'
-    for list in '10.0.0.0/8,169.254.0.0/16' '169.254.0.0/16' '10.0.0.0/8,169.254.0.0/15' '0.0.0.0/0' '169.0.0.0/8' '128.0.0.0/1' '169.254.5.5/16' '169.252.0.0/14'; do
+    for list in '10.0.0.0/8,169.254.0.0/16' '169.254.0.0/16' '10.0.0.0/8,169.254.0.0/15' '0.0.0.0/0' '169.0.0.0/8' '128.0.0.0/1' '169.254.5.5/16' '169.252.0.0/14' '10.0.0.0/8,169.254.0.0/016'; do
         t "a list ${list} holds or covers the range: the render passes" helm template t "$CHART" -f "$EXAMPLE" --set "network.internal_cidrs={${list}}"
     done
     t "the default list renders" helm template t "$CHART" -f "$EXAMPLE"
@@ -137,7 +140,25 @@ check_a_replacing_deny_list_must_keep_the_link_local_range() {
     t "no template other than the validation templates names the fault" test "$(grep -rl 'BR_SANDBOX_LINK_LOCAL_MISSING' "$CHART/templates" | sed 's#.*/##' | tr '\n' ' ')" = '_validate.tpl '
     t "no fixture of ci/ sets network.internal_cidrs" test "$(grep -rl internal_cidrs "$CHART/ci" | wc -l | tr -d ' ')" -eq 0
     t "the README lists the fault in the render errors and in the values table" test "$(grep -cF "\`${LINK_LOCAL_FAULT}\`" "$CHART/README.md")" -ge 1 -a "$(grep -cF '| `network.internal_cidrs` | RFC1918, 100.64/10, 169.254/16, 127/8 | must hold `169.254.0.0/16` or a CIDR that covers it (`BR_SANDBOX_LINK_LOCAL_MISSING`) |' "$CHART/README.md")" -eq 1
-    t "the README says that a replacing list keeps the private ranges of the cluster, that the chart holds the link-local range only, and how the cover is computed" has_all "$CHART/README.md" 'A list given to `network.internal_cidrs` replaces the default list: it must also keep the private ranges of the cluster, and the chart holds the link-local range only.' 'An IPv4 entry covers the range when its prefix is 16 bits or fewer and its network holds `169.254.0.0` (`169.254.0.0/15` and `0.0.0.0/0` cover it); a bare address is a /32 and does not; IPv6 entries are not read.' 'with a list that had no `169.254.0.0/16`, the address `169.254.169.254` on port 80 was open from a pod of mode `full` (reported by the operator of a test cluster; no record in this repository)'
+    t "the README says that a replacing list keeps the private ranges of the cluster, that the chart holds the link-local range only, and how the cover is computed" has_all "$CHART/README.md" 'A list given to `network.internal_cidrs` replaces the default list: it must also keep the private ranges of the cluster, and the chart holds the link-local range only.' 'An IPv4 entry covers the range when it is a well-formed IPv4 CIDR (four decimal octets of 0 to 255 and a prefix of 0 to 32), its prefix is 16 bits or fewer and its network holds `169.254.0.0` (`169.254.0.0/15` and `0.0.0.0/0` cover it); a bare address is a /32 and does not; IPv6 entries and malformed entries are not read and cover nothing.' 'with a list that had no `169.254.0.0/16`, the address `169.254.169.254` on port 80 was open from a pod of mode `full` (reported by the operator of a test cluster; no record in this repository)'
     t "the CHANGELOG 0.4.0 names the fault in the faults bullet and in its own line" test "$(changelog_040 | grep -cF "${LINK_LOCAL_FAULT}")" -eq 2
+    t "the CHANGELOG 0.4.0 line Link-local range says what an owner of an older list does: add the range or a covering entry" test "$(changelog_040 | grep -F -- "- Link-local range: " | grep -cF 'the owner adds `169.254.0.0/16`, or an entry that covers it, to the list.')" -eq 1
+    t "the README says what an owner of a list without the range does: add the range or a covering entry" grep -qF 'the owner adds `169.254.0.0/16`, or an entry that covers it, to the list.' "$CHART/README.md"
+    t "the CHANGELOG 0.4.0 line Link-local range says that a malformed entry covers nothing" test "$(changelog_040 | grep -F -- "- Link-local range: " | grep -cF 'only if it is a well-formed IPv4 CIDR (four decimal octets of 0 to 255 and a prefix of 0 to 32); a malformed entry covers nothing.')" -eq 1
     t "the CHANGELOG 0.4.0 has the line Link-local range, which names the fault" test "$(changelog_040 | grep -F -- "- Link-local range: " | grep -cF "${LINK_LOCAL_FAULT}")" -eq 1
+}
+
+check_limits_names_an_allow_entry_in_a_private_range() {
+    section "LIMITS.md: an allow.cidrs entry in a private or link-local range is not refused, and the document says which part is not tested"
+    local cidr
+    for cidr in 10.0.0.0/8 169.254.0.0/16 169.254.169.254; do
+        yq ".namespaces[1].allow.cidrs = [\"${cidr}\"]" "$EGRESS_VALUES" >"$WORK/allow-private.yaml"
+        t "an allow.cidrs entry ${cidr} renders, with the entry at the end of the allow list of the adapter document" bash -c 'helm template t "$1" -f "$2" -f "$3" | grep -qF -- "$4"' _ "$CHART" "$EXAMPLE" "$WORK/allow-private.yaml" "\"${cidr}\"]"
+    done
+    t "LIMITS.md carries the limit on an allow.cidrs entry in a private or link-local range, and says what is not tested" grep -qF 'An entry of `allow.cidrs` inside a private or link-local range is not refused by the chart. Not tested: which of the allow entry and the deny list of the proxy wins for such an address.' "$CHART/LIMITS.md"
+}
+
+check_limits_names_the_small_pool_behaviour_of_the_keeper() {
+    section "LIMITS.md: a refused edit removes all the warm pods of a small pool"
+    t "LIMITS.md carries the limit on a small pool and a refused edit of the image or the size" grep -qF 'With a pool that has `scale_down_step` warm pods or fewer (the default step is 5), one edit of the image or of the size that the namespace refuses removes all the warm pods of the pool. The pool shows `PodsRefused` and makes pods again when the edit is corrected. A claimed pod is never removed.' "$CHART/LIMITS.md"
 }
