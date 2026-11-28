@@ -10,10 +10,22 @@ scratch_namespace_doc() {
 }
 
 scratch_copy_doc() {
-  jq -c --arg ns "$SCRATCH_NS" '
+  jq -c --arg ns "$SCRATCH_NS" --arg map "$FENCE_TEMPLATE_MAP" --arg label "$LBL_POOL_ID" '
+    def own_pool_id:
+      if .data | type == "object" and has("pod-template.json") then
+        (.data["pod-template.json"] | fromjson) as $template
+        | if $template.metadata.labels | type == "object" and has($label) then
+            .data["pod-template.json"] = ($template | .metadata.labels[$label] = $ns | tojson)
+          else
+            error("the pod template of \(.metadata.name) has no label \($label) to rewrite")
+          end
+      else
+        error("the ConfigMap \(.metadata.name) has no key pod-template.json to rewrite")
+      end;
     del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.ownerReferences,
         .metadata.managedFields, .metadata.annotations, .metadata.labels, .status)
-    | .metadata.namespace = $ns' <<< "$1"
+    | .metadata.namespace = $ns
+    | if .kind == "ConfigMap" and .metadata.name == $map then own_pool_id else . end' <<< "$1"
 }
 
 scratch_wait_stamped() {
@@ -26,13 +38,17 @@ scratch_wait_stamped() {
 }
 
 scratch_copy() {
-  local ref=$1 doc out
+  local ref=$1 doc copy out
   if k -n "$SCRATCH_NS" get "$ref" > /dev/null 2>&1; then return 0; fi
   if ! doc=$(k -n "$SCRATCH_REF_NS" get "$ref" -o json 2>&1); then
     check "$SCRATCH_PREFIX-fence-source" fail "$ref cannot be read in $SCRATCH_REF_NS: $(first_line "$doc")"
     return 1
   fi
-  if ! out=$(fence_k apply -f - <<< "$(scratch_copy_doc "$doc")" 2>&1); then
+  if ! copy=$(scratch_copy_doc "$doc" 2>&1); then
+    check "$SCRATCH_PREFIX-fence-template" fail "$ref cannot be rewritten for $SCRATCH_NS, so it is not copied: $(first_line "$copy")"
+    return 1
+  fi
+  if ! out=$(fence_k apply -f - <<< "$copy" 2>&1); then
     check "$SCRATCH_PREFIX-fence-copy" fail "$ref was not made in $SCRATCH_NS as $FENCE_WRITER (it must be in grants.writers of the release): $(first_line "$out")"
     return 1
   fi
